@@ -8,6 +8,7 @@ export {
   DEFAULT_KEYBINDS,
   KEYBIND_DEFINITIONS,
   RESERVED_KEYBINDS,
+  getReservedKeybindLabel,
   buildKeybindFromEvent,
   coerceKeybinds,
   formatKeybind,

@@ -76,6 +76,9 @@ export const useSelectionDrag = (
     if (!drag.active || !drag.dragging) return;
 
     const bounds = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    const paddingLeft = Number.parseFloat(style.paddingLeft) || 0;
+    const paddingTop = Number.parseFloat(style.paddingTop) || 0;
     const startX = clamp(drag.startX, bounds.left, bounds.right);
     const startY = clamp(drag.startY, bounds.top, bounds.bottom);
     const endX = clamp(drag.lastX, bounds.left, bounds.right);
@@ -86,8 +89,8 @@ export const useSelectionDrag = (
     const bottom = Math.max(startY, endY);
 
     setSelectionBox({
-      left: left - bounds.left + element.scrollLeft,
-      top: top - bounds.top + element.scrollTop,
+      left: left - bounds.left - paddingLeft + element.scrollLeft,
+      top: top - bounds.top - paddingTop + element.scrollTop,
       width: right - left,
       height: bottom - top,
     });

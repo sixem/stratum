@@ -1,13 +1,14 @@
 // Manages path/search inputs and view focus behavior for the main panel.
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
+import type { ListDirOptions } from "@/types";
 
 type UseAppViewStateOptions = {
   currentPath: string;
   parentPath: string | null;
   loading: boolean;
-  loadDir: (path: string) => Promise<void>;
-  jumpTo: (path: string) => void;
-  browseTo: (path: string) => void;
+  loadDir: (path: string, options?: ListDirOptions) => Promise<void>;
+  jumpTo: (path: string, options?: ListDirOptions) => void;
+  browseTo: (path: string, options?: ListDirOptions) => void;
 };
 
 export const useAppViewState = ({
@@ -46,7 +47,7 @@ export const useAppViewState = ({
         setSearchValue("");
         setPendingViewFocus(true);
       }
-      void loadDir(path);
+      void loadDir(path, hadSearch ? { search: "" } : undefined);
     },
     [loadDir, searchValue],
   );

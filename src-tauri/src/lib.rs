@@ -4,6 +4,7 @@ mod fs;
 mod drag;
 mod opener;
 mod thumbs;
+mod clipboard;
 
 #[tauri::command]
 async fn get_home() -> Option<String> {
@@ -34,8 +35,21 @@ async fn list_drive_info() -> Vec<fs::DriveInfo> {
 }
 
 #[tauri::command]
-async fn list_dir(path: String) -> Result<Vec<fs::FileEntry>, String> {
-    tauri::async_runtime::spawn_blocking(move || fs::list_dir(path))
+async fn list_dir(
+    path: String,
+    options: Option<fs::ListDirOptions>,
+) -> Result<fs::ListDirResult, String> {
+    tauri::async_runtime::spawn_blocking(move || fs::list_dir(path, options))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+async fn list_dir_with_parent(
+    path: String,
+    options: Option<fs::ListDirOptions>,
+) -> Result<fs::ListDirWithParentResult, String> {
+    tauri::async_runtime::spawn_blocking(move || fs::list_dir_with_parent(path, options))
         .await
         .map_err(|err| err.to_string())?
 }
@@ -57,6 +71,13 @@ async fn parent_dir(path: String) -> Option<String> {
 #[tauri::command]
 async fn copy_entries(paths: Vec<String>, destination: String) -> Result<fs::CopyReport, String> {
     tauri::async_runtime::spawn_blocking(move || fs::copy_entries(paths, destination))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+async fn set_clipboard_paths(paths: Vec<String>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || clipboard::set_clipboard_paths(paths))
         .await
         .map_err(|err| err.to_string())?
 }
@@ -158,9 +179,11 @@ pub fn run() {
             list_drives,
             list_drive_info,
             list_dir,
+            list_dir_with_parent,
             stat_entries,
             parent_dir,
             copy_entries,
+            set_clipboard_paths,
             delete_entries,
             start_drag,
             request_thumbnails,

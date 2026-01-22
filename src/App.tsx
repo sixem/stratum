@@ -1,7 +1,8 @@
 // App shell wiring: composes state hooks, layout blocks, and overlays.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { clearThumbCache, getThumbCacheDir, openPath } from "@/api";
+import type { ViewMode } from "@/types";
+import { clearThumbCache, copyPathsToClipboard, getThumbCacheDir, openPath } from "@/api";
 import { AppContent, AppOverlays, AppStatusbar, AppTopstack } from "@/components";
 import {
   useAppAppearance,
@@ -14,26 +15,28 @@ import {
   useFileDrop,
   useFileManager,
   useFileViewInteractions,
+  useFileViewModel,
   useFilteredEntries,
   useKeybinds,
-  useMetaPrefetch,
+  useLayoutMenuItems,
   useScrollPositions,
   useScrollRequest,
   useSearchHotkey,
   useSelectionShortcuts,
   useSettings,
-  useSortMenuItems,
   useStatusLabels,
   useTabSession,
   useThumbnails,
   useWindowSize,
 } from "@/hooks";
-import { isEditableElement, tabLabel } from "@/lib";
+import { isEditableElement, makeDebug, normalizePath, tabLabel } from "@/lib";
 import { useClipboardStore, usePromptStore, useTooltipStore } from "@/modules";
 import "@/styles/app.scss";
 
 const MAX_SCROLL_POSITIONS = 160;
 const SCROLL_PERSIST_DELAY = 800;
+const viewLog = makeDebug("view");
+const scrollLog = makeDebug("scroll:key");
 
 const getSelectionTargets = (selected: Set<string>, parentPath: string | null) => {
   return Array.from(selected).filter((path) => path !== parentPath);
@@ -43,6 +46,17 @@ const formatDeleteLabel = (targets: string[]) => {
   const count = targets.length;
   if (count === 1) return tabLabel(targets[0] ?? "");
   return `${count} items`;
+};
+
+const buildScrollKey = (
+  tabId: string | null,
+  viewMode: ViewMode,
+  path: string,
+  searchValue: string,
+) => {
+  const normalizedPath = normalizePath(path ?? "");
+  const normalizedSearch = searchValue.trim().toLowerCase();
+  return `${tabId ?? "none"}:${viewMode}:${normalizedPath}:${normalizedSearch}`;
 };
 
 const App = () => {
@@ -79,8 +93,9 @@ const App = () => {
     maxEntries: MAX_SCROLL_POSITIONS,
     persistDelayMs: SCROLL_PERSIST_DELAY,
   });
-  const { currentPath, parentPath, entries, entryMeta, loading, status } = fileManager;
-  const { activeTabId, activeTab, viewMode, sidebarOpen, sortState } = tabSession;
+  const { currentPath, parentPath, entries, entryMeta, totalCount, loading, status } =
+    fileManager;
+  const { activeTabId, activeTab, viewMode, sidebarOpen, sortState, tabs } = tabSession;
   // Path, search, and view state for the main content area.
   const {
     pathValue,
@@ -120,6 +135,36 @@ const App = () => {
     useTooltipStore.getState().hideTooltip();
   }, [activeTabId, currentPath, sidebarOpen, viewMode]);
 
+  useEffect(() => {
+    viewLog(
+      "view change: tab=%s path=%s mode=%s loading=%s",
+      activeTabId ?? "none",
+      currentPath,
+      viewMode,
+      loading ? "yes" : "no",
+    );
+  }, [activeTabId, currentPath, loading, viewMode]);
+
+  useEffect(() => {
+    if (!currentPath || loading) return;
+    const activePath = activeTab?.path ?? currentPath;
+    const currentKey = normalizePath(currentPath);
+    const activeKey = normalizePath(activePath);
+    if (activeKey && currentKey && activeKey !== currentKey) return;
+    void fileManager.loadDir(currentPath, {
+      sort: sortState,
+      search: deferredSearchValue,
+      silent: true,
+    });
+  }, [
+    activeTab?.path,
+    currentPath,
+    deferredSearchValue,
+    fileManager.loadDir,
+    loading,
+    sortState,
+  ]);
+
   // Drive + place selection share the same jump target semantics.
   const handleSelectDrive = useCallback(
     (path: string) => tabSession.jumpTo(path),
@@ -157,23 +202,13 @@ const App = () => {
     settings.thumbnailsEnabled,
     thumbnailResetKey,
   );
-  const needsMetaPrefetch = sortState.key !== "name";
-  const metaReady = useMetaPrefetch({
-    enabled: needsMetaPrefetch,
-    loading,
-    resetKey: `${currentPath}:${sortState.key}`,
-    entries,
-    entryMeta,
-    requestMeta: fileManager.requestEntryMeta,
-  });
-  const blockReveal = needsMetaPrefetch && !metaReady;
+  const blockReveal = loading;
 
-  const { sortedEntries, totalCount, visibleCount, isFiltered } = useFilteredEntries({
+  const { sortedEntries, visibleCount, isFiltered, totalCount: resolvedTotalCount } =
+    useFilteredEntries({
     entries,
-    entryMeta,
     searchValue: deferredSearchValue,
-    sortState,
-    metaReady,
+    totalCount,
   });
 
   // Drive stats for the statusbar and overlays.
@@ -187,9 +222,35 @@ const App = () => {
   const viewParentPath =
     canGoUp && settings.showParentEntry && !isFiltered ? parentPath : null;
   const viewPath = activeTab?.path ?? currentPath;
-  const scrollKey = `${activeTabId ?? "none"}:${viewMode}:${viewPath}:${deferredSearchValue.trim()}`;
+  const scrollReady =
+    Boolean(currentPath) &&
+    !loading &&
+    normalizePath(viewPath) === normalizePath(currentPath);
+  const desiredScrollKey = buildScrollKey(
+    activeTabId,
+    viewMode,
+    viewPath,
+    deferredSearchValue,
+  );
+  const stableScrollKeyRef = useRef(desiredScrollKey);
+  // Keep using the last scroll key tied to rendered content until the new view is ready.
+  if (scrollReady) {
+    stableScrollKeyRef.current = desiredScrollKey;
+  }
+  const scrollKey = scrollReady ? desiredScrollKey : stableScrollKeyRef.current;
+  if (scrollLog.enabled) {
+    scrollLog(
+      "key: active=%s desired=%s using=%s ready=%s path=%s",
+      activeTabId ?? "none",
+      desiredScrollKey,
+      scrollKey,
+      scrollReady ? "yes" : "no",
+      currentPath,
+    );
+  }
   const initialScrollTop = getScrollTop(scrollKey);
   const contextMenuActive = Boolean(contextMenu);
+  const viewModel = useFileViewModel(sortedEntries, viewParentPath);
   const {
     gridColumnsRef,
     handleGridColumnsChange,
@@ -202,8 +263,7 @@ const App = () => {
     getSelectionTarget,
     handleSelectItem,
   } = useFileViewInteractions({
-    entries: sortedEntries,
-    parentPath: viewParentPath,
+    viewModel,
     activeTabId,
     currentPath,
     deferredSearchValue,
@@ -302,6 +362,17 @@ const App = () => {
     [activeTabId, canHandleGlobalKeybind, tabSession],
   );
 
+  const handleSelectTabIndex = useCallback(
+    (index: number) => {
+      if (!canHandleGlobalKeybind()) return false;
+      const target = tabs[index - 1];
+      if (!target) return false;
+      tabSession.selectTab(target.id);
+      return true;
+    },
+    [canHandleGlobalKeybind, tabSession, tabs],
+  );
+
   const handleDeleteSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
     if (selectionTargets.length === 0) return false;
@@ -338,6 +409,7 @@ const App = () => {
     if (!canHandleViewKeybind()) return false;
     if (selectionTargets.length === 0) return false;
     useClipboardStore.getState().setClipboard(selectionTargets);
+    void copyPathsToClipboard(selectionTargets);
     return true;
   }, [canHandleViewKeybind, selectionTargets]);
 
@@ -345,7 +417,7 @@ const App = () => {
     if (!canHandleViewKeybind()) return false;
     const clipboard = useClipboardStore.getState().clipboard;
     if (!clipboard || clipboard.paths.length === 0) return false;
-    void fileManager.duplicateEntries(clipboard.paths);
+    void fileManager.pasteEntries(clipboard.paths);
     return true;
   }, [canHandleViewKeybind, fileManager]);
 
@@ -374,12 +446,23 @@ const App = () => {
   );
 
   const reservedKeybinds = useMemo(
-    () => ({
-      F5: handleRefreshKeybind,
-      "Control+c": handleCopySelectionKeybind,
-      "Control+v": handlePasteSelectionKeybind,
-    }),
-    [handleCopySelectionKeybind, handlePasteSelectionKeybind, handleRefreshKeybind],
+    () => {
+      const map: Record<string, (event: KeyboardEvent) => boolean> = {
+        F5: handleRefreshKeybind,
+        "Control+c": handleCopySelectionKeybind,
+        "Control+v": handlePasteSelectionKeybind,
+      };
+      for (let index = 1; index <= 9; index += 1) {
+        map[`Control+${index}`] = () => handleSelectTabIndex(index);
+      }
+      return map;
+    },
+    [
+      handleCopySelectionKeybind,
+      handlePasteSelectionKeybind,
+      handleRefreshKeybind,
+      handleSelectTabIndex,
+    ],
   );
 
   useKeybinds({
@@ -392,7 +475,7 @@ const App = () => {
   const { countLabel, selectionLabel } = useStatusLabels({
     isFiltered,
     visibleCount,
-    totalCount,
+    totalCount: resolvedTotalCount,
     currentDriveInfo,
     selected,
     entryMeta,
@@ -418,18 +501,28 @@ const App = () => {
     }
   }, []);
   // Context menu content is derived from the current target + sort state.
-  const sortMenuItems = useSortMenuItems(sortState, tabSession.setSort);
+  const layoutMenuItems = useLayoutMenuItems({
+    sortState,
+    onSortChange: tabSession.setSort,
+    onPaste: (paths) => {
+      void fileManager.pasteEntries(paths);
+    },
+  });
   const entryMenuItems = useEntryMenuItems({
     target: contextMenu?.kind === "entry" ? contextMenu.entry : null,
     selected,
     parentPath: viewParentPath,
+    currentPath,
     onOpenEntry: fileManager.openEntry,
     onOpenDir: browseFromView,
     onDeleteEntries: fileManager.deleteEntries,
     onClearSelection: clearSelection,
+    onPasteEntries: (paths, destination) => {
+      void fileManager.pasteEntries(paths, destination);
+    },
   });
   const contextMenuItems =
-    contextMenu?.kind === "entry" ? entryMenuItems : sortMenuItems;
+    contextMenu?.kind === "entry" ? entryMenuItems : layoutMenuItems;
   const contextMenuOpen = Boolean(contextMenu && contextMenuItems.length > 0);
 
   // Layout class toggles full-width mode when the sidebar is closed.
@@ -471,6 +564,8 @@ const App = () => {
           onClose: tabSession.closeTab,
           onNew: tabSession.newTab,
           onReorder: tabSession.reorderTabs,
+          showTabNumbers: settings.showTabNumbers,
+          fixedWidthTabs: settings.fixedWidthTabs,
         }}
         crumbsBar={{ path: viewPath, onNavigate: browseFromView }}
       />
@@ -493,12 +588,15 @@ const App = () => {
         fileViewProps={{
           viewMode,
           entries: sortedEntries,
+          items: viewModel.items,
+          itemIndexMap: viewModel.indexMap,
           loading,
-          parentPath: viewParentPath,
           searchQuery: deferredSearchValue,
           scrollKey,
           initialScrollTop,
+          scrollReady,
           scrollRequest,
+          smoothScroll: settings.smoothScroll,
           selectedPaths: selected,
           onSetSelection: setSelection,
           onOpenDir: browseFromView,
@@ -519,7 +617,6 @@ const App = () => {
           gridNameEllipsis: settings.gridNameEllipsis,
           gridNameHideExtension: settings.gridNameHideExtension,
           thumbResetKey: thumbnailResetKey,
-          blockReveal,
           onContextMenu: openSortMenu,
           onEntryContextMenu: handleEntryContextMenu,
           onGridColumnsChange: handleGridColumnsChange,

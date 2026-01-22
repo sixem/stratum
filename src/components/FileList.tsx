@@ -5,13 +5,17 @@ import { useCallback, useMemo, useRef } from "react";
 import {
   useEntryDragOut,
   useEntryMetaRequest,
+  useDynamicOverscan,
+  useScrollAnchor,
+  useScrollSettled,
   useScrollPosition,
   useScrollToIndex,
   useSelectionDrag,
+  useWheelSnap,
   useVirtualRange,
-  useViewReady,
 } from "@/hooks";
-import { buildEntryItems, getEmptyMessage, handleMiddleClick, isEntryItem } from "@/lib";
+import { getEmptyMessage, handleMiddleClick, isEntryItem } from "@/lib";
+import type { EntryItem } from "@/lib";
 import type { EntryMeta, FileEntry } from "@/types";
 import { EmptyState } from "./EmptyState";
 import { LoadingIndicator } from "./LoadingIndicator";
@@ -20,12 +24,15 @@ import { EntryRow, ParentRow } from "./fileList/index";
 
 type FileListProps = {
   entries: FileEntry[];
+  items: EntryItem[];
+  itemIndexMap: Map<string, number>;
   loading: boolean;
-  parentPath: string | null;
   searchQuery: string;
   scrollKey: string;
   initialScrollTop: number;
+  scrollReady: boolean;
   scrollRequest?: { index: number; nonce: number } | null;
+  smoothScroll: boolean;
   selectedPaths: Set<string>;
   onSetSelection: (paths: string[], anchor?: string) => void;
   onOpenDir: (path: string) => void;
@@ -35,8 +42,7 @@ type FileListProps = {
   onClearSelection: () => void;
   onScrollTopChange: (key: string, scrollTop: number) => void;
   entryMeta: Map<string, EntryMeta>;
-  onRequestMeta: (paths: string[]) => void;
-  blockReveal: boolean;
+  onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   onContextMenu?: (event: ReactMouseEvent) => void;
   onEntryContextMenu?: (
     event: ReactMouseEvent,
@@ -49,16 +55,21 @@ type FileListProps = {
 const ROW_HEIGHT = 48;
 const ROW_GAP = 8;
 const OVERSCAN = 10;
+const OVERSCAN_MIN = 2;
+const OVERSCAN_WARMUP_MS = 140;
 const noop = () => {};
 
 export default function FileList({
   entries,
+  items,
+  itemIndexMap,
   loading,
-  parentPath,
   searchQuery,
   scrollKey,
   initialScrollTop,
+  scrollReady,
   scrollRequest,
+  smoothScroll,
   selectedPaths,
   onSetSelection,
   onOpenDir,
@@ -69,29 +80,30 @@ export default function FileList({
   onScrollTopChange,
   entryMeta,
   onRequestMeta,
-  blockReveal,
   onContextMenu,
   onEntryContextMenu,
   dropTargetPath,
   onStartDragOut,
 }: FileListProps) {
   const emptyMessage = useMemo(() => getEmptyMessage(searchQuery), [searchQuery]);
-  const rows = useMemo(() => buildEntryItems(entries, parentPath), [entries, parentPath]);
+  const rows = items;
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const itemHeight = ROW_HEIGHT + ROW_GAP;
-  const virtual = useVirtualRange(listRef, rows.length, itemHeight, OVERSCAN);
+  // When smooth scrolling is disabled, snap wheel input to a single row.
+  useWheelSnap(listRef, smoothScroll ? 0 : itemHeight);
+  const scrolling = useScrollSettled(listRef);
+  const overscan = useDynamicOverscan({
+    resetKey: scrollKey,
+    base: OVERSCAN,
+    min: OVERSCAN_MIN,
+    warmupMs: OVERSCAN_WARMUP_MS,
+  });
+  const virtual = useVirtualRange(listRef, rows.length, itemHeight, overscan);
   const visibleRows = rows.slice(virtual.startIndex, virtual.endIndex);
   const hasContent = rows.length > 0;
-  // Hide stale rows during navigation to avoid fill-in while scrolled.
-  const keepVisible = false;
-  const showGhost = blockReveal && !loading && hasContent;
-  const { ready: viewReady, animate: viewAnimate } = useViewReady(
-    loading,
-    [rows.length, parentPath, searchQuery, scrollKey],
-    keepVisible,
-  );
-  const contentReady = (keepVisible ? true : viewReady) && !showGhost;
+  const contentReady = true;
+  const viewAnimate = false;
   const metaPaths = useMemo(
     () =>
       visibleRows
@@ -155,11 +167,31 @@ export default function FileList({
     event.stopPropagation();
   }, []);
 
+  const { handleScrollTopChange: handleAnchorScroll, getAnchorTop } = useScrollAnchor(
+    listRef,
+    {
+      scrollKey,
+      items: rows,
+      itemHeight,
+      scrollReady,
+      loading,
+      getItemPath: (item) => {
+        if (item.type === "parent") return item.path;
+        if (item.type === "entry") return item.entry.path;
+        return null;
+      },
+      getItemIndex: (path) => itemIndexMap.get(path) ?? null,
+      // Persist scroll even while the view is transitioning.
+      onScrollTopChange,
+    },
+  );
+  const restoreTop = getAnchorTop() ?? initialScrollTop;
+
   useScrollPosition(listRef, {
     scrollKey,
-    initialTop: initialScrollTop,
-    onScrollTopChange,
-    restoreReady: !loading && !showGhost,
+    initialTop: restoreTop,
+    onScrollTopChange: handleAnchorScroll,
+    restoreReady: scrollReady && !loading,
   });
   useScrollToIndex(listRef, {
     itemCount: rows.length,
@@ -172,7 +204,7 @@ export default function FileList({
     clearSelection: onClearSelection,
     itemSelector: "[data-selectable=\"true\"]",
   });
-  const dragEnabled = Boolean(onStartDragOut) && !loading && !showGhost;
+  const dragEnabled = Boolean(onStartDragOut) && !loading;
   useEntryDragOut(listRef, {
     selected: selectedPaths,
     onSetSelection,
@@ -180,7 +212,8 @@ export default function FileList({
     itemSelector: "[data-selectable=\"true\"]",
     enabled: dragEnabled,
   });
-  useEntryMetaRequest(loading, metaPaths, onRequestMeta);
+  useEntryMetaRequest(loading || scrolling, metaPaths, onRequestMeta);
+  const showLoadingOverlay = loading && !hasContent;
 
   return (
     <div className="file-list">
@@ -199,8 +232,6 @@ export default function FileList({
               "--list-row-gap": `${ROW_GAP}px`,
             } as CSSProperties
           }
-          data-hold={loading ? "true" : "false"}
-          data-blocked={showGhost ? "true" : "false"}
           onContextMenu={(event) => {
             if (!onContextMenu) return;
             const target = event.target as HTMLElement | null;
@@ -214,7 +245,6 @@ export default function FileList({
             className="list-content"
             data-ready={contentReady ? "true" : "false"}
             data-animate={viewAnimate ? "true" : "false"}
-            data-loading={keepVisible ? "true" : "false"}
           >
             <div className="list-spacer" style={{ height: `${virtual.totalHeight}px` }} />
             <div
@@ -264,18 +294,9 @@ export default function FileList({
           </div>
           <SelectionRect box={selectionBox} />
         </div>
-        <div className="list-ghost" data-visible={showGhost ? "true" : "false"}>
-          {Array.from({ length: 12 }, (_, index) => (
-            <div className="ghost-row" key={`ghost-row-${index}`}>
-              <span className="ghost-bar ghost-name" />
-              <span className="ghost-bar ghost-size" />
-              <span className="ghost-bar ghost-modified" />
-            </div>
-          ))}
-        </div>
         <div
           className="loading-overlay"
-          data-visible={loading ? "true" : "false"}
+          data-visible={showLoadingOverlay ? "true" : "false"}
           data-solid={!hasContent ? "true" : "false"}
         >
           <LoadingIndicator />

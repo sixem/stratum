@@ -1,8 +1,7 @@
 // Owns the main layout body (sidebar + file view) and the focusable main container.
 import type { ComponentProps, RefObject } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { FileView } from "@/components/FileView";
-import { Sidebar } from "@/components/Sidebar";
+import { FileView, PerfProfiler, Sidebar } from "@/components";
 
 type AppContentProps = {
   layoutClass: string;
@@ -22,11 +21,19 @@ export const AppContent = ({
   onContextMenu,
 }: AppContentProps) => {
   return (
-    <div className={layoutClass} onContextMenu={onContextMenu}>
-      {sidebarOpen ? <Sidebar {...sidebarProps} /> : null}
-      <main className="main" ref={mainRef} tabIndex={-1}>
-        <FileView {...fileViewProps} />
-      </main>
-    </div>
+    <PerfProfiler id="app-content">
+      <div className={layoutClass} onContextMenu={onContextMenu}>
+        {sidebarOpen ? (
+          <PerfProfiler id="sidebar">
+            <Sidebar {...sidebarProps} />
+          </PerfProfiler>
+        ) : null}
+        <main className="main" ref={mainRef} tabIndex={-1}>
+          <PerfProfiler id="file-view">
+            <FileView {...fileViewProps} />
+          </PerfProfiler>
+        </main>
+      </div>
+    </PerfProfiler>
   );
 };

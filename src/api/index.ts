@@ -1,6 +1,7 @@
 // Barrel exports for native API wrappers.
 export type { DragOutcome } from "./drag";
 export { startDrag } from "./drag";
+export { copyPathsToClipboard } from "./clipboard";
 export {
   copyEntries,
   deleteEntries,
@@ -8,6 +9,7 @@ export {
   getHome,
   getPlaces,
   listDir,
+  listDirWithParent,
   listDriveInfo,
   parentDir,
   statEntries,

@@ -4,11 +4,10 @@ import type { KeybindAction, KeybindMap } from "@/modules";
 import {
   DEFAULT_KEYBINDS,
   KEYBIND_DEFINITIONS,
-  RESERVED_KEYBINDS,
   buildKeybindFromEvent,
   formatKeybind,
+  getReservedKeybindLabel,
   isBareCharacterKeybind,
-  isReservedKeybind,
   normalizeKeybind,
 } from "@/modules";
 import type { SettingsUpdateHandler } from "./types";
@@ -56,8 +55,9 @@ export function SettingsKeybindsSection({
       if (!next) return;
       const normalized = normalizeKeybind(next);
       if (!normalized) return;
-      if (isReservedKeybind(normalized)) {
-        setCaptureError("That shortcut is reserved.");
+      const reservedLabel = getReservedKeybindLabel(normalized);
+      if (reservedLabel) {
+        setCaptureError(`That shortcut is reserved for ${reservedLabel}.`);
         return;
       }
       if (isBareCharacterKeybind(normalized)) {
@@ -161,19 +161,6 @@ export function SettingsKeybindsSection({
           </div>
         );
       })}
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Fixed shortcuts</div>
-          <div className="settings-desc">Reserved for search, copy, paste, and refresh.</div>
-        </div>
-        <div className="settings-actions">
-          {RESERVED_KEYBINDS.map((binding) => (
-            <span className="keybind-pill" key={binding}>
-              {formatKeybind(binding)}
-            </span>
-          ))}
-        </div>
-      </div>
     </section>
   );
 }

@@ -1,13 +1,13 @@
 // Coordinates selection, typeahead navigation, and grid column tracking for the file view.
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useRef } from "react";
 import type { RefObject } from "react";
-import type { FileEntry, ViewMode } from "@/types";
+import type { ViewMode } from "@/types";
+import type { FileViewModel } from "./useFileViewModel";
 import { useFileViewSelection } from "./useFileViewSelection";
 import { useTypeaheadSelection } from "./useTypeaheadSelection";
 
 type UseFileViewInteractionsOptions = {
-  entries: FileEntry[];
-  parentPath: string | null;
+  viewModel: FileViewModel;
   activeTabId: string | null;
   currentPath: string;
   deferredSearchValue: string;
@@ -21,8 +21,7 @@ type UseFileViewInteractionsOptions = {
 };
 
 export const useFileViewInteractions = ({
-  entries,
-  parentPath,
+  viewModel,
   activeTabId,
   currentPath,
   deferredSearchValue,
@@ -39,6 +38,7 @@ export const useFileViewInteractions = ({
     gridColumnsRef.current = columns;
   }, []);
   const selectionResetKey = `${activeTabId ?? "none"}:${currentPath}`;
+  // Reuse the shared view model so selection + typeahead stay in sync.
   const {
     selected,
     selectItem,
@@ -49,19 +49,9 @@ export const useFileViewInteractions = ({
     getSelectionTarget,
     handleSelectItem,
   } = useFileViewSelection({
-    entries,
-    parentPath,
+    viewModel,
     resetKey: selectionResetKey,
   });
-
-  const typeaheadItems = useMemo(() => {
-    const offset = parentPath ? 1 : 0;
-    return entries.map((entry, index) => ({
-      path: entry.path,
-      index: index + offset,
-      label: entry.name.toLowerCase(),
-    }));
-  }, [entries, parentPath]);
 
   const handleTypeaheadMatch = useCallback(
     (item: { path: string; index: number }) => {
@@ -92,7 +82,7 @@ export const useFileViewInteractions = ({
   );
 
   useTypeaheadSelection({
-    items: typeaheadItems,
+    items: viewModel.typeaheadItems,
     onMatch: handleTypeaheadMatch,
     shouldHandle: shouldHandleTypeahead,
     resetKeys: [currentPath, deferredSearchValue, viewMode],

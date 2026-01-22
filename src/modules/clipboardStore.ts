@@ -1,5 +1,5 @@
 // Internal clipboard for file paths copied from the grid/list.
-import { create } from "zustand";
+import { createWithEqualityFn } from "zustand/traditional";
 
 export type ClipboardPayload = {
   paths: string[];
@@ -25,7 +25,7 @@ const normalizeClipboardPaths = (paths: string[]) => {
   return next;
 };
 
-export const useClipboardStore = create<ClipboardStore>((set) => ({
+export const useClipboardStore = createWithEqualityFn<ClipboardStore>((set) => ({
   clipboard: null,
   setClipboard: (paths) => {
     const normalized = normalizeClipboardPaths(paths);

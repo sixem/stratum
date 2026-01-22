@@ -1,5 +1,6 @@
 // Persists scroll positions for tabs and view modes.
 import { useCallback, useEffect, useRef } from "react";
+import { makeDebug } from "@/lib";
 import { useSessionStore } from "@/modules";
 
 type UseScrollPositionsOptions = {
@@ -9,6 +10,7 @@ type UseScrollPositionsOptions = {
 
 const DEFAULT_MAX_ENTRIES = 160;
 const DEFAULT_PERSIST_DELAY = 800;
+const log = makeDebug("scroll:store");
 
 export const useScrollPositions = ({
   maxEntries = DEFAULT_MAX_ENTRIES,
@@ -43,10 +45,16 @@ export const useScrollPositions = ({
         map.delete(key);
       }
       map.set(key, nextTop);
+      if (log.enabled) {
+        log("save: key=%s top=%d size=%d", key, nextTop, map.size);
+      }
       if (map.size > maxEntries) {
         const oldest = map.keys().next().value;
         if (oldest) {
           map.delete(oldest);
+          if (log.enabled) {
+            log("evict: key=%s size=%d", oldest, map.size);
+          }
         }
       }
       schedulePersist();

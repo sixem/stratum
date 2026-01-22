@@ -1,6 +1,6 @@
 // Tab strip for open folders with drag reordering.
 import type { DragEvent } from "react";
-import { Fragment } from "react";
+import { Fragment, startTransition } from "react";
 import { handleMiddleClick, tabLabel } from "@/lib";
 import { useTabDragDrop } from "@/hooks";
 import type { Tab } from "@/types";
@@ -9,6 +9,8 @@ import { TooltipWrapper } from "./Tooltip";
 type TabsBarProps = {
   tabs: Tab[];
   activeId: string | null;
+  showTabNumbers: boolean;
+  fixedWidthTabs: boolean;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onNew: () => void;
@@ -26,6 +28,9 @@ type TabItemProps = {
   onDragEnd: () => void;
   isDragging: boolean;
   index: number;
+  showIndex: boolean;
+  showClose: boolean;
+  fixedWidthTabs: boolean;
 };
 
 const TabItem = ({
@@ -39,6 +44,9 @@ const TabItem = ({
   onDragEnd,
   isDragging,
   index,
+  showIndex,
+  showClose,
+  fixedWidthTabs,
 }: TabItemProps) => {
   const label = tabLabel(tab.path);
   return (
@@ -54,19 +62,44 @@ const TabItem = ({
       }}
     >
       <TooltipWrapper text={tab.path}>
-        <button type="button" className="tab-main" onClick={() => onSelect(tab.id)}>
+        <button
+          type="button"
+          className="tab-main"
+          onMouseDown={(event) => {
+            if (event.button !== 0) return;
+            if (isActive) return;
+            // Defer the state change so the mousedown handler stays light.
+            event.preventDefault();
+            window.requestAnimationFrame(() => {
+              startTransition(() => onSelect(tab.id));
+            });
+          }}
+          onClick={(event) => {
+            // Keep keyboard activation working without double-triggering.
+            if (event.detail !== 0) return;
+            if (isActive) return;
+            startTransition(() => onSelect(tab.id));
+          }}
+        >
+          {showIndex ? <span className="tab-index">{index + 1}</span> : null}
           <span className="tab-title">{label}</span>
         </button>
       </TooltipWrapper>
-      <button
-        type="button"
-        className="tab-close"
-        onClick={() => onClose(tab.id)}
-        aria-label={`Close ${label} tab`}
-        disabled={!canClose}
-      >
-        x
-      </button>
+      {showClose ? (
+        <button
+          type="button"
+          className="tab-close"
+          onClick={() => {
+            startTransition(() => onClose(tab.id));
+          }}
+          aria-label={`Close ${label} tab`}
+          disabled={!canClose}
+        >
+          x
+        </button>
+      ) : fixedWidthTabs ? (
+        <span className="tab-close-spacer" aria-hidden="true" />
+      ) : null}
     </div>
   );
 };
@@ -76,6 +109,8 @@ const TabDrop = () => <div className="tab-drop" />;
 export function TabsBar({
   tabs,
   activeId,
+  showTabNumbers,
+  fixedWidthTabs,
   onSelect,
   onClose,
   onNew,
@@ -97,7 +132,12 @@ export function TabsBar({
 
   return (
     <div className="tabsbar">
-      <div className="tabs" onDrop={handleDrop} onDragOver={handleContainerDragOver}>
+      <div
+        className="tabs"
+        data-fixed-tabs={fixedWidthTabs ? "true" : "false"}
+        onDrop={handleDrop}
+        onDragOver={handleContainerDragOver}
+      >
         {tabs.map((tab, index) => (
           <Fragment key={tab.id}>
             {dropIndex === index ? <TabDrop /> : null}
@@ -112,6 +152,9 @@ export function TabsBar({
               onDragEnd={handleDragEnd}
               isDragging={draggingId === tab.id}
               index={index}
+              showIndex={showTabNumbers}
+              showClose={tab.id === activeId}
+              fixedWidthTabs={fixedWidthTabs}
             />
           </Fragment>
         ))}

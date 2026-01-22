@@ -3,9 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 type UseSelectionOptions = {
   items: string[];
   resetKey: string;
+  indexMap?: Map<string, number>;
 };
 
-export const useSelection = ({ items, resetKey }: UseSelectionOptions) => {
+export const useSelection = ({ items, resetKey, indexMap }: UseSelectionOptions) => {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const selectedRef = useRef<Set<string>>(new Set());
   const anchorPathRef = useRef<string | null>(null);
@@ -27,16 +28,21 @@ export const useSelection = ({ items, resetKey }: UseSelectionOptions) => {
     setSelected(next);
   }, []);
 
-  const indexMap = useMemo(() => {
+  // Accept a precomputed index map when the caller already has one.
+  const selectionIndexMap = useMemo(() => {
+    if (indexMap) return indexMap;
     // Map item -> index without allocating a temporary array.
     const map = new Map<string, number>();
     items.forEach((path, index) => {
       map.set(path, index);
     });
     return map;
-  }, [items]);
+  }, [indexMap, items]);
 
   useEffect(() => {
+    if (selectedRef.current.size === 0 && !anchorPathRef.current) {
+      return;
+    }
     const next = new Set<string>();
     selectedRef.current = next;
     setSelected(next);
@@ -75,7 +81,7 @@ export const useSelection = ({ items, resetKey }: UseSelectionOptions) => {
       const isToggle = modifiers.ctrlKey || modifiers.metaKey || modifiers.altKey;
       const isRange = modifiers.shiftKey;
       const anchorPath = anchorPathRef.current;
-      const anchorIndex = anchorPath ? indexMap.get(anchorPath) : undefined;
+      const anchorIndex = anchorPath ? selectionIndexMap.get(anchorPath) : undefined;
       const current = selectedRef.current;
 
       let next: Set<string>;
@@ -103,14 +109,14 @@ export const useSelection = ({ items, resetKey }: UseSelectionOptions) => {
         anchorPathRef.current = path;
       }
     },
-    [indexMap, items],
+    [items, selectionIndexMap],
   );
 
   const setSelection = useCallback(
     (paths: string[], anchor?: string) => {
       const next = new Set<string>();
       paths.forEach((path) => {
-        if (indexMap.has(path)) {
+        if (selectionIndexMap.has(path)) {
           next.add(path);
         }
       });
@@ -121,7 +127,7 @@ export const useSelection = ({ items, resetKey }: UseSelectionOptions) => {
         anchorPathRef.current = paths[paths.length - 1] ?? null;
       }
     },
-    [indexMap],
+    [selectionIndexMap],
   );
 
   const isSelected = useCallback((path: string) => selected.has(path), [selected]);

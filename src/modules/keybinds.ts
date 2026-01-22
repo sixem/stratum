@@ -61,9 +61,6 @@ export const DEFAULT_KEYBINDS = KEYBIND_DEFINITIONS.reduce<KeybindMap>((acc, ent
   return acc;
 }, {} as KeybindMap);
 
-// Fixed shortcuts that cannot be reassigned.
-export const RESERVED_KEYBINDS = ["Control+f", "Control+c", "Control+v", "F5"];
-
 const MODIFIER_ORDER = ["Control", "Alt", "Shift", "Meta"] as const;
 const MODIFIER_KEYS = new Set(MODIFIER_ORDER);
 const PRIMARY_MODIFIERS = new Set(["Control", "Alt", "Meta"]);
@@ -142,6 +139,27 @@ export const normalizeKeybind = (binding: string) => {
   return [...orderedMods, key].join("+");
 };
 
+// Fixed shortcuts that cannot be reassigned.
+const RESERVED_KEYBIND_DEFINITIONS = [
+  { combo: "Control+f", label: "Search" },
+  { combo: "Control+c", label: "Copy" },
+  { combo: "Control+v", label: "Paste" },
+  { combo: "F5", label: "Refresh" },
+  { combo: "Control+1", label: "Tab 1" },
+  { combo: "Control+2", label: "Tab 2" },
+  { combo: "Control+3", label: "Tab 3" },
+  { combo: "Control+4", label: "Tab 4" },
+  { combo: "Control+5", label: "Tab 5" },
+  { combo: "Control+6", label: "Tab 6" },
+  { combo: "Control+7", label: "Tab 7" },
+  { combo: "Control+8", label: "Tab 8" },
+  { combo: "Control+9", label: "Tab 9" },
+];
+
+export const RESERVED_KEYBINDS = RESERVED_KEYBIND_DEFINITIONS.map(
+  (definition) => definition.combo,
+);
+
 const isSingleCharacterBinding = (normalized: string) => {
   if (!normalized) return false;
   const parts = normalized.split("+");
@@ -166,9 +184,17 @@ export const formatKeybind = (binding: string) => {
     .join("+");
 };
 
-export const isReservedKeybind = (binding: string) => {
+export const getReservedKeybindLabel = (binding: string) => {
   const normalized = normalizeKeybind(binding);
-  return RESERVED_KEYBINDS.some((reserved) => normalizeKeybind(reserved) === normalized);
+  if (!normalized) return null;
+  const reserved = RESERVED_KEYBIND_DEFINITIONS.find(
+    (definition) => normalizeKeybind(definition.combo) === normalized,
+  );
+  return reserved?.label ?? null;
+};
+
+export const isReservedKeybind = (binding: string) => {
+  return Boolean(getReservedKeybindLabel(binding));
 };
 
 export const buildKeybindFromEvent = (event: KeyboardEvent) => {

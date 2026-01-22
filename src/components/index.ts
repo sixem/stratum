@@ -11,6 +11,7 @@ export { LoadingIndicator } from "./LoadingIndicator";
 export { LoadingState } from "./LoadingState";
 export { PathBar } from "./PathBar";
 export { PathCrumbsBar } from "./PathCrumbsBar";
+export { PerfProfiler } from "./PerfProfiler";
 export { PromptModal } from "./PromptModal";
 export { SelectionRect } from "./SelectionRect";
 export { SettingsOverlay } from "./SettingsOverlay";

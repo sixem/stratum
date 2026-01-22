@@ -1,7 +1,7 @@
 // Handles view selection state for list and grid views.
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import type { FileEntry } from "@/types";
+import type { FileViewModel } from "./useFileViewModel";
 import { useSelection } from "./useSelection";
 
 type SelectionTarget = {
@@ -10,35 +10,19 @@ type SelectionTarget = {
 };
 
 type UseFileViewSelectionOptions = {
-  entries: FileEntry[];
-  parentPath: string | null;
+  viewModel: FileViewModel;
   resetKey: string;
 };
 
 export const useFileViewSelection = ({
-  entries,
-  parentPath,
+  viewModel,
   resetKey,
 }: UseFileViewSelectionOptions) => {
-  const { selectionItems, entryByPath } = useMemo(() => {
-    // Build selection order and lookup map together to avoid extra passes.
-    const nextItems: string[] = [];
-    const nextEntryMap = new Map<string, FileEntry>();
-    if (parentPath) {
-      nextItems.push(parentPath);
-    }
-    entries.forEach((entry) => {
-      nextItems.push(entry.path);
-      nextEntryMap.set(entry.path, entry);
-    });
-    return { selectionItems: nextItems, entryByPath: nextEntryMap };
-  }, [entries, parentPath]);
-
-  const selectionIndexMap = useMemo(() => {
-    const map = new Map<string, number>();
-    selectionItems.forEach((path, index) => map.set(path, index));
-    return map;
-  }, [selectionItems]);
+  // Use the shared view model so selection stays aligned with rendered order.
+  const selectionItems = viewModel.itemPaths;
+  const selectionIndexMap = viewModel.indexMap;
+  const entryByPath = viewModel.entryByPath;
+  const parentPath = viewModel.parentPath;
 
   const {
     selected,
@@ -50,6 +34,7 @@ export const useFileViewSelection = ({
   } = useSelection({
     items: selectionItems,
     resetKey,
+    indexMap: selectionIndexMap,
   });
 
   const getSelectionIndex = useCallback(() => {

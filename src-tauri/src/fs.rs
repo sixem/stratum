@@ -1,4 +1,5 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -15,6 +16,51 @@ pub struct FileEntry {
     pub is_dir: bool,
     pub size: Option<u64>,
     pub modified: Option<u64>,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SortKey {
+    Name,
+    Size,
+    Modified,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SortDir {
+    Asc,
+    Desc,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SortState {
+    pub key: SortKey,
+    pub dir: SortDir,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListDirOptions {
+    pub sort: Option<SortState>,
+    pub search: Option<String>,
+    pub fast: Option<bool>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListDirResult {
+    pub entries: Vec<FileEntry>,
+    pub total_count: usize,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListDirWithParentResult {
+    pub entries: Vec<FileEntry>,
+    pub total_count: usize,
+    pub parent_path: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -75,6 +121,166 @@ fn push_place(places: &mut Vec<Place>, name: &str, path: PathBuf) {
             name: name.to_string(),
             path: path.to_string_lossy().to_string(),
         });
+    }
+}
+
+fn default_sort_state() -> SortState {
+    SortState {
+        key: SortKey::Name,
+        dir: SortDir::Asc,
+    }
+}
+
+fn normalize_search(value: Option<String>) -> String {
+    value.unwrap_or_default().trim().to_lowercase()
+}
+
+fn compare_numbers(a: Option<u64>, b: Option<u64>) -> Ordering {
+    match (a, b) {
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Greater,
+        (Some(_), None) => Ordering::Less,
+        (Some(left), Some(right)) => left.cmp(&right),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Segment<'a> {
+    Digits { value: Option<u64>, len: usize, raw: &'a str },
+    Text(&'a str),
+}
+
+impl<'a> Segment<'a> {
+    fn as_str(&self) -> &str {
+        match self {
+            Segment::Digits { raw, .. } => raw,
+            Segment::Text(value) => value,
+        }
+    }
+}
+
+fn next_segment<'a>(value: &'a str, start: usize) -> (Segment<'a>, usize) {
+    let mut iter = value[start..].char_indices();
+    let (_first_offset, first_char) = iter
+        .next()
+        .map(|(offset, ch)| (offset, ch))
+        .unwrap_or((0, '\0'));
+    let is_digit = first_char.is_ascii_digit();
+    let mut end = start + first_char.len_utf8();
+    for (offset, ch) in iter {
+        if ch.is_ascii_digit() != is_digit {
+            break;
+        }
+        end = start + offset + ch.len_utf8();
+    }
+    let segment = &value[start..end];
+    if is_digit {
+        let parsed = segment.parse::<u64>().ok();
+        (
+            Segment::Digits {
+                value: parsed,
+                len: segment.len(),
+                raw: segment,
+            },
+            end,
+        )
+    } else {
+        (Segment::Text(segment), end)
+    }
+}
+
+// Approximate Intl.Collator numeric + case-insensitive ordering from the UI.
+fn natural_compare(left: &str, right: &str) -> Ordering {
+    let mut left_index = 0;
+    let mut right_index = 0;
+    let left_len = left.len();
+    let right_len = right.len();
+
+    while left_index < left_len && right_index < right_len {
+        let (left_segment, next_left) = next_segment(left, left_index);
+        let (right_segment, next_right) = next_segment(right, right_index);
+        left_index = next_left;
+        right_index = next_right;
+
+        let ordering = match (left_segment, right_segment) {
+            (
+                Segment::Digits {
+                    value: left_value,
+                    len: left_len,
+                    raw: left_raw,
+                },
+                Segment::Digits {
+                    value: right_value,
+                    len: right_len,
+                    raw: right_raw,
+                },
+            ) => {
+                match (left_value, right_value) {
+                    (Some(l), Some(r)) if l != r => l.cmp(&r),
+                    (Some(_), None) => Ordering::Less,
+                    (None, Some(_)) => Ordering::Greater,
+                    _ => {
+                        if left_len != right_len {
+                            left_len.cmp(&right_len)
+                        } else {
+                            left_raw.cmp(right_raw)
+                        }
+                    }
+                }
+            }
+            (Segment::Text(left_text), Segment::Text(right_text)) => {
+                left_text.cmp(right_text)
+            }
+            (left_segment, right_segment) => left_segment.as_str().cmp(right_segment.as_str()),
+        };
+
+        if ordering != Ordering::Equal {
+            return ordering;
+        }
+    }
+
+    left_len.cmp(&right_len)
+}
+
+fn compare_names(left: &str, right: &str) -> Ordering {
+    let left_lower = left.to_lowercase();
+    let right_lower = right.to_lowercase();
+    natural_compare(&left_lower, &right_lower)
+}
+
+fn apply_sort_dir(ordering: Ordering, dir: SortDir) -> Ordering {
+    match dir {
+        SortDir::Asc => ordering,
+        SortDir::Desc => ordering.reverse(),
+    }
+}
+
+// Keep folders first, then apply the requested sort with name fallbacks.
+fn compare_entries(left: &FileEntry, right: &FileEntry, sort: &SortState) -> Ordering {
+    if left.is_dir != right.is_dir {
+        return if left.is_dir {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        };
+    }
+
+    match sort.key {
+        SortKey::Name => apply_sort_dir(compare_names(&left.name, &right.name), sort.dir),
+        SortKey::Size => {
+            let size_order = compare_numbers(left.size, right.size);
+            if size_order != Ordering::Equal {
+                return apply_sort_dir(size_order, sort.dir);
+            }
+            compare_names(&left.name, &right.name)
+        }
+        SortKey::Modified => {
+            let modified_order = compare_numbers(left.modified, right.modified);
+            if modified_order != Ordering::Equal {
+                return apply_sort_dir(modified_order, sort.dir);
+            }
+            compare_names(&left.name, &right.name)
+        }
     }
 }
 
@@ -155,38 +361,80 @@ pub fn list_drive_info() -> Vec<DriveInfo> {
         .collect()
 }
 
-pub fn list_dir(path: String) -> Result<Vec<FileEntry>, String> {
+pub fn list_dir(path: String, options: Option<ListDirOptions>) -> Result<ListDirResult, String> {
     let trimmed = path.trim();
     let target = if trimmed.is_empty() {
         home_dir().ok_or_else(|| "Unable to resolve home directory".to_string())?
     } else {
         PathBuf::from(trimmed)
     };
+    let options = options.unwrap_or(ListDirOptions {
+        sort: None,
+        search: None,
+        fast: None,
+    });
+    let sort = options.sort.unwrap_or_else(default_sort_state);
+    let search = normalize_search(options.search);
+    let fast = options.fast.unwrap_or(false);
+    // For size/modified sorts we need file metadata, but keep folders name-sorted.
+    let include_meta = !fast && !matches!(sort.key, SortKey::Name);
 
     let entries = fs::read_dir(&target).map_err(|err| err.to_string())?;
     let mut items = Vec::new();
+    let mut total_count = 0;
+    let has_search = !search.is_empty();
 
     for entry in entries {
         let entry = match entry {
             Ok(value) => value,
             Err(_) => continue,
         };
-        let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
+        total_count += 1;
         let name = entry.file_name().to_string_lossy().to_string();
+        if has_search && !name.to_lowercase().contains(&search) {
+            continue;
+        }
         let path = entry.path().to_string_lossy().to_string();
+        let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
+        let mut size = None;
+        let mut modified = None;
+        if include_meta && !is_dir {
+            if let Ok(metadata) = entry.metadata() {
+                size = Some(metadata.len());
+                modified = metadata.modified().ok().and_then(to_epoch_ms);
+            }
+        }
 
         items.push(FileEntry {
             name,
             path,
             is_dir,
-            size: None,
-            modified: None,
+            size,
+            modified,
         });
     }
+    if items.len() > 1 {
+        items.sort_by(|left, right| compare_entries(left, right, &sort));
+    }
 
-    items.sort_by_cached_key(|entry| (!entry.is_dir, entry.name.to_lowercase()));
+    Ok(ListDirResult {
+        entries: items,
+        total_count,
+    })
+}
 
-    Ok(items)
+pub fn list_dir_with_parent(
+    path: String,
+    options: Option<ListDirOptions>,
+) -> Result<ListDirWithParentResult, String> {
+    let path_copy = path.clone();
+    let result = list_dir(path, options)?;
+    let parent_path = parent_dir(path_copy);
+    Ok(ListDirWithParentResult {
+        entries: result.entries,
+        total_count: result.total_count,
+        parent_path,
+    })
 }
 
 pub fn stat_entries(paths: Vec<String>) -> Vec<EntryMeta> {

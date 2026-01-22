@@ -2,6 +2,9 @@
 import type { DriveInfo, EntryMeta, FileEntry } from "@/types";
 import { formatBytes, formatDate, formatPercent } from "./format";
 
+const TOOLTIP_CACHE_LIMIT = 10000;
+const entryTooltipCache = new Map<string, string>();
+
 const getFileTypeLabel = (name: string) => {
   const lastDot = name.lastIndexOf(".");
   if (lastDot <= 0 || lastDot === name.length - 1) {
@@ -18,7 +21,7 @@ const formatSizeDetail = (size: number | null | undefined) => {
   return `${formatBytes(size)} (${bytesLabel} ${suffix})`;
 };
 
-export const buildEntryTooltip = (entry: FileEntry, meta?: EntryMeta) => {
+const buildEntryTooltipCore = (entry: FileEntry, meta?: EntryMeta) => {
   if (entry.isDir) {
     return entry.path;
   }
@@ -33,6 +36,34 @@ export const buildEntryTooltip = (entry: FileEntry, meta?: EntryMeta) => {
     `Len (Full Path): ${entry.name.length} (${entry.path.length} characters)`,
     `Full Path: ${entry.path}`,
   ].join("\n");
+};
+
+const trimEntryTooltipCache = () => {
+  while (entryTooltipCache.size > TOOLTIP_CACHE_LIMIT) {
+    const oldest = entryTooltipCache.keys().next().value;
+    if (!oldest) break;
+    entryTooltipCache.delete(oldest);
+  }
+};
+
+// Cache entry tooltips so list/grid renders avoid repeated formatting work.
+export const buildEntryTooltip = (entry: FileEntry, meta?: EntryMeta) => {
+  if (entry.isDir) {
+    return entry.path;
+  }
+  const keyParts = [
+    entry.path,
+    entry.name,
+    meta?.size ?? "null",
+    meta?.modified ?? "null",
+  ];
+  const cacheKey = keyParts.join("|");
+  const cached = entryTooltipCache.get(cacheKey);
+  if (cached) return cached;
+  const tooltip = buildEntryTooltipCore(entry, meta);
+  entryTooltipCache.set(cacheKey, tooltip);
+  trimEntryTooltipCache();
+  return tooltip;
 };
 
 export const buildDriveTooltip = (label: string, info?: DriveInfo) => {

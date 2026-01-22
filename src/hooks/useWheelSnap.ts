@@ -14,9 +14,10 @@ export function useWheelSnap(
 
     const handleWheel = (event: WheelEvent) => {
       if (event.ctrlKey) return;
-      event.preventDefault();
       const direction = Math.sign(event.deltaY);
       if (!direction) return;
+      // Own vertical wheel scrolling so each tick snaps a consistent distance.
+      event.preventDefault();
       const step = Math.max(1, stepPx);
       const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
       const nextTop = Math.min(maxScrollTop, Math.max(0, element.scrollTop + direction * step));
@@ -30,5 +31,5 @@ export function useWheelSnap(
 
     element.addEventListener("wheel", handleWheel, { passive: false });
     return () => element.removeEventListener("wheel", handleWheel);
-  }, [containerRef, stepPx]);
+  }, [containerRef, snapPx, stepPx]);
 }

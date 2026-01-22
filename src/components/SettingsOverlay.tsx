@@ -2,7 +2,9 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { SettingsCacheSection } from "@/components/settings/SettingsCacheSection";
+import { SettingsBarsSection } from "@/components/settings/SettingsBarsSection";
 import { SettingsFlairSection } from "@/components/settings/SettingsFlairSection";
+import { SettingsGridSection } from "@/components/settings/SettingsGridSection";
 import { SettingsKeybindsSection } from "@/components/settings/SettingsKeybindsSection";
 import { SettingsSidebarSection } from "@/components/settings/SettingsSidebarSection";
 import { SettingsThumbsSection } from "@/components/settings/SettingsThumbsSection";
@@ -31,6 +33,9 @@ export function SettingsOverlay({
     thumbnailVideos,
     thumbnailCacheMb,
     defaultViewMode,
+    showTabNumbers,
+    fixedWidthTabs,
+    smoothScroll,
     accentTheme,
     categoryTinting,
     showParentEntry,
@@ -51,6 +56,8 @@ export function SettingsOverlay({
   } = useSettings();
   const titleId = useId();
   const viewSectionId = "settings-view";
+  const barsSectionId = "settings-bars";
+  const gridSectionId = "settings-grid";
   const flairSectionId = "settings-flair";
   const thumbSectionId = "settings-thumbnails";
   const sidebarSectionId = "settings-sidebar";
@@ -125,6 +132,20 @@ export function SettingsOverlay({
               <button
                 type="button"
                 className="settings-nav-item"
+                onClick={handleJump(barsSectionId)}
+              >
+                Bars
+              </button>
+              <button
+                type="button"
+                className="settings-nav-item"
+                onClick={handleJump(gridSectionId)}
+              >
+                Grid
+              </button>
+              <button
+                type="button"
+                className="settings-nav-item"
                 onClick={handleJump(flairSectionId)}
               >
                 Flair
@@ -164,14 +185,25 @@ export function SettingsOverlay({
             <SettingsViewSection
               sectionId={viewSectionId}
               defaultViewMode={defaultViewMode}
+              smoothScroll={smoothScroll}
+              gridCentered={gridCentered}
+              showParentEntry={showParentEntry}
+              onUpdate={updateSettings}
+            />
+            <SettingsBarsSection
+              sectionId={barsSectionId}
+              showTabNumbers={showTabNumbers}
+              fixedWidthTabs={fixedWidthTabs}
+              onUpdate={updateSettings}
+            />
+            <SettingsGridSection
+              sectionId={gridSectionId}
               gridSize={gridSize}
               gridRounded={gridRounded}
-              gridCentered={gridCentered}
               gridShowSize={gridShowSize}
               gridShowExtension={gridShowExtension}
               gridNameEllipsis={gridNameEllipsis}
               gridNameHideExtension={gridNameHideExtension}
-              showParentEntry={showParentEntry}
               onUpdate={updateSettings}
             />
             <SettingsFlairSection

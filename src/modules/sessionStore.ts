@@ -1,5 +1,5 @@
 // Persistent session state for tabs and scroll positions.
-import { create } from "zustand";
+import { createWithEqualityFn } from "zustand/traditional";
 import type { SortDir, SortKey, SortState, Tab, ViewMode } from "@/types";
 import { DEFAULT_SORT, getDefaultSortDir } from "@/lib";
 import { SIDEBAR_RECENT_LIMIT_MAX } from "./settings";
@@ -173,7 +173,7 @@ const applyUpdater = <T,>(value: T, updater: T | ((prev: T) => T)) => {
   return typeof updater === "function" ? (updater as (prev: T) => T)(value) : updater;
 };
 
-export const useSessionStore = create<SessionStore>((set) => ({
+export const useSessionStore = createWithEqualityFn<SessionStore>((set) => ({
   ...readStoredSession(),
   setTabs: (updater) =>
     set((state) => ({

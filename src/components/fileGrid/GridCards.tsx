@@ -7,6 +7,7 @@ import {
   getExtension,
   getFileKind,
   isPdfLikeExtension,
+  isSvgLikeExtension,
   splitNameExtension,
   stripNameExtension,
 } from "@/lib";
@@ -17,14 +18,14 @@ import { FILE_TOOLTIP_DELAY_MS } from "@/constants";
 import {
   ArchiveIcon,
   AudioIcon,
-  DocumentIcon,
-  ExecutableIcon,
+  ExecutableFileIcon,
   FallbackFileIcon,
-  FileIcon,
   FolderIcon,
   ImageIcon,
-  KeyIcon,
   PdfIcon,
+  SecureFileIcon,
+  SvgIcon,
+  TextFileIcon,
   VideoIcon,
 } from "../Icons";
 import { TooltipWrapper } from "../Tooltip";
@@ -88,7 +89,7 @@ export const ThumbnailIcon = ({ isDir, fileKind, extension, thumbUrl }: Thumbnai
   let Icon = FallbackFileIcon;
   switch (fileKind) {
     case "document":
-      Icon = isPdfLikeExtension(extension) ? PdfIcon : DocumentIcon;
+      Icon = isPdfLikeExtension(extension) ? PdfIcon : TextFileIcon;
       break;
     case "video":
       Icon = VideoIcon;
@@ -97,16 +98,16 @@ export const ThumbnailIcon = ({ isDir, fileKind, extension, thumbUrl }: Thumbnai
       Icon = AudioIcon;
       break;
     case "image":
-      Icon = ImageIcon;
+      Icon = isSvgLikeExtension(extension) ? SvgIcon : ImageIcon;
       break;
     case "executable":
-      Icon = ExecutableIcon;
+      Icon = ExecutableFileIcon;
       break;
     case "archive":
       Icon = ArchiveIcon;
       break;
     case "secure":
-      Icon = KeyIcon;
+      Icon = SecureFileIcon;
       break;
     case "generic":
       Icon = FallbackFileIcon;

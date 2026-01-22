@@ -1,6 +1,15 @@
 // Tauri-backed filesystem API calls.
 import { invoke } from "@tauri-apps/api/core";
-import type { CopyReport, DeleteReport, DriveInfo, EntryMeta, FileEntry, Place } from "@/types";
+import type {
+  CopyReport,
+  DeleteReport,
+  DriveInfo,
+  EntryMeta,
+  ListDirOptions,
+  ListDirResult,
+  ListDirWithParentResult,
+  Place,
+} from "@/types";
 
 export function getHome() {
   return invoke<string | null>("get_home");
@@ -18,8 +27,12 @@ export function listDriveInfo() {
   return invoke<DriveInfo[]>("list_drive_info");
 }
 
-export function listDir(path: string) {
-  return invoke<FileEntry[]>("list_dir", { path });
+export function listDir(path: string, options?: ListDirOptions) {
+  return invoke<ListDirResult>("list_dir", { path, options });
+}
+
+export function listDirWithParent(path: string, options?: ListDirOptions) {
+  return invoke<ListDirWithParentResult>("list_dir_with_parent", { path, options });
 }
 
 export function statEntries(paths: string[]) {

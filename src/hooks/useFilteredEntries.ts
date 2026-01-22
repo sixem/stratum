@@ -1,53 +1,36 @@
-// Filters and sorts entries based on search and sort state.
+// Derives counts/flags from backend-filtered/sorted entries.
 import { useMemo } from "react";
-import type { EntryMeta, FileEntry, SortState } from "@/types";
-import { sortEntries } from "@/lib";
+import type { FileEntry } from "@/types";
 
 type UseFilteredEntriesOptions = {
   entries: FileEntry[];
-  entryMeta: Map<string, EntryMeta>;
   searchValue: string;
-  sortState: SortState;
-  metaReady?: boolean;
+  totalCount: number;
 };
 
 export const useFilteredEntries = ({
   entries,
-  entryMeta,
   searchValue,
-  sortState,
-  metaReady = true,
+  totalCount,
 }: UseFilteredEntriesOptions) => {
   const trimmedQuery = searchValue.trim();
-  const normalizedQuery = trimmedQuery.toLowerCase();
-  const filteredEntries = useMemo(() => {
-    if (!normalizedQuery) return entries;
-    return entries.filter((entry) =>
-      entry.name.toLowerCase().includes(normalizedQuery),
-    );
-  }, [entries, normalizedQuery]);
-
-  const totalCount = entries.length;
-  const visibleCount = filteredEntries.length;
+  const visibleCount = entries.length;
   const isFiltered = trimmedQuery.length > 0;
-
-  const needsMeta = sortState.key !== "name";
-  const metaDependency = needsMeta && metaReady ? entryMeta : 0;
-  // Only sort once metadata is ready for size/modified sorts.
-  const sortedEntries = useMemo(() => {
-    if (needsMeta && !metaReady) return filteredEntries;
-    return sortEntries(filteredEntries, entryMeta, sortState);
-  }, [filteredEntries, metaDependency, metaReady, needsMeta, sortState]);
+  const resolvedTotalCount = totalCount || entries.length;
+  const sortedEntries = useMemo(() => entries, [entries]);
+  const filteredEntries = sortedEntries;
 
   const countLabel = useMemo(() => {
-    return isFiltered ? `${visibleCount} of ${totalCount} items` : `${totalCount} items`;
-  }, [isFiltered, totalCount, visibleCount]);
+    return isFiltered
+      ? `${visibleCount} of ${resolvedTotalCount} items`
+      : `${resolvedTotalCount} items`;
+  }, [isFiltered, resolvedTotalCount, visibleCount]);
 
   return {
     filteredEntries,
     sortedEntries,
     countLabel,
-    totalCount,
+    totalCount: resolvedTotalCount,
     visibleCount,
     isFiltered,
   };

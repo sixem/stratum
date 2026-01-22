@@ -1,5 +1,5 @@
 // Persistent user settings with defaults and coercion.
-import { create } from "zustand";
+import { createWithEqualityFn } from "zustand/traditional";
 import type { ViewMode } from "@/types";
 import type { KeybindMap } from "./keybinds";
 import { coerceKeybinds, DEFAULT_KEYBINDS } from "./keybinds";
@@ -33,6 +33,9 @@ type Settings = {
   sidebarShowTips: boolean;
   sidebarSectionOrder: SidebarSectionId[];
   defaultViewMode: ViewMode;
+  showTabNumbers: boolean;
+  fixedWidthTabs: boolean;
+  smoothScroll: boolean;
   accentTheme: AccentTheme;
   categoryTinting: boolean;
   showParentEntry: boolean;
@@ -66,7 +69,7 @@ type StoredSettings = {
 };
 
 const STORAGE_KEY = "stratum.settings";
-const STORAGE_VERSION = 7;
+const STORAGE_VERSION = 10;
 
 const DEFAULT_SETTINGS: Settings = {
   sidebarOpen: true,
@@ -74,6 +77,9 @@ const DEFAULT_SETTINGS: Settings = {
   sidebarShowTips: true,
   sidebarSectionOrder: DEFAULT_SIDEBAR_SECTION_ORDER,
   defaultViewMode: "thumbs",
+  showTabNumbers: false,
+  fixedWidthTabs: false,
+  smoothScroll: false,
   accentTheme: "red",
   categoryTinting: false,
   showParentEntry: true,
@@ -174,6 +180,18 @@ const coerceSettings = (value: Partial<Settings> | null | undefined): Settings =
         : DEFAULT_SETTINGS.sidebarShowTips,
     sidebarSectionOrder: normalizeSidebarSectionOrder(value?.sidebarSectionOrder),
     defaultViewMode: coerceViewMode(value?.defaultViewMode),
+    showTabNumbers:
+      typeof value?.showTabNumbers === "boolean"
+        ? value.showTabNumbers
+        : DEFAULT_SETTINGS.showTabNumbers,
+    fixedWidthTabs:
+      typeof value?.fixedWidthTabs === "boolean"
+        ? value.fixedWidthTabs
+        : DEFAULT_SETTINGS.fixedWidthTabs,
+    smoothScroll:
+      typeof value?.smoothScroll === "boolean"
+        ? value.smoothScroll
+        : DEFAULT_SETTINGS.smoothScroll,
     accentTheme: coerceAccentTheme(value?.accentTheme),
     categoryTinting:
       typeof value?.categoryTinting === "boolean"
@@ -266,7 +284,7 @@ const writeStoredSettings = (settings: Settings) => {
   }
 };
 
-export const useSettingsStore = create<SettingsStore>((set) => ({
+export const useSettingsStore = createWithEqualityFn<SettingsStore>((set) => ({
   ...readStoredSettings(),
   setSettings: (next) =>
     set({ ...next, keybinds: coerceKeybinds(next.keybinds) }),
@@ -286,6 +304,9 @@ useSettingsStore.subscribe((state) => {
     sidebarShowTips: state.sidebarShowTips,
     sidebarSectionOrder: state.sidebarSectionOrder,
     defaultViewMode: state.defaultViewMode,
+    showTabNumbers: state.showTabNumbers,
+    fixedWidthTabs: state.fixedWidthTabs,
+    smoothScroll: state.smoothScroll,
     accentTheme: state.accentTheme,
     categoryTinting: state.categoryTinting,
     showParentEntry: state.showParentEntry,

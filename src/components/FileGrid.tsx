@@ -6,18 +6,20 @@ import {
   useElementSize,
   useEntryDragOut,
   useEntryMetaRequest,
-  useLayoutBusy,
+  useDynamicOverscan,
+  useScrollAnchor,
+  useScrollSettled,
   useScrollPosition,
   useScrollToIndex,
   useSelectionDrag,
   useThumbnailRequest,
+  useWheelSnap,
   useVirtualRange,
-  useViewReady,
 } from "@/hooks";
-import { buildEntryItems, getEmptyMessage, handleMiddleClick, isEntryItem } from "@/lib";
+import { getEmptyMessage, handleMiddleClick, isEntryItem } from "@/lib";
+import type { EntryItem } from "@/lib";
 import type { GridNameEllipsis, GridSize } from "@/modules";
 import type { EntryMeta, FileEntry } from "@/types";
-import layoutLoader from "../assets/icons/loaders/ring.svg";
 import { EmptyState } from "./EmptyState";
 import { LoadingIndicator } from "./LoadingIndicator";
 import { SelectionRect } from "./SelectionRect";
@@ -25,12 +27,15 @@ import { EntryCard, ParentCard } from "./fileGrid/index";
 
 type FileGridProps = {
   entries: FileEntry[];
+  items: EntryItem[];
+  itemIndexMap: Map<string, number>;
   loading: boolean;
-  parentPath: string | null;
   searchQuery: string;
   scrollKey: string;
   initialScrollTop: number;
+  scrollReady: boolean;
   scrollRequest?: { index: number; nonce: number } | null;
+  smoothScroll: boolean;
   selectedPaths: Set<string>;
   onSetSelection: (paths: string[], anchor?: string) => void;
   onOpenDir: (path: string) => void;
@@ -40,7 +45,7 @@ type FileGridProps = {
   onClearSelection: () => void;
   onScrollTopChange: (key: string, scrollTop: number) => void;
   entryMeta: Map<string, EntryMeta>;
-  onRequestMeta: (paths: string[]) => void;
+  onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
   thumbnails: Map<string, string>;
   onRequestThumbs: (paths: string[]) => void;
@@ -51,7 +56,6 @@ type FileGridProps = {
   gridNameEllipsis: GridNameEllipsis;
   gridNameHideExtension: boolean;
   thumbResetKey?: string;
-  blockReveal: boolean;
   onGridColumnsChange?: (columns: number) => void;
   onContextMenu?: (event: ReactMouseEvent) => void;
   onEntryContextMenu?: (
@@ -86,19 +90,21 @@ const GRID_PRESETS: Record<GridSize, GridSizing> = {
 
 const GRID_META_TRIM = 24;
 const GRID_OVERSCAN = 3;
-const LAYOUT_LOADING_MS = 200;
-const LAYOUT_LOADING_THRESHOLD = 500;
-const LAYOUT_WIDTH_DELTA = 4;
+const GRID_OVERSCAN_MIN = 1;
+const GRID_OVERSCAN_WARMUP_MS = 140;
 const noop = () => {};
 
 export default function FileGrid({
   entries,
+  items,
+  itemIndexMap,
   loading,
-  parentPath,
   searchQuery,
   scrollKey,
   initialScrollTop,
+  scrollReady,
   scrollRequest,
+  smoothScroll,
   selectedPaths,
   onSetSelection,
   onOpenDir,
@@ -119,7 +125,6 @@ export default function FileGrid({
   gridNameEllipsis,
   gridNameHideExtension,
   thumbResetKey,
-  blockReveal,
   onGridColumnsChange,
   onContextMenu,
   onEntryContextMenu,
@@ -127,29 +132,17 @@ export default function FileGrid({
   onStartDragOut,
 }: FileGridProps) {
   const emptyMessage = useMemo(() => getEmptyMessage(searchQuery), [searchQuery]);
-  const items = useMemo(() => buildEntryItems(entries, parentPath), [entries, parentPath]);
-  const scrollTopRef = useRef(initialScrollTop);
-  const handleScrollTopChange = useCallback(
+  const viewItems = items;
+  const persistScrollTop = useCallback(
     (key: string, scrollTop: number) => {
-      scrollTopRef.current = scrollTop;
       onScrollTopChange(key, scrollTop);
     },
     [onScrollTopChange],
   );
-
-  useEffect(() => {
-    scrollTopRef.current = initialScrollTop;
-  }, [initialScrollTop, scrollKey]);
-
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const { width: viewportWidth } = useElementSize(viewportRef);
-  const layoutBusy = useLayoutBusy({
-    width: viewportWidth,
-    itemCount: items.length,
-    threshold: LAYOUT_LOADING_THRESHOLD,
-    widthDelta: LAYOUT_WIDTH_DELTA,
-    delayMs: LAYOUT_LOADING_MS,
-  });
+  const layoutReady = viewportWidth > 0;
+  const scrolling = useScrollSettled(viewportRef);
 
   const gridMetaEnabled = gridShowSize || gridShowExtension;
   const gridSizing = useMemo(() => {
@@ -175,9 +168,12 @@ export default function FileGrid({
     1,
     Math.floor((contentWidth + gridSizing.gap) / (gridSizing.column + gridSizing.gap)),
   );
-  const rowCount = Math.ceil(items.length / columnCount);
+  const rowCount = Math.ceil(viewItems.length / columnCount);
   const rowHeight = gridSizing.rowHeight + gridSizing.gap;
   const lastLayoutRef = useRef({ gridSize, columnCount, rowHeight });
+
+  // When smooth scrolling is disabled, snap wheel input to a single grid row.
+  useWheelSnap(viewportRef, smoothScroll ? 0 : rowHeight);
 
   // Keep the same entries in view when density changes by anchoring the viewport center.
   useLayoutEffect(() => {
@@ -192,7 +188,7 @@ export default function FileGrid({
       gridSizeChanged &&
       last.rowHeight > 0 &&
       last.columnCount > 0 &&
-      items.length > 0
+      viewItems.length > 0
     ) {
       const viewportHeight = Math.max(0, element.clientHeight);
       // Anchor to the middle of the viewport so the same items stay in view.
@@ -206,7 +202,7 @@ export default function FileGrid({
         last.columnCount - 1,
         Math.floor(last.columnCount / 2),
       );
-      const maxAnchorIndex = Math.max(0, items.length - 1);
+      const maxAnchorIndex = Math.max(0, viewItems.length - 1);
       const anchorIndex = Math.min(
         maxAnchorIndex,
         prevRowIndex * last.columnCount + anchorColumn,
@@ -219,32 +215,30 @@ export default function FileGrid({
       const clamped = Math.min(Math.max(0, nextScrollTop), maxScrollTop);
       if (Math.abs(clamped - element.scrollTop) > 0.5) {
         element.scrollTop = clamped;
-        handleScrollTopChange(scrollKey, clamped);
+        persistScrollTop(scrollKey, clamped);
       }
     }
     lastLayoutRef.current = { gridSize, columnCount, rowHeight };
-  }, [columnCount, gridSize, rowHeight, items.length, handleScrollTopChange, scrollKey]);
+  }, [columnCount, gridSize, rowHeight, persistScrollTop, scrollKey, viewItems.length]);
 
   useEffect(() => {
     if (!onGridColumnsChange) return;
     onGridColumnsChange(columnCount);
   }, [columnCount, onGridColumnsChange]);
 
-  const virtual = useVirtualRange(viewportRef, rowCount, rowHeight, GRID_OVERSCAN);
+  const overscan = useDynamicOverscan({
+    resetKey: scrollKey,
+    base: GRID_OVERSCAN,
+    min: GRID_OVERSCAN_MIN,
+    warmupMs: GRID_OVERSCAN_WARMUP_MS,
+  });
+  const virtual = useVirtualRange(viewportRef, rowCount, rowHeight, overscan);
   const startIndex = virtual.startIndex * columnCount;
-  const endIndex = Math.min(items.length, virtual.endIndex * columnCount);
-  const visibleItems = items.slice(startIndex, endIndex);
-  const hasContent = items.length > 0;
-  // Hide stale cards during navigation to avoid fill-in while scrolled.
-  const keepVisible = false;
-  const { ready: viewReady, animate: viewAnimate } = useViewReady(
-    loading,
-    [items.length, parentPath, searchQuery, scrollKey],
-    keepVisible,
-  );
-  const showGhost = blockReveal && !loading && hasContent;
-  const contentReady = (keepVisible ? true : viewReady) && !showGhost;
-  const showLayoutLoader = !loading && layoutBusy;
+  const endIndex = Math.min(viewItems.length, virtual.endIndex * columnCount);
+  const visibleItems = viewItems.slice(startIndex, endIndex);
+  const hasContent = viewItems.length > 0;
+  const contentReady = true;
+  const viewAnimate = false;
   const metaPaths = useMemo(() => {
     // Build the meta/thumb request list in one pass to keep allocations low.
     if (visibleItems.length === 0) return [];
@@ -311,14 +305,35 @@ export default function FileGrid({
     event.stopPropagation();
   }, []);
 
+  const { handleScrollTopChange: handleAnchorScroll, getAnchorTop } = useScrollAnchor(
+    viewportRef,
+    {
+      scrollKey,
+      items: viewItems,
+      itemHeight: rowHeight,
+      itemsPerRow: columnCount,
+      scrollReady,
+      loading,
+      getItemPath: (item) => {
+        if (item.type === "parent") return item.path;
+        if (item.type === "entry") return item.entry.path;
+        return null;
+      },
+      getItemIndex: (path) => itemIndexMap.get(path) ?? null,
+      // Persist scroll even while the view is transitioning.
+      onScrollTopChange: persistScrollTop,
+    },
+  );
+  const restoreTop = getAnchorTop() ?? initialScrollTop;
+
   useScrollPosition(viewportRef, {
     scrollKey,
-    initialTop: initialScrollTop,
-    onScrollTopChange: handleScrollTopChange,
-    restoreReady: !loading && !showGhost,
+    initialTop: restoreTop,
+    onScrollTopChange: handleAnchorScroll,
+    restoreReady: scrollReady && !loading && layoutReady,
   });
   useScrollToIndex(viewportRef, {
-    itemCount: items.length,
+    itemCount: viewItems.length,
     rowHeight,
     itemsPerRow: columnCount,
     scrollRequest,
@@ -329,7 +344,7 @@ export default function FileGrid({
     clearSelection: onClearSelection,
     itemSelector: "[data-selectable=\"true\"]",
   });
-  const dragEnabled = Boolean(onStartDragOut) && !loading && !showGhost;
+  const dragEnabled = Boolean(onStartDragOut) && !loading;
   useEntryDragOut(viewportRef, {
     selected: selectedPaths,
     onSetSelection,
@@ -337,9 +352,15 @@ export default function FileGrid({
     itemSelector: "[data-selectable=\"true\"]",
     enabled: dragEnabled,
   });
-  useEntryMetaRequest(loading, metaPaths, onRequestMeta);
-  const canRequestThumbs = thumbnailsEnabled && !blockReveal;
-  useThumbnailRequest(loading, canRequestThumbs, metaPaths, onRequestThumbs, thumbResetKey);
+  useEntryMetaRequest(loading || scrolling, metaPaths, onRequestMeta);
+  const canRequestThumbs = thumbnailsEnabled && !loading && !scrolling;
+  useThumbnailRequest(
+    loading || scrolling,
+    canRequestThumbs,
+    metaPaths,
+    onRequestThumbs,
+    thumbResetKey,
+  );
 
   const gridStyle = useMemo(
     () => ({
@@ -347,20 +368,11 @@ export default function FileGrid({
     }),
     [columnCount],
   );
-  const ghostStyle = useMemo(
-    () => ({
-      ...gridVars,
-      ...gridStyle,
-    }),
-    [gridStyle, gridVars],
-  );
+  const showLoadingOverlay = loading && !hasContent;
 
   return (
     <div
       className="thumb-shell"
-      data-layout-busy={layoutBusy ? "true" : "false"}
-      data-layout-loader={showLayoutLoader ? "true" : "false"}
-      data-hold={loading ? "true" : "false"}
       data-category-tint={categoryTinting ? "true" : "false"}
       data-meta-hidden={gridMetaEnabled ? "false" : "true"}
     >
@@ -368,8 +380,6 @@ export default function FileGrid({
         className="thumb-viewport"
         ref={viewportRef}
         style={gridVars}
-        data-hold={loading ? "true" : "false"}
-        data-blocked={showGhost ? "true" : "false"}
         onContextMenu={(event) => {
           if (!onContextMenu) return;
           const target = event.target as HTMLElement | null;
@@ -383,7 +393,6 @@ export default function FileGrid({
           className="thumb-content"
           data-ready={contentReady ? "true" : "false"}
           data-animate={viewAnimate ? "true" : "false"}
-          data-loading={keepVisible ? "true" : "false"}
         >
           <div className="thumb-spacer" style={{ height: `${virtual.offsetTop}px` }} />
           <div className="thumb-grid" style={gridStyle}>
@@ -431,36 +440,17 @@ export default function FileGrid({
             })}
           </div>
           <div className="thumb-spacer" style={{ height: `${virtual.offsetBottom}px` }} />
-          {entries.length === 0 && !loading && !layoutBusy ? (
+          {entries.length === 0 && !loading ? (
             <div className="thumb-empty">
               <EmptyState title={emptyMessage.title} subtitle={emptyMessage.subtitle} />
             </div>
           ) : null}
         </div>
         <SelectionRect box={selectionBox} />
-        <div className="thumb-ghost" data-visible={showGhost ? "true" : "false"}>
-          <div className="thumb-ghost-grid" style={ghostStyle}>
-            {Array.from(
-              { length: Math.max(columnCount * 3, 12) },
-              (_, index) => (
-                <div className="thumb-ghost-card" key={`ghost-card-${index}`}>
-                  <div className="thumb-ghost-icon" />
-                  <div className="thumb-ghost-meta">
-                    <span className="ghost-bar ghost-name" />
-                    {gridMetaEnabled ? <span className="ghost-bar ghost-info" /> : null}
-                  </div>
-                </div>
-              ),
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="thumb-layout-loading" aria-live="polite">
-        <img src={layoutLoader} alt="Updating layout" />
       </div>
       <div
         className="loading-overlay"
-        data-visible={loading ? "true" : "false"}
+        data-visible={showLoadingOverlay ? "true" : "false"}
         data-solid={!hasContent ? "true" : "false"}
       >
         <LoadingIndicator />

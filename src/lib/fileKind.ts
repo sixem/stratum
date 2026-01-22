@@ -9,6 +9,11 @@ export type FileKind =
   | "generic";
 
 const DOCUMENT_EXTENSIONS = new Set([
+  "adoc",
+  "asciidoc",
+  "cfg",
+  "conf",
+  "config",
   "doc",
   "docx",
   "odt",
@@ -16,6 +21,8 @@ const DOCUMENT_EXTENSIONS = new Set([
   "txt",
   "md",
   "markdown",
+  "mdx",
+  "rst",
   "pdf",
   "ppt",
   "pptx",
@@ -23,6 +30,48 @@ const DOCUMENT_EXTENSIONS = new Set([
   "xlsx",
   "csv",
   "tsv",
+  "json",
+  "jsonc",
+  "json5",
+  "yaml",
+  "yml",
+  "toml",
+  "ini",
+  "properties",
+  "env",
+  "log",
+  "xml",
+  "html",
+  "htm",
+  "css",
+  "scss",
+  "sass",
+  "less",
+  "js",
+  "jsx",
+  "ts",
+  "tsx",
+  "mjs",
+  "cjs",
+  "c",
+  "h",
+  "cpp",
+  "hpp",
+  "cc",
+  "hh",
+  "cs",
+  "java",
+  "kt",
+  "kts",
+  "swift",
+  "py",
+  "rb",
+  "php",
+  "go",
+  "rs",
+  "sql",
+  "gql",
+  "graphql",
   "pages",
   "numbers",
   "key",
@@ -52,6 +101,8 @@ const SECURE_EXTENSIONS = new Set([
 ]);
 
 const PDF_LIKE_EXTENSIONS = new Set(["pdf"]);
+// Vector formats that should use the SVG-style icon in the grid.
+const SVG_LIKE_EXTENSIONS = new Set(["svg", "svgz"]);
 
 const ARCHIVE_EXTENSIONS = new Set([
   "zip",
@@ -92,6 +143,7 @@ const IMAGE_EXTENSIONS = new Set([
   "tiff",
   "ico",
   "svg",
+  "svgz",
 ]);
 
 const AUDIO_EXTENSIONS = new Set([
@@ -132,6 +184,11 @@ const EXECUTABLE_EXTENSIONS = new Set([
 export const isPdfLikeExtension = (extension: string | null): boolean => {
   if (!extension) return false;
   return PDF_LIKE_EXTENSIONS.has(extension.toLowerCase());
+};
+
+export const isSvgLikeExtension = (extension: string | null): boolean => {
+  if (!extension) return false;
+  return SVG_LIKE_EXTENSIONS.has(extension.toLowerCase());
 };
 
 export const getExtension = (name: string): string | null => {

@@ -2,8 +2,10 @@
 import { Suspense, lazy } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { GridNameEllipsis, GridSize } from "@/modules";
+import type { EntryItem } from "@/lib";
 import type { EntryMeta, FileEntry, ViewMode } from "@/types";
 import { LoadingIndicator } from "./LoadingIndicator";
+import { PerfProfiler } from "./PerfProfiler";
 
 const FileList = lazy(() => import("./FileList"));
 const FileGrid = lazy(() => import("./FileGrid"));
@@ -11,12 +13,15 @@ const FileGrid = lazy(() => import("./FileGrid"));
 type FileViewProps = {
   viewMode: ViewMode;
   entries: FileEntry[];
+  items: EntryItem[];
+  itemIndexMap: Map<string, number>;
   loading: boolean;
-  parentPath: string | null;
   searchQuery: string;
   scrollKey: string;
   initialScrollTop: number;
+  scrollReady: boolean;
   scrollRequest?: { index: number; nonce: number } | null;
+  smoothScroll: boolean;
   selectedPaths: Set<string>;
   onSetSelection: (paths: string[], anchor?: string) => void;
   onOpenDir: (path: string) => void;
@@ -26,7 +31,7 @@ type FileViewProps = {
   onClearSelection: () => void;
   onScrollTopChange: (key: string, scrollTop: number) => void;
   entryMeta: Map<string, EntryMeta>;
-  onRequestMeta: (paths: string[]) => void;
+  onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
   thumbnails: Map<string, string>;
   onRequestThumbs: (paths: string[]) => void;
@@ -37,7 +42,6 @@ type FileViewProps = {
   gridNameEllipsis: GridNameEllipsis;
   gridNameHideExtension: boolean;
   thumbResetKey?: string;
-  blockReveal: boolean;
   onGridColumnsChange?: (columns: number) => void;
   onContextMenu?: (event: ReactMouseEvent) => void;
   onEntryContextMenu?: (
@@ -60,12 +64,14 @@ export function FileView({
   gridNameEllipsis,
   gridNameHideExtension,
   thumbResetKey,
-  blockReveal,
   scrollKey,
+  scrollReady,
   onGridColumnsChange,
   dropTargetPath,
   onStartDragOut,
   onEntryContextMenu,
+  smoothScroll,
+  itemIndexMap,
   ...viewProps
 }: FileViewProps) {
   // Keep the heavy views lazy-loaded but render-driven.
@@ -78,36 +84,42 @@ export function FileView({
       }
     >
       {viewMode === "thumbs" ? (
-        <FileGrid
-          key={`grid:${scrollKey}`}
-          {...viewProps}
-          scrollKey={scrollKey}
-          thumbnailsEnabled={thumbnailsEnabled}
-          thumbnails={thumbnails}
-          onRequestThumbs={onRequestThumbs}
-          categoryTinting={categoryTinting}
-          gridSize={gridSize}
-          gridShowSize={gridShowSize}
-          gridShowExtension={gridShowExtension}
-          gridNameEllipsis={gridNameEllipsis}
-          gridNameHideExtension={gridNameHideExtension}
-          thumbResetKey={thumbResetKey}
-          blockReveal={blockReveal}
-          onGridColumnsChange={onGridColumnsChange}
-          dropTargetPath={dropTargetPath}
-          onStartDragOut={onStartDragOut}
-          onEntryContextMenu={onEntryContextMenu}
-        />
+        <PerfProfiler id="file-grid">
+          <FileGrid
+            {...viewProps}
+            scrollKey={scrollKey}
+            scrollReady={scrollReady}
+            smoothScroll={smoothScroll}
+            itemIndexMap={itemIndexMap}
+            thumbnailsEnabled={thumbnailsEnabled}
+            thumbnails={thumbnails}
+            onRequestThumbs={onRequestThumbs}
+            categoryTinting={categoryTinting}
+            gridSize={gridSize}
+            gridShowSize={gridShowSize}
+            gridShowExtension={gridShowExtension}
+            gridNameEllipsis={gridNameEllipsis}
+            gridNameHideExtension={gridNameHideExtension}
+            thumbResetKey={thumbResetKey}
+            onGridColumnsChange={onGridColumnsChange}
+            dropTargetPath={dropTargetPath}
+            onStartDragOut={onStartDragOut}
+            onEntryContextMenu={onEntryContextMenu}
+          />
+        </PerfProfiler>
       ) : (
-        <FileList
-          key={`list:${scrollKey}`}
-          {...viewProps}
-          scrollKey={scrollKey}
-          blockReveal={blockReveal}
-          dropTargetPath={dropTargetPath}
-          onStartDragOut={onStartDragOut}
-          onEntryContextMenu={onEntryContextMenu}
-        />
+        <PerfProfiler id="file-list">
+          <FileList
+            {...viewProps}
+            scrollKey={scrollKey}
+            scrollReady={scrollReady}
+            smoothScroll={smoothScroll}
+            itemIndexMap={itemIndexMap}
+            dropTargetPath={dropTargetPath}
+            onStartDragOut={onStartDragOut}
+            onEntryContextMenu={onEntryContextMenu}
+          />
+        </PerfProfiler>
       )}
     </Suspense>
   );

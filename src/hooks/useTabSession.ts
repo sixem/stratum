@@ -1,18 +1,20 @@
 // Orchestrates tab state, view settings, and navigation flows.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shallow } from "zustand/shallow";
-import type { Place, SortState, Tab, ViewMode } from "@/types";
-import { createTab, DEFAULT_TAB_STATE, normalizePath } from "@/lib";
+import type { ListDirOptions, Place, SortState, Tab, ViewMode } from "@/types";
+import { createTab, DEFAULT_TAB_STATE, makeDebug, normalizePath } from "@/lib";
 import { useSessionStore } from "@/modules";
 
 type TabSessionOptions = {
   currentPath: string;
   drives: string[];
   places: Place[];
-  loadDir: (path: string) => Promise<void>;
+  loadDir: (path: string, options?: ListDirOptions) => Promise<void>;
   defaultViewMode: ViewMode;
   recentJumpsLimit: number;
 };
+
+const log = makeDebug("tabs");
 
 export const useTabSession = ({
   currentPath,
@@ -121,8 +123,8 @@ export const useTabSession = ({
       return;
     }
     restoreRequestedRef.current = true;
-    void loadDir(target);
-  }, [currentPath, loadDir]);
+    void loadDir(target, { sort: sortState });
+  }, [currentPath, loadDir, sortState]);
 
   useEffect(() => {
     // Update recent jumps after navigation completes.
@@ -151,19 +153,21 @@ export const useTabSession = ({
   }, [safeRecentLimit, setRecentJumps]);
 
   const jumpTo = useCallback(
-    (path: string) => {
+    (path: string, options?: ListDirOptions) => {
       pendingJumpSourceRef.current = "navigate";
       setPendingJump(path);
-      void loadDir(path);
+      const nextSort = options?.sort ?? sortState;
+      void loadDir(path, { ...options, sort: nextSort });
     },
-    [loadDir],
+    [loadDir, sortState],
   );
 
   const browseTo = useCallback(
-    (path: string) => {
-      void loadDir(path);
+    (path: string, options?: ListDirOptions) => {
+      const nextSort = options?.sort ?? sortState;
+      void loadDir(path, { ...options, sort: nextSort });
     },
-    [loadDir],
+    [loadDir, sortState],
   );
 
   const updateActiveTab = useCallback(
@@ -178,6 +182,7 @@ export const useTabSession = ({
 
   const setViewMode = useCallback(
     (nextView: ViewMode) => {
+      log("view mode -> %s", nextView);
       updateActiveTab({ viewMode: nextView });
     },
     [updateActiveTab],
@@ -185,6 +190,7 @@ export const useTabSession = ({
 
   const setSort = useCallback(
     (sort: SortState) => {
+      log("sort -> %s/%s", sort.key, sort.dir);
       updateActiveTab({ sort });
     },
     [updateActiveTab],
@@ -192,12 +198,14 @@ export const useTabSession = ({
 
   const toggleSidebar = useCallback(() => {
     if (!activeTab) return;
+    log("sidebar -> %s", activeTab.sidebarOpen ? "closed" : "open");
     updateActiveTab({ sidebarOpen: !activeTab.sidebarOpen });
   }, [activeTab, updateActiveTab]);
 
   const newTab = useCallback(() => {
     const basePath = currentPath || drives[0] || places[0]?.path;
     if (!basePath) return;
+    log("new tab -> %s", basePath);
     const nextTab = createTab(basePath, activeTab ?? defaultTabState, defaultTabState);
     pendingTabPathRef.current = normalizePath(basePath) ?? basePath;
     setTabs((prev) => [...prev, nextTab]);
@@ -209,6 +217,7 @@ export const useTabSession = ({
     (path: string) => {
       const target = path.trim();
       if (!target) return;
+      log("open in new tab -> %s", target);
       pendingJumpSourceRef.current = "navigate";
       const nextTab = createTab(target, activeTab ?? defaultTabState, defaultTabState);
       pendingTabPathRef.current = normalizePath(target) ?? target;
@@ -223,6 +232,7 @@ export const useTabSession = ({
     (id: string) => {
       const selected = tabs.find((tab) => tab.id === id);
       if (!selected) return;
+      log("select tab -> %s (%s)", id, selected.path);
       pendingJumpSourceRef.current = "switch";
       pendingTabPathRef.current = normalizePath(selected.path) ?? selected.path;
       setActiveTabId(id);
@@ -230,7 +240,7 @@ export const useTabSession = ({
         pendingJumpSourceRef.current = null;
         return;
       }
-      jumpTo(selected.path);
+      jumpTo(selected.path, { sort: selected.sort });
     },
     [jumpTo, setActiveTabId, shouldLoadPath, tabs],
   );
@@ -238,6 +248,7 @@ export const useTabSession = ({
   const closeTab = useCallback(
     (id: string) => {
       if (tabs.length <= 1) return;
+      log("close tab -> %s", id);
       const index = tabs.findIndex((tab) => tab.id === id);
       const nextTabs = tabs.filter((tab) => tab.id !== id);
       setTabs(nextTabs);
@@ -249,7 +260,7 @@ export const useTabSession = ({
           pendingTabPathRef.current = normalizePath(fallback.path) ?? fallback.path;
           setActiveTabId(fallback.id);
           if (shouldLoadPath(fallback.path)) {
-            jumpTo(fallback.path);
+            jumpTo(fallback.path, { sort: fallback.sort });
           } else {
             pendingJumpSourceRef.current = null;
           }

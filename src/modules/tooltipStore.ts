@@ -1,5 +1,5 @@
 // Centralized tooltip state for hover and focus interactions.
-import { create } from "zustand";
+import { createWithEqualityFn } from "zustand/traditional";
 import { clampTooltipDelay, DEFAULT_TOOLTIP_DELAY_MS } from "@/constants";
 
 type TooltipState = {
@@ -29,7 +29,7 @@ type TooltipStore = TooltipState & {
   clearTooltipBlock: () => void;
 };
 
-export const useTooltipStore = create<TooltipStore>((set, _get) => ({
+export const useTooltipStore = createWithEqualityFn<TooltipStore>((set, _get) => ({
   visible: false,
   text: "",
   x: 0,

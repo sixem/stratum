@@ -1,6 +1,6 @@
 // Prompt modal state for confirmations and alerts.
 import type { ReactNode } from "react";
-import { create } from "zustand";
+import { createWithEqualityFn } from "zustand/traditional";
 
 export type PromptConfig = {
   title?: string;
@@ -18,7 +18,7 @@ type PromptStore = {
   hidePrompt: () => void;
 };
 
-export const usePromptStore = create<PromptStore>((set) => ({
+export const usePromptStore = createWithEqualityFn<PromptStore>((set) => ({
   prompt: null,
   showPrompt: (prompt) => set({ prompt }),
   hidePrompt: () => set({ prompt: null }),

@@ -1,8 +1,10 @@
 // Prefetches entry metadata over time for non-name sorts.
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { EntryMeta, FileEntry } from "@/types";
+import { makeDebug } from "@/lib";
 
 const PREFETCH_INTERVAL_MS = 140;
+const log = makeDebug("meta");
 
 type MetaPrefetchOptions = {
   enabled: boolean;
@@ -10,7 +12,9 @@ type MetaPrefetchOptions = {
   resetKey: string;
   entries: FileEntry[];
   entryMeta: Map<string, EntryMeta>;
-  requestMeta: (paths: string[]) => void;
+  requestMeta: (paths: string[], options?: { defer?: boolean }) => Promise<EntryMeta[]>;
+  deferUpdates?: boolean;
+  flushMeta?: () => void;
 };
 
 export const useMetaPrefetch = ({
@@ -20,6 +24,8 @@ export const useMetaPrefetch = ({
   entries,
   entryMeta,
   requestMeta,
+  deferUpdates = false,
+  flushMeta,
 }: MetaPrefetchOptions) => {
   const [ready, setReady] = useState(true);
   const metaRef = useRef(entryMeta);
@@ -48,30 +54,67 @@ export const useMetaPrefetch = ({
       return;
     }
 
-    const initialMissing = filePaths.filter((path) => !metaRef.current.has(path));
-    if (initialMissing.length === 0) {
+    const missingSet = deferUpdates
+      ? new Set(filePaths)
+      : new Set(filePaths.filter((path) => !metaRef.current.has(path)));
+    if (missingSet.size === 0) {
       setReady(true);
+      if (deferUpdates && flushMeta) {
+        flushMeta();
+      }
       return;
     }
 
     let cancelled = false;
     let timer: number | null = null;
     setReady(false);
+    if (log.enabled) {
+      log(
+        "meta prefetch start: %d files, %d missing",
+        filePaths.length,
+        missingSet.size,
+      );
+    }
 
-    const tick = () => {
-      if (cancelled) return;
-      const meta = metaRef.current;
-      const missing = filePaths.filter((path) => !meta.has(path));
-      if (missing.length === 0) {
-        setReady(true);
+    const applyResults = (batch: string[], results: EntryMeta[]) => {
+      const resolved = results.length > 0 ? results.map((meta) => meta.path) : batch;
+      resolved.forEach((path) => missingSet.delete(path));
+    };
+
+    const scheduleNext = () => {
+      if (deferUpdates) {
+        tick();
         return;
       }
-      requestMeta(missing);
       timer = window.setTimeout(tick, PREFETCH_INTERVAL_MS);
     };
 
-    requestMeta(initialMissing);
-    timer = window.setTimeout(tick, PREFETCH_INTERVAL_MS);
+    const tick = () => {
+      if (cancelled) return;
+      if (missingSet.size === 0) {
+        setReady(true);
+        if (log.enabled) {
+          log("meta prefetch complete: %d files", filePaths.length);
+        }
+        if (deferUpdates && flushMeta) {
+          flushMeta();
+        }
+        return;
+      }
+      const batch = Array.from(missingSet).slice(0, 120);
+      void requestMeta(batch, { defer: deferUpdates }).then((results) => {
+        if (cancelled) return;
+        applyResults(batch, results);
+        scheduleNext();
+      });
+    };
+
+    const firstBatch = Array.from(missingSet).slice(0, 120);
+    void requestMeta(firstBatch, { defer: deferUpdates }).then((results) => {
+      if (cancelled) return;
+      applyResults(firstBatch, results);
+      scheduleNext();
+    });
 
     return () => {
       cancelled = true;
@@ -79,7 +122,7 @@ export const useMetaPrefetch = ({
         window.clearTimeout(timer);
       }
     };
-  }, [enabled, filePaths, loading, requestMeta, resetKey]);
+  }, [deferUpdates, enabled, filePaths, flushMeta, loading, requestMeta, resetKey]);
 
   return ready;
 };

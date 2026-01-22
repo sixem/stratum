@@ -5,7 +5,7 @@ const META_REQUEST_DELAY = 70;
 export const useEntryMetaRequest = (
   loading: boolean,
   paths: string[],
-  onRequestMeta: (paths: string[]) => void,
+  onRequestMeta: (paths: string[]) => Promise<unknown>,
 ) => {
   const timerRef = useRef<number | null>(null);
   const latestPaths = useRef<string[]>([]);

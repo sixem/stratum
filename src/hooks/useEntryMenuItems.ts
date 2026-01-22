@@ -1,6 +1,6 @@
 // Builds file/folder context menu items for a targeted entry.
 import { useMemo } from "react";
-import { openPathProperties } from "@/api";
+import { copyPathsToClipboard, openPathProperties } from "@/api";
 import { tabLabel } from "@/lib";
 import { useClipboardStore, usePromptStore } from "@/modules";
 import type { ContextMenuItem, EntryContextTarget } from "@/types";
@@ -9,10 +9,12 @@ type UseEntryMenuItemsOptions = {
   target: EntryContextTarget | null;
   selected: Set<string>;
   parentPath: string | null;
+  currentPath: string;
   onOpenEntry: (path: string) => void;
   onOpenDir: (path: string) => void;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   onClearSelection: () => void;
+  onPasteEntries: (paths: string[], destination: string) => Promise<unknown> | void;
 };
 
 const resolveContextTargets = (
@@ -31,15 +33,21 @@ export const useEntryMenuItems = ({
   target,
   selected,
   parentPath,
+  currentPath,
   onOpenEntry,
   onOpenDir,
   onDeleteEntries,
   onClearSelection,
-}: UseEntryMenuItemsOptions) =>
-  useMemo<ContextMenuItem[]>(() => {
+  onPasteEntries,
+}: UseEntryMenuItemsOptions) => {
+  const clipboard = useClipboardStore((state) => state.clipboard);
+
+  return useMemo<ContextMenuItem[]>(() => {
     if (!target) return [];
     const actionTargets = resolveContextTargets(target, selected, parentPath);
     const hasTargets = actionTargets.length > 0;
+    const pasteTarget = (target.isDir ? target.path : currentPath).trim();
+    const canPaste = Boolean(clipboard && clipboard.paths.length > 0 && pasteTarget);
 
     return [
       {
@@ -61,8 +69,19 @@ export const useEntryMenuItems = ({
         onSelect: () => {
           if (!hasTargets) return;
           useClipboardStore.getState().setClipboard(actionTargets);
+          void copyPathsToClipboard(actionTargets);
         },
         disabled: !hasTargets,
+      },
+      {
+        id: "entry-paste",
+        label: target.isDir ? "Paste into folder" : "Paste",
+        onSelect: () => {
+          if (!clipboard || clipboard.paths.length === 0) return;
+          if (!pasteTarget) return;
+          void onPasteEntries(clipboard.paths, pasteTarget);
+        },
+        disabled: !canPaste,
       },
       {
         id: "entry-delete",
@@ -110,11 +129,15 @@ export const useEntryMenuItems = ({
       },
     ];
   }, [
+    clipboard,
+    currentPath,
     onClearSelection,
     onDeleteEntries,
     onOpenDir,
     onOpenEntry,
+    onPasteEntries,
     parentPath,
     selected,
     target,
   ]);
+};
