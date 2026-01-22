@@ -19,6 +19,7 @@ import {
   useFilteredEntries,
   useKeybinds,
   useLayoutMenuItems,
+  useMetaPrefetch,
   useScrollPositions,
   useScrollRequest,
   useSearchHotkey,
@@ -37,6 +38,7 @@ const MAX_SCROLL_POSITIONS = 160;
 const SCROLL_PERSIST_DELAY = 800;
 const viewLog = makeDebug("view");
 const scrollLog = makeDebug("scroll:key");
+const scrollSaveLog = makeDebug("scroll:save");
 
 const getSelectionTargets = (selected: Set<string>, parentPath: string | null) => {
   return Array.from(selected).filter((path) => path !== parentPath);
@@ -65,9 +67,8 @@ const App = () => {
   const settings = useSettings();
   const tabSession = useTabSession({
     currentPath: fileManager.currentPath,
-    drives: fileManager.drives,
-    places: fileManager.places,
     loadDir: fileManager.loadDir,
+    clearDir: fileManager.clearDir,
     defaultViewMode: settings.defaultViewMode,
     recentJumpsLimit: settings.sidebarRecentLimit,
   });
@@ -93,6 +94,23 @@ const App = () => {
     maxEntries: MAX_SCROLL_POSITIONS,
     persistDelayMs: SCROLL_PERSIST_DELAY,
   });
+  // Track the latest scroll position so tab switches can flush immediately.
+  const lastScrollSnapshotRef = useRef<{ key: string; top: number } | null>(null);
+  const handleScrollTopChange = useCallback(
+    (key: string, scrollTop: number) => {
+      lastScrollSnapshotRef.current = { key, top: scrollTop };
+      setScrollTop(key, scrollTop);
+    },
+    [setScrollTop],
+  );
+  const flushActiveScroll = useCallback(() => {
+    const snapshot = lastScrollSnapshotRef.current;
+    if (!snapshot) return;
+    if (scrollSaveLog.enabled) {
+      scrollSaveLog("save key=%s top=%d", snapshot.key, Math.round(snapshot.top));
+    }
+    setScrollTop(snapshot.key, snapshot.top);
+  }, [setScrollTop]);
   const { currentPath, parentPath, entries, entryMeta, totalCount, loading, status } =
     fileManager;
   const { activeTabId, activeTab, viewMode, sidebarOpen, sortState, tabs } = tabSession;
@@ -174,6 +192,31 @@ const App = () => {
     (path: string) => tabSession.jumpTo(path),
     [tabSession.jumpTo],
   );
+  const handleSelectTab = useCallback(
+    (id: string) => {
+      flushActiveScroll();
+      tabSession.selectTab(id);
+    },
+    [flushActiveScroll, tabSession],
+  );
+  const handleCloseTab = useCallback(
+    (id: string) => {
+      flushActiveScroll();
+      tabSession.closeTab(id);
+    },
+    [flushActiveScroll, tabSession],
+  );
+  const handleNewTab = useCallback(() => {
+    flushActiveScroll();
+    tabSession.newTab();
+  }, [flushActiveScroll, tabSession]);
+  const handleOpenInNewTab = useCallback(
+    (path: string) => {
+      flushActiveScroll();
+      tabSession.openInNewTab(path);
+    },
+    [flushActiveScroll, tabSession],
+  );
 
   const handleRefresh = useCallback(() => {
     void fileManager.refresh();
@@ -210,6 +253,19 @@ const App = () => {
     searchValue: deferredSearchValue,
     totalCount,
   });
+  const metaPrefetchKey = `${currentPath}:${sortState.key}:${sortState.dir}:${deferredSearchValue}`;
+  const shouldPrefetchMeta = sortState.key !== "name";
+  useMetaPrefetch({
+    enabled: shouldPrefetchMeta,
+    loading,
+    resetKey: metaPrefetchKey,
+    entries: sortedEntries,
+    entryMeta,
+    requestMeta: fileManager.requestEntryMeta,
+    // Defer non-visible updates to keep scrolling smooth; flush when done.
+    deferUpdates: true,
+    flushMeta: fileManager.flushEntryMeta,
+  });
 
   // Drive stats for the statusbar and overlays.
   const { driveInfoMap, currentDriveInfo } = useDriveInfo({
@@ -221,6 +277,7 @@ const App = () => {
   const canGoUp = Boolean(parentPath && parentPath !== currentPath);
   const viewParentPath =
     canGoUp && settings.showParentEntry && !isFiltered ? parentPath : null;
+  const showLander = !currentPath.trim() && !loading;
   const viewPath = activeTab?.path ?? currentPath;
   const scrollReady =
     Boolean(currentPath) &&
@@ -335,16 +392,16 @@ const App = () => {
   // Keybind handlers are kept explicit for readability and testing.
   const handleNewTabKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleGlobalKeybind()) return false;
-    tabSession.newTab();
+    handleNewTab();
     return true;
-  }, [canHandleGlobalKeybind, tabSession]);
+  }, [canHandleGlobalKeybind, handleNewTab]);
 
   const handleCloseTabKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleGlobalKeybind()) return false;
     if (!activeTabId) return false;
-    tabSession.closeTab(activeTabId);
+    handleCloseTab(activeTabId);
     return true;
-  }, [activeTabId, canHandleGlobalKeybind, tabSession]);
+  }, [activeTabId, canHandleGlobalKeybind, handleCloseTab]);
 
   const handleAdjacentTab = useCallback(
     (_event: KeyboardEvent, direction: -1 | 1) => {
@@ -356,10 +413,10 @@ const App = () => {
       if (nextIndex < 0 || nextIndex >= tabSession.tabs.length) return false;
       const target = tabSession.tabs[nextIndex];
       if (!target) return false;
-      tabSession.selectTab(target.id);
+      handleSelectTab(target.id);
       return true;
     },
-    [activeTabId, canHandleGlobalKeybind, tabSession],
+    [activeTabId, canHandleGlobalKeybind, handleSelectTab, tabSession.tabs],
   );
 
   const handleSelectTabIndex = useCallback(
@@ -367,10 +424,10 @@ const App = () => {
       if (!canHandleGlobalKeybind()) return false;
       const target = tabs[index - 1];
       if (!target) return false;
-      tabSession.selectTab(target.id);
+      handleSelectTab(target.id);
       return true;
     },
-    [canHandleGlobalKeybind, tabSession, tabs],
+    [canHandleGlobalKeybind, handleSelectTab, tabs],
   );
 
   const handleDeleteSelectionKeybind = useCallback((_event: KeyboardEvent) => {
@@ -540,7 +597,7 @@ const App = () => {
           sidebarOpen,
           settingsOpen,
           onSelect: handleSelectDrive,
-          onSelectNewTab: tabSession.openInNewTab,
+          onSelectNewTab: handleOpenInNewTab,
           onViewChange: tabSession.setViewMode,
           onToggleSidebar: tabSession.toggleSidebar,
           onToggleSettings: toggleSettings,
@@ -560,9 +617,9 @@ const App = () => {
         tabsBar={{
           tabs: tabSession.tabs,
           activeId: activeTabId,
-          onSelect: tabSession.selectTab,
-          onClose: tabSession.closeTab,
-          onNew: tabSession.newTab,
+          onSelect: handleSelectTab,
+          onClose: handleCloseTab,
+          onNew: handleNewTab,
           onReorder: tabSession.reorderTabs,
           showTabNumbers: settings.showTabNumbers,
           fixedWidthTabs: settings.fixedWidthTabs,
@@ -581,7 +638,7 @@ const App = () => {
           showTips: settings.sidebarShowTips,
           onSelect: handleSelectPlace,
           onSelectRecent: tabSession.jumpTo,
-          onSelectNewTab: tabSession.openInNewTab,
+          onSelectNewTab: handleOpenInNewTab,
         }}
         mainRef={mainRef}
         onContextMenu={handleLayoutContextMenu}
@@ -591,6 +648,7 @@ const App = () => {
           items: viewModel.items,
           itemIndexMap: viewModel.indexMap,
           loading,
+          showLander,
           searchQuery: deferredSearchValue,
           scrollKey,
           initialScrollTop,
@@ -600,11 +658,11 @@ const App = () => {
           selectedPaths: selected,
           onSetSelection: setSelection,
           onOpenDir: browseFromView,
-          onOpenDirNewTab: tabSession.openInNewTab,
+          onOpenDirNewTab: handleOpenInNewTab,
           onOpenEntry: fileManager.openEntry,
           onSelectItem: handleSelectItem,
           onClearSelection: clearSelection,
-          onScrollTopChange: setScrollTop,
+          onScrollTopChange: handleScrollTopChange,
           entryMeta,
           onRequestMeta: fileManager.requestEntryMeta,
           thumbnailsEnabled: settings.thumbnailsEnabled,

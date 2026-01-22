@@ -12,6 +12,8 @@ export type ListDirOptions = {
   sort?: SortState;
   search?: string;
   fast?: boolean;
+  // Optional request generation so the backend can cancel stale scans.
+  generation?: number;
 };
 
 export type ListDirResult = {

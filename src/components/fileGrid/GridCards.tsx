@@ -2,10 +2,6 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  buildEntryTooltip,
-  formatBytes,
-  getExtension,
-  getFileKind,
   isPdfLikeExtension,
   isSvgLikeExtension,
   splitNameExtension,
@@ -13,7 +9,7 @@ import {
 } from "@/lib";
 import type { FileKind } from "@/lib";
 import type { GridNameEllipsis } from "@/modules";
-import type { EntryMeta, FileEntry } from "@/types";
+import type { FileEntry } from "@/types";
 import { FILE_TOOLTIP_DELAY_MS } from "@/constants";
 import {
   ArchiveIcon,
@@ -175,7 +171,10 @@ export const ParentCard = memo(({
 type EntryCardProps = {
   entry: FileEntry;
   index: number;
-  meta: EntryMeta | undefined;
+  tooltipText: string;
+  fileKind: FileKind;
+  extension: string | null;
+  sizeLabel: string;
   thumbUrl?: string;
   showSize: boolean;
   showExtension: boolean;
@@ -211,7 +210,10 @@ const buildMiddleEllipsisParts = (name: string) => {
 export const EntryCard = memo(({
   entry,
   index,
-  meta,
+  tooltipText,
+  fileKind,
+  extension,
+  sizeLabel,
   thumbUrl,
   showSize,
   showExtension,
@@ -224,12 +226,9 @@ export const EntryCard = memo(({
   onOpenNewTab,
   onContextMenu,
 }: EntryCardProps) => {
-  const tooltipText = buildEntryTooltip(entry, meta);
-  const sizeLabel = showSize ? (entry.isDir ? "Folder" : formatBytes(meta?.size ?? null)) : "";
-  const extension = entry.isDir ? null : getExtension(entry.name);
+  const resolvedSizeLabel = showSize ? sizeLabel : "";
   const extensionLabel = showExtension && extension ? extension : "";
-  const showInfo = Boolean(sizeLabel) || Boolean(extensionLabel);
-  const fileKind = entry.isDir ? "generic" : getFileKind(entry.name);
+  const showInfo = Boolean(resolvedSizeLabel) || Boolean(extensionLabel);
   const displayName =
     hideExtension && !entry.isDir ? stripNameExtension(entry.name) : entry.name;
   const nameParts =
@@ -278,7 +277,9 @@ export const EntryCard = memo(({
           </span>
           {showInfo ? (
             <div className="thumb-info">
-              {sizeLabel ? <span className="thumb-info-size">{sizeLabel}</span> : null}
+              {resolvedSizeLabel ? (
+                <span className="thumb-info-size">{resolvedSizeLabel}</span>
+              ) : null}
               {extensionLabel ? (
                 <span className="thumb-info-ext">{extensionLabel}</span>
               ) : null}

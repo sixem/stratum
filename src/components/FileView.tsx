@@ -3,9 +3,10 @@ import { Suspense, lazy } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { GridNameEllipsis, GridSize } from "@/modules";
 import type { EntryItem } from "@/lib";
-import type { EntryMeta, FileEntry, ViewMode } from "@/types";
+import type { EntryMeta, FileEntry, ThumbnailRequest, ViewMode } from "@/types";
 import { LoadingIndicator } from "./LoadingIndicator";
 import { PerfProfiler } from "./PerfProfiler";
+import { StartLander } from "./StartLander";
 
 const FileList = lazy(() => import("./FileList"));
 const FileGrid = lazy(() => import("./FileGrid"));
@@ -16,6 +17,7 @@ type FileViewProps = {
   items: EntryItem[];
   itemIndexMap: Map<string, number>;
   loading: boolean;
+  showLander: boolean;
   searchQuery: string;
   scrollKey: string;
   initialScrollTop: number;
@@ -34,7 +36,7 @@ type FileViewProps = {
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
   thumbnails: Map<string, string>;
-  onRequestThumbs: (paths: string[]) => void;
+  onRequestThumbs: (requests: ThumbnailRequest[]) => void;
   categoryTinting: boolean;
   gridSize: GridSize;
   gridShowSize: boolean;
@@ -54,6 +56,7 @@ type FileViewProps = {
 
 export function FileView({
   viewMode,
+  showLander,
   thumbnailsEnabled,
   thumbnails,
   onRequestThumbs,
@@ -75,6 +78,9 @@ export function FileView({
   ...viewProps
 }: FileViewProps) {
   // Keep the heavy views lazy-loaded but render-driven.
+  if (showLander) {
+    return <StartLander />;
+  }
   return (
     <Suspense
       fallback={

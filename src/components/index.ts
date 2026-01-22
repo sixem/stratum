@@ -17,6 +17,7 @@ export { SelectionRect } from "./SelectionRect";
 export { SettingsOverlay } from "./SettingsOverlay";
 export { Sidebar } from "./Sidebar";
 export { SidebarSection } from "./SidebarSection";
+export { StartLander } from "./StartLander";
 export { StatusBar } from "./StatusBar";
 export { TabsBar } from "./TabsBar";
 export { ToolbarIconButton } from "./ToolbarIconButton";

@@ -4,7 +4,6 @@ import {
   copyEntries,
   deleteEntries,
   getDrives,
-  getHome,
   getPlaces,
   listDirWithParent,
   listDriveInfo,
@@ -119,7 +118,7 @@ export function useFileManager() {
     level: "idle",
     message: "Ready",
   });
-  // Track latest request to avoid stale UI updates.
+  // Track latest request to avoid stale UI updates (and cancel older backend scans).
   const loadId = useRef(0);
   // Track the most recent foreground load so background refreshes don't block the loader.
   const foregroundLoadId = useRef(0);
@@ -145,13 +144,6 @@ export function useFileManager() {
   const deleteInFlightRef = useRef(false);
   const copyInFlightRef = useRef(false);
 
-  const trimMetaCache = useCallback((cache: Map<string, EntryMeta>) => {
-    while (cache.size > META_CACHE_LIMIT) {
-      const oldest = cache.keys().next().value;
-      if (!oldest) break;
-      cache.delete(oldest);
-    }
-  }, []);
   const reportError = useCallback((title: string, message: string) => {
     usePromptStore.getState().showPrompt({
       title,
@@ -160,6 +152,13 @@ export function useFileManager() {
       cancelLabel: null,
     });
     setStatus({ level: "idle", message: "Ready" });
+  }, []);
+  const trimMetaCache = useCallback((cache: Map<string, EntryMeta>) => {
+    while (cache.size > META_CACHE_LIMIT) {
+      const oldest = cache.keys().next().value;
+      if (!oldest) break;
+      cache.delete(oldest);
+    }
   }, []);
 
   // Batch entry metadata updates to avoid a React commit on every small batch.
@@ -278,7 +277,11 @@ export function useFileManager() {
       }
 
       try {
-        const result = await listDirWithParent(target, { ...query, fast: useFast });
+        const result = await listDirWithParent(target, {
+          ...query,
+          fast: useFast,
+          generation: currentLoad,
+        });
         if (loadId.current !== currentLoad) return;
         const items = result.entries;
         if (perf.enabled) {
@@ -427,6 +430,27 @@ export function useFileManager() {
     }
   }, [loadDir, refreshDriveInfo]);
 
+  // Clear the current view without hitting the filesystem.
+  const clearDir = useCallback(
+    (options?: { silent?: boolean }) => {
+      const nextLoad = loadId.current + 1;
+      loadId.current = nextLoad;
+      foregroundLoadId.current = nextLoad;
+      lastQueryRef.current = null;
+      lastQueryKeyRef.current = "";
+      primeEntryMeta([]);
+      setEntries([]);
+      setTotalCount(0);
+      setCurrentPath("");
+      setParentPath(null);
+      setLoading(false);
+      if (!options?.silent) {
+        setStatus({ level: "idle", message: "Ready" });
+      }
+    },
+    [primeEntryMeta],
+  );
+
   const deleteEntriesInView = useCallback(
     async (paths: string[]) => {
       if (deleteInFlightRef.current) return null;
@@ -532,14 +556,11 @@ export function useFileManager() {
       setStatus({ level: "loading", message: "Loading locations" });
 
       try {
-        const [homeResult, placesResult, drivesResult, driveInfoResult] =
-          await Promise.allSettled([
-            getHome(),
-            getPlaces(),
-            getDrives(),
-            listDriveInfo(),
-          ]);
-        const home = homeResult.status === "fulfilled" ? homeResult.value : null;
+        const [placesResult, drivesResult, driveInfoResult] = await Promise.allSettled([
+          getPlaces(),
+          getDrives(),
+          listDriveInfo(),
+        ]);
         const placeList = placesResult.status === "fulfilled" ? placesResult.value : [];
         const driveList = drivesResult.status === "fulfilled" ? drivesResult.value : [];
         const driveInfoList =
@@ -551,13 +572,9 @@ export function useFileManager() {
         setDriveInfo(driveInfoList);
         setDrives(resolvedDrives);
 
-        const startPath = home ?? placeList[0]?.path ?? resolvedDrives[0];
-        if (startPath) {
-          await loadDir(startPath);
-        } else {
-          reportError("Couldn't start", "No start folder available.");
-          setLoading(false);
-        }
+        if (!active) return;
+        setStatus({ level: "idle", message: "Ready" });
+        setLoading(false);
       } catch (error) {
         if (!active) return;
         reportError(
@@ -572,7 +589,7 @@ export function useFileManager() {
     return () => {
       active = false;
     };
-  }, [loadDir]);
+  }, []);
 
   return {
     currentPath,
@@ -586,6 +603,7 @@ export function useFileManager() {
     loading,
     status,
     loadDir,
+    clearDir,
     openEntry,
     refresh,
     requestEntryMeta,

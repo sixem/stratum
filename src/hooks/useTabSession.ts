@@ -1,15 +1,14 @@
 // Orchestrates tab state, view settings, and navigation flows.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shallow } from "zustand/shallow";
-import type { ListDirOptions, Place, SortState, Tab, ViewMode } from "@/types";
+import type { ListDirOptions, SortState, Tab, ViewMode } from "@/types";
 import { createTab, DEFAULT_TAB_STATE, makeDebug, normalizePath } from "@/lib";
 import { useSessionStore } from "@/modules";
 
 type TabSessionOptions = {
   currentPath: string;
-  drives: string[];
-  places: Place[];
   loadDir: (path: string, options?: ListDirOptions) => Promise<void>;
+  clearDir: (options?: { silent?: boolean }) => void;
   defaultViewMode: ViewMode;
   recentJumpsLimit: number;
 };
@@ -18,9 +17,8 @@ const log = makeDebug("tabs");
 
 export const useTabSession = ({
   currentPath,
-  drives,
-  places,
   loadDir,
+  clearDir,
   defaultViewMode,
   recentJumpsLimit,
 }: TabSessionOptions) => {
@@ -78,7 +76,7 @@ export const useTabSession = ({
 
   useEffect(() => {
     // Keep the active tab path synced with the current directory.
-    if (!currentPath) return;
+    if (!currentPath && activeTabId) return;
     const pendingPath = pendingTabPathRef.current;
     if (pendingPath) {
       const pendingKey = normalizePath(pendingPath) ?? pendingPath;
@@ -101,7 +99,7 @@ export const useTabSession = ({
       restorePathRef.current = null;
     }
     if (!activeTabId) {
-      const nextTab = createTab(currentPath, undefined, defaultTabState);
+      const nextTab = createTab(currentPath ?? "", undefined, defaultTabState);
       setTabs([nextTab]);
       setActiveTabId(nextTab.id);
       return;
@@ -114,7 +112,7 @@ export const useTabSession = ({
   useEffect(() => {
     // Restore the last active tab path once on startup.
     const target = restorePathRef.current;
-    if (!target || restoreRequestedRef.current || !currentPath) return;
+    if (!target || restoreRequestedRef.current) return;
     const targetKey = normalizePath(target);
     const currentKey = normalizePath(currentPath);
     if (!targetKey || targetKey === currentKey) {
@@ -154,20 +152,30 @@ export const useTabSession = ({
 
   const jumpTo = useCallback(
     (path: string, options?: ListDirOptions) => {
+      const target = path.trim();
+      if (!target) {
+        clearDir();
+        return;
+      }
       pendingJumpSourceRef.current = "navigate";
-      setPendingJump(path);
+      setPendingJump(target);
       const nextSort = options?.sort ?? sortState;
-      void loadDir(path, { ...options, sort: nextSort });
+      void loadDir(target, { ...options, sort: nextSort });
     },
-    [loadDir, sortState],
+    [clearDir, loadDir, sortState],
   );
 
   const browseTo = useCallback(
     (path: string, options?: ListDirOptions) => {
+      const target = path.trim();
+      if (!target) {
+        clearDir();
+        return;
+      }
       const nextSort = options?.sort ?? sortState;
-      void loadDir(path, { ...options, sort: nextSort });
+      void loadDir(target, { ...options, sort: nextSort });
     },
-    [loadDir, sortState],
+    [clearDir, loadDir, sortState],
   );
 
   const updateActiveTab = useCallback(
@@ -203,15 +211,13 @@ export const useTabSession = ({
   }, [activeTab, updateActiveTab]);
 
   const newTab = useCallback(() => {
-    const basePath = currentPath || drives[0] || places[0]?.path;
-    if (!basePath) return;
-    log("new tab -> %s", basePath);
-    const nextTab = createTab(basePath, activeTab ?? defaultTabState, defaultTabState);
-    pendingTabPathRef.current = normalizePath(basePath) ?? basePath;
+    log("new tab -> empty");
+    const nextTab = createTab("", activeTab ?? defaultTabState, defaultTabState);
+    pendingTabPathRef.current = null;
     setTabs((prev) => [...prev, nextTab]);
     setActiveTabId(nextTab.id);
-    jumpTo(basePath);
-  }, [activeTab, currentPath, drives, jumpTo, places, setActiveTabId, setTabs]);
+    clearDir({ silent: true });
+  }, [activeTab, clearDir, defaultTabState, setActiveTabId, setTabs]);
 
   const openInNewTab = useCallback(
     (path: string) => {
@@ -236,13 +242,17 @@ export const useTabSession = ({
       pendingJumpSourceRef.current = "switch";
       pendingTabPathRef.current = normalizePath(selected.path) ?? selected.path;
       setActiveTabId(id);
+      if (!selected.path.trim()) {
+        clearDir({ silent: true });
+        return;
+      }
       if (!shouldLoadPath(selected.path)) {
         pendingJumpSourceRef.current = null;
         return;
       }
       jumpTo(selected.path, { sort: selected.sort });
     },
-    [jumpTo, setActiveTabId, shouldLoadPath, tabs],
+    [clearDir, jumpTo, setActiveTabId, shouldLoadPath, tabs],
   );
 
   const closeTab = useCallback(
@@ -259,6 +269,10 @@ export const useTabSession = ({
           pendingJumpSourceRef.current = "switch";
           pendingTabPathRef.current = normalizePath(fallback.path) ?? fallback.path;
           setActiveTabId(fallback.id);
+          if (!fallback.path.trim()) {
+            clearDir({ silent: true });
+            return;
+          }
           if (shouldLoadPath(fallback.path)) {
             jumpTo(fallback.path, { sort: fallback.sort });
           } else {
@@ -267,7 +281,7 @@ export const useTabSession = ({
         }
       }
     },
-    [activeTabId, jumpTo, setActiveTabId, setTabs, shouldLoadPath, tabs],
+    [activeTabId, clearDir, jumpTo, setActiveTabId, setTabs, shouldLoadPath, tabs],
   );
 
   const reorderTabs = useCallback(

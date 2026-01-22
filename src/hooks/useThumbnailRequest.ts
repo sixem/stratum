@@ -1,35 +1,37 @@
+// Schedules thumbnail request batches with a short delay for smoother scrolling.
 import { useEffect, useRef } from "react";
+import type { ThumbnailRequest } from "@/types";
 
 const THUMB_REQUEST_DELAY = 80;
 
 export const useThumbnailRequest = (
   loading: boolean,
   enabled: boolean,
-  paths: string[],
-  onRequest: (paths: string[]) => void,
+  requests: ThumbnailRequest[],
+  onRequest: (requests: ThumbnailRequest[]) => void,
   resetKey?: string,
 ) => {
   const timerRef = useRef<number | null>(null);
-  const latestPaths = useRef<string[]>([]);
+  const latestRequests = useRef<ThumbnailRequest[]>([]);
 
   useEffect(() => {
-    if (loading || !enabled || paths.length === 0) return;
-    latestPaths.current = paths;
+    if (loading || !enabled || requests.length === 0) return;
+    latestRequests.current = requests;
     if (timerRef.current != null) return;
     timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
-      onRequest(latestPaths.current);
+      onRequest(latestRequests.current);
     }, THUMB_REQUEST_DELAY);
-  }, [enabled, loading, onRequest, paths, resetKey]);
+  }, [enabled, loading, onRequest, requests, resetKey]);
 
   useEffect(() => {
-    if (!enabled || loading || paths.length === 0) {
+    if (!enabled || loading || requests.length === 0) {
       if (timerRef.current != null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
       }
     }
-  }, [enabled, loading, paths.length, resetKey]);
+  }, [enabled, loading, requests.length, resetKey]);
 
   useEffect(() => {
     if (timerRef.current != null) {

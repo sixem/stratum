@@ -1,3 +1,4 @@
+// Thumbnail generation pipeline: queueing, worker threads, and cache management.
 use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};
 use std::fs;
@@ -42,6 +43,15 @@ pub struct ThumbOptions {
     pub cache_mb: u32,
 }
 
+// Optional size/modified fields let the UI skip filesystem metadata calls.
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThumbRequest {
+    pub path: String,
+    pub size: Option<u64>,
+    pub modified: Option<u64>,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ThumbFormat {
@@ -80,9 +90,15 @@ struct ThumbJob {
     kind: ThumbKind,
 }
 
+struct ThumbMeta {
+    size: u64,
+    modified: Option<u64>,
+}
+
 struct ThumbQueue {
     items: VecDeque<ThumbJob>,
     in_flight: HashSet<String>,
+    paused: bool,
 }
 
 pub struct ThumbnailState {
@@ -95,6 +111,8 @@ pub struct ThumbnailState {
 
 pub type ThumbnailHandle = Arc<ThumbnailState>;
 
+const MAX_THUMB_WORKERS: usize = 3;
+
 pub fn init(app_handle: AppHandle) -> ThumbnailHandle {
     let cache_dir = resolve_cache_dir(&app_handle);
     if let Err(err) = fs::create_dir_all(&cache_dir) {
@@ -106,14 +124,17 @@ pub fn init(app_handle: AppHandle) -> ThumbnailHandle {
         queue: Mutex::new(ThumbQueue {
             items: VecDeque::new(),
             in_flight: HashSet::new(),
+            paused: false,
         }),
         condvar: Condvar::new(),
         last_trim: Mutex::new(None),
     });
 
+    // Leave room for UI threads by keeping the worker pool intentionally small.
     let worker_count = std::thread::available_parallelism()
         .map(|value| value.get().saturating_sub(1).max(1))
-        .unwrap_or(2);
+        .unwrap_or(2)
+        .min(MAX_THUMB_WORKERS);
     for index in 0..worker_count {
         let state_clone = Arc::clone(&state);
         let _ = std::thread::Builder::new()
@@ -126,14 +147,14 @@ pub fn init(app_handle: AppHandle) -> ThumbnailHandle {
 
 pub fn request_thumbnails(
     state: &ThumbnailState,
-    paths: Vec<String>,
+    requests: Vec<ThumbRequest>,
     options: ThumbOptions,
     key: String,
 ) -> Vec<ThumbHit> {
-    let mut hits = Vec::with_capacity(paths.len());
+    let mut hits = Vec::with_capacity(requests.len());
 
-    for path in paths.into_iter().rev() {
-        let trimmed = path.trim();
+    for request in requests.into_iter().rev() {
+        let trimmed = request.path.trim();
         if trimmed.is_empty() {
             continue;
         }
@@ -141,16 +162,12 @@ pub fn request_thumbnails(
         let Some(kind) = select_thumbnail_kind(&input_path, &options) else {
             continue;
         };
-        let metadata = match fs::metadata(&input_path) {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
-        if metadata.is_dir() {
+        let Some(meta) = resolve_thumb_meta(&input_path, &request) else {
             continue;
-        }
+        };
 
         let (thumb_path, thumb_id) =
-            build_thumb_path(&state.cache_dir, &input_path, &metadata, &key, &options.format);
+            build_thumb_path(&state.cache_dir, &input_path, &meta, &key, &options.format);
         if thumb_path.exists() {
             hits.push(ThumbHit {
                 path: trimmed.to_string(),
@@ -180,11 +197,22 @@ pub fn request_thumbnails(
     hits
 }
 
+pub fn set_paused(state: &ThumbnailState, paused: bool) {
+    let mut queue = state.queue.lock().expect("thumb queue lock");
+    if queue.paused == paused {
+        return;
+    }
+    queue.paused = paused;
+    if !paused {
+        state.condvar.notify_all();
+    }
+}
+
 fn worker_loop(state: ThumbnailHandle) {
     loop {
         let job = {
             let mut queue = state.queue.lock().expect("thumb queue lock");
-            while queue.items.is_empty() {
+            while queue.items.is_empty() || queue.paused {
                 queue = state.condvar.wait(queue).expect("thumb queue wait");
             }
             queue.items.pop_front()
@@ -464,17 +492,35 @@ pub fn get_cache_size(app_handle: &AppHandle) -> Result<u64, String> {
     Ok(total)
 }
 
+fn resolve_thumb_meta(input_path: &Path, request: &ThumbRequest) -> Option<ThumbMeta> {
+    // Use UI-provided metadata when available to avoid extra stat calls.
+    if let (Some(size), Some(modified)) = (request.size, request.modified) {
+        return Some(ThumbMeta {
+            size,
+            modified: Some(modified),
+        });
+    }
+    let metadata = fs::metadata(input_path).ok()?;
+    if metadata.is_dir() {
+        return None;
+    }
+    Some(ThumbMeta {
+        size: metadata.len(),
+        modified: metadata.modified().ok().and_then(to_epoch_ms),
+    })
+}
+
 fn build_thumb_path(
     cache_dir: &Path,
     input_path: &Path,
-    metadata: &fs::Metadata,
+    meta: &ThumbMeta,
     key: &str,
     format: &ThumbFormat,
 ) -> (PathBuf, String) {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     input_path.hash(&mut hasher);
-    metadata.len().hash(&mut hasher);
-    if let Some(modified) = metadata.modified().ok().and_then(to_epoch_ms) {
+    meta.size.hash(&mut hasher);
+    if let Some(modified) = meta.modified {
         modified.hash(&mut hasher);
     }
     key.hash(&mut hasher);

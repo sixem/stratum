@@ -18,7 +18,24 @@ type UseTypeaheadSelectionOptions = {
 
 const DEFAULT_RESET_MS = 700;
 
-const findBestMatch = (items: TypeaheadItem[], query: string) => {
+type TypeaheadIndex = Map<string, TypeaheadItem[]>;
+
+const buildIndex = (items: TypeaheadItem[]): TypeaheadIndex => {
+  const index = new Map<string, TypeaheadItem[]>();
+  items.forEach((item) => {
+    const first = item.label[0];
+    if (!first) return;
+    const bucket = index.get(first);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      index.set(first, [item]);
+    }
+  });
+  return index;
+};
+
+const scanForMatch = (items: TypeaheadItem[], query: string) => {
   let fallback: TypeaheadItem | null = null;
   for (const item of items) {
     if (item.label.startsWith(query)) return item;
@@ -27,6 +44,14 @@ const findBestMatch = (items: TypeaheadItem[], query: string) => {
     }
   }
   return fallback;
+};
+
+const findBestMatch = (items: TypeaheadItem[], index: TypeaheadIndex, query: string) => {
+  const first = query[0];
+  const candidates = first ? index.get(first) ?? items : items;
+  const match = scanForMatch(candidates, query);
+  if (match || candidates === items) return match;
+  return scanForMatch(items, query);
 };
 
 export const useTypeaheadSelection = ({
@@ -39,6 +64,7 @@ export const useTypeaheadSelection = ({
   const bufferRef = useRef("");
   const lastTypeRef = useRef(0);
   const itemsRef = useRef(items);
+  const indexRef = useRef<TypeaheadIndex>(buildIndex(items));
   const onMatchRef = useRef(onMatch);
   const delayRef = useRef(resetDelayMs);
   const shouldHandleRef = useRef<UseTypeaheadSelectionOptions["shouldHandle"]>(shouldHandle);
@@ -50,6 +76,8 @@ export const useTypeaheadSelection = ({
 
   useEffect(() => {
     itemsRef.current = items;
+    // Index by first letter to keep scan work sub-linear for large folders.
+    indexRef.current = buildIndex(items);
   }, [items]);
 
   useEffect(() => {
@@ -101,7 +129,7 @@ export const useTypeaheadSelection = ({
       const query = bufferRef.current.trim();
       if (!query) return;
 
-      const match = findBestMatch(itemsRef.current, query);
+      const match = findBestMatch(itemsRef.current, indexRef.current, query);
       if (!match) return;
 
       onMatchRef.current(match);

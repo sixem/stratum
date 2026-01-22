@@ -20,5 +20,6 @@ export {
   getThumbCacheDir,
   getThumbCacheSize,
   requestThumbnails,
+  setThumbPaused,
   toThumbnailUrl,
 } from "./thumbs";

@@ -8,6 +8,8 @@ type PerfProfilerProps = PropsWithChildren<{
 }>;
 
 const log = makeDebug("perf:react");
+// Avoid spamming tiny commits in perf logs.
+const MIN_DURATION_MS = 8;
 
 export const PerfProfiler = ({ id, children }: PerfProfilerProps) => {
   const onRender: ProfilerOnRenderCallback = (
@@ -19,6 +21,8 @@ export const PerfProfiler = ({ id, children }: PerfProfilerProps) => {
     commitTime,
   ) => {
     if (!log.enabled) return;
+    if (phase === "nested-update") return;
+    if (actualDuration < MIN_DURATION_MS) return;
     log(
       "%s %s actual=%dms base=%dms start=%dms commit=%dms",
       profilerId,

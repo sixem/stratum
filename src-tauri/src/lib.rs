@@ -114,17 +114,26 @@ async fn start_drag(window: tauri::Window, paths: Vec<String>) -> Result<drag::D
 
 #[tauri::command]
 async fn request_thumbnails(
-    paths: Vec<String>,
+    requests: Vec<thumbs::ThumbRequest>,
     options: thumbs::ThumbOptions,
     key: String,
     state: tauri::State<'_, thumbs::ThumbnailHandle>,
 ) -> Result<Vec<thumbs::ThumbHit>, String> {
     let handle = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        thumbs::request_thumbnails(handle.as_ref(), paths, options, key)
+        thumbs::request_thumbnails(handle.as_ref(), requests, options, key)
     })
     .await
     .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn set_thumb_paused(
+    paused: bool,
+    state: tauri::State<'_, thumbs::ThumbnailHandle>,
+) -> Result<(), String> {
+    thumbs::set_paused(state.inner().as_ref(), paused);
+    Ok(())
 }
 
 #[tauri::command]
@@ -187,6 +196,7 @@ pub fn run() {
             delete_entries,
             start_drag,
             request_thumbnails,
+            set_thumb_paused,
             open_path,
             open_path_properties,
             get_thumb_cache_dir,

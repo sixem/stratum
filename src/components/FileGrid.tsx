@@ -12,14 +12,25 @@ import {
   useScrollPosition,
   useScrollToIndex,
   useSelectionDrag,
+  useThumbnailPause,
   useThumbnailRequest,
+  useTypingActivity,
   useWheelSnap,
   useVirtualRange,
 } from "@/hooks";
-import { getEmptyMessage, handleMiddleClick, isEntryItem } from "@/lib";
+import {
+  buildEntryTooltip,
+  formatBytes,
+  getEmptyMessage,
+  getExtension,
+  getFileKind,
+  handleMiddleClick,
+  isEntryItem,
+} from "@/lib";
+import type { FileKind } from "@/lib";
 import type { EntryItem } from "@/lib";
 import type { GridNameEllipsis, GridSize } from "@/modules";
-import type { EntryMeta, FileEntry } from "@/types";
+import type { EntryMeta, FileEntry, ThumbnailRequest } from "@/types";
 import { EmptyState } from "./EmptyState";
 import { LoadingIndicator } from "./LoadingIndicator";
 import { SelectionRect } from "./SelectionRect";
@@ -48,7 +59,7 @@ type FileGridProps = {
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
   thumbnails: Map<string, string>;
-  onRequestThumbs: (paths: string[]) => void;
+  onRequestThumbs: (requests: ThumbnailRequest[]) => void;
   categoryTinting: boolean;
   gridSize: GridSize;
   gridShowSize: boolean;
@@ -92,7 +103,16 @@ const GRID_META_TRIM = 24;
 const GRID_OVERSCAN = 3;
 const GRID_OVERSCAN_MIN = 1;
 const GRID_OVERSCAN_WARMUP_MS = 140;
+// Pause thumbnail work briefly after key presses to keep input responsive.
+const THUMB_TYPING_PAUSE_MS = 320;
 const noop = () => {};
+
+type GridDisplayMeta = {
+  tooltipText: string;
+  fileKind: FileKind;
+  extension: string | null;
+  sizeLabel: string;
+};
 
 export default function FileGrid({
   entries,
@@ -143,6 +163,8 @@ export default function FileGrid({
   const { width: viewportWidth } = useElementSize(viewportRef);
   const layoutReady = viewportWidth > 0;
   const scrolling = useScrollSettled(viewportRef);
+  const typingActive = useTypingActivity({ resetDelayMs: THUMB_TYPING_PAUSE_MS });
+  const interactionActive = scrolling || typingActive;
 
   const gridMetaEnabled = gridShowSize || gridShowExtension;
   const gridSizing = useMemo(() => {
@@ -239,17 +261,59 @@ export default function FileGrid({
   const hasContent = viewItems.length > 0;
   const contentReady = true;
   const viewAnimate = false;
-  const metaPaths = useMemo(() => {
-    // Build the meta/thumb request list in one pass to keep allocations low.
-    if (visibleItems.length === 0) return [];
-    const next: string[] = [];
+  const { metaPaths, thumbRequests } = useMemo(() => {
+    // Build the meta + thumbnail request lists in one pass to keep allocations low.
+    if (visibleItems.length === 0) {
+      return { metaPaths: [], thumbRequests: [] };
+    }
+    const nextMeta: string[] = [];
+    const nextThumbs: ThumbnailRequest[] = [];
     for (const item of visibleItems) {
       if (!isEntryItem(item)) continue;
       if (item.entry.isDir) continue;
-      next.push(item.entry.path);
+      const path = item.entry.path;
+      nextMeta.push(path);
+      const meta = entryMeta.get(path);
+      // Provide cached size/modified so the backend can hash without extra stats.
+      nextThumbs.push({
+        path,
+        size: meta?.size ?? null,
+        modified: meta?.modified ?? null,
+      });
     }
+    return { metaPaths: nextMeta, thumbRequests: nextThumbs };
+  }, [entryMeta, visibleItems]);
+  const entryMetaCacheRef = useRef<Map<string, GridDisplayMeta>>(new Map());
+
+  useEffect(() => {
+    // Reset cached grid labels on view changes to keep memory bounded.
+    entryMetaCacheRef.current.clear();
+  }, [scrollKey]);
+
+  const gridMetaByPath = useMemo(() => {
+    const cache = entryMetaCacheRef.current;
+    const next = new Map<string, GridDisplayMeta>();
+    visibleItems.forEach((item) => {
+      if (!isEntryItem(item)) return;
+      const entry = item.entry;
+      const path = entry.path;
+      const meta = entryMeta.get(path);
+      const cacheKey = `${path}:${meta?.modified ?? "none"}:${meta?.size ?? "none"}`;
+      let resolved = cache.get(cacheKey);
+      if (!resolved) {
+        const extension = entry.isDir ? null : getExtension(entry.name);
+        resolved = {
+          tooltipText: buildEntryTooltip(entry, meta),
+          fileKind: entry.isDir ? "generic" : getFileKind(entry.name),
+          extension,
+          sizeLabel: entry.isDir ? "Folder" : formatBytes(meta?.size ?? null),
+        };
+        cache.set(cacheKey, resolved);
+      }
+      next.set(path, resolved);
+    });
     return next;
-  }, [visibleItems]);
+  }, [entryMeta, visibleItems]);
   const handleCardSelect = useCallback(
     (event: ReactMouseEvent) => {
       const target = event.currentTarget as HTMLElement;
@@ -353,11 +417,13 @@ export default function FileGrid({
     enabled: dragEnabled,
   });
   useEntryMetaRequest(loading || scrolling, metaPaths, onRequestMeta);
-  const canRequestThumbs = thumbnailsEnabled && !loading && !scrolling;
+  // Pause thumbnail generation while the user is actively interacting.
+  useThumbnailPause(interactionActive, thumbnailsEnabled);
+  const canRequestThumbs = thumbnailsEnabled && !loading && !interactionActive;
   useThumbnailRequest(
-    loading || scrolling,
+    loading || interactionActive,
     canRequestThumbs,
-    metaPaths,
+    thumbRequests,
     onRequestThumbs,
     thumbResetKey,
   );
@@ -416,12 +482,16 @@ export default function FileGrid({
                 );
               }
               const isDropTarget = dropTargetPath === item.entry.path;
+              const itemMeta = gridMetaByPath.get(item.entry.path);
               return (
                 <EntryCard
                   key={item.key}
                   entry={item.entry}
                   index={index}
-                  meta={entryMeta.get(item.entry.path)}
+                  tooltipText={itemMeta?.tooltipText ?? ""}
+                  fileKind={itemMeta?.fileKind ?? "generic"}
+                  extension={itemMeta?.extension ?? null}
+                  sizeLabel={itemMeta?.sizeLabel ?? ""}
                   thumbUrl={
                     thumbnailsEnabled ? thumbnails.get(item.entry.path) : undefined
                   }

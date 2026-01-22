@@ -17,6 +17,7 @@ export type {
   ThumbnailEvent,
   ThumbnailFormat,
   ThumbnailHit,
+  ThumbnailRequest,
   ThumbnailRequestOptions,
 } from "./thumbs";
 export type { ViewMode } from "./view";

@@ -1,5 +1,5 @@
 // Path input and search bar for quick navigation.
-import type { FormEvent, RefObject } from "react";
+import type { FormEvent, KeyboardEvent, RefObject } from "react";
 import { ChevronUpIcon, FilterIcon } from "./Icons";
 
 type PathBarProps = {
@@ -32,6 +32,13 @@ export function PathBar({
     if (loading) return;
     onSubmit();
   };
+  const handlePathKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    // Enter in the path input should navigate immediately.
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    if (loading) return;
+    onSubmit();
+  };
 
   return (
     <form className="pathbar" onSubmit={handleSubmit}>
@@ -48,6 +55,7 @@ export function PathBar({
       <input
         value={path}
         onChange={(event) => onPathChange(event.currentTarget.value)}
+        onKeyDown={handlePathKeyDown}
         placeholder="Enter a path"
         aria-label="Current path"
         spellCheck={false}

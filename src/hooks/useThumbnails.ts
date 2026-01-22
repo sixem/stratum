@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { requestThumbnails, toThumbnailUrl } from "@/api";
 import { makeDebug } from "@/lib";
-import type { ThumbnailEvent, ThumbnailRequestOptions } from "@/types";
+import type { ThumbnailEvent, ThumbnailRequest, ThumbnailRequestOptions } from "@/types";
 
 const buildOptionsKey = (options: ThumbnailRequestOptions) => {
   const quality = options.format === "jpeg" ? options.quality : "lossless";
@@ -14,6 +14,31 @@ const buildOptionsKey = (options: ThumbnailRequestOptions) => {
 // Batch thumbnail ready events to avoid re-rendering for every single image.
 const THUMB_EVENT_FLUSH_MS = 80;
 const perf = makeDebug("perf:thumbs");
+
+// Deduplicate thumbnail requests by path while preserving any known metadata.
+const normalizeRequests = (requests: ThumbnailRequest[]) => {
+  const merged = new Map<string, ThumbnailRequest>();
+  requests.forEach((request) => {
+    const trimmed = request.path.trim();
+    if (!trimmed) return;
+    const next: ThumbnailRequest = {
+      path: trimmed,
+      size: request.size ?? null,
+      modified: request.modified ?? null,
+    };
+    const existing = merged.get(trimmed);
+    if (!existing) {
+      merged.set(trimmed, next);
+      return;
+    }
+    merged.set(trimmed, {
+      path: trimmed,
+      size: next.size ?? existing.size ?? null,
+      modified: next.modified ?? existing.modified ?? null,
+    });
+  });
+  return merged;
+};
 
 export const useThumbnails = (
   options: ThumbnailRequestOptions,
@@ -126,15 +151,16 @@ export const useThumbnails = (
   }, []);
 
   const request = useCallback(
-    async (paths: string[]) => {
+    async (requests: ThumbnailRequest[]) => {
       if (!enabled) return;
-      const unique = new Set(paths.map((path) => path.trim()).filter(Boolean));
-      const missing = Array.from(unique).filter(
-        (path) => !thumbnailsRef.current.has(path) && !pending.current.has(path),
+      const deduped = normalizeRequests(requests);
+      const missing = Array.from(deduped.values()).filter(
+        (request) =>
+          !thumbnailsRef.current.has(request.path) && !pending.current.has(request.path),
       );
       if (missing.length === 0) return;
       const batch = missing.slice(0, 120);
-      batch.forEach((path) => pending.current.add(path));
+      batch.forEach((request) => pending.current.add(request.path));
       const key = optionsKeyRef.current;
       try {
         const start = perf.enabled ? performance.now() : 0;
@@ -159,7 +185,7 @@ export const useThumbnails = (
       } catch {
         // Ignore thumbnail request errors; entries will retry on next view update.
       } finally {
-        batch.forEach((path) => pending.current.delete(path));
+        batch.forEach((request) => pending.current.delete(request.path));
       }
     },
     [enabled, options],

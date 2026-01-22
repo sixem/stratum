@@ -1,8 +1,7 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
 // Row rendering for list view entries.
 import { memo } from "react";
-import { buildEntryTooltip, formatBytes, formatDate } from "@/lib";
-import type { EntryMeta, FileEntry } from "@/types";
+import type { FileEntry } from "@/types";
 import { FILE_TOOLTIP_DELAY_MS } from "@/constants";
 import { TooltipWrapper } from "../Tooltip";
 
@@ -54,7 +53,9 @@ export const ParentRow = memo(({
 type EntryRowProps = {
   entry: FileEntry;
   index: number;
-  meta: EntryMeta | undefined;
+  tooltipText: string;
+  sizeLabel: string;
+  modifiedLabel: string;
   selected: boolean;
   dropTarget: boolean;
   onSelect: (event: ReactMouseEvent) => void;
@@ -66,7 +67,9 @@ type EntryRowProps = {
 export const EntryRow = memo(({
   entry,
   index,
-  meta,
+  tooltipText,
+  sizeLabel,
+  modifiedLabel,
   selected,
   dropTarget,
   onSelect,
@@ -74,14 +77,6 @@ export const EntryRow = memo(({
   onOpenNewTab,
   onContextMenu,
 }: EntryRowProps) => {
-  const tooltipText = buildEntryTooltip(entry, meta);
-  const sizeLabel = entry.isDir ? "-" : formatBytes(meta?.size ?? null);
-  const modifiedLabel = entry.isDir
-    ? "-"
-    : meta?.modified == null
-      ? "..."
-      : formatDate(meta.modified);
-
   return (
     <TooltipWrapper text={tooltipText} delayMs={FILE_TOOLTIP_DELAY_MS}>
       <button

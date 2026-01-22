@@ -1,8 +1,10 @@
+// Filesystem helpers backing the Tauri commands.
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::SystemTime;
 
 #[cfg(target_os = "windows")]
@@ -46,6 +48,8 @@ pub struct ListDirOptions {
     pub sort: Option<SortState>,
     pub search: Option<String>,
     pub fast: Option<bool>,
+    // Generation counter from the UI; newer generations cancel older scans.
+    pub generation: Option<u64>,
 }
 
 #[derive(Clone, Serialize)]
@@ -100,6 +104,40 @@ pub struct DriveInfo {
     pub path: String,
     pub free: Option<u64>,
     pub total: Option<u64>,
+}
+
+const LIST_DIR_CANCEL_CHECK_INTERVAL: usize = 32;
+const LIST_DIR_CANCEL_MESSAGE: &str = "Directory listing canceled";
+
+// Track the newest list_dir generation so older scans can stop early.
+static LIST_DIR_LATEST_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+fn start_list_dir_generation(generation: Option<u64>) -> Result<Option<u64>, String> {
+    let generation = match generation {
+        Some(value) => value,
+        None => return Ok(None),
+    };
+
+    // fetch_max keeps the newest generation when requests overlap.
+    let previous = LIST_DIR_LATEST_GENERATION.fetch_max(generation, AtomicOrdering::Relaxed);
+    if previous > generation {
+        return Err(LIST_DIR_CANCEL_MESSAGE.into());
+    }
+    Ok(Some(generation))
+}
+
+fn is_list_dir_generation_stale(generation: Option<u64>) -> bool {
+    match generation {
+        Some(value) => LIST_DIR_LATEST_GENERATION.load(AtomicOrdering::Relaxed) != value,
+        None => false,
+    }
+}
+
+fn should_cancel_list_dir(generation: Option<u64>, scanned: usize) -> bool {
+    if scanned % LIST_DIR_CANCEL_CHECK_INTERVAL != 0 {
+        return false;
+    }
+    is_list_dir_generation_stale(generation)
 }
 
 fn home_dir() -> Option<PathBuf> {
@@ -372,7 +410,9 @@ pub fn list_dir(path: String, options: Option<ListDirOptions>) -> Result<ListDir
         sort: None,
         search: None,
         fast: None,
+        generation: None,
     });
+    let generation = start_list_dir_generation(options.generation)?;
     let sort = options.sort.unwrap_or_else(default_sort_state);
     let search = normalize_search(options.search);
     let fast = options.fast.unwrap_or(false);
@@ -384,7 +424,12 @@ pub fn list_dir(path: String, options: Option<ListDirOptions>) -> Result<ListDir
     let mut total_count = 0;
     let has_search = !search.is_empty();
 
+    let mut scanned = 0;
     for entry in entries {
+        if should_cancel_list_dir(generation, scanned) {
+            return Err(LIST_DIR_CANCEL_MESSAGE.into());
+        }
+        scanned += 1;
         let entry = match entry {
             Ok(value) => value,
             Err(_) => continue,
@@ -395,15 +440,28 @@ pub fn list_dir(path: String, options: Option<ListDirOptions>) -> Result<ListDir
             continue;
         }
         let path = entry.path().to_string_lossy().to_string();
-        let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
-        let mut size = None;
-        let mut modified = None;
-        if include_meta && !is_dir {
-            if let Ok(metadata) = entry.metadata() {
-                size = Some(metadata.len());
-                modified = metadata.modified().ok().and_then(to_epoch_ms);
+        // Pull metadata once when needed so we can derive is_dir + size/modified without
+        // a second syscall.
+        let metadata = if include_meta {
+            entry.metadata().ok()
+        } else {
+            None
+        };
+        let is_dir = match metadata.as_ref() {
+            Some(meta) => meta.is_dir(),
+            None => entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false),
+        };
+        let (size, modified) = if include_meta && !is_dir {
+            match metadata.as_ref() {
+                Some(meta) => (
+                    Some(meta.len()),
+                    meta.modified().ok().and_then(to_epoch_ms),
+                ),
+                None => (None, None),
             }
-        }
+        } else {
+            (None, None)
+        };
 
         items.push(FileEntry {
             name,
@@ -412,6 +470,9 @@ pub fn list_dir(path: String, options: Option<ListDirOptions>) -> Result<ListDir
             size,
             modified,
         });
+    }
+    if is_list_dir_generation_stale(generation) {
+        return Err(LIST_DIR_CANCEL_MESSAGE.into());
     }
     if items.len() > 1 {
         items.sort_by(|left, right| compare_entries(left, right, &sort));

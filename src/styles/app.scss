@@ -885,8 +885,8 @@ input {
 
 .thumb-card {
   border: 1px solid var(--stroke);
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: 6px;
+  padding: 6px;
   background: #121621;
   text-align: left;
   cursor: pointer;
@@ -1041,9 +1041,10 @@ input {
   grid-template-columns: 1fr auto;
   gap: 8px;
   align-items: center;
-  font-size: 11px;
+  font-size: 0.7rem;
   color: var(--muted);
   min-width: 0;
+  font-weight: 500;
 }
 
 .thumb-info-size {
@@ -1197,6 +1198,19 @@ input {
   padding: 24px;
   text-align: center;
   color: var(--muted);
+}
+
+.view-lander {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 32px;
+}
+
+.view-lander .empty-state {
+  max-width: 360px;
 }
 
 .empty-title {
@@ -1359,6 +1373,11 @@ input {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
+:root[data-blur-overlays="true"] .prompt-modal,
+:root[data-blur-overlays="true"] .settings-overlay {
+  backdrop-filter: blur(6px);
+}
+
 .context-menu[data-open="true"] {
   opacity: 1;
   pointer-events: auto;
@@ -1427,7 +1446,6 @@ input {
   place-items: center;
   padding: 24px;
   background: rgba(6, 8, 12, 0.68);
-  backdrop-filter: blur(6px);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;

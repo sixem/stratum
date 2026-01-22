@@ -1,5 +1,13 @@
 const sizeUnits = ["B", "KB", "MB", "GB", "TB"];
 const countFormatter = new Intl.NumberFormat();
+// Reuse the formatter to keep date rendering cheap during fast scroll.
+const dateFormatter = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "short",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
 export function formatBytes(value: number | null) {
   if (value === null) return "...";
@@ -28,12 +36,5 @@ export function formatPercent(value: number, total: number, decimals = 0) {
 
 export function formatDate(epochMs: number | null) {
   if (epochMs === null) return "-";
-  const date = new Date(epochMs);
-  return date.toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return dateFormatter.format(new Date(epochMs));
 }

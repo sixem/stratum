@@ -1,7 +1,7 @@
 // Virtualized list view for file entries.
 import type { CSSProperties } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   useEntryDragOut,
   useEntryMetaRequest,
@@ -14,7 +14,14 @@ import {
   useWheelSnap,
   useVirtualRange,
 } from "@/hooks";
-import { getEmptyMessage, handleMiddleClick, isEntryItem } from "@/lib";
+import {
+  buildEntryTooltip,
+  formatBytes,
+  formatDate,
+  getEmptyMessage,
+  handleMiddleClick,
+  isEntryItem,
+} from "@/lib";
 import type { EntryItem } from "@/lib";
 import type { EntryMeta, FileEntry } from "@/types";
 import { EmptyState } from "./EmptyState";
@@ -58,6 +65,12 @@ const OVERSCAN = 10;
 const OVERSCAN_MIN = 2;
 const OVERSCAN_WARMUP_MS = 140;
 const noop = () => {};
+
+type RowDisplayMeta = {
+  tooltipText: string;
+  sizeLabel: string;
+  modifiedLabel: string;
+};
 
 export default function FileList({
   entries,
@@ -112,6 +125,40 @@ export default function FileList({
         .map((row) => row.entry.path),
     [visibleRows],
   );
+  const rowMetaCacheRef = useRef<Map<string, RowDisplayMeta>>(new Map());
+
+  useEffect(() => {
+    // Reset cached row labels on view changes to keep memory bounded.
+    rowMetaCacheRef.current.clear();
+  }, [scrollKey]);
+
+  const rowMetaByPath = useMemo(() => {
+    const cache = rowMetaCacheRef.current;
+    const next = new Map<string, RowDisplayMeta>();
+    visibleRows.forEach((row) => {
+      if (!isEntryItem(row)) return;
+      const path = row.entry.path;
+      const meta = entryMeta.get(path);
+      const cacheKey = `${path}:${meta?.modified ?? "none"}:${meta?.size ?? "none"}`;
+      let resolved = cache.get(cacheKey);
+      if (!resolved) {
+        const sizeLabel = row.entry.isDir ? "-" : formatBytes(meta?.size ?? null);
+        const modifiedLabel = row.entry.isDir
+          ? "-"
+          : meta?.modified == null
+            ? "..."
+            : formatDate(meta.modified);
+        resolved = {
+          tooltipText: buildEntryTooltip(row.entry, meta),
+          sizeLabel,
+          modifiedLabel,
+        };
+        cache.set(cacheKey, resolved);
+      }
+      next.set(path, resolved);
+    });
+    return next;
+  }, [entryMeta, visibleRows]);
   const handleRowSelect = useCallback(
     (event: ReactMouseEvent) => {
       const target = event.currentTarget as HTMLElement;
@@ -270,12 +317,15 @@ export default function FileList({
                   );
                 }
                 const isDropTarget = dropTargetPath === row.entry.path;
+                const rowMeta = rowMetaByPath.get(row.entry.path);
                 return (
                   <EntryRow
                     key={row.key}
                     entry={row.entry}
                     index={index}
-                    meta={entryMeta.get(row.entry.path)}
+                    tooltipText={rowMeta?.tooltipText ?? ""}
+                    sizeLabel={rowMeta?.sizeLabel ?? ""}
+                    modifiedLabel={rowMeta?.modifiedLabel ?? ""}
                     selected={selectedPaths.has(row.entry.path)}
                     dropTarget={isDropTarget}
                     onSelect={handleRowSelect}
