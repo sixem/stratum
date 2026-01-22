@@ -35,7 +35,18 @@ import "@/styles/app.scss";
 const MAX_SCROLL_POSITIONS = 160;
 const SCROLL_PERSIST_DELAY = 800;
 
+const getSelectionTargets = (selected: Set<string>, parentPath: string | null) => {
+  return Array.from(selected).filter((path) => path !== parentPath);
+};
+
+const formatDeleteLabel = (targets: string[]) => {
+  const count = targets.length;
+  if (count === 1) return tabLabel(targets[0] ?? "");
+  return `${count} items`;
+};
+
 const App = () => {
+  // Core state and layout refs.
   const fileManager = useFileManager();
   const settings = useSettings();
   const tabSession = useTabSession({
@@ -70,6 +81,7 @@ const App = () => {
   });
   const { currentPath, parentPath, entries, entryMeta, loading, status } = fileManager;
   const { activeTabId, activeTab, viewMode, sidebarOpen, sortState } = tabSession;
+  // Path, search, and view state for the main content area.
   const {
     pathValue,
     setPathValue,
@@ -95,6 +107,7 @@ const App = () => {
   useCssVarHeight(statusbarRef, "--statusbar-height");
   useWindowSize();
 
+  // Global appearance settings reflected in CSS variables.
   useAppAppearance({
     accentTheme: settings.accentTheme,
     ambientBackground: settings.ambientBackground,
@@ -107,6 +120,7 @@ const App = () => {
     useTooltipStore.getState().hideTooltip();
   }, [activeTabId, currentPath, sidebarOpen, viewMode]);
 
+  // Drive + place selection share the same jump target semantics.
   const handleSelectDrive = useCallback(
     (path: string) => tabSession.jumpTo(path),
     [tabSession.jumpTo],
@@ -120,6 +134,7 @@ const App = () => {
     void fileManager.refresh();
   }, [fileManager.refresh]);
 
+  // Thumbnail pipeline input config.
   const thumbnailOptions = useMemo(
     () => ({
       size: settings.thumbnailSize,
@@ -161,6 +176,7 @@ const App = () => {
     metaReady,
   });
 
+  // Drive stats for the statusbar and overlays.
   const { driveInfoMap, currentDriveInfo } = useDriveInfo({
     currentPath,
     drives: fileManager.drives,
@@ -173,6 +189,7 @@ const App = () => {
   const viewPath = activeTab?.path ?? currentPath;
   const scrollKey = `${activeTabId ?? "none"}:${viewMode}:${viewPath}:${deferredSearchValue.trim()}`;
   const initialScrollTop = getScrollTop(scrollKey);
+  const contextMenuActive = Boolean(contextMenu);
   const {
     gridColumnsRef,
     handleGridColumnsChange,
@@ -194,10 +211,14 @@ const App = () => {
     blockReveal,
     loading,
     settingsOpen,
-    contextMenuOpen: Boolean(contextMenu),
+    contextMenuOpen: contextMenuActive,
     mainRef,
     requestScrollToIndex,
   });
+  const selectionTargets = useMemo(
+    () => getSelectionTargets(selected, viewParentPath),
+    [selected, viewParentPath],
+  );
   const handleStartDragOut = useDragOutHandler({
     viewParentPath,
     onRefresh: fileManager.refresh,
@@ -223,7 +244,7 @@ const App = () => {
 
   useSelectionShortcuts({
     blockReveal,
-    contextMenuOpen: Boolean(contextMenu),
+    contextMenuOpen: contextMenuActive,
     loading,
     settingsOpen,
     viewMode,
@@ -238,6 +259,7 @@ const App = () => {
     onOpenEntry: fileManager.openEntry,
   });
 
+  // Keybind gating helpers: protect interactions during modal states.
   const canHandleGlobalKeybind = useCallback(() => {
     return !settingsOpen && !contextMenu && !promptOpen;
   }, [contextMenu, promptOpen, settingsOpen]);
@@ -250,6 +272,7 @@ const App = () => {
     return true;
   }, [blockReveal, canHandleGlobalKeybind, loading]);
 
+  // Keybind handlers are kept explicit for readability and testing.
   const handleNewTabKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleGlobalKeybind()) return false;
     tabSession.newTab();
@@ -281,17 +304,15 @@ const App = () => {
 
   const handleDeleteSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
-    const targets = Array.from(selected).filter((path) => path !== viewParentPath);
-    if (targets.length === 0) return false;
-    const count = targets.length;
-    const label = count === 1 ? tabLabel(targets[0] ?? "") : `${count} items`;
+    if (selectionTargets.length === 0) return false;
+    const label = formatDeleteLabel(selectionTargets);
     usePromptStore.getState().showPrompt({
-      title: count === 1 ? "Delete item?" : "Delete items?",
+      title: selectionTargets.length === 1 ? "Delete item?" : "Delete items?",
       content: `Delete ${label}? This cannot be undone.`,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
       onConfirm: () => {
-        void fileManager.deleteEntries(targets).then((report) => {
+        void fileManager.deleteEntries(selectionTargets).then((report) => {
           if (report?.deleted) {
             clearSelection();
           }
@@ -303,25 +324,22 @@ const App = () => {
     canHandleViewKeybind,
     clearSelection,
     fileManager,
-    selected,
-    viewParentPath,
+    selectionTargets,
   ]);
 
   const handleDuplicateSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
-    const targets = Array.from(selected).filter((path) => path !== viewParentPath);
-    if (targets.length === 0) return false;
-    void fileManager.duplicateEntries(targets);
+    if (selectionTargets.length === 0) return false;
+    void fileManager.duplicateEntries(selectionTargets);
     return true;
-  }, [canHandleViewKeybind, fileManager, selected, viewParentPath]);
+  }, [canHandleViewKeybind, fileManager, selectionTargets]);
 
   const handleCopySelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
-    const targets = Array.from(selected).filter((path) => path !== viewParentPath);
-    if (targets.length === 0) return false;
-    useClipboardStore.getState().setClipboard(targets);
+    if (selectionTargets.length === 0) return false;
+    useClipboardStore.getState().setClipboard(selectionTargets);
     return true;
-  }, [canHandleViewKeybind, selected, viewParentPath]);
+  }, [canHandleViewKeybind, selectionTargets]);
 
   const handlePasteSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
@@ -370,6 +388,7 @@ const App = () => {
     reserved: reservedKeybinds,
   });
 
+  // Status bar labels are kept in sync with selection and drive stats.
   const { countLabel, selectionLabel } = useStatusLabels({
     isFiltered,
     visibleCount,
@@ -379,6 +398,7 @@ const App = () => {
     entryMeta,
   });
 
+  // Cache actions for the settings panel.
   const handleOpenThumbCache = useCallback(async () => {
     try {
       const cacheDir = await getThumbCacheDir();
@@ -397,6 +417,7 @@ const App = () => {
       // Ignore cache clear errors.
     }
   }, []);
+  // Context menu content is derived from the current target + sort state.
   const sortMenuItems = useSortMenuItems(sortState, tabSession.setSort);
   const entryMenuItems = useEntryMenuItems({
     target: contextMenu?.kind === "entry" ? contextMenu.entry : null,
@@ -411,6 +432,7 @@ const App = () => {
     contextMenu?.kind === "entry" ? entryMenuItems : sortMenuItems;
   const contextMenuOpen = Boolean(contextMenu && contextMenuItems.length > 0);
 
+  // Layout class toggles full-width mode when the sidebar is closed.
   const layoutClass = `layout${sidebarOpen ? "" : " is-full"}`;
 
   return (
