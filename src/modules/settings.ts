@@ -1,0 +1,311 @@
+// Persistent user settings with defaults and coercion.
+import { create } from "zustand";
+import type { ViewMode } from "@/types";
+import type { KeybindMap } from "./keybinds";
+import { coerceKeybinds, DEFAULT_KEYBINDS } from "./keybinds";
+
+type ThumbnailFormat = "webp" | "jpeg";
+export type GridSize = "compact" | "large";
+export type GridNameEllipsis = "end" | "middle";
+export type AccentTheme =
+  | "red"
+  | "purple"
+  | "green"
+  | "yellow"
+  | "orange"
+  | "teal"
+  | "white";
+export type SidebarSectionId = "places" | "recent" | "tips";
+
+export const SIDEBAR_SECTION_DEFINITIONS: { id: SidebarSectionId; label: string }[] = [
+  { id: "places", label: "Places" },
+  { id: "recent", label: "Recent jumps" },
+  { id: "tips", label: "Tips" },
+];
+
+export const DEFAULT_SIDEBAR_SECTION_ORDER = SIDEBAR_SECTION_DEFINITIONS.map((item) => item.id);
+export const SIDEBAR_RECENT_LIMIT_MIN = 1;
+export const SIDEBAR_RECENT_LIMIT_MAX = 20;
+
+type Settings = {
+  sidebarOpen: boolean;
+  sidebarRecentLimit: number;
+  sidebarShowTips: boolean;
+  sidebarSectionOrder: SidebarSectionId[];
+  defaultViewMode: ViewMode;
+  accentTheme: AccentTheme;
+  categoryTinting: boolean;
+  showParentEntry: boolean;
+  ambientBackground: boolean;
+  blurOverlays: boolean;
+  keybinds: KeybindMap;
+  gridSize: GridSize;
+  gridRounded: boolean;
+  gridCentered: boolean;
+  gridShowSize: boolean;
+  gridShowExtension: boolean;
+  gridNameEllipsis: GridNameEllipsis;
+  gridNameHideExtension: boolean;
+  thumbnailsEnabled: boolean;
+  thumbnailSize: number;
+  thumbnailQuality: number;
+  thumbnailFormat: ThumbnailFormat;
+  thumbnailVideos: boolean;
+  thumbnailCacheMb: number;
+};
+
+type SettingsStore = Settings & {
+  setSettings: (next: Settings) => void;
+  updateSettings: (patch: Partial<Settings>) => void;
+  resetSettings: () => void;
+};
+
+type StoredSettings = {
+  version: number;
+  settings: Settings;
+};
+
+const STORAGE_KEY = "stratum.settings";
+const STORAGE_VERSION = 7;
+
+const DEFAULT_SETTINGS: Settings = {
+  sidebarOpen: true,
+  sidebarRecentLimit: 8,
+  sidebarShowTips: true,
+  sidebarSectionOrder: DEFAULT_SIDEBAR_SECTION_ORDER,
+  defaultViewMode: "thumbs",
+  accentTheme: "red",
+  categoryTinting: false,
+  showParentEntry: true,
+  ambientBackground: false,
+  blurOverlays: false,
+  keybinds: DEFAULT_KEYBINDS,
+  gridSize: "compact",
+  gridRounded: true,
+  gridCentered: true,
+  gridShowSize: true,
+  gridShowExtension: false,
+  gridNameEllipsis: "end",
+  gridNameHideExtension: false,
+  thumbnailsEnabled: true,
+  thumbnailSize: 256,
+  thumbnailQuality: 80,
+  thumbnailFormat: "webp",
+  thumbnailVideos: true,
+  thumbnailCacheMb: 512,
+};
+
+const clampNumber = (value: unknown, fallback: number, min: number, max: number) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+};
+
+const coerceFormat = (value: unknown): ThumbnailFormat => {
+  return value === "jpeg" ? "jpeg" : "webp";
+};
+
+const coerceViewMode = (value: unknown): ViewMode => {
+  return value === "list" ? "list" : "thumbs";
+};
+
+const coerceAccentTheme = (value: unknown): AccentTheme => {
+  switch (value) {
+    case "purple":
+    case "green":
+    case "yellow":
+    case "orange":
+    case "teal":
+    case "white":
+    case "red":
+      return value;
+    default:
+      return DEFAULT_SETTINGS.accentTheme;
+  }
+};
+
+const coerceGridSize = (value: unknown): GridSize => {
+  return value === "large" ? "large" : "compact";
+};
+
+const coerceGridNameEllipsis = (value: unknown): GridNameEllipsis => {
+  return value === "middle" ? "middle" : "end";
+};
+
+const isSidebarSectionId = (value: unknown): value is SidebarSectionId => {
+  return SIDEBAR_SECTION_DEFINITIONS.some((item) => item.id === value);
+};
+
+export const normalizeSidebarSectionOrder = (value: unknown): SidebarSectionId[] => {
+  const next: SidebarSectionId[] = [];
+  const seen = new Set<SidebarSectionId>();
+  if (Array.isArray(value)) {
+    value.forEach((item) => {
+      if (!isSidebarSectionId(item)) return;
+      if (seen.has(item)) return;
+      seen.add(item);
+      next.push(item);
+    });
+  }
+  SIDEBAR_SECTION_DEFINITIONS.forEach((item) => {
+    if (seen.has(item.id)) return;
+    seen.add(item.id);
+    next.push(item.id);
+  });
+  return next;
+};
+
+const coerceSidebarRecentLimit = (value: unknown) => {
+  return clampNumber(
+    value,
+    DEFAULT_SETTINGS.sidebarRecentLimit,
+    SIDEBAR_RECENT_LIMIT_MIN,
+    SIDEBAR_RECENT_LIMIT_MAX,
+  );
+};
+
+const coerceSettings = (value: Partial<Settings> | null | undefined): Settings => {
+  return {
+    sidebarOpen:
+      typeof value?.sidebarOpen === "boolean" ? value.sidebarOpen : DEFAULT_SETTINGS.sidebarOpen,
+    sidebarRecentLimit: coerceSidebarRecentLimit(value?.sidebarRecentLimit),
+    sidebarShowTips:
+      typeof value?.sidebarShowTips === "boolean"
+        ? value.sidebarShowTips
+        : DEFAULT_SETTINGS.sidebarShowTips,
+    sidebarSectionOrder: normalizeSidebarSectionOrder(value?.sidebarSectionOrder),
+    defaultViewMode: coerceViewMode(value?.defaultViewMode),
+    accentTheme: coerceAccentTheme(value?.accentTheme),
+    categoryTinting:
+      typeof value?.categoryTinting === "boolean"
+        ? value.categoryTinting
+        : DEFAULT_SETTINGS.categoryTinting,
+    showParentEntry:
+      typeof value?.showParentEntry === "boolean"
+        ? value.showParentEntry
+        : DEFAULT_SETTINGS.showParentEntry,
+    ambientBackground:
+      typeof value?.ambientBackground === "boolean"
+        ? value.ambientBackground
+        : DEFAULT_SETTINGS.ambientBackground,
+    blurOverlays:
+      typeof value?.blurOverlays === "boolean"
+        ? value.blurOverlays
+        : DEFAULT_SETTINGS.blurOverlays,
+    keybinds: coerceKeybinds(value?.keybinds),
+    gridSize: coerceGridSize(value?.gridSize),
+    gridRounded:
+      typeof value?.gridRounded === "boolean"
+        ? value.gridRounded
+        : DEFAULT_SETTINGS.gridRounded,
+    gridCentered:
+      typeof value?.gridCentered === "boolean"
+        ? value.gridCentered
+        : DEFAULT_SETTINGS.gridCentered,
+    gridShowSize:
+      typeof value?.gridShowSize === "boolean"
+        ? value.gridShowSize
+        : DEFAULT_SETTINGS.gridShowSize,
+    gridShowExtension:
+      typeof value?.gridShowExtension === "boolean"
+        ? value.gridShowExtension
+        : DEFAULT_SETTINGS.gridShowExtension,
+    gridNameEllipsis: coerceGridNameEllipsis(value?.gridNameEllipsis),
+    gridNameHideExtension:
+      typeof value?.gridNameHideExtension === "boolean"
+        ? value.gridNameHideExtension
+        : DEFAULT_SETTINGS.gridNameHideExtension,
+    thumbnailsEnabled:
+      typeof value?.thumbnailsEnabled === "boolean"
+        ? value.thumbnailsEnabled
+        : DEFAULT_SETTINGS.thumbnailsEnabled,
+    thumbnailSize: clampNumber(value?.thumbnailSize, DEFAULT_SETTINGS.thumbnailSize, 96, 320),
+    thumbnailQuality: clampNumber(
+      value?.thumbnailQuality,
+      DEFAULT_SETTINGS.thumbnailQuality,
+      50,
+      95,
+    ),
+    thumbnailFormat: coerceFormat(value?.thumbnailFormat),
+    thumbnailVideos:
+      typeof value?.thumbnailVideos === "boolean"
+        ? value.thumbnailVideos
+        : DEFAULT_SETTINGS.thumbnailVideos,
+    thumbnailCacheMb: clampNumber(
+      value?.thumbnailCacheMb,
+      DEFAULT_SETTINGS.thumbnailCacheMb,
+      128,
+      4096,
+    ),
+  };
+};
+
+const readStoredSettings = () => {
+  try {
+    if (!("localStorage" in globalThis)) {
+      return DEFAULT_SETTINGS;
+    }
+    const raw = globalThis.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULT_SETTINGS;
+    const parsed = JSON.parse(raw) as StoredSettings | Partial<Settings>;
+    if ("settings" in parsed) {
+      return coerceSettings(parsed.settings);
+    }
+    return coerceSettings(parsed);
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+};
+
+const writeStoredSettings = (settings: Settings) => {
+  try {
+    if (!("localStorage" in globalThis)) return;
+    const payload: StoredSettings = { version: STORAGE_VERSION, settings };
+    globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage errors (private mode, denied, etc.).
+  }
+};
+
+export const useSettingsStore = create<SettingsStore>((set) => ({
+  ...readStoredSettings(),
+  setSettings: (next) =>
+    set({ ...next, keybinds: coerceKeybinds(next.keybinds) }),
+  updateSettings: (patch) =>
+    set((state) => ({
+      ...state,
+      ...patch,
+      keybinds: patch.keybinds ? coerceKeybinds(patch.keybinds) : state.keybinds,
+    })),
+  resetSettings: () => set({ ...DEFAULT_SETTINGS, keybinds: DEFAULT_KEYBINDS }),
+}));
+
+useSettingsStore.subscribe((state) => {
+  writeStoredSettings({
+    sidebarOpen: state.sidebarOpen,
+    sidebarRecentLimit: state.sidebarRecentLimit,
+    sidebarShowTips: state.sidebarShowTips,
+    sidebarSectionOrder: state.sidebarSectionOrder,
+    defaultViewMode: state.defaultViewMode,
+    accentTheme: state.accentTheme,
+    categoryTinting: state.categoryTinting,
+    showParentEntry: state.showParentEntry,
+    ambientBackground: state.ambientBackground,
+    blurOverlays: state.blurOverlays,
+    keybinds: state.keybinds,
+    gridSize: state.gridSize,
+    gridRounded: state.gridRounded,
+    gridCentered: state.gridCentered,
+    gridShowSize: state.gridShowSize,
+    gridShowExtension: state.gridShowExtension,
+    gridNameEllipsis: state.gridNameEllipsis,
+    gridNameHideExtension: state.gridNameHideExtension,
+    thumbnailsEnabled: state.thumbnailsEnabled,
+    thumbnailSize: state.thumbnailSize,
+    thumbnailQuality: state.thumbnailQuality,
+    thumbnailFormat: state.thumbnailFormat,
+    thumbnailVideos: state.thumbnailVideos,
+    thumbnailCacheMb: state.thumbnailCacheMb,
+  });
+});
+
+export type { Settings };

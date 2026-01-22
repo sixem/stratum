@@ -1,0 +1,120 @@
+// Builds file/folder context menu items for a targeted entry.
+import { useMemo } from "react";
+import { openPathProperties } from "@/api";
+import { tabLabel } from "@/lib";
+import { useClipboardStore, usePromptStore } from "@/modules";
+import type { ContextMenuItem, EntryContextTarget } from "@/types";
+
+type UseEntryMenuItemsOptions = {
+  target: EntryContextTarget | null;
+  selected: Set<string>;
+  parentPath: string | null;
+  onOpenEntry: (path: string) => void;
+  onOpenDir: (path: string) => void;
+  onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
+  onClearSelection: () => void;
+};
+
+const resolveContextTargets = (
+  target: EntryContextTarget,
+  selected: Set<string>,
+  parentPath: string | null,
+) => {
+  // Prefer the current selection when the right-clicked entry is already selected.
+  const useSelection = selected.has(target.path);
+  const base = useSelection ? Array.from(selected) : [target.path];
+  const filtered = parentPath ? base.filter((path) => path !== parentPath) : base;
+  return filtered.length > 0 ? filtered : [target.path];
+};
+
+export const useEntryMenuItems = ({
+  target,
+  selected,
+  parentPath,
+  onOpenEntry,
+  onOpenDir,
+  onDeleteEntries,
+  onClearSelection,
+}: UseEntryMenuItemsOptions) =>
+  useMemo<ContextMenuItem[]>(() => {
+    if (!target) return [];
+    const actionTargets = resolveContextTargets(target, selected, parentPath);
+    const hasTargets = actionTargets.length > 0;
+
+    return [
+      {
+        id: "entry-open",
+        label: "Open",
+        onSelect: () => {
+          if (!hasTargets) return;
+          if (target.isDir) {
+            onOpenDir(target.path);
+          } else {
+            onOpenEntry(target.path);
+          }
+        },
+        disabled: !hasTargets,
+      },
+      {
+        id: "entry-copy",
+        label: "Copy",
+        onSelect: () => {
+          if (!hasTargets) return;
+          useClipboardStore.getState().setClipboard(actionTargets);
+        },
+        disabled: !hasTargets,
+      },
+      {
+        id: "entry-delete",
+        label: "Delete",
+        onSelect: () => {
+          if (!hasTargets) return;
+          const count = actionTargets.length;
+          const label = count === 1 ? tabLabel(actionTargets[0] ?? "") : `${count} items`;
+          usePromptStore.getState().showPrompt({
+            title: count === 1 ? "Delete item?" : "Delete items?",
+            content: `Delete ${label}? This cannot be undone.`,
+            confirmLabel: "Delete",
+            cancelLabel: "Cancel",
+            onConfirm: () => {
+              void Promise.resolve(onDeleteEntries(actionTargets)).then((report) => {
+                if (report?.deleted) {
+                  onClearSelection();
+                }
+              });
+            },
+          });
+        },
+        disabled: !hasTargets,
+      },
+      { kind: "divider", id: "entry-divider-properties" },
+      {
+        id: "entry-properties",
+        label: "Properties",
+        onSelect: () => {
+          if (!hasTargets) return;
+          void openPathProperties(target.path).catch((error) => {
+            const message =
+              error instanceof Error && error.message
+                ? error.message
+                : "Unable to open the properties dialog.";
+            usePromptStore.getState().showPrompt({
+              title: "Couldn't open properties",
+              content: message,
+              confirmLabel: "OK",
+              cancelLabel: null,
+            });
+          });
+        },
+        disabled: !hasTargets,
+      },
+    ];
+  }, [
+    onClearSelection,
+    onDeleteEntries,
+    onOpenDir,
+    onOpenEntry,
+    parentPath,
+    selected,
+    target,
+  ]);

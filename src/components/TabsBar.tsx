@@ -1,0 +1,125 @@
+// Tab strip for open folders with drag reordering.
+import type { DragEvent } from "react";
+import { Fragment } from "react";
+import { handleMiddleClick, tabLabel } from "@/lib";
+import { useTabDragDrop } from "@/hooks";
+import type { Tab } from "@/types";
+import { TooltipWrapper } from "./Tooltip";
+
+type TabsBarProps = {
+  tabs: Tab[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  onClose: (id: string) => void;
+  onNew: () => void;
+  onReorder: (fromId: string, toIndex: number) => void;
+};
+
+type TabItemProps = {
+  tab: Tab;
+  isActive: boolean;
+  canClose: boolean;
+  onSelect: (id: string) => void;
+  onClose: (id: string) => void;
+  onDragStart: (event: DragEvent<HTMLDivElement>, id: string) => void;
+  onDragOver: (event: DragEvent<HTMLDivElement>, index: number) => void;
+  onDragEnd: () => void;
+  isDragging: boolean;
+  index: number;
+};
+
+const TabItem = ({
+  tab,
+  isActive,
+  canClose,
+  onSelect,
+  onClose,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  isDragging,
+  index,
+}: TabItemProps) => {
+  const label = tabLabel(tab.path);
+  return (
+    <div
+      className={`tab${isActive ? " is-active" : ""}${isDragging ? " is-dragging" : ""}`}
+      draggable
+      onDragStart={(event) => onDragStart(event, tab.id)}
+      onDragOver={(event) => onDragOver(event, index)}
+      onDragEnd={onDragEnd}
+      onMouseDown={(event) => {
+        if (!canClose) return;
+        handleMiddleClick(event, () => onClose(tab.id));
+      }}
+    >
+      <TooltipWrapper text={tab.path}>
+        <button type="button" className="tab-main" onClick={() => onSelect(tab.id)}>
+          <span className="tab-title">{label}</span>
+        </button>
+      </TooltipWrapper>
+      <button
+        type="button"
+        className="tab-close"
+        onClick={() => onClose(tab.id)}
+        aria-label={`Close ${label} tab`}
+        disabled={!canClose}
+      >
+        x
+      </button>
+    </div>
+  );
+};
+
+const TabDrop = () => <div className="tab-drop" />;
+
+export function TabsBar({
+  tabs,
+  activeId,
+  onSelect,
+  onClose,
+  onNew,
+  onReorder,
+}: TabsBarProps) {
+  const canClose = tabs.length > 1;
+  const {
+    draggingId,
+    dropIndex,
+    handleDragStart,
+    handleDragOver,
+    handleDrop,
+    handleDragEnd,
+    handleContainerDragOver,
+  } = useTabDragDrop({
+    tabCount: tabs.length,
+    onReorder,
+  });
+
+  return (
+    <div className="tabsbar">
+      <div className="tabs" onDrop={handleDrop} onDragOver={handleContainerDragOver}>
+        {tabs.map((tab, index) => (
+          <Fragment key={tab.id}>
+            {dropIndex === index ? <TabDrop /> : null}
+            <TabItem
+              tab={tab}
+              isActive={tab.id === activeId}
+              canClose={canClose}
+              onSelect={onSelect}
+              onClose={onClose}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragEnd={handleDragEnd}
+              isDragging={draggingId === tab.id}
+              index={index}
+            />
+          </Fragment>
+        ))}
+        {dropIndex === tabs.length ? <TabDrop /> : null}
+        <button type="button" className="tab-new" onClick={onNew} aria-label="New tab">
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
