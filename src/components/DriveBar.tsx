@@ -82,8 +82,10 @@ export function DriveBar({
   return (
     <header className="drivebar">
       <div className="brand">
-        <div className="brand-mark">ST</div>
-        <div className="brand-title">Stratum</div>
+        <div className="brand-mark">
+          <img src="/favicon.png" alt="" aria-hidden="true" />
+        </div>
+        <div className="brand-title">Drives:</div>
       </div>
       <div className="drive-list">
         <DriveList

@@ -207,6 +207,14 @@ input {
   font-size: 11px;
   letter-spacing: 0.08em;
   color: var(--accent);
+  overflow: hidden;
+}
+
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .brand-title {
@@ -741,7 +749,7 @@ input {
 
 .list-content {
   opacity: 0;
-  transition: none;
+  transition: opacity 0.14s ease;
   will-change: opacity;
 }
 
@@ -755,7 +763,7 @@ input {
   transition: none;
 }
 
-.list-content[data-animate="true"] {
+.list-content[data-ready="false"][data-animate="true"] {
   transition: opacity 0.14s ease;
 }
 
@@ -779,7 +787,7 @@ input {
 
 .thumb-content {
   opacity: 0;
-  transition: none;
+  transition: opacity 0.14s ease;
   will-change: opacity;
 }
 
@@ -793,7 +801,7 @@ input {
   transition: none;
 }
 
-.thumb-content[data-animate="true"] {
+.thumb-content[data-ready="false"][data-animate="true"] {
   transition: opacity 0.14s ease;
 }
 
@@ -802,6 +810,7 @@ input {
   grid-template-columns: repeat(auto-fill, var(--thumb-column, 180px));
   gap: var(--thumb-gap, 12px);
   grid-auto-rows: var(--thumb-row-height, 210px);
+  align-items: start;
   justify-content: center;
   align-content: center;
   width: 100%;
@@ -848,7 +857,7 @@ input {
   z-index: 2;
   opacity: 0;
   pointer-events: none;
-  transition: none;
+  transition: opacity 0.14s ease;
 }
 
 .loading-overlay[data-visible="true"] {
@@ -898,8 +907,9 @@ input {
   text-align: left;
   cursor: pointer;
   display: grid;
-  gap: 4px;
-  height: 100%;
+  // Keep the thumbnail + metadata snug; let extra space sit below the content.
+  align-content: start;
+  gap: 6px;
   transition: none;
 }
 
@@ -959,9 +969,9 @@ input {
 .thumb-icon {
   position: relative;
   border-radius: 8px;
-  border: 1px solid var(--stroke);
-  background: #0f131d;
+  background: var(--thumb-preview-bg, #0f131d);
   aspect-ratio: 4 / 3;
+  height: var(--thumb-icon-height, auto);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -974,7 +984,7 @@ input {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: var(--thumb-fit, cover);
   display: block;
   pointer-events: none;
   z-index: 1;
@@ -1008,14 +1018,15 @@ input {
 
 .thumb-meta {
   display: grid;
-  gap: 1px;
+  gap: 6px;
+  min-height: var(--thumb-meta-height, auto);
   min-width: 0;
 }
 
 .thumb-name {
   font-size: 12px;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1049,6 +1060,7 @@ input {
   gap: 8px;
   align-items: center;
   font-size: 0.7rem;
+  line-height: 13px;
   color: var(--muted);
   min-width: 0;
   font-weight: 500;
@@ -1099,7 +1111,7 @@ input {
 }
 
 .selection-rect {
-  position: absolute;
+  position: fixed;
   z-index: 3;
   border: 1px solid rgba(var(--accent-rgb), 0.9);
   background: rgba(var(--accent-rgb), 0.18);

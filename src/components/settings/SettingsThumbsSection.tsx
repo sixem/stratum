@@ -1,4 +1,5 @@
 // Thumbnail generation and preview tuning.
+import type { ThumbnailFit } from "@/modules";
 import type { SettingsUpdateHandler } from "./types";
 
 type SettingsThumbsSectionProps = {
@@ -8,6 +9,7 @@ type SettingsThumbsSectionProps = {
   thumbnailQuality: number;
   thumbnailFormat: "webp" | "jpeg";
   thumbnailVideos: boolean;
+  thumbnailFit: ThumbnailFit;
   onUpdate: SettingsUpdateHandler;
 };
 
@@ -25,6 +27,7 @@ export function SettingsThumbsSection({
   thumbnailQuality,
   thumbnailFormat,
   thumbnailVideos,
+  thumbnailFit,
   onUpdate,
 }: SettingsThumbsSectionProps) {
   const isThumbsDisabled = !thumbnailsEnabled;
@@ -102,6 +105,32 @@ export function SettingsThumbsSection({
           />
           <span />
         </label>
+      </div>
+      <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
+        <div>
+          <div className="settings-label">Thumbnail display</div>
+          <div className="settings-desc">
+            Cover fills the frame, Fit keeps the entire image visible.
+          </div>
+        </div>
+        <div className="settings-pills" role="group" aria-label="Thumbnail display">
+          <button
+            type="button"
+            disabled={isThumbsDisabled}
+            className={`settings-pill${thumbnailFit === "cover" ? " is-active" : ""}`}
+            onClick={() => onUpdate({ thumbnailFit: "cover" })}
+          >
+            Cover
+          </button>
+          <button
+            type="button"
+            disabled={isThumbsDisabled}
+            className={`settings-pill${thumbnailFit === "contain" ? " is-active" : ""}`}
+            onClick={() => onUpdate({ thumbnailFit: "contain" })}
+          >
+            Fit
+          </button>
+        </div>
       </div>
     </section>
   );

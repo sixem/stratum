@@ -32,6 +32,7 @@ export function SettingsOverlay({
     thumbnailFormat,
     thumbnailVideos,
     thumbnailCacheMb,
+    thumbnailFit,
     defaultViewMode,
     showTabNumbers,
     fixedWidthTabs,
@@ -228,6 +229,7 @@ export function SettingsOverlay({
               thumbnailQuality={thumbnailQuality}
               thumbnailFormat={thumbnailFormat}
               thumbnailVideos={thumbnailVideos}
+              thumbnailFit={thumbnailFit}
               onUpdate={updateSettings}
             />
             <SettingsKeybindsSection

@@ -28,7 +28,7 @@ import {
 } from "@/lib";
 import type { FileKind } from "@/lib";
 import type { EntryItem } from "@/lib";
-import type { GridNameEllipsis, GridSize } from "@/modules";
+import type { GridNameEllipsis, GridSize, ThumbnailFit } from "@/modules";
 import type { EntryMeta, FileEntry, ThumbnailRequest } from "@/types";
 import { EmptyState } from "./EmptyState";
 import { LoadingIndicator } from "./LoadingIndicator";
@@ -57,6 +57,7 @@ type FileGridProps = {
   thumbnailsEnabled: boolean;
   thumbnails: Map<string, string>;
   onRequestThumbs: (requests: ThumbnailRequest[]) => void;
+  thumbnailFit: ThumbnailFit;
   categoryTinting: boolean;
   gridSize: GridSize;
   gridShowSize: boolean;
@@ -74,29 +75,70 @@ type FileGridProps = {
   onStartDragOut?: (paths: string[]) => void;
 };
 
-type GridSizing = {
+type GridPreset = {
   column: number;
   gap: number;
-  rowHeight: number;
   padding: number;
 };
 
-const GRID_PRESETS: Record<GridSize, GridSizing> = {
-  compact: {
+type GridSizing = GridPreset & {
+  iconHeight: number;
+  metaHeight: number;
+  rowHeight: number;
+};
+
+const GRID_PRESETS: Record<GridSize, GridPreset> = {
+  small: {
     column: 180,
     gap: 12,
-    rowHeight: 210,
     padding: 6,
   },
-  large: {
+  normal: {
     column: 220,
     gap: 14,
-    rowHeight: 252,
     padding: 8,
+  },
+  large: {
+    column: 260,
+    gap: 16,
+    padding: 10,
   },
 };
 
-const GRID_META_TRIM = 24;
+// Keep these layout numbers in sync with the grid card styles in app.scss.
+const GRID_CARD_BORDER = 1;
+const GRID_CARD_GAP = 3;
+const GRID_META_GAP = 1;
+const GRID_ICON_RATIO = 3 / 4;
+const GRID_NAME_LINE_HEIGHT = 14;
+const GRID_INFO_LINE_HEIGHT = 13;
+
+const getGridIconHeight = (column: number, padding: number) => {
+  const innerWidth = column - padding * 2 - GRID_CARD_BORDER * 2;
+  return Math.max(0, Math.round(innerWidth * GRID_ICON_RATIO));
+};
+
+const getGridMetaHeight = (showMeta: boolean) => {
+  if (!showMeta) return GRID_NAME_LINE_HEIGHT;
+  return GRID_NAME_LINE_HEIGHT + GRID_META_GAP + GRID_INFO_LINE_HEIGHT;
+};
+
+// Derive the virtual row height from the card's real content sizing.
+const buildGridSizing = (preset: GridPreset, showMeta: boolean): GridSizing => {
+  const iconHeight = getGridIconHeight(preset.column, preset.padding);
+  const metaHeight = getGridMetaHeight(showMeta);
+  return {
+    ...preset,
+    iconHeight,
+    metaHeight,
+    rowHeight:
+      iconHeight +
+      metaHeight +
+      GRID_CARD_GAP +
+      preset.padding * 2 +
+      GRID_CARD_BORDER * 2,
+  };
+};
 const GRID_OVERSCAN = 3;
 const GRID_OVERSCAN_MIN = 1;
 const GRID_OVERSCAN_WARMUP_MS = 140;
@@ -133,6 +175,7 @@ export default function FileGrid({
   thumbnailsEnabled,
   thumbnails,
   onRequestThumbs,
+  thumbnailFit,
   categoryTinting,
   gridSize,
   gridShowSize,
@@ -156,12 +199,8 @@ export default function FileGrid({
 
   const gridMetaEnabled = gridShowSize || gridShowExtension;
   const gridSizing = useMemo(() => {
-    const preset = GRID_PRESETS[gridSize] ?? GRID_PRESETS.compact;
-    if (gridMetaEnabled) return preset;
-    return {
-      ...preset,
-      rowHeight: preset.rowHeight - GRID_META_TRIM,
-    };
+    const preset = GRID_PRESETS[gridSize] ?? GRID_PRESETS.small;
+    return buildGridSizing(preset, gridMetaEnabled);
   }, [gridMetaEnabled, gridSize]);
   const gridVars = useMemo(
     () =>
@@ -170,8 +209,12 @@ export default function FileGrid({
         "--thumb-gap": `${gridSizing.gap}px`,
         "--thumb-row-height": `${gridSizing.rowHeight}px`,
         "--thumb-padding": `${gridSizing.padding}px`,
+        "--thumb-icon-height": `${gridSizing.iconHeight}px`,
+        "--thumb-meta-height": `${gridSizing.metaHeight}px`,
+        "--thumb-fit": thumbnailFit,
+        "--thumb-preview-bg": thumbnailFit === "contain" ? "transparent" : "#0f131d",
       }) as CSSProperties,
-    [gridSizing],
+    [gridSizing, thumbnailFit],
   );
   const contentWidth = Math.max(0, viewportWidth - gridSizing.padding * 2);
   const columnCount = Math.max(

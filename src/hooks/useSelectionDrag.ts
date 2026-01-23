@@ -44,6 +44,22 @@ const clamp = (value: number, min: number, max: number) => {
   return value;
 };
 
+const selectionMatches = (paths: string[], current: Set<string>) => {
+  if (paths.length !== current.size) return false;
+  for (const path of paths) {
+    if (!current.has(path)) return false;
+  }
+  return true;
+};
+
+const setsMatch = (next: Set<string>, current: Set<string>) => {
+  if (next.size !== current.size) return false;
+  for (const path of next) {
+    if (!current.has(path)) return false;
+  }
+  return true;
+};
+
 export const useSelectionDrag = (
   ref: RefObject<HTMLElement | null>,
   { selected, setSelection, clearSelection, itemSelector }: SelectionDragOptions,
@@ -75,10 +91,8 @@ export const useSelectionDrag = (
     const drag = dragRef.current;
     if (!drag.active || !drag.dragging) return;
 
-    const bounds = element.getBoundingClientRect();
-    const style = window.getComputedStyle(element);
-    const paddingLeft = Number.parseFloat(style.paddingLeft) || 0;
-    const paddingTop = Number.parseFloat(style.paddingTop) || 0;
+    const dragRoot = element.closest(".main") as HTMLElement | null;
+    const bounds = (dragRoot ?? element).getBoundingClientRect();
     const startX = clamp(drag.startX, bounds.left, bounds.right);
     const startY = clamp(drag.startY, bounds.top, bounds.bottom);
     const endX = clamp(drag.lastX, bounds.left, bounds.right);
@@ -89,8 +103,8 @@ export const useSelectionDrag = (
     const bottom = Math.max(startY, endY);
 
     setSelectionBox({
-      left: left - bounds.left - paddingLeft + element.scrollLeft,
-      top: top - bounds.top - paddingTop + element.scrollTop,
+      left,
+      top,
       width: right - left,
       height: bottom - top,
     });
@@ -117,7 +131,9 @@ export const useSelectionDrag = (
     const items = cacheRef.current?.items ?? [];
     if (!items.length) {
       if (!drag.addMode) {
-        setSelection([], undefined);
+        if (selectedRef.current.size > 0) {
+          setSelection([], undefined);
+        }
       }
       return;
     }
@@ -136,16 +152,24 @@ export const useSelectionDrag = (
     if (drag.addMode) {
       const next = new Set(baseSelectionRef.current);
       orderedPaths.forEach((path) => next.add(path));
+      if (setsMatch(next, selectedRef.current)) {
+        return;
+      }
       setSelection(Array.from(next), anchor);
       return;
     }
 
+    if (selectionMatches(orderedPaths, selectedRef.current)) {
+      return;
+    }
     setSelection(orderedPaths, anchor);
   }, [itemSelector, ref, setSelection]);
 
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
+    const dragRoot = element.closest(".main") as HTMLElement | null;
+    const dragElement = dragRoot ?? element;
 
     const resetDrag = (clear = false) => {
       dragRef.current.active = false;
@@ -156,8 +180,11 @@ export const useSelectionDrag = (
         window.cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
-      if (pointerIdRef.current != null && element.hasPointerCapture(pointerIdRef.current)) {
-        element.releasePointerCapture(pointerIdRef.current);
+      if (
+        pointerIdRef.current != null &&
+        dragElement.hasPointerCapture(pointerIdRef.current)
+      ) {
+        dragElement.releasePointerCapture(pointerIdRef.current);
       }
       pointerIdRef.current = null;
       if (clear) {
@@ -190,7 +217,7 @@ export const useSelectionDrag = (
       baseSelectionRef.current = new Set(selectedRef.current);
       cacheRef.current = null;
       pointerIdRef.current = event.pointerId;
-      element.setPointerCapture(event.pointerId);
+      dragElement.setPointerCapture(event.pointerId);
       event.preventDefault();
     };
 
@@ -224,18 +251,18 @@ export const useSelectionDrag = (
       resetDrag(true);
     };
 
-    element.addEventListener("pointerdown", handlePointerDown);
-    element.addEventListener("pointermove", handlePointerMove);
-    element.addEventListener("pointerup", handlePointerUp);
-    element.addEventListener("pointercancel", handlePointerUp);
+    dragElement.addEventListener("pointerdown", handlePointerDown);
+    dragElement.addEventListener("pointermove", handlePointerMove);
+    dragElement.addEventListener("pointerup", handlePointerUp);
+    dragElement.addEventListener("pointercancel", handlePointerUp);
     element.addEventListener("scroll", handleCancel, { passive: true });
     element.addEventListener("wheel", handleCancel, { passive: true });
 
     return () => {
-      element.removeEventListener("pointerdown", handlePointerDown);
-      element.removeEventListener("pointermove", handlePointerMove);
-      element.removeEventListener("pointerup", handlePointerUp);
-      element.removeEventListener("pointercancel", handlePointerUp);
+      dragElement.removeEventListener("pointerdown", handlePointerDown);
+      dragElement.removeEventListener("pointermove", handlePointerMove);
+      dragElement.removeEventListener("pointerup", handlePointerUp);
+      dragElement.removeEventListener("pointercancel", handlePointerUp);
       element.removeEventListener("scroll", handleCancel);
       element.removeEventListener("wheel", handleCancel);
       resetDrag(false);

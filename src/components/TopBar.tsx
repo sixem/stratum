@@ -30,9 +30,11 @@ export function TopBar({
   return (
     <header className="topbar">
       <div className="brand">
-        <div className="brand-mark">ST</div>
+        <div className="brand-mark">
+          <img src="/favicon.png" alt="" aria-hidden="true" />
+        </div>
         <div>
-          <div className="brand-title">Stratum</div>
+          <div className="brand-title">Drives:</div>
           <div className="brand-subtitle">File Manager</div>
         </div>
       </div>

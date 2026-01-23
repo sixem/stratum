@@ -1,6 +1,7 @@
 // App shell wiring: composes state hooks, layout blocks, and overlays.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { clearThumbCache, copyPathsToClipboard, getThumbCacheDir, openPath } from "@/api";
 import { AppContent, AppOverlays, AppStatusbar, AppTopstack } from "@/components";
 import {
@@ -31,8 +32,14 @@ import {
 import { isEditableElement, makeDebug, normalizePath, tabLabel } from "@/lib";
 import { useClipboardStore, usePromptStore, useTooltipStore } from "@/modules";
 import "@/styles/app.scss";
+import appPackage from "../package.json";
 
 const viewLog = makeDebug("view");
+const APP_NAME = "Stratum";
+const APP_VERSION = appPackage.version;
+const isTauriEnv = () => {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+};
 
 const getSelectionTargets = (selected: Set<string>, parentPath: string | null) => {
   return Array.from(selected).filter((path) => path !== parentPath);
@@ -277,6 +284,17 @@ const App = () => {
     activeTabId ? tabScrollTopsRef.current.get(activeTabId) ?? 0 : 0;
   const contextMenuActive = Boolean(contextMenu);
   const viewModel = useFileViewModel(sortedEntries, viewParentPath);
+
+  useEffect(() => {
+    const trimmed = viewPath?.trim() ?? "";
+    if (!isTauriEnv()) return;
+    const appWindow = getCurrentWindow();
+    const isUntitled = trimmed.toLowerCase() === "untitled";
+    const title = trimmed && !isUntitled
+      ? `${trimmed} - ${APP_NAME} ${APP_VERSION}`
+      : `${APP_NAME} ${APP_VERSION}`;
+    void appWindow.setTitle(title);
+  }, [viewPath]);
   const {
     gridColumnsRef,
     handleGridColumnsChange,
@@ -477,6 +495,7 @@ const App = () => {
         F5: handleRefreshKeybind,
         "Control+c": handleCopySelectionKeybind,
         "Control+v": handlePasteSelectionKeybind,
+        "Control+r": handleRefreshKeybind,
       };
       for (let index = 1; index <= 9; index += 1) {
         map[`Control+${index}`] = () => handleSelectTabIndex(index);
@@ -635,6 +654,7 @@ const App = () => {
           thumbnailsEnabled: settings.thumbnailsEnabled,
           thumbnails,
           onRequestThumbs: requestThumbnails,
+          thumbnailFit: settings.thumbnailFit,
           categoryTinting: settings.categoryTinting,
           gridSize: settings.gridSize,
           gridShowSize: settings.gridShowSize,

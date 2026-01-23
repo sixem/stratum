@@ -14,7 +14,8 @@ type SettingsGridSectionProps = {
 };
 
 const GRID_SIZES: { id: GridSize; label: string }[] = [
-  { id: "compact", label: "Compact" },
+  { id: "small", label: "Small" },
+  { id: "normal", label: "Normal" },
   { id: "large", label: "Large" },
 ];
 const GRID_NAME_ELLIPSIS: { id: GridNameEllipsis; label: string }[] = [

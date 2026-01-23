@@ -144,6 +144,7 @@ const RESERVED_KEYBIND_DEFINITIONS = [
   { combo: "Control+f", label: "Search" },
   { combo: "Control+c", label: "Copy" },
   { combo: "Control+v", label: "Paste" },
+  { combo: "Control+r", label: "Refresh" },
   { combo: "F5", label: "Refresh" },
   { combo: "Control+1", label: "Tab 1" },
   { combo: "Control+2", label: "Tab 2" },

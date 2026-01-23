@@ -5,7 +5,8 @@ import type { KeybindMap } from "./keybinds";
 import { coerceKeybinds, DEFAULT_KEYBINDS } from "./keybinds";
 
 type ThumbnailFormat = "webp" | "jpeg";
-export type GridSize = "compact" | "large";
+export type ThumbnailFit = "cover" | "contain";
+export type GridSize = "small" | "normal" | "large";
 export type GridNameEllipsis = "end" | "middle";
 export type AccentTheme =
   | "red"
@@ -55,6 +56,7 @@ type Settings = {
   thumbnailFormat: ThumbnailFormat;
   thumbnailVideos: boolean;
   thumbnailCacheMb: number;
+  thumbnailFit: ThumbnailFit;
 };
 
 type SettingsStore = Settings & {
@@ -69,7 +71,7 @@ type StoredSettings = {
 };
 
 const STORAGE_KEY = "stratum.settings";
-const STORAGE_VERSION = 10;
+const STORAGE_VERSION = 11;
 
 const DEFAULT_SETTINGS: Settings = {
   sidebarOpen: true,
@@ -86,7 +88,7 @@ const DEFAULT_SETTINGS: Settings = {
   ambientBackground: false,
   blurOverlays: false,
   keybinds: DEFAULT_KEYBINDS,
-  gridSize: "compact",
+  gridSize: "small",
   gridRounded: true,
   gridCentered: true,
   gridShowSize: true,
@@ -99,6 +101,7 @@ const DEFAULT_SETTINGS: Settings = {
   thumbnailFormat: "webp",
   thumbnailVideos: true,
   thumbnailCacheMb: 512,
+  thumbnailFit: "contain",
 };
 
 const clampNumber = (value: unknown, fallback: number, min: number, max: number) => {
@@ -108,6 +111,10 @@ const clampNumber = (value: unknown, fallback: number, min: number, max: number)
 
 const coerceFormat = (value: unknown): ThumbnailFormat => {
   return value === "jpeg" ? "jpeg" : "webp";
+};
+
+const coerceThumbnailFit = (value: unknown): ThumbnailFit => {
+  return value === "contain" ? "contain" : "cover";
 };
 
 const coerceViewMode = (value: unknown): ViewMode => {
@@ -130,7 +137,8 @@ const coerceAccentTheme = (value: unknown): AccentTheme => {
 };
 
 const coerceGridSize = (value: unknown): GridSize => {
-  return value === "large" ? "large" : "compact";
+  if (value === "large" || value === "normal" || value === "small") return value;
+  return value === "compact" ? "small" : DEFAULT_SETTINGS.gridSize;
 };
 
 const coerceGridNameEllipsis = (value: unknown): GridNameEllipsis => {
@@ -254,7 +262,23 @@ const coerceSettings = (value: Partial<Settings> | null | undefined): Settings =
       128,
       4096,
     ),
+    thumbnailFit: coerceThumbnailFit(value?.thumbnailFit),
   };
+};
+
+// Map pre-v11 grid size labels to the new small/normal/large set.
+const normalizeLegacySettings = (
+  settings: Partial<Settings>,
+  version: number | undefined,
+): Partial<Settings> => {
+  if (version != null && version >= STORAGE_VERSION) return settings;
+  if (settings.gridSize === "large") {
+    return { ...settings, gridSize: "normal" };
+  }
+  if (settings.gridSize === "compact") {
+    return { ...settings, gridSize: "small" };
+  }
+  return settings;
 };
 
 const readStoredSettings = () => {
@@ -266,9 +290,11 @@ const readStoredSettings = () => {
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw) as StoredSettings | Partial<Settings>;
     if ("settings" in parsed) {
-      return coerceSettings(parsed.settings);
+      const normalized = normalizeLegacySettings(parsed.settings, parsed.version);
+      return coerceSettings(normalized);
     }
-    return coerceSettings(parsed);
+    const normalized = normalizeLegacySettings(parsed, undefined);
+    return coerceSettings(normalized);
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -326,6 +352,7 @@ useSettingsStore.subscribe((state) => {
     thumbnailFormat: state.thumbnailFormat,
     thumbnailVideos: state.thumbnailVideos,
     thumbnailCacheMb: state.thumbnailCacheMb,
+    thumbnailFit: state.thumbnailFit,
   });
 });
 

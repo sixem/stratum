@@ -1,7 +1,7 @@
 // Switches between list and grid file views.
 import { Suspense, lazy } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import type { GridNameEllipsis, GridSize } from "@/modules";
+import type { GridNameEllipsis, GridSize, ThumbnailFit } from "@/modules";
 import type { EntryItem } from "@/lib";
 import type { EntryMeta, FileEntry, ThumbnailRequest, ViewMode } from "@/types";
 import { LoadingIndicator } from "./LoadingIndicator";
@@ -35,6 +35,7 @@ type FileViewProps = {
   thumbnailsEnabled: boolean;
   thumbnails: Map<string, string>;
   onRequestThumbs: (requests: ThumbnailRequest[]) => void;
+  thumbnailFit: ThumbnailFit;
   categoryTinting: boolean;
   gridSize: GridSize;
   gridShowSize: boolean;
@@ -58,6 +59,7 @@ export function FileView({
   thumbnailsEnabled,
   thumbnails,
   onRequestThumbs,
+  thumbnailFit,
   categoryTinting,
   gridSize,
   gridShowSize,
@@ -92,6 +94,7 @@ export function FileView({
             thumbnailsEnabled={thumbnailsEnabled}
             thumbnails={thumbnails}
             onRequestThumbs={onRequestThumbs}
+            thumbnailFit={thumbnailFit}
             categoryTinting={categoryTinting}
             gridSize={gridSize}
             gridShowSize={gridShowSize}

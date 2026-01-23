@@ -29,6 +29,7 @@ export type {
   GridNameEllipsis,
   GridSize,
   Settings,
+  ThumbnailFit,
   SidebarSectionId,
 } from "./settings";
 export type { KeybindAction, KeybindDefinition, KeybindMap } from "./keybinds";
