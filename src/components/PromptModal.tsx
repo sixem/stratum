@@ -1,5 +1,6 @@
 // Global prompt modal driven by the prompt store.
 import { useEffect, useRef } from "react";
+import { isEditableElement } from "@/lib";
 import { usePromptStore } from "@/modules";
 
 export function PromptModal() {
@@ -8,9 +9,24 @@ export function PromptModal() {
   const shouldCloseRef = useRef(false);
 
   useEffect(() => {
-    if (!prompt || prompt.blocking) return;
+    if (!prompt) return;
+    const confirmLabel = prompt.confirmLabel === undefined ? "OK" : prompt.confirmLabel;
+    const showConfirm = Boolean(confirmLabel && confirmLabel.trim().length > 0);
     const handleKey = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      if (isEditableElement(document.activeElement)) return;
+
+      if (event.key === "Enter") {
+        if (!showConfirm) return;
+        event.preventDefault();
+        event.stopPropagation();
+        prompt.onConfirm?.();
+        hidePrompt();
+        return;
+      }
+
       if (event.key !== "Escape") return;
+      if (prompt.blocking) return;
       event.preventDefault();
       event.stopPropagation();
       prompt.onCancel?.();

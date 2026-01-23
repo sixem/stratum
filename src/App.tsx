@@ -1,7 +1,6 @@
 // App shell wiring: composes state hooks, layout blocks, and overlays.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import type { ViewMode } from "@/types";
 import { clearThumbCache, copyPathsToClipboard, getThumbCacheDir, openPath } from "@/api";
 import { AppContent, AppOverlays, AppStatusbar, AppTopstack } from "@/components";
 import {
@@ -20,7 +19,6 @@ import {
   useKeybinds,
   useLayoutMenuItems,
   useMetaPrefetch,
-  useScrollPositions,
   useScrollRequest,
   useSearchHotkey,
   useSelectionShortcuts,
@@ -34,11 +32,7 @@ import { isEditableElement, makeDebug, normalizePath, tabLabel } from "@/lib";
 import { useClipboardStore, usePromptStore, useTooltipStore } from "@/modules";
 import "@/styles/app.scss";
 
-const MAX_SCROLL_POSITIONS = 160;
-const SCROLL_PERSIST_DELAY = 800;
 const viewLog = makeDebug("view");
-const scrollLog = makeDebug("scroll:key");
-const scrollSaveLog = makeDebug("scroll:save");
 
 const getSelectionTargets = (selected: Set<string>, parentPath: string | null) => {
   return Array.from(selected).filter((path) => path !== parentPath);
@@ -48,17 +42,6 @@ const formatDeleteLabel = (targets: string[]) => {
   const count = targets.length;
   if (count === 1) return tabLabel(targets[0] ?? "");
   return `${count} items`;
-};
-
-const buildScrollKey = (
-  tabId: string | null,
-  viewMode: ViewMode,
-  path: string,
-  searchValue: string,
-) => {
-  const normalizedPath = normalizePath(path ?? "");
-  const normalizedSearch = searchValue.trim().toLowerCase();
-  return `${tabId ?? "none"}:${viewMode}:${normalizedPath}:${normalizedSearch}`;
 };
 
 const App = () => {
@@ -79,6 +62,8 @@ const App = () => {
   const { scrollRequest, requestScrollToIndex } = useScrollRequest();
   const topstackRef = useRef<HTMLDivElement | null>(null);
   const statusbarRef = useRef<HTMLDivElement | null>(null);
+  // Store a single scroll offset per tab (in-memory only).
+  const tabScrollTopsRef = useRef<Map<string, number>>(new Map());
   const {
     contextMenu,
     settingsOpen,
@@ -90,27 +75,6 @@ const App = () => {
   } = useAppMenuState();
   const promptOpen = usePromptStore((state) => Boolean(state.prompt));
   const [thumbResetNonce, setThumbResetNonce] = useState(0);
-  const { getScrollTop, setScrollTop } = useScrollPositions({
-    maxEntries: MAX_SCROLL_POSITIONS,
-    persistDelayMs: SCROLL_PERSIST_DELAY,
-  });
-  // Track the latest scroll position so tab switches can flush immediately.
-  const lastScrollSnapshotRef = useRef<{ key: string; top: number } | null>(null);
-  const handleScrollTopChange = useCallback(
-    (key: string, scrollTop: number) => {
-      lastScrollSnapshotRef.current = { key, top: scrollTop };
-      setScrollTop(key, scrollTop);
-    },
-    [setScrollTop],
-  );
-  const flushActiveScroll = useCallback(() => {
-    const snapshot = lastScrollSnapshotRef.current;
-    if (!snapshot) return;
-    if (scrollSaveLog.enabled) {
-      scrollSaveLog("save key=%s top=%d", snapshot.key, Math.round(snapshot.top));
-    }
-    setScrollTop(snapshot.key, snapshot.top);
-  }, [setScrollTop]);
   const { currentPath, parentPath, entries, entryMeta, totalCount, loading, status } =
     fileManager;
   const { activeTabId, activeTab, viewMode, sidebarOpen, sortState, tabs } = tabSession;
@@ -192,30 +156,58 @@ const App = () => {
     (path: string) => tabSession.jumpTo(path),
     [tabSession.jumpTo],
   );
+  const stashActiveScroll = useCallback(() => {
+    const main = mainRef.current;
+    if (!main) return;
+    const listBody = main.querySelector<HTMLElement>(".list-body");
+    if (listBody) {
+      if (activeTabId) {
+        tabScrollTopsRef.current.set(
+          activeTabId,
+          Math.max(0, Math.round(listBody.scrollTop)),
+        );
+      }
+      return;
+    }
+    const thumbViewport = main.querySelector<HTMLElement>(".thumb-viewport");
+    if (thumbViewport) {
+      if (activeTabId) {
+        tabScrollTopsRef.current.set(
+          activeTabId,
+          Math.max(0, Math.round(thumbViewport.scrollTop)),
+        );
+      }
+    }
+  }, [activeTabId, mainRef]);
   const handleSelectTab = useCallback(
     (id: string) => {
-      flushActiveScroll();
+      if (id === activeTabId) return;
+      // Capture the outgoing tab scroll before switching to the next tab.
+      stashActiveScroll();
       tabSession.selectTab(id);
     },
-    [flushActiveScroll, tabSession],
+    [activeTabId, stashActiveScroll, tabSession],
   );
   const handleCloseTab = useCallback(
     (id: string) => {
-      flushActiveScroll();
+      if (id === activeTabId) {
+        stashActiveScroll();
+      }
       tabSession.closeTab(id);
+      tabScrollTopsRef.current.delete(id);
     },
-    [flushActiveScroll, tabSession],
+    [activeTabId, stashActiveScroll, tabSession],
   );
   const handleNewTab = useCallback(() => {
-    flushActiveScroll();
+    stashActiveScroll();
     tabSession.newTab();
-  }, [flushActiveScroll, tabSession]);
+  }, [stashActiveScroll, tabSession]);
   const handleOpenInNewTab = useCallback(
     (path: string) => {
-      flushActiveScroll();
+      stashActiveScroll();
       tabSession.openInNewTab(path);
     },
-    [flushActiveScroll, tabSession],
+    [stashActiveScroll, tabSession],
   );
 
   const handleRefresh = useCallback(() => {
@@ -279,33 +271,10 @@ const App = () => {
     canGoUp && settings.showParentEntry && !isFiltered ? parentPath : null;
   const showLander = !currentPath.trim() && !loading;
   const viewPath = activeTab?.path ?? currentPath;
-  const scrollReady =
-    Boolean(currentPath) &&
-    !loading &&
-    normalizePath(viewPath) === normalizePath(currentPath);
-  const desiredScrollKey = buildScrollKey(
-    activeTabId,
-    viewMode,
-    viewPath,
-    deferredSearchValue,
-  );
-  const stableScrollKeyRef = useRef(desiredScrollKey);
-  // Keep using the last scroll key tied to rendered content until the new view is ready.
-  if (scrollReady) {
-    stableScrollKeyRef.current = desiredScrollKey;
-  }
-  const scrollKey = scrollReady ? desiredScrollKey : stableScrollKeyRef.current;
-  if (scrollLog.enabled) {
-    scrollLog(
-      "key: active=%s desired=%s using=%s ready=%s path=%s",
-      activeTabId ?? "none",
-      desiredScrollKey,
-      scrollKey,
-      scrollReady ? "yes" : "no",
-      currentPath,
-    );
-  }
-  const initialScrollTop = getScrollTop(scrollKey);
+  const viewKey = `${activeTabId ?? "none"}:${normalizePath(viewPath ?? "")}`;
+  const scrollRestoreKey = activeTabId ?? "none";
+  const scrollRestoreTop =
+    activeTabId ? tabScrollTopsRef.current.get(activeTabId) ?? 0 : 0;
   const contextMenuActive = Boolean(contextMenu);
   const viewModel = useFileViewModel(sortedEntries, viewParentPath);
   const {
@@ -646,13 +615,12 @@ const App = () => {
           viewMode,
           entries: sortedEntries,
           items: viewModel.items,
-          itemIndexMap: viewModel.indexMap,
           loading,
           showLander,
           searchQuery: deferredSearchValue,
-          scrollKey,
-          initialScrollTop,
-          scrollReady,
+          viewKey,
+          scrollRestoreKey,
+          scrollRestoreTop,
           scrollRequest,
           smoothScroll: settings.smoothScroll,
           selectedPaths: selected,
@@ -662,7 +630,6 @@ const App = () => {
           onOpenEntry: fileManager.openEntry,
           onSelectItem: handleSelectItem,
           onClearSelection: clearSelection,
-          onScrollTopChange: handleScrollTopChange,
           entryMeta,
           onRequestMeta: fileManager.requestEntryMeta,
           thumbnailsEnabled: settings.thumbnailsEnabled,

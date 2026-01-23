@@ -4,6 +4,7 @@ import { Fragment, startTransition } from "react";
 import { handleMiddleClick, tabLabel } from "@/lib";
 import { useTabDragDrop } from "@/hooks";
 import type { Tab } from "@/types";
+import { TabCloseIcon } from "./Icons";
 import { TooltipWrapper } from "./Tooltip";
 
 type TabsBarProps = {
@@ -95,7 +96,7 @@ const TabItem = ({
           aria-label={`Close ${label} tab`}
           disabled={!canClose}
         >
-          x
+          <TabCloseIcon className="tab-close-icon" />
         </button>
       ) : fixedWidthTabs ? (
         <span className="tab-close-spacer" aria-hidden="true" />

@@ -6,9 +6,8 @@ import {
   useEntryDragOut,
   useEntryMetaRequest,
   useDynamicOverscan,
-  useScrollAnchor,
+  useScrollRestore,
   useScrollSettled,
-  useScrollPosition,
   useScrollToIndex,
   useSelectionDrag,
   useWheelSnap,
@@ -32,12 +31,11 @@ import { EntryRow, ParentRow } from "./fileList/index";
 type FileListProps = {
   entries: FileEntry[];
   items: EntryItem[];
-  itemIndexMap: Map<string, number>;
   loading: boolean;
   searchQuery: string;
-  scrollKey: string;
-  initialScrollTop: number;
-  scrollReady: boolean;
+  viewKey: string;
+  scrollRestoreKey: string;
+  scrollRestoreTop: number;
   scrollRequest?: { index: number; nonce: number } | null;
   smoothScroll: boolean;
   selectedPaths: Set<string>;
@@ -47,7 +45,6 @@ type FileListProps = {
   onOpenEntry: (path: string) => void;
   onSelectItem: (path: string, index: number, event: ReactMouseEvent) => void;
   onClearSelection: () => void;
-  onScrollTopChange: (key: string, scrollTop: number) => void;
   entryMeta: Map<string, EntryMeta>;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   onContextMenu?: (event: ReactMouseEvent) => void;
@@ -75,12 +72,11 @@ type RowDisplayMeta = {
 export default function FileList({
   entries,
   items,
-  itemIndexMap,
   loading,
   searchQuery,
-  scrollKey,
-  initialScrollTop,
-  scrollReady,
+  viewKey,
+  scrollRestoreKey,
+  scrollRestoreTop,
   scrollRequest,
   smoothScroll,
   selectedPaths,
@@ -90,7 +86,6 @@ export default function FileList({
   onOpenEntry,
   onSelectItem,
   onClearSelection,
-  onScrollTopChange,
   entryMeta,
   onRequestMeta,
   onContextMenu,
@@ -105,9 +100,15 @@ export default function FileList({
   const itemHeight = ROW_HEIGHT + ROW_GAP;
   // When smooth scrolling is disabled, snap wheel input to a single row.
   useWheelSnap(listRef, smoothScroll ? 0 : itemHeight);
+  // Restore the stored scroll offset once the list height is ready.
+  useScrollRestore(listRef, {
+    restoreKey: scrollRestoreKey,
+    restoreTop: scrollRestoreTop,
+    restoreReady: !loading,
+  });
   const scrolling = useScrollSettled(listRef);
   const overscan = useDynamicOverscan({
-    resetKey: scrollKey,
+    resetKey: viewKey,
     base: OVERSCAN,
     min: OVERSCAN_MIN,
     warmupMs: OVERSCAN_WARMUP_MS,
@@ -130,7 +131,7 @@ export default function FileList({
   useEffect(() => {
     // Reset cached row labels on view changes to keep memory bounded.
     rowMetaCacheRef.current.clear();
-  }, [scrollKey]);
+  }, [viewKey]);
 
   const rowMetaByPath = useMemo(() => {
     const cache = rowMetaCacheRef.current;
@@ -214,32 +215,6 @@ export default function FileList({
     event.stopPropagation();
   }, []);
 
-  const { handleScrollTopChange: handleAnchorScroll, getAnchorTop } = useScrollAnchor(
-    listRef,
-    {
-      scrollKey,
-      items: rows,
-      itemHeight,
-      scrollReady,
-      loading,
-      getItemPath: (item) => {
-        if (item.type === "parent") return item.path;
-        if (item.type === "entry") return item.entry.path;
-        return null;
-      },
-      getItemIndex: (path) => itemIndexMap.get(path) ?? null,
-      // Persist scroll even while the view is transitioning.
-      onScrollTopChange,
-    },
-  );
-  const restoreTop = getAnchorTop() ?? initialScrollTop;
-
-  useScrollPosition(listRef, {
-    scrollKey,
-    initialTop: restoreTop,
-    onScrollTopChange: handleAnchorScroll,
-    restoreReady: scrollReady && !loading,
-  });
   useScrollToIndex(listRef, {
     itemCount: rows.length,
     rowHeight: itemHeight,

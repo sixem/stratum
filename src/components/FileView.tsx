@@ -15,13 +15,12 @@ type FileViewProps = {
   viewMode: ViewMode;
   entries: FileEntry[];
   items: EntryItem[];
-  itemIndexMap: Map<string, number>;
   loading: boolean;
   showLander: boolean;
   searchQuery: string;
-  scrollKey: string;
-  initialScrollTop: number;
-  scrollReady: boolean;
+  viewKey: string;
+  scrollRestoreKey: string;
+  scrollRestoreTop: number;
   scrollRequest?: { index: number; nonce: number } | null;
   smoothScroll: boolean;
   selectedPaths: Set<string>;
@@ -31,7 +30,6 @@ type FileViewProps = {
   onOpenEntry: (path: string) => void;
   onSelectItem: (path: string, index: number, event: ReactMouseEvent) => void;
   onClearSelection: () => void;
-  onScrollTopChange: (key: string, scrollTop: number) => void;
   entryMeta: Map<string, EntryMeta>;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
@@ -67,14 +65,11 @@ export function FileView({
   gridNameEllipsis,
   gridNameHideExtension,
   thumbResetKey,
-  scrollKey,
-  scrollReady,
   onGridColumnsChange,
   dropTargetPath,
   onStartDragOut,
   onEntryContextMenu,
   smoothScroll,
-  itemIndexMap,
   ...viewProps
 }: FileViewProps) {
   // Keep the heavy views lazy-loaded but render-driven.
@@ -93,10 +88,7 @@ export function FileView({
         <PerfProfiler id="file-grid">
           <FileGrid
             {...viewProps}
-            scrollKey={scrollKey}
-            scrollReady={scrollReady}
             smoothScroll={smoothScroll}
-            itemIndexMap={itemIndexMap}
             thumbnailsEnabled={thumbnailsEnabled}
             thumbnails={thumbnails}
             onRequestThumbs={onRequestThumbs}
@@ -117,10 +109,7 @@ export function FileView({
         <PerfProfiler id="file-list">
           <FileList
             {...viewProps}
-            scrollKey={scrollKey}
-            scrollReady={scrollReady}
             smoothScroll={smoothScroll}
-            itemIndexMap={itemIndexMap}
             dropTargetPath={dropTargetPath}
             onStartDragOut={onStartDragOut}
             onEntryContextMenu={onEntryContextMenu}

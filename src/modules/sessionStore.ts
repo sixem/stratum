@@ -1,4 +1,4 @@
-// Persistent session state for tabs and scroll positions.
+// Persistent session state for tabs and view settings.
 import { createWithEqualityFn } from "zustand/traditional";
 import type { SortDir, SortKey, SortState, Tab, ViewMode } from "@/types";
 import { DEFAULT_SORT, getDefaultSortDir } from "@/lib";
@@ -8,18 +8,12 @@ type SessionState = {
   tabs: Tab[];
   activeTabId: string | null;
   recentJumps: string[];
-  scrollPositions: Record<string, number>;
 };
 
 type SessionStore = SessionState & {
   setTabs: (updater: Tab[] | ((prev: Tab[]) => Tab[])) => void;
   setActiveTabId: (id: string | null) => void;
   setRecentJumps: (updater: string[] | ((prev: string[]) => string[])) => void;
-  setScrollPositions: (
-    updater:
-      | Record<string, number>
-      | ((prev: Record<string, number>) => Record<string, number>),
-  ) => void;
   updateSession: (patch: Partial<SessionState>) => void;
   resetSession: () => void;
 };
@@ -37,7 +31,6 @@ const DEFAULT_SESSION: SessionState = {
   tabs: [],
   activeTabId: null,
   recentJumps: [],
-  scrollPositions: {},
 };
 
 const DEFAULT_TAB = {
@@ -76,17 +69,6 @@ const coerceSort = (value: unknown): SortState => {
   };
 };
 
-const coerceScrollPositions = (value: unknown): Record<string, number> => {
-  if (!value || typeof value !== "object") return {};
-  const raw = value as Record<string, unknown>;
-  const next: Record<string, number> = {};
-  Object.entries(raw).forEach(([key, val]) => {
-    if (typeof val !== "number" || !Number.isFinite(val)) return;
-    next[key] = Math.max(0, Math.round(val));
-  });
-  return next;
-};
-
 const coerceTabs = (value: unknown) => {
   if (!Array.isArray(value)) return [];
   return value
@@ -120,12 +102,10 @@ const coerceSession = (value: Partial<SessionState> | null | undefined): Session
   const recentJumps = Array.isArray(value?.recentJumps)
     ? value.recentJumps.filter((item) => typeof item === "string")
     : [];
-  const scrollPositions = coerceScrollPositions(value?.scrollPositions);
   return {
     tabs,
     activeTabId,
     recentJumps: recentJumps.slice(0, SIDEBAR_RECENT_LIMIT_MAX),
-    scrollPositions,
   };
 };
 
@@ -184,10 +164,6 @@ export const useSessionStore = createWithEqualityFn<SessionStore>((set) => ({
     set((state) => ({
       recentJumps: applyUpdater(state.recentJumps, updater),
     })),
-  setScrollPositions: (updater) =>
-    set((state) => ({
-      scrollPositions: applyUpdater(state.scrollPositions, updater),
-    })),
   updateSession: (patch) => set((state) => ({ ...state, ...patch })),
   resetSession: () => set({ ...DEFAULT_SESSION }),
 }));
@@ -197,7 +173,6 @@ useSessionStore.subscribe((state) => {
     tabs: state.tabs,
     activeTabId: state.activeTabId,
     recentJumps: state.recentJumps,
-    scrollPositions: state.scrollPositions,
   });
 });
 

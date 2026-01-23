@@ -7,9 +7,8 @@ import {
   useEntryDragOut,
   useEntryMetaRequest,
   useDynamicOverscan,
-  useScrollAnchor,
+  useScrollRestore,
   useScrollSettled,
-  useScrollPosition,
   useScrollToIndex,
   useSelectionDrag,
   useThumbnailPause,
@@ -39,12 +38,11 @@ import { EntryCard, ParentCard } from "./fileGrid/index";
 type FileGridProps = {
   entries: FileEntry[];
   items: EntryItem[];
-  itemIndexMap: Map<string, number>;
   loading: boolean;
   searchQuery: string;
-  scrollKey: string;
-  initialScrollTop: number;
-  scrollReady: boolean;
+  viewKey: string;
+  scrollRestoreKey: string;
+  scrollRestoreTop: number;
   scrollRequest?: { index: number; nonce: number } | null;
   smoothScroll: boolean;
   selectedPaths: Set<string>;
@@ -54,7 +52,6 @@ type FileGridProps = {
   onOpenEntry: (path: string) => void;
   onSelectItem: (path: string, index: number, event: ReactMouseEvent) => void;
   onClearSelection: () => void;
-  onScrollTopChange: (key: string, scrollTop: number) => void;
   entryMeta: Map<string, EntryMeta>;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
@@ -117,12 +114,11 @@ type GridDisplayMeta = {
 export default function FileGrid({
   entries,
   items,
-  itemIndexMap,
   loading,
   searchQuery,
-  scrollKey,
-  initialScrollTop,
-  scrollReady,
+  viewKey,
+  scrollRestoreKey,
+  scrollRestoreTop,
   scrollRequest,
   smoothScroll,
   selectedPaths,
@@ -132,7 +128,6 @@ export default function FileGrid({
   onOpenEntry,
   onSelectItem,
   onClearSelection,
-  onScrollTopChange,
   entryMeta,
   onRequestMeta,
   thumbnailsEnabled,
@@ -153,15 +148,8 @@ export default function FileGrid({
 }: FileGridProps) {
   const emptyMessage = useMemo(() => getEmptyMessage(searchQuery), [searchQuery]);
   const viewItems = items;
-  const persistScrollTop = useCallback(
-    (key: string, scrollTop: number) => {
-      onScrollTopChange(key, scrollTop);
-    },
-    [onScrollTopChange],
-  );
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const { width: viewportWidth } = useElementSize(viewportRef);
-  const layoutReady = viewportWidth > 0;
   const scrolling = useScrollSettled(viewportRef);
   const typingActive = useTypingActivity({ resetDelayMs: THUMB_TYPING_PAUSE_MS });
   const interactionActive = scrolling || typingActive;
@@ -193,9 +181,16 @@ export default function FileGrid({
   const rowCount = Math.ceil(viewItems.length / columnCount);
   const rowHeight = gridSizing.rowHeight + gridSizing.gap;
   const lastLayoutRef = useRef({ gridSize, columnCount, rowHeight });
+  const layoutReady = viewportWidth > 0;
 
   // When smooth scrolling is disabled, snap wheel input to a single grid row.
   useWheelSnap(viewportRef, smoothScroll ? 0 : rowHeight);
+  // Restore the stored scroll offset once the grid has a measurable height.
+  useScrollRestore(viewportRef, {
+    restoreKey: scrollRestoreKey,
+    restoreTop: scrollRestoreTop,
+    restoreReady: !loading && layoutReady,
+  });
 
   // Keep the same entries in view when density changes by anchoring the viewport center.
   useLayoutEffect(() => {
@@ -237,11 +232,10 @@ export default function FileGrid({
       const clamped = Math.min(Math.max(0, nextScrollTop), maxScrollTop);
       if (Math.abs(clamped - element.scrollTop) > 0.5) {
         element.scrollTop = clamped;
-        persistScrollTop(scrollKey, clamped);
       }
     }
     lastLayoutRef.current = { gridSize, columnCount, rowHeight };
-  }, [columnCount, gridSize, rowHeight, persistScrollTop, scrollKey, viewItems.length]);
+  }, [columnCount, gridSize, rowHeight, viewItems.length]);
 
   useEffect(() => {
     if (!onGridColumnsChange) return;
@@ -249,7 +243,7 @@ export default function FileGrid({
   }, [columnCount, onGridColumnsChange]);
 
   const overscan = useDynamicOverscan({
-    resetKey: scrollKey,
+    resetKey: viewKey,
     base: GRID_OVERSCAN,
     min: GRID_OVERSCAN_MIN,
     warmupMs: GRID_OVERSCAN_WARMUP_MS,
@@ -288,7 +282,7 @@ export default function FileGrid({
   useEffect(() => {
     // Reset cached grid labels on view changes to keep memory bounded.
     entryMetaCacheRef.current.clear();
-  }, [scrollKey]);
+  }, [viewKey]);
 
   const gridMetaByPath = useMemo(() => {
     const cache = entryMetaCacheRef.current;
@@ -369,33 +363,6 @@ export default function FileGrid({
     event.stopPropagation();
   }, []);
 
-  const { handleScrollTopChange: handleAnchorScroll, getAnchorTop } = useScrollAnchor(
-    viewportRef,
-    {
-      scrollKey,
-      items: viewItems,
-      itemHeight: rowHeight,
-      itemsPerRow: columnCount,
-      scrollReady,
-      loading,
-      getItemPath: (item) => {
-        if (item.type === "parent") return item.path;
-        if (item.type === "entry") return item.entry.path;
-        return null;
-      },
-      getItemIndex: (path) => itemIndexMap.get(path) ?? null,
-      // Persist scroll even while the view is transitioning.
-      onScrollTopChange: persistScrollTop,
-    },
-  );
-  const restoreTop = getAnchorTop() ?? initialScrollTop;
-
-  useScrollPosition(viewportRef, {
-    scrollKey,
-    initialTop: restoreTop,
-    onScrollTopChange: handleAnchorScroll,
-    restoreReady: scrollReady && !loading && layoutReady,
-  });
   useScrollToIndex(viewportRef, {
     itemCount: viewItems.length,
     rowHeight,
