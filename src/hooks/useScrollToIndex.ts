@@ -1,23 +1,36 @@
 import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 
-type ScrollRequest = { index: number; nonce: number } | null | undefined;
+type ScrollRequest = {
+  index: number;
+  nonce: number;
+  scopeKey?: string;
+} | null | undefined;
 
 type UseScrollToIndexOptions = {
   itemCount: number;
   rowHeight: number;
   itemsPerRow?: number;
   scrollRequest?: ScrollRequest;
+  scrollKey?: string;
 };
 
 export const useScrollToIndex = (
   ref: RefObject<HTMLElement | null>,
-  { itemCount, rowHeight, itemsPerRow = 1, scrollRequest }: UseScrollToIndexOptions,
+  {
+    itemCount,
+    rowHeight,
+    itemsPerRow = 1,
+    scrollRequest,
+    scrollKey,
+  }: UseScrollToIndexOptions,
 ) => {
   const scrollNonceRef = useRef(0);
 
   useEffect(() => {
     if (!scrollRequest) return;
+    // Ignore stale scroll requests that were created for a different view.
+    if (scrollRequest.scopeKey && scrollRequest.scopeKey !== scrollKey) return;
     if (scrollRequest.nonce === scrollNonceRef.current) return;
     const element = ref.current;
     if (!element || itemCount === 0 || rowHeight <= 0) return;
@@ -37,5 +50,5 @@ export const useScrollToIndex = (
     } else if (targetBottom > viewBottom) {
       element.scrollTop = targetBottom - element.clientHeight;
     }
-  }, [itemCount, itemsPerRow, ref, rowHeight, scrollRequest]);
+  }, [itemCount, itemsPerRow, ref, rowHeight, scrollKey, scrollRequest]);
 };

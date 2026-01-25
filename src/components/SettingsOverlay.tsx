@@ -6,11 +6,13 @@ import { SettingsBarsSection } from "@/components/settings/SettingsBarsSection";
 import { SettingsFlairSection } from "@/components/settings/SettingsFlairSection";
 import { SettingsGridSection } from "@/components/settings/SettingsGridSection";
 import { SettingsKeybindsSection } from "@/components/settings/SettingsKeybindsSection";
+import { SettingsMenusSection } from "@/components/settings/SettingsMenusSection";
 import { SettingsSidebarSection } from "@/components/settings/SettingsSidebarSection";
 import { SettingsThumbsSection } from "@/components/settings/SettingsThumbsSection";
 import { SettingsViewSection } from "@/components/settings/SettingsViewSection";
 import { SettingsVitals } from "@/components/settings/SettingsVitals";
 import { useSettings } from "@/hooks";
+import { usePromptStore } from "@/modules";
 
 type SettingsOverlayProps = {
   open: boolean;
@@ -37,9 +39,11 @@ export function SettingsOverlay({
     showTabNumbers,
     fixedWidthTabs,
     smoothScroll,
+    compactMode,
     accentTheme,
     categoryTinting,
     showParentEntry,
+    confirmDelete,
     ambientBackground,
     blurOverlays,
     keybinds,
@@ -50,15 +54,19 @@ export function SettingsOverlay({
     gridShowExtension,
     gridNameEllipsis,
     gridNameHideExtension,
+    menuOpenPwsh,
+    menuOpenWsl,
     sidebarRecentLimit,
     sidebarShowTips,
     sidebarSectionOrder,
     updateSettings,
+    resetSettings,
   } = useSettings();
   const titleId = useId();
   const viewSectionId = "settings-view";
   const barsSectionId = "settings-bars";
   const gridSectionId = "settings-grid";
+  const menuSectionId = "settings-menus";
   const flairSectionId = "settings-flair";
   const thumbSectionId = "settings-thumbnails";
   const sidebarSectionId = "settings-sidebar";
@@ -92,6 +100,19 @@ export function SettingsOverlay({
     },
     [],
   );
+
+  const handleResetSettings = useCallback(() => {
+    // Confirm reset to avoid wiping custom settings by accident.
+    usePromptStore.getState().showPrompt({
+      title: "Reset all settings?",
+      content: "This will restore every setting to the default values.",
+      confirmLabel: "Reset",
+      cancelLabel: "Cancel",
+      onConfirm: () => {
+        resetSettings();
+      },
+    });
+  }, [resetSettings]);
 
   return (
     <div
@@ -147,6 +168,13 @@ export function SettingsOverlay({
               <button
                 type="button"
                 className="settings-nav-item"
+                onClick={handleJump(menuSectionId)}
+              >
+                Menus
+              </button>
+              <button
+                type="button"
+                className="settings-nav-item"
                 onClick={handleJump(flairSectionId)}
               >
                 Flair
@@ -180,6 +208,19 @@ export function SettingsOverlay({
                 Cache
               </button>
             </div>
+            <div className="settings-sidebar-actions">
+              <div className="settings-sidebar-title">Actions</div>
+              <button
+                type="button"
+                className="btn settings-reset"
+                onClick={handleResetSettings}
+              >
+                Reset all to defaults
+              </button>
+              <div className="settings-desc">
+                Resets every setting and keybind back to default.
+              </div>
+            </div>
             <SettingsVitals open={open} />
           </nav>
           <div className="settings-content">
@@ -188,7 +229,9 @@ export function SettingsOverlay({
               defaultViewMode={defaultViewMode}
               smoothScroll={smoothScroll}
               gridCentered={gridCentered}
+              compactMode={compactMode}
               showParentEntry={showParentEntry}
+              confirmDelete={confirmDelete}
               onUpdate={updateSettings}
             />
             <SettingsBarsSection
@@ -205,6 +248,12 @@ export function SettingsOverlay({
               gridShowExtension={gridShowExtension}
               gridNameEllipsis={gridNameEllipsis}
               gridNameHideExtension={gridNameHideExtension}
+              onUpdate={updateSettings}
+            />
+            <SettingsMenusSection
+              sectionId={menuSectionId}
+              menuOpenPwsh={menuOpenPwsh}
+              menuOpenWsl={menuOpenWsl}
               onUpdate={updateSettings}
             />
             <SettingsFlairSection

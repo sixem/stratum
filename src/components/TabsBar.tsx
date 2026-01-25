@@ -10,6 +10,7 @@ import { TooltipWrapper } from "./Tooltip";
 type TabsBarProps = {
   tabs: Tab[];
   activeId: string | null;
+  dropTargetId?: string | null;
   showTabNumbers: boolean;
   fixedWidthTabs: boolean;
   onSelect: (id: string) => void;
@@ -28,6 +29,7 @@ type TabItemProps = {
   onDragOver: (event: DragEvent<HTMLDivElement>, index: number) => void;
   onDragEnd: () => void;
   isDragging: boolean;
+  isDropTarget: boolean;
   index: number;
   showIndex: boolean;
   showClose: boolean;
@@ -44,6 +46,7 @@ const TabItem = ({
   onDragOver,
   onDragEnd,
   isDragging,
+  isDropTarget,
   index,
   showIndex,
   showClose,
@@ -53,6 +56,10 @@ const TabItem = ({
   return (
     <div
       className={`tab${isActive ? " is-active" : ""}${isDragging ? " is-dragging" : ""}`}
+      data-drop-kind="tab"
+      data-drop-path={tab.path}
+      data-drop-id={tab.id}
+      data-drop-target={isDropTarget ? "true" : "false"}
       draggable
       onDragStart={(event) => onDragStart(event, tab.id)}
       onDragOver={(event) => onDragOver(event, index)}
@@ -110,6 +117,7 @@ const TabDrop = () => <div className="tab-drop" />;
 export function TabsBar({
   tabs,
   activeId,
+  dropTargetId,
   showTabNumbers,
   fixedWidthTabs,
   onSelect,
@@ -142,21 +150,22 @@ export function TabsBar({
         {tabs.map((tab, index) => (
           <Fragment key={tab.id}>
             {dropIndex === index ? <TabDrop /> : null}
-            <TabItem
-              tab={tab}
-              isActive={tab.id === activeId}
-              canClose={canClose}
-              onSelect={onSelect}
-              onClose={onClose}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDragEnd={handleDragEnd}
-              isDragging={draggingId === tab.id}
-              index={index}
-              showIndex={showTabNumbers}
-              showClose={tab.id === activeId}
-              fixedWidthTabs={fixedWidthTabs}
-            />
+          <TabItem
+            tab={tab}
+            isActive={tab.id === activeId}
+            canClose={canClose}
+            onSelect={onSelect}
+            onClose={onClose}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+            isDragging={draggingId === tab.id}
+            isDropTarget={dropTargetId === tab.id}
+            index={index}
+            showIndex={showTabNumbers}
+            showClose={tab.id === activeId}
+            fixedWidthTabs={fixedWidthTabs}
+          />
           </Fragment>
         ))}
         {dropIndex === tabs.length ? <TabDrop /> : null}

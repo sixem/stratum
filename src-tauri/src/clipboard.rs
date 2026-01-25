@@ -11,6 +11,19 @@ pub fn set_clipboard_paths(paths: Vec<String>) -> Result<(), String> {
     }
 }
 
+pub fn get_clipboard_paths() -> Result<Vec<String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        // Read file paths from the Windows clipboard (CF_HDROP).
+        return windows_clipboard::get_clipboard_paths();
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        return Err("Clipboard file copy is only supported on Windows.".to_string());
+    }
+}
+
 #[cfg(target_os = "windows")]
 mod windows_clipboard {
     use std::collections::HashSet;
@@ -20,16 +33,21 @@ mod windows_clipboard {
     use std::path::Path;
     use std::ptr;
 
-    use windows::core::BOOL;
+    use windows::core::{BOOL, PCWSTR};
     use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL, POINT};
     use windows::Win32::System::DataExchange::{
-        CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
+        CloseClipboard,
+        EmptyClipboard,
+        GetClipboardData,
+        OpenClipboard,
+        RegisterClipboardFormatW,
+        SetClipboardData,
     };
     use windows::Win32::System::Memory::{
         GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE, GMEM_ZEROINIT,
     };
-    use windows::Win32::System::Ole::{CF_HDROP, CF_UNICODETEXT};
-    use windows::Win32::UI::Shell::DROPFILES;
+    use windows::Win32::System::Ole::{CF_HDROP, CF_UNICODETEXT, DROPEFFECT_COPY};
+    use windows::Win32::UI::Shell::{DragQueryFileW, HDROP, DROPFILES};
 
     struct ClipboardGuard;
 
@@ -60,6 +78,17 @@ mod windows_clipboard {
             }
         }
 
+        // Hint to the shell that this is a copy (not a move) operation.
+        if let Some(effect_handle) = write_drop_effect(DROPEFFECT_COPY.0) {
+            if let Some(format) = preferred_drop_effect_format() {
+                unsafe {
+                    if SetClipboardData(format, Some(HANDLE(effect_handle.0))).is_err() {
+                        let _ = GlobalFree(Some(effect_handle));
+                    }
+                }
+            }
+        }
+
         if let Some(text_handle) = write_unicode_text(&filtered) {
             unsafe {
                 if SetClipboardData(CF_UNICODETEXT.0 as u32, Some(HANDLE(text_handle.0)))
@@ -71,6 +100,40 @@ mod windows_clipboard {
         }
 
         Ok(())
+    }
+
+    pub fn get_clipboard_paths() -> Result<Vec<String>, String> {
+        unsafe { OpenClipboard(None).map_err(|err| err.to_string())? };
+        let _guard = ClipboardGuard;
+
+        let handle = unsafe { GetClipboardData(CF_HDROP.0 as u32) };
+        let handle = match handle {
+            Ok(handle) => handle,
+            Err(_) => return Ok(Vec::new()),
+        };
+        let hdrop = HDROP(handle.0 as _);
+        let count = unsafe { DragQueryFileW(hdrop, 0xFFFFFFFF, None) };
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut paths = Vec::new();
+        for index in 0..count {
+            let character_count = unsafe { DragQueryFileW(hdrop, index, None) } as usize;
+            if character_count == 0 {
+                continue;
+            }
+            let mut path_buf = vec![0u16; character_count + 1];
+            unsafe {
+                DragQueryFileW(hdrop, index, Some(&mut path_buf));
+            }
+            let path = String::from_utf16_lossy(&path_buf[..character_count]);
+            if !path.trim().is_empty() {
+                paths.push(path);
+            }
+        }
+
+        Ok(paths)
     }
 
     fn filter_paths(paths: Vec<String>) -> Vec<String> {
@@ -136,6 +199,35 @@ mod windows_clipboard {
 
             let list_ptr = ptr as *mut u16;
             ptr::copy_nonoverlapping(wide.as_ptr(), list_ptr, wide.len());
+            let _ = GlobalUnlock(handle);
+            Some(handle)
+        }
+    }
+
+    fn preferred_drop_effect_format() -> Option<u32> {
+        let wide: Vec<u16> = OsStr::new("Preferred DropEffect")
+            .encode_wide()
+            .chain(once(0))
+            .collect();
+        let format = unsafe { RegisterClipboardFormatW(PCWSTR(wide.as_ptr())) };
+        if format == 0 {
+            None
+        } else {
+            Some(format)
+        }
+    }
+
+    fn write_drop_effect(effect: u32) -> Option<HGLOBAL> {
+        let total_bytes = std::mem::size_of::<u32>();
+        unsafe {
+            let handle =
+                GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, total_bytes).ok()?;
+            let ptr = GlobalLock(handle) as *mut u8;
+            if ptr.is_null() {
+                let _ = GlobalFree(Some(handle));
+                return None;
+            }
+            (ptr as *mut u32).write(effect);
             let _ = GlobalUnlock(handle);
             Some(handle)
         }

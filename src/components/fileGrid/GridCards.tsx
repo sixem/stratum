@@ -1,6 +1,6 @@
 // Grid card rendering for file thumbnails and metadata.
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   isPdfLikeExtension,
   isSvgLikeExtension,
@@ -9,7 +9,8 @@ import {
 } from "@/lib";
 import type { FileKind } from "@/lib";
 import type { GridNameEllipsis } from "@/modules";
-import type { FileEntry } from "@/types";
+import type { FileEntry, RenameCommitReason } from "@/types";
+import type { EntryPresence } from "@/lib";
 import { FILE_TOOLTIP_DELAY_MS } from "@/constants";
 import {
   ArchiveIcon,
@@ -25,6 +26,7 @@ import {
   VideoIcon,
 } from "../Icons";
 import { TooltipWrapper } from "../Tooltip";
+import { RenameField } from "../RenameField";
 
 type ThumbnailIconProps = {
   isDir: boolean;
@@ -39,20 +41,62 @@ type ThumbnailPreviewProps = {
 };
 
 const ThumbnailPreview = ({ src, onReadyChange }: ThumbnailPreviewProps) => {
+  const [displaySrc, setDisplaySrc] = useState(src);
   const [ready, setReady] = useState(false);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  const loadIdRef = useRef(0);
+  const lastReadyRef = useRef(ready);
 
-  useLayoutEffect(() => {
+  const setReadyState = useCallback((next: boolean) => {
+    setReady((prev) => (prev === next ? prev : next));
+  }, []);
+
+  useEffect(() => {
+    if (lastReadyRef.current === ready) return;
+    lastReadyRef.current = ready;
+    // Notify the parent after render to avoid setState during render warnings.
+    onReadyChange?.(ready);
+  }, [onReadyChange, ready]);
+
+  useEffect(() => {
+    if (!src) {
+      loadIdRef.current += 1;
+      setDisplaySrc("");
+      setReadyState(false);
+      return;
+    }
+    if (src === displaySrc) return;
+    const loadId = loadIdRef.current + 1;
+    loadIdRef.current = loadId;
+    const preload = new Image();
+    preload.onload = () => {
+      if (loadIdRef.current !== loadId) return;
+      setDisplaySrc(src);
+      setReadyState(true);
+    };
+    preload.onerror = () => {
+      if (loadIdRef.current !== loadId) return;
+      if (!displaySrc) {
+        setReadyState(false);
+      }
+    };
+    preload.src = src;
+  }, [displaySrc, setReadyState, src]);
+
+  useEffect(() => {
+    if (!displaySrc) return;
+    // Defer sync image readiness checks to avoid blocking paint during fast scrolls.
     const img = imgRef.current;
     const isReady = Boolean(img && img.complete && img.naturalWidth > 0);
-    setReady(isReady);
-    onReadyChange?.(isReady);
-  }, [onReadyChange, src]);
+    setReadyState(isReady);
+  }, [displaySrc, setReadyState]);
+
+  if (!displaySrc) return null;
 
   return (
     <img
       className="thumb-preview"
-      src={src}
+      src={displaySrc}
       alt=""
       aria-hidden="true"
       draggable={false}
@@ -61,12 +105,10 @@ const ThumbnailPreview = ({ src, onReadyChange }: ThumbnailPreviewProps) => {
       data-ready={ready ? "true" : "false"}
       ref={imgRef}
       onLoad={() => {
-        setReady(true);
-        onReadyChange?.(true);
+        setReadyState(true);
       }}
       onError={() => {
-        setReady(false);
-        onReadyChange?.(false);
+        setReadyState(false);
       }}
     />
   );
@@ -76,7 +118,9 @@ export const ThumbnailIcon = ({ isDir, fileKind, extension, thumbUrl }: Thumbnai
   const [previewReady, setPreviewReady] = useState(false);
 
   useEffect(() => {
-    setPreviewReady(false);
+    if (!thumbUrl) {
+      setPreviewReady(false);
+    }
   }, [thumbUrl]);
 
   if (isDir) {
@@ -142,6 +186,19 @@ export const ParentCard = memo(({
   onOpenNewTab,
   onContextMenu,
 }: ParentCardProps) => {
+  const handleMouseDown = (event: ReactMouseEvent) => {
+    if (event.button === 0) {
+      onSelect(event);
+    }
+    onOpenNewTab?.(event);
+  };
+
+  const handleClick = (event: ReactMouseEvent) => {
+    if (event.detail === 0) {
+      onSelect(event);
+    }
+  };
+
   return (
     <button
       type="button"
@@ -152,9 +209,9 @@ export const ParentCard = memo(({
       data-is-dir="true"
       data-drop-target={dropTarget ? "true" : "false"}
       aria-selected={selected}
-      onClick={onSelect}
+      onClick={handleClick}
       onDoubleClick={onOpen}
-      onMouseDown={onOpenNewTab}
+      onMouseDown={handleMouseDown}
       onContextMenu={onContextMenu}
     >
       <div className="thumb-icon">
@@ -182,10 +239,16 @@ type EntryCardProps = {
   hideExtension: boolean;
   selected: boolean;
   dropTarget: boolean;
+  isRenaming: boolean;
+  renameValue: string;
+  onRenameChange: (value: string) => void;
+  onRenameCommit: (reason: RenameCommitReason) => void;
+  onRenameCancel: () => void;
   onSelect: (event: ReactMouseEvent) => void;
   onOpen: (event: ReactMouseEvent) => void;
   onOpenNewTab?: (event: ReactMouseEvent) => void;
   onContextMenu?: (event: ReactMouseEvent) => void;
+  presence?: EntryPresence;
 };
 
 // Keep a chunk of the name tail visible when using middle-ellipsis truncation.
@@ -221,10 +284,16 @@ export const EntryCard = memo(({
   hideExtension,
   selected,
   dropTarget,
+  isRenaming,
+  renameValue,
+  onRenameChange,
+  onRenameCommit,
+  onRenameCancel,
   onSelect,
   onOpen,
   onOpenNewTab,
   onContextMenu,
+  presence = "stable",
 }: EntryCardProps) => {
   const resolvedSizeLabel = showSize ? sizeLabel : "";
   const extensionLabel = showExtension && extension ? extension : "";
@@ -245,23 +314,56 @@ export const EntryCard = memo(({
       ]
     : displayName;
   const nameEllipsisMode = useMiddleEllipsis ? "middle" : "end";
+  // Keep the card element stable so thumbnail previews do not remount on rename.
+  const isRemoved = presence === "removed";
+  const isInteractive = !isRenaming && !isRemoved;
+  const cardClass = `thumb-card${isRenaming ? " is-renaming" : ""}${
+    entry.isDir ? " is-dir" : ""
+  }${selected ? " is-selected" : ""}${isRemoved ? " is-removed" : ""}`;
+  const handleMouseDown = (event: ReactMouseEvent) => {
+    if (!isInteractive) return;
+    if (event.button === 0) {
+      const hasModifier =
+        event.shiftKey || event.ctrlKey || event.metaKey || event.altKey;
+      // Preserve multi-selection when dragging a selected card.
+      if (!selected || hasModifier) {
+        onSelect(event);
+      }
+    }
+    onOpenNewTab?.(event);
+  };
+
+  const handleClick = (event: ReactMouseEvent) => {
+    if (!isInteractive) return;
+    if (event.detail === 0) {
+      onSelect(event);
+    }
+  };
 
   return (
-    <TooltipWrapper text={tooltipText} delayMs={FILE_TOOLTIP_DELAY_MS}>
-      <button
-        type="button"
-        className={`thumb-card${entry.isDir ? " is-dir" : ""}${selected ? " is-selected" : ""}`}
-        data-selectable="true"
+    <TooltipWrapper
+      text={tooltipText}
+      delayMs={FILE_TOOLTIP_DELAY_MS}
+      disabled={isRenaming}
+    >
+      <div
+        className={cardClass}
+        role={isInteractive ? "button" : undefined}
+        tabIndex={isInteractive ? 0 : -1}
+        data-selectable={isRemoved ? "false" : "true"}
         data-path={entry.path}
+        data-name={entry.name}
         data-index={index}
         data-is-dir={entry.isDir ? "true" : "false"}
         data-kind={fileKind}
         data-drop-target={dropTarget ? "true" : "false"}
+        data-presence={presence}
         aria-selected={selected}
-        onClick={onSelect}
-        onDoubleClick={onOpen}
-        onMouseDown={onOpenNewTab}
-        onContextMenu={onContextMenu}
+        aria-hidden={isRemoved ? "true" : "false"}
+        onClick={isInteractive ? handleClick : undefined}
+        onDoubleClick={isInteractive ? onOpen : undefined}
+        onMouseDown={isInteractive ? handleMouseDown : undefined}
+        onContextMenu={isInteractive ? onContextMenu : undefined}
       >
         <div className="thumb-icon">
           <ThumbnailIcon
@@ -272,9 +374,20 @@ export const EntryCard = memo(({
           />
         </div>
         <div className="thumb-meta">
-          <span className="thumb-name" data-ellipsis={nameEllipsisMode}>
-            {nameNodes}
-          </span>
+          {isRenaming ? (
+            <RenameField
+              value={renameValue}
+              isDir={entry.isDir}
+              className="rename-input rename-input-grid"
+              onChange={onRenameChange}
+              onCommit={onRenameCommit}
+              onCancel={onRenameCancel}
+            />
+          ) : (
+            <span className="thumb-name" data-ellipsis={nameEllipsisMode}>
+              {nameNodes}
+            </span>
+          )}
           {showInfo ? (
             <div className="thumb-info">
               {resolvedSizeLabel ? (
@@ -286,7 +399,7 @@ export const EntryCard = memo(({
             </div>
           ) : null}
         </div>
-      </button>
+      </div>
     </TooltipWrapper>
   );
 });

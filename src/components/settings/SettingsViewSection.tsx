@@ -7,7 +7,9 @@ type SettingsViewSectionProps = {
   defaultViewMode: ViewMode;
   smoothScroll: boolean;
   gridCentered: boolean;
+  compactMode: boolean;
   showParentEntry: boolean;
+  confirmDelete: boolean;
   onUpdate: SettingsUpdateHandler;
 };
 
@@ -16,7 +18,9 @@ export function SettingsViewSection({
   defaultViewMode,
   smoothScroll,
   gridCentered,
+  compactMode,
   showParentEntry,
+  confirmDelete,
   onUpdate,
 }: SettingsViewSectionProps) {
   return (
@@ -76,6 +80,22 @@ export function SettingsViewSection({
       </div>
       <div className="settings-item">
         <div>
+          <div className="settings-label">Compact mode</div>
+          <div className="settings-desc">
+            Edge-to-edge layout with a flush sidebar and a simplified content frame.
+          </div>
+        </div>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={compactMode}
+            onChange={(event) => onUpdate({ compactMode: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
+      </div>
+      <div className="settings-item">
+        <div>
           <div className="settings-label">Parent directory entry</div>
           <div className="settings-desc">Show a pseudo entry for moving up one level.</div>
         </div>
@@ -84,6 +104,22 @@ export function SettingsViewSection({
             type="checkbox"
             checked={showParentEntry}
             onChange={(event) => onUpdate({ showParentEntry: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
+      </div>
+      <div className="settings-item">
+        <div>
+          <div className="settings-label">Confirm deletes</div>
+          <div className="settings-desc">
+            Ask before sending items to the trash.
+          </div>
+        </div>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={confirmDelete}
+            onChange={(event) => onUpdate({ confirmDelete: event.currentTarget.checked })}
           />
           <span />
         </label>

@@ -4,6 +4,7 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   useEntryDragOut,
+  useEntryPresence,
   useEntryMetaRequest,
   useDynamicOverscan,
   useScrollRestore,
@@ -18,11 +19,12 @@ import {
   formatBytes,
   formatDate,
   getEmptyMessage,
+  getFileKind,
+  nextSortState,
   handleMiddleClick,
-  isEntryItem,
 } from "@/lib";
-import type { EntryItem } from "@/lib";
-import type { EntryMeta, FileEntry } from "@/types";
+import type { DropTarget, EntryItem, FileKind } from "@/lib";
+import type { EntryMeta, FileEntry, RenameCommitReason, SortKey, SortState } from "@/types";
 import { EmptyState } from "./EmptyState";
 import { LoadingIndicator } from "./LoadingIndicator";
 import { SelectionRect } from "./SelectionRect";
@@ -38,6 +40,10 @@ type FileListProps = {
   scrollRestoreTop: number;
   scrollRequest?: { index: number; nonce: number } | null;
   smoothScroll: boolean;
+  compactMode: boolean;
+  sortState: SortState;
+  onSortChange: (next: SortState) => void;
+  categoryTinting: boolean;
   selectedPaths: Set<string>;
   onSetSelection: (paths: string[], anchor?: string) => void;
   onOpenDir: (path: string) => void;
@@ -45,19 +51,30 @@ type FileListProps = {
   onOpenEntry: (path: string) => void;
   onSelectItem: (path: string, index: number, event: ReactMouseEvent) => void;
   onClearSelection: () => void;
+  renameTargetPath?: string | null;
+  renameValue: string;
+  onRenameChange: (value: string) => void;
+  onRenameCommit: (reason: RenameCommitReason) => void;
+  onRenameCancel: () => void;
   entryMeta: Map<string, EntryMeta>;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   onContextMenu?: (event: ReactMouseEvent) => void;
   onEntryContextMenu?: (
     event: ReactMouseEvent,
-    target: { path: string; isDir: boolean },
+    target: { name: string; path: string; isDir: boolean },
   ) => void;
   dropTargetPath?: string | null;
   onStartDragOut?: (paths: string[]) => void;
+  onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
+  onInternalHover?: (target: DropTarget | null) => void;
+  presenceEnabled?: boolean;
 };
 
 const ROW_HEIGHT = 48;
 const ROW_GAP = 8;
+const COMPACT_ROW_HEIGHT = 36;
+const COMPACT_ROW_GAP = 6;
+const COMPACT_VIEW_INSET = 10;
 const OVERSCAN = 10;
 const OVERSCAN_MIN = 2;
 const OVERSCAN_WARMUP_MS = 140;
@@ -65,6 +82,7 @@ const noop = () => {};
 
 type RowDisplayMeta = {
   tooltipText: string;
+  fileKind: FileKind;
   sizeLabel: string;
   modifiedLabel: string;
 };
@@ -79,6 +97,10 @@ export default function FileList({
   scrollRestoreTop,
   scrollRequest,
   smoothScroll,
+  compactMode,
+  sortState,
+  onSortChange,
+  categoryTinting,
   selectedPaths,
   onSetSelection,
   onOpenDir,
@@ -86,18 +108,41 @@ export default function FileList({
   onOpenEntry,
   onSelectItem,
   onClearSelection,
+  renameTargetPath,
+  renameValue,
+  onRenameChange,
+  onRenameCommit,
+  onRenameCancel,
   entryMeta,
   onRequestMeta,
   onContextMenu,
   onEntryContextMenu,
   dropTargetPath,
   onStartDragOut,
+  onInternalDrop,
+  onInternalHover,
+  presenceEnabled = true,
 }: FileListProps) {
   const emptyMessage = useMemo(() => getEmptyMessage(searchQuery), [searchQuery]);
-  const rows = items;
+  const { items: rows } = useEntryPresence({
+    items,
+    resetKey: viewKey,
+    animate: !loading && presenceEnabled,
+  });
+  const indexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    items.forEach((item, index) => {
+      const key = item.type === "parent" ? item.path : item.entry.path;
+      map.set(key, index);
+    });
+    return map;
+  }, [items]);
 
   const listRef = useRef<HTMLDivElement | null>(null);
-  const itemHeight = ROW_HEIGHT + ROW_GAP;
+  // Match virtualization height with compact spacing when enabled.
+  const rowHeight = compactMode ? COMPACT_ROW_HEIGHT : ROW_HEIGHT;
+  const rowGap = compactMode ? COMPACT_ROW_GAP : ROW_GAP;
+  const itemHeight = rowHeight + rowGap;
   // When smooth scrolling is disabled, snap wheel input to a single row.
   useWheelSnap(listRef, smoothScroll ? 0 : itemHeight);
   // Restore the stored scroll offset once the list height is ready.
@@ -113,19 +158,40 @@ export default function FileList({
     min: OVERSCAN_MIN,
     warmupMs: OVERSCAN_WARMUP_MS,
   });
-  const virtual = useVirtualRange(listRef, rows.length, itemHeight, overscan);
-  const visibleRows = rows.slice(virtual.startIndex, virtual.endIndex);
+  const viewInset = compactMode ? COMPACT_VIEW_INSET : 0;
+  const virtual = useVirtualRange(
+    listRef,
+    rows.length,
+    itemHeight,
+    overscan,
+    viewInset,
+    viewInset,
+  );
+  // Memoize the visible slice so selection drags don't rebuild row metadata.
+  const visibleRows = useMemo(
+    () => rows.slice(virtual.startIndex, virtual.endIndex),
+    [rows, virtual.endIndex, virtual.startIndex],
+  );
   const hasContent = rows.length > 0;
   const contentReady = true;
   const viewAnimate = false;
-  const metaPaths = useMemo(
-    () =>
-      visibleRows
-        .filter(isEntryItem)
-        .filter((row) => !row.entry.isDir)
-        .map((row) => row.entry.path),
-    [visibleRows],
+  // Header buttons reuse the global sort state.
+  const handleSortClick = useCallback(
+    (key: SortKey) => {
+      onSortChange(nextSortState(sortState, key));
+    },
+    [onSortChange, sortState],
   );
+  const metaPaths = useMemo(() => {
+    const next: string[] = [];
+    visibleRows.forEach((row) => {
+      if (row.type !== "entry") return;
+      if (row.presence === "removed") return;
+      if (row.entry.isDir) return;
+      next.push(row.entry.path);
+    });
+    return next;
+  }, [visibleRows]);
   const rowMetaCacheRef = useRef<Map<string, RowDisplayMeta>>(new Map());
 
   useEffect(() => {
@@ -137,20 +203,24 @@ export default function FileList({
     const cache = rowMetaCacheRef.current;
     const next = new Map<string, RowDisplayMeta>();
     visibleRows.forEach((row) => {
-      if (!isEntryItem(row)) return;
-      const path = row.entry.path;
+      if (row.type !== "entry") return;
+      if (row.presence === "removed") return;
+      const entry = row.entry;
+      const path = entry.path;
       const meta = entryMeta.get(path);
       const cacheKey = `${path}:${meta?.modified ?? "none"}:${meta?.size ?? "none"}`;
       let resolved = cache.get(cacheKey);
       if (!resolved) {
-        const sizeLabel = row.entry.isDir ? "-" : formatBytes(meta?.size ?? null);
-        const modifiedLabel = row.entry.isDir
+        const sizeLabel = entry.isDir ? "-" : formatBytes(meta?.size ?? null);
+        const modifiedLabel = entry.isDir
           ? "-"
           : meta?.modified == null
             ? "..."
             : formatDate(meta.modified);
         resolved = {
           tooltipText: buildEntryTooltip(row.entry, meta),
+          // File kind drives category tinting for list view dots.
+          fileKind: entry.isDir ? "generic" : getFileKind(entry.name),
           sizeLabel,
           modifiedLabel,
         };
@@ -202,9 +272,11 @@ export default function FileList({
       if (!onEntryContextMenu) return;
       const target = event.currentTarget as HTMLElement;
       const path = target.dataset.path;
+      const name = target.dataset.name ?? "";
       if (!path) return;
       onEntryContextMenu(event, {
         path,
+        name,
         isDir: target.dataset.isDir === "true",
       });
     },
@@ -219,6 +291,7 @@ export default function FileList({
     itemCount: rows.length,
     rowHeight: itemHeight,
     scrollRequest,
+    scrollKey: viewKey,
   });
   const { selectionBox } = useSelectionDrag(listRef, {
     selected: selectedPaths,
@@ -231,6 +304,8 @@ export default function FileList({
     selected: selectedPaths,
     onSetSelection,
     onStartDrag: onStartDragOut ?? noop,
+    onInternalDrop,
+    onInternalHover,
     itemSelector: "[data-selectable=\"true\"]",
     enabled: dragEnabled,
   });
@@ -239,19 +314,64 @@ export default function FileList({
 
   return (
     <div className="file-list">
-      <div className="list-header">
-        <span>Name</span>
-        <span>Size</span>
-        <span>Modified</span>
+      <div className="list-header" role="row" data-selection-ignore="true">
+        <button
+          type="button"
+          className="list-header-button"
+          data-sort-active={sortState.key === "name" ? "true" : "false"}
+          data-sort-dir={sortState.dir}
+          aria-sort={
+            sortState.key === "name"
+              ? sortState.dir === "asc"
+                ? "ascending"
+                : "descending"
+              : "none"
+          }
+          onClick={() => handleSortClick("name")}
+        >
+          Name
+        </button>
+        <button
+          type="button"
+          className="list-header-button is-right"
+          data-sort-active={sortState.key === "size" ? "true" : "false"}
+          data-sort-dir={sortState.dir}
+          aria-sort={
+            sortState.key === "size"
+              ? sortState.dir === "asc"
+                ? "ascending"
+                : "descending"
+              : "none"
+          }
+          onClick={() => handleSortClick("size")}
+        >
+          Size
+        </button>
+        <button
+          type="button"
+          className="list-header-button is-right"
+          data-sort-active={sortState.key === "modified" ? "true" : "false"}
+          data-sort-dir={sortState.dir}
+          aria-sort={
+            sortState.key === "modified"
+              ? sortState.dir === "asc"
+                ? "ascending"
+                : "descending"
+              : "none"
+          }
+          onClick={() => handleSortClick("modified")}
+        >
+          Modified
+        </button>
       </div>
-      <div className="list-shell">
+      <div className="list-shell" data-category-tint={categoryTinting ? "true" : "false"}>
         <div
           className="list-body"
           ref={listRef}
           style={
             {
-              "--list-row-height": `${ROW_HEIGHT}px`,
-              "--list-row-gap": `${ROW_GAP}px`,
+              "--list-row-height": `${rowHeight}px`,
+              "--list-row-gap": `${rowGap}px`,
             } as CSSProperties
           }
           onContextMenu={(event) => {
@@ -277,11 +397,12 @@ export default function FileList({
                 const index = virtual.startIndex + rowIndex;
                 if (row.type === "parent") {
                   const isDropTarget = dropTargetPath === row.path;
+                  const baseIndex = indexMap.get(row.path) ?? index;
                   return (
                     <ParentRow
                       key={row.key}
                       path={row.path}
-                      index={index}
+                      index={baseIndex}
                       selected={selectedPaths.has(row.path)}
                       dropTarget={isDropTarget}
                       onSelect={handleRowSelect}
@@ -293,20 +414,28 @@ export default function FileList({
                 }
                 const isDropTarget = dropTargetPath === row.entry.path;
                 const rowMeta = rowMetaByPath.get(row.entry.path);
+                const baseIndex = indexMap.get(row.entry.path) ?? index;
                 return (
                   <EntryRow
                     key={row.key}
                     entry={row.entry}
-                    index={index}
+                    index={baseIndex}
                     tooltipText={rowMeta?.tooltipText ?? ""}
+                    fileKind={rowMeta?.fileKind ?? "generic"}
                     sizeLabel={rowMeta?.sizeLabel ?? ""}
                     modifiedLabel={rowMeta?.modifiedLabel ?? ""}
                     selected={selectedPaths.has(row.entry.path)}
                     dropTarget={isDropTarget}
+                    isRenaming={renameTargetPath === row.entry.path}
+                    renameValue={renameValue}
+                    onRenameChange={onRenameChange}
+                    onRenameCommit={onRenameCommit}
+                    onRenameCancel={onRenameCancel}
                     onSelect={handleRowSelect}
                     onOpen={handleRowOpen}
                     onOpenNewTab={handleRowOpenNewTab}
                     onContextMenu={handleEntryContextMenu}
+                    presence={row.presence}
                   />
                 );
               })}

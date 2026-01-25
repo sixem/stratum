@@ -1,5 +1,7 @@
 // Breadcrumb navigation for the current filesystem path.
 import { Fragment, useMemo } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
+import { handleMiddleClick, normalizePath } from "@/lib";
 
 type PathCrumb = {
   label: string;
@@ -9,7 +11,11 @@ type PathCrumb = {
 
 type PathCrumbsBarProps = {
   path: string;
+  // The deepest path visited within the current branch, used to show future crumbs.
+  trailPath?: string | null;
+  dropTargetPath?: string | null;
   onNavigate: (path: string) => void;
+  onNavigateNewTab?: (path: string) => void;
 };
 
 const buildCrumbs = (path: string): PathCrumb[] => {
@@ -59,19 +65,71 @@ const buildCrumbs = (path: string): PathCrumb[] => {
   return crumbs;
 };
 
-export function PathCrumbsBar({ path, onNavigate }: PathCrumbsBarProps) {
-  const crumbs = useMemo(() => buildCrumbs(path), [path]);
+// Prefer the stored trail path when it still contains the current path.
+const resolveCrumbs = (path: string, trailPath?: string | null) => {
+  const trimmedPath = path.trim();
+  if (!trimmedPath) {
+    return { crumbs: buildCrumbs(path), activeIndex: -1 };
+  }
+  const trimmedTrail = trailPath?.trim();
+  const displayPath = trimmedTrail ? trimmedTrail : path;
+  const trailCrumbs = buildCrumbs(displayPath);
+  const currentKey = normalizePath(trimmedPath);
+  const currentIndex = trailCrumbs.findIndex(
+    (crumb) => normalizePath(crumb.path) === currentKey,
+  );
+  if (currentIndex !== -1) {
+    return { crumbs: trailCrumbs, activeIndex: currentIndex };
+  }
+  const currentCrumbs = buildCrumbs(path);
+  return { crumbs: currentCrumbs, activeIndex: currentCrumbs.length - 1 };
+};
 
+export function PathCrumbsBar({
+  path,
+  trailPath,
+  dropTargetPath,
+  onNavigate,
+  onNavigateNewTab,
+}: PathCrumbsBarProps) {
+  const { crumbs, activeIndex } = useMemo(
+    () => resolveCrumbs(path, trailPath),
+    [path, trailPath],
+  );
+  const trimmedPath = path.trim();
+  const isBarDropTarget = Boolean(trimmedPath && dropTargetPath === trimmedPath);
+
+  const handleCrumbMouseDown = (event: ReactMouseEvent, crumbPath: string) => {
+    if (!onNavigateNewTab) return;
+    handleMiddleClick(event, () => onNavigateNewTab(crumbPath));
+  };
+
+  // Treat the crumb bar and each crumb as directory drop targets.
+  // Future crumbs stay interactive while being visually dimmed.
   return (
-    <div className="crumbbar" role="navigation" aria-label="Current path">
+    <div
+      className="crumbbar"
+      role="navigation"
+      aria-label="Current path"
+      data-is-dir="true"
+      data-path={path}
+      data-drop-target={isBarDropTarget ? "true" : "false"}
+    >
       <div className="crumbs">
         {crumbs.map((crumb, index) => (
           <Fragment key={crumb.key}>
             <button
               type="button"
               className="crumb"
+              data-is-dir="true"
+              data-path={crumb.path}
+              data-drop-target={dropTargetPath === crumb.path ? "true" : "false"}
+              data-future={
+                activeIndex >= 0 && index > activeIndex ? "true" : "false"
+              }
               onClick={() => onNavigate(crumb.path)}
-              aria-current={index === crumbs.length - 1 ? "page" : undefined}
+              onMouseDown={(event) => handleCrumbMouseDown(event, crumb.path)}
+              aria-current={index === activeIndex ? "page" : undefined}
             >
               {crumb.label}
             </button>

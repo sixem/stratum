@@ -298,6 +298,14 @@ export const FilterIcon = ({ className }: IconProps) => {
   );
 };
 
+export const NavArrowIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 1024 1024" aria-hidden="true" className={className} fill="currentColor">
+      <path d="M754.752 480H160a32 32 0 100 64h594.752L521.344 777.344a32 32 0 0045.312 45.312l288-288a32 32 0 000-45.312l-288-288a32 32 0 10-45.312 45.312L754.752 480z" />
+    </svg>
+  );
+};
+
 export const ChevronUpIcon = ({ className }: IconProps) => {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>

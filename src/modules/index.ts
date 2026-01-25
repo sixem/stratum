@@ -2,6 +2,7 @@
 export { useClipboardStore } from "./clipboardStore";
 export { usePromptStore } from "./promptStore";
 export { useSessionStore } from "./sessionStore";
+export { useShellStore } from "./shellStore";
 export { useSettingsStore } from "./settings";
 export { useTooltipStore } from "./tooltipStore";
 export {

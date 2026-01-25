@@ -3,6 +3,7 @@
 export type KeybindAction =
   | "newTab"
   | "closeTab"
+  | "undo"
   | "deleteSelection"
   | "duplicateSelection"
   | "prevTab"
@@ -29,6 +30,12 @@ export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
     label: "Close tab",
     description: "Close the current tab.",
     default: "Control+w",
+  },
+  {
+    id: "undo",
+    label: "Undo",
+    description: "Undo the last file operation.",
+    default: "Control+z",
   },
   {
     id: "deleteSelection",

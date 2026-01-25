@@ -6,7 +6,6 @@ type UseAppViewStateOptions = {
   currentPath: string;
   parentPath: string | null;
   loading: boolean;
-  loadDir: (path: string, options?: ListDirOptions) => Promise<void>;
   jumpTo: (path: string, options?: ListDirOptions) => void;
   browseTo: (path: string, options?: ListDirOptions) => void;
 };
@@ -15,7 +14,6 @@ export const useAppViewState = ({
   currentPath,
   parentPath,
   loading,
-  loadDir,
   jumpTo,
   browseTo,
 }: UseAppViewStateOptions) => {
@@ -47,9 +45,9 @@ export const useAppViewState = ({
         setSearchValue("");
         setPendingViewFocus(true);
       }
-      void loadDir(path, hadSearch ? { search: "" } : undefined);
+      browseTo(path, hadSearch ? { search: "" } : undefined);
     },
-    [loadDir, searchValue],
+    [browseTo, searchValue],
   );
 
   const handleGo = useCallback(() => {

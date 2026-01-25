@@ -5,6 +5,8 @@ mod drag;
 mod opener;
 mod thumbs;
 mod clipboard;
+mod watch;
+mod shells;
 
 #[tauri::command]
 async fn get_home() -> Option<String> {
@@ -32,6 +34,13 @@ async fn list_drive_info() -> Vec<fs::DriveInfo> {
     tauri::async_runtime::spawn_blocking(fs::list_drive_info)
         .await
         .unwrap_or_default()
+}
+
+#[tauri::command]
+async fn ensure_dir(path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || fs::ensure_dir(path))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
@@ -76,8 +85,28 @@ async fn copy_entries(paths: Vec<String>, destination: String) -> Result<fs::Cop
 }
 
 #[tauri::command]
+async fn transfer_entries(
+    paths: Vec<String>,
+    destination: String,
+    options: Option<fs::TransferOptions>,
+) -> Result<fs::TransferReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        fs::transfer_entries(paths, destination, options)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
 async fn set_clipboard_paths(paths: Vec<String>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || clipboard::set_clipboard_paths(paths))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+async fn get_clipboard_paths() -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(clipboard::get_clipboard_paths)
         .await
         .map_err(|err| err.to_string())?
 }
@@ -90,15 +119,19 @@ async fn delete_entries(paths: Vec<String>) -> Result<fs::DeleteReport, String> 
 }
 
 #[tauri::command]
+async fn rename_entry(path: String, new_name: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || fs::rename_entry(path, new_name))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
 async fn start_drag(window: tauri::Window, paths: Vec<String>) -> Result<drag::DragOutcome, String> {
     let (tx, mut rx) = tauri::async_runtime::channel(1);
-    #[cfg(target_os = "windows")]
-    let window_clone = window.clone();
-
-    window
-        .run_on_main_thread(move || {
+    let window_for_closure = window.clone();
+    window.clone().run_on_main_thread(move || {
             #[cfg(target_os = "windows")]
-            let hwnd = window_clone.hwnd().ok();
+            let hwnd = window_for_closure.hwnd().ok();
             #[cfg(not(target_os = "windows"))]
             let hwnd = None;
 
@@ -173,6 +206,20 @@ async fn get_thumb_cache_size(app: tauri::AppHandle) -> Result<u64, String> {
         .map_err(|err| err.to_string())?
 }
 
+#[tauri::command]
+async fn get_shell_availability() -> shells::ShellAvailability {
+    tauri::async_runtime::spawn_blocking(shells::get_shell_availability)
+        .await
+        .unwrap_or(shells::ShellAvailability { pwsh: false, wsl: false })
+}
+
+#[tauri::command]
+async fn open_shell(kind: String, path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || shells::open_shell(kind, path))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -180,20 +227,27 @@ pub fn run() {
         .setup(|app| {
             let thumbnails = thumbs::init(app.handle().clone());
             app.manage(thumbnails);
+            app.manage(watch::DirWatchHandle::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_home,
             get_places,
             list_drives,
+            ensure_dir,
             list_drive_info,
             list_dir,
             list_dir_with_parent,
             stat_entries,
             parent_dir,
             copy_entries,
+            transfer_entries,
             set_clipboard_paths,
+            get_clipboard_paths,
             delete_entries,
+            rename_entry,
+            watch::start_dir_watch,
+            watch::stop_dir_watch,
             start_drag,
             request_thumbnails,
             set_thumb_paused,
@@ -201,7 +255,9 @@ pub fn run() {
             open_path_properties,
             get_thumb_cache_dir,
             clear_thumb_cache,
-            get_thumb_cache_size
+            get_thumb_cache_size,
+            get_shell_availability,
+            open_shell
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

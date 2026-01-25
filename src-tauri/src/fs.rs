@@ -90,6 +90,30 @@ pub struct CopyReport {
     pub failures: Vec<String>,
 }
 
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TransferMode {
+    Copy,
+    Move,
+    Auto,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferReport {
+    pub copied: usize,
+    pub moved: usize,
+    pub skipped: usize,
+    pub failures: Vec<String>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferOptions {
+    pub mode: Option<TransferMode>,
+    pub overwrite: Option<bool>,
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteReport {
@@ -399,6 +423,14 @@ pub fn list_drive_info() -> Vec<DriveInfo> {
         .collect()
 }
 
+pub fn ensure_dir(path: String) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Empty path".to_string());
+    }
+    fs::create_dir_all(trimmed).map_err(|err| err.to_string())
+}
+
 pub fn list_dir(path: String, options: Option<ListDirOptions>) -> Result<ListDirResult, String> {
     let trimmed = path.trim();
     let target = if trimmed.is_empty() {
@@ -642,6 +674,180 @@ pub fn copy_entries(paths: Vec<String>, destination: String) -> Result<CopyRepor
     Ok(report)
 }
 
+#[cfg(target_os = "windows")]
+fn drive_key(path: &Path) -> Option<String> {
+    use std::path::Component;
+    use std::path::Prefix;
+
+    let component = path.components().next()?;
+    if let Component::Prefix(prefix) = component {
+        return match prefix.kind() {
+            Prefix::Disk(letter) | Prefix::VerbatimDisk(letter) => {
+                Some(format!("{}:", char::from(letter).to_ascii_uppercase()))
+            }
+            Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) => {
+                Some(format!(
+                    "\\\\{}\\{}",
+                    server.to_string_lossy(),
+                    share.to_string_lossy()
+                ))
+            }
+            _ => None,
+        };
+    }
+    None
+}
+
+#[cfg(not(target_os = "windows"))]
+fn drive_key(path: &Path) -> Option<String> {
+    if path.is_absolute() {
+        Some("/".to_string())
+    } else {
+        None
+    }
+}
+
+fn same_drive(left: &Path, right: &Path) -> bool {
+    let left_key = drive_key(left);
+    let right_key = drive_key(right);
+    match (left_key, right_key) {
+        (Some(l), Some(r)) => l.eq_ignore_ascii_case(&r),
+        _ => false,
+    }
+}
+
+fn remove_existing(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let result = if path.is_dir() {
+        fs::remove_dir_all(path)
+    } else {
+        fs::remove_file(path)
+    };
+    result.map_err(|err| err.to_string())
+}
+
+fn move_path(src: &Path, dest: &Path) -> Result<(), String> {
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    match fs::rename(src, dest) {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            copy_path(src, dest)?;
+            let cleanup = if src.is_dir() {
+                fs::remove_dir_all(src)
+            } else {
+                fs::remove_file(src)
+            };
+            cleanup.map_err(|err| err.to_string())
+        }
+    }
+}
+
+// Transfers entries into a destination folder with optional overwrite.
+// Auto mode moves within the same drive and copies across drives.
+pub fn transfer_entries(
+    paths: Vec<String>,
+    destination: String,
+    options: Option<TransferOptions>,
+) -> Result<TransferReport, String> {
+    let target = destination.trim();
+    if target.is_empty() {
+        return Err("Empty destination".to_string());
+    }
+    let target_path = PathBuf::from(target);
+    if !target_path.exists() {
+        return Err("Destination does not exist".to_string());
+    }
+    if !target_path.is_dir() {
+        return Err("Destination is not a folder".to_string());
+    }
+
+    let mode = options
+        .as_ref()
+        .and_then(|value| value.mode)
+        .unwrap_or(TransferMode::Auto);
+    let overwrite = options
+        .as_ref()
+        .and_then(|value| value.overwrite)
+        .unwrap_or(false);
+
+    let mut report = TransferReport {
+        copied: 0,
+        moved: 0,
+        skipped: 0,
+        failures: Vec::new(),
+    };
+
+    for path in paths {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            report.skipped += 1;
+            continue;
+        }
+        let src = PathBuf::from(trimmed);
+        if !src.exists() {
+            report.skipped += 1;
+            continue;
+        }
+        if src.is_dir() && target_path.starts_with(&src) {
+            report
+                .failures
+                .push(format!("{}: destination is inside source", trimmed));
+            continue;
+        }
+        let name = match src.file_name() {
+            Some(name) => name.to_string_lossy().to_string(),
+            None => {
+                report.skipped += 1;
+                continue;
+            }
+        };
+        let dest_path = target_path.join(name);
+        if dest_path.exists() {
+            if overwrite {
+                if let Err(err) = remove_existing(&dest_path) {
+                    report
+                        .failures
+                        .push(format!("{}: {}", trimmed, err.to_string()));
+                    continue;
+                }
+            } else {
+                report
+                    .failures
+                    .push(format!("{}: destination already exists", trimmed));
+                continue;
+            }
+        }
+
+        let should_move = match mode {
+            TransferMode::Copy => false,
+            TransferMode::Move => true,
+            TransferMode::Auto => same_drive(&src, &target_path),
+        };
+
+        let outcome = if should_move {
+            move_path(&src, &dest_path).map(|_| {
+                report.moved += 1;
+            })
+        } else {
+            copy_path(&src, &dest_path).map(|_| {
+                report.copied += 1;
+            })
+        };
+
+        if let Err(err) = outcome {
+            report
+                .failures
+                .push(format!("{}: {}", trimmed, err.to_string()));
+        }
+    }
+
+    Ok(report)
+}
+
 pub fn delete_entries(paths: Vec<String>) -> Result<DeleteReport, String> {
     let mut report = DeleteReport {
         deleted: 0,
@@ -674,4 +880,52 @@ pub fn delete_entries(paths: Vec<String>) -> Result<DeleteReport, String> {
     }
 
     Ok(report)
+}
+
+pub fn rename_entry(path: String, new_name: String) -> Result<String, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Empty source path".to_string());
+    }
+    let name = new_name.trim();
+    if name.is_empty() {
+        return Err("Empty destination name".to_string());
+    }
+    if name == "." || name == ".." {
+        return Err("Invalid name".to_string());
+    }
+    if name.contains('/') || name.contains('\\') {
+        return Err("Name cannot include path separators".to_string());
+    }
+
+    let source = PathBuf::from(trimmed);
+    if !source.exists() {
+        return Err("Source does not exist".to_string());
+    }
+    let parent = source
+        .parent()
+        .ok_or_else(|| "Unable to resolve parent directory".to_string())?;
+    let dest = parent.join(name);
+    let source_string = source.to_string_lossy().to_string();
+    let dest_string = dest.to_string_lossy().to_string();
+
+    #[cfg(target_os = "windows")]
+    {
+        if source_string.eq_ignore_ascii_case(&dest_string) {
+            return Ok(source_string);
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        if source_string == dest_string {
+            return Ok(source_string);
+        }
+    }
+
+    if dest.exists() {
+        return Err("A file or folder with that name already exists.".to_string());
+    }
+
+    fs::rename(&source, &dest).map_err(|err| err.to_string())?;
+    Ok(dest_string)
 }

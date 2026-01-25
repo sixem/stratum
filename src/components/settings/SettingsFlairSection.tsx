@@ -55,7 +55,9 @@ export function SettingsFlairSection({
       <div className="settings-item">
         <div>
           <div className="settings-label">Category tints</div>
-          <div className="settings-desc">Subtle color cues for file types in grid view.</div>
+          <div className="settings-desc">
+            Subtle color cues for file types in grid and list views.
+          </div>
         </div>
         <label className="settings-toggle">
           <input

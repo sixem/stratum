@@ -8,6 +8,7 @@ type AppAppearanceOptions = {
   blurOverlays: boolean;
   gridRounded: boolean;
   gridCentered: boolean;
+  compactMode: boolean;
 };
 
 export const useAppAppearance = ({
@@ -16,6 +17,7 @@ export const useAppAppearance = ({
   blurOverlays,
   gridRounded,
   gridCentered,
+  compactMode,
 }: AppAppearanceOptions) => {
   useEffect(() => {
     const root = document.documentElement;
@@ -24,5 +26,6 @@ export const useAppAppearance = ({
     root.dataset.blurOverlays = blurOverlays ? "true" : "false";
     root.dataset.gridCorners = gridRounded ? "rounded" : "straight";
     root.dataset.gridCenter = gridCentered ? "true" : "false";
-  }, [accentTheme, ambientBackground, blurOverlays, gridRounded, gridCentered]);
+    root.dataset.compact = compactMode ? "true" : "false";
+  }, [accentTheme, ambientBackground, blurOverlays, gridRounded, gridCentered, compactMode]);
 };

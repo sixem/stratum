@@ -37,9 +37,11 @@ type Settings = {
   showTabNumbers: boolean;
   fixedWidthTabs: boolean;
   smoothScroll: boolean;
+  compactMode: boolean;
   accentTheme: AccentTheme;
   categoryTinting: boolean;
   showParentEntry: boolean;
+  confirmDelete: boolean;
   ambientBackground: boolean;
   blurOverlays: boolean;
   keybinds: KeybindMap;
@@ -50,6 +52,8 @@ type Settings = {
   gridShowExtension: boolean;
   gridNameEllipsis: GridNameEllipsis;
   gridNameHideExtension: boolean;
+  menuOpenPwsh: boolean;
+  menuOpenWsl: boolean;
   thumbnailsEnabled: boolean;
   thumbnailSize: number;
   thumbnailQuality: number;
@@ -71,37 +75,41 @@ type StoredSettings = {
 };
 
 const STORAGE_KEY = "stratum.settings";
-const STORAGE_VERSION = 11;
+const STORAGE_VERSION = 14;
 
 const DEFAULT_SETTINGS: Settings = {
   sidebarOpen: true,
-  sidebarRecentLimit: 8,
+  sidebarRecentLimit: 4,
   sidebarShowTips: true,
   sidebarSectionOrder: DEFAULT_SIDEBAR_SECTION_ORDER,
   defaultViewMode: "thumbs",
-  showTabNumbers: false,
+  showTabNumbers: true,
   fixedWidthTabs: false,
   smoothScroll: false,
+  compactMode: false,
   accentTheme: "red",
   categoryTinting: false,
   showParentEntry: true,
+  confirmDelete: true,
   ambientBackground: false,
   blurOverlays: false,
   keybinds: DEFAULT_KEYBINDS,
-  gridSize: "small",
+  gridSize: "normal",
   gridRounded: true,
   gridCentered: true,
   gridShowSize: true,
-  gridShowExtension: false,
+  gridShowExtension: true,
   gridNameEllipsis: "end",
-  gridNameHideExtension: false,
+  gridNameHideExtension: true,
+  menuOpenPwsh: true,
+  menuOpenWsl: true,
   thumbnailsEnabled: true,
   thumbnailSize: 256,
   thumbnailQuality: 80,
   thumbnailFormat: "webp",
   thumbnailVideos: true,
   thumbnailCacheMb: 512,
-  thumbnailFit: "contain",
+  thumbnailFit: "cover",
 };
 
 const clampNumber = (value: unknown, fallback: number, min: number, max: number) => {
@@ -200,6 +208,10 @@ const coerceSettings = (value: Partial<Settings> | null | undefined): Settings =
       typeof value?.smoothScroll === "boolean"
         ? value.smoothScroll
         : DEFAULT_SETTINGS.smoothScroll,
+    compactMode:
+      typeof value?.compactMode === "boolean"
+        ? value.compactMode
+        : DEFAULT_SETTINGS.compactMode,
     accentTheme: coerceAccentTheme(value?.accentTheme),
     categoryTinting:
       typeof value?.categoryTinting === "boolean"
@@ -209,6 +221,10 @@ const coerceSettings = (value: Partial<Settings> | null | undefined): Settings =
       typeof value?.showParentEntry === "boolean"
         ? value.showParentEntry
         : DEFAULT_SETTINGS.showParentEntry,
+    confirmDelete:
+      typeof value?.confirmDelete === "boolean"
+        ? value.confirmDelete
+        : DEFAULT_SETTINGS.confirmDelete,
     ambientBackground:
       typeof value?.ambientBackground === "boolean"
         ? value.ambientBackground
@@ -240,6 +256,14 @@ const coerceSettings = (value: Partial<Settings> | null | undefined): Settings =
       typeof value?.gridNameHideExtension === "boolean"
         ? value.gridNameHideExtension
         : DEFAULT_SETTINGS.gridNameHideExtension,
+    menuOpenPwsh:
+      typeof value?.menuOpenPwsh === "boolean"
+        ? value.menuOpenPwsh
+        : DEFAULT_SETTINGS.menuOpenPwsh,
+    menuOpenWsl:
+      typeof value?.menuOpenWsl === "boolean"
+        ? value.menuOpenWsl
+        : DEFAULT_SETTINGS.menuOpenWsl,
     thumbnailsEnabled:
       typeof value?.thumbnailsEnabled === "boolean"
         ? value.thumbnailsEnabled
@@ -272,10 +296,11 @@ const normalizeLegacySettings = (
   version: number | undefined,
 ): Partial<Settings> => {
   if (version != null && version >= STORAGE_VERSION) return settings;
-  if (settings.gridSize === "large") {
+  const legacyGridSize = settings.gridSize as string | undefined;
+  if (legacyGridSize === "large") {
     return { ...settings, gridSize: "normal" };
   }
-  if (settings.gridSize === "compact") {
+  if (legacyGridSize === "compact") {
     return { ...settings, gridSize: "small" };
   }
   return settings;
@@ -333,9 +358,11 @@ useSettingsStore.subscribe((state) => {
     showTabNumbers: state.showTabNumbers,
     fixedWidthTabs: state.fixedWidthTabs,
     smoothScroll: state.smoothScroll,
+    compactMode: state.compactMode,
     accentTheme: state.accentTheme,
     categoryTinting: state.categoryTinting,
     showParentEntry: state.showParentEntry,
+    confirmDelete: state.confirmDelete,
     ambientBackground: state.ambientBackground,
     blurOverlays: state.blurOverlays,
     keybinds: state.keybinds,
@@ -346,6 +373,8 @@ useSettingsStore.subscribe((state) => {
     gridShowExtension: state.gridShowExtension,
     gridNameEllipsis: state.gridNameEllipsis,
     gridNameHideExtension: state.gridNameHideExtension,
+    menuOpenPwsh: state.menuOpenPwsh,
+    menuOpenWsl: state.menuOpenWsl,
     thumbnailsEnabled: state.thumbnailsEnabled,
     thumbnailSize: state.thumbnailSize,
     thumbnailQuality: state.thumbnailQuality,

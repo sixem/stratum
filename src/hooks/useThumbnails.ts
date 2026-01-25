@@ -40,6 +40,7 @@ const normalizeRequests = (requests: ThumbnailRequest[]) => {
   return merged;
 };
 
+// Normalize keys so path casing/separators do not churn thumbnail lookups.
 export const useThumbnails = (
   options: ThumbnailRequestOptions,
   enabled: boolean,

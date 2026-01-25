@@ -9,6 +9,8 @@ import type {
   ListDirResult,
   ListDirWithParentResult,
   Place,
+  TransferMode,
+  TransferReport,
 } from "@/types";
 
 export function getHome() {
@@ -21,6 +23,10 @@ export function getPlaces() {
 
 export function getDrives() {
   return invoke<string[]>("list_drives");
+}
+
+export function ensureDir(path: string) {
+  return invoke<void>("ensure_dir", { path });
 }
 
 export function listDriveInfo() {
@@ -47,6 +53,26 @@ export function copyEntries(paths: string[], destination: string) {
   return invoke<CopyReport>("copy_entries", { paths, destination });
 }
 
+export function transferEntries(
+  paths: string[],
+  destination: string,
+  options?: { mode?: TransferMode; overwrite?: boolean },
+) {
+  return invoke<TransferReport>("transfer_entries", { paths, destination, options });
+}
+
 export function deleteEntries(paths: string[]) {
   return invoke<DeleteReport>("delete_entries", { paths });
+}
+
+export function renameEntry(path: string, newName: string) {
+  return invoke<string>("rename_entry", { path, newName });
+}
+
+export function startDirWatch(path: string) {
+  return invoke<void>("start_dir_watch", { path });
+}
+
+export function stopDirWatch() {
+  return invoke<void>("stop_dir_watch");
 }

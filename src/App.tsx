@@ -2,14 +2,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { clearThumbCache, copyPathsToClipboard, getThumbCacheDir, openPath } from "@/api";
+import {
+  clearThumbCache,
+  copyPathsToClipboard,
+  getThumbCacheDir,
+  openPath,
+  openShell,
+} from "@/api";
 import { AppContent, AppOverlays, AppStatusbar, AppTopstack } from "@/components";
 import {
   useAppAppearance,
   useAppMenuState,
   useAppViewState,
+  useClipboardSync,
   useCssVarHeight,
   useDragOutHandler,
+  useDirWatch,
   useDriveInfo,
   useEntryMenuItems,
   useFileDrop,
@@ -23,14 +31,29 @@ import {
   useScrollRequest,
   useSearchHotkey,
   useSelectionShortcuts,
+  useShellAvailability,
   useSettings,
   useStatusLabels,
   useTabSession,
   useThumbnails,
   useWindowSize,
 } from "@/hooks";
-import { isEditableElement, makeDebug, normalizePath, tabLabel } from "@/lib";
+import {
+  isEditableElement,
+  makeDebug,
+  normalizePath,
+  splitNameExtension,
+  tabLabel,
+} from "@/lib";
+import type { DropTarget } from "@/lib";
 import { useClipboardStore, usePromptStore, useTooltipStore } from "@/modules";
+import type {
+  EntryContextTarget,
+  FileEntry,
+  RenameCommitReason,
+  ShellKind,
+  SortState,
+} from "@/types";
 import "@/styles/app.scss";
 import appPackage from "../package.json";
 
@@ -51,6 +74,100 @@ const formatDeleteLabel = (targets: string[]) => {
   return `${count} items`;
 };
 
+type RenamePlanItem = {
+  path: string;
+  nextName: string;
+};
+
+
+const orderSelectionByView = (
+  targets: string[],
+  indexMap: Map<string, number>,
+) => {
+  const ordered = [...targets];
+  ordered.sort((left, right) => {
+    const leftIndex = indexMap.get(left) ?? Number.POSITIVE_INFINITY;
+    const rightIndex = indexMap.get(right) ?? Number.POSITIVE_INFINITY;
+    return leftIndex - rightIndex;
+  });
+  return ordered;
+};
+
+const buildBulkRenamePlan = (
+  baseName: string,
+  targets: string[],
+  entryByPath: Map<string, FileEntry>,
+  entries: FileEntry[],
+  indexMap: Map<string, number>,
+) => {
+  const ordered = orderSelectionByView(targets, indexMap);
+  const targetSet = new Set(ordered);
+  // Reserve names that already exist in the directory but are not part of the rename set.
+  const reserved = new Set<string>();
+  entries.forEach((entry) => {
+    if (targetSet.has(entry.path)) return;
+    reserved.add(entry.name.trim().toLowerCase());
+  });
+
+  const plan: RenamePlanItem[] = [];
+  ordered.forEach((path, index) => {
+    const entry = entryByPath.get(path);
+    if (!entry) return;
+    const dotExtension = entry.isDir
+      ? ""
+      : splitNameExtension(entry.name).dotExtension ?? "";
+    // Match Explorer-style numbering: first keeps base, then (1), (2), etc.
+    let suffixIndex = index === 0 ? 0 : index;
+    let candidate = "";
+    while (true) {
+      const suffix = suffixIndex > 0 ? ` (${suffixIndex})` : "";
+      candidate = `${baseName}${suffix}${dotExtension}`;
+      const key = candidate.trim().toLowerCase();
+      if (!key) {
+        suffixIndex += 1;
+        continue;
+      }
+      if (!reserved.has(key)) {
+        reserved.add(key);
+        break;
+      }
+      suffixIndex += 1;
+    }
+
+    if (candidate !== entry.name) {
+      plan.push({ path: entry.path, nextName: candidate });
+    } else {
+      reserved.add(candidate.trim().toLowerCase());
+    }
+  });
+
+  return { ordered, plan };
+};
+
+const getRenameInputValue = (
+  target: { name: string; isDir: boolean },
+  hideExtension: boolean,
+) => {
+  if (!hideExtension || target.isDir) return target.name;
+  return splitNameExtension(target.name).base;
+};
+
+const applyHiddenExtension = (
+  nextName: string,
+  originalName: string,
+  hideExtension: boolean,
+  isDir: boolean,
+) => {
+  if (!hideExtension || isDir) return nextName;
+  const { dotExtension } = splitNameExtension(originalName);
+  if (!dotExtension) return nextName;
+  const trimmed = nextName.trim();
+  if (trimmed.toLowerCase().endsWith(dotExtension.toLowerCase())) {
+    return trimmed;
+  }
+  return `${trimmed}${dotExtension}`;
+};
+
 const App = () => {
   // Core state and layout refs.
   const fileManager = useFileManager();
@@ -62,15 +179,17 @@ const App = () => {
     defaultViewMode: settings.defaultViewMode,
     recentJumpsLimit: settings.sidebarRecentLimit,
   });
-  const { dropTargetPath } = useFileDrop({
+  const { dropTargetPath, dropTargetTabId, performDrop, setDropTarget } = useFileDrop({
     currentPath: fileManager.currentPath,
     onRefresh: fileManager.refresh,
   });
   const { scrollRequest, requestScrollToIndex } = useScrollRequest();
   const topstackRef = useRef<HTMLDivElement | null>(null);
   const statusbarRef = useRef<HTMLDivElement | null>(null);
-  // Store a single scroll offset per tab (in-memory only).
-  const tabScrollTopsRef = useRef<Map<string, number>>(new Map());
+  // Track tab switches so we can clear the view when landing on an untitled tab.
+  const lastActiveTabIdRef = useRef<string | null>(null);
+  // Track the last rendered tab/path to reset scroll on in-tab navigation.
+  const lastViewRef = useRef<{ tabId: string | null; pathKey: string } | null>(null);
   const {
     contextMenu,
     settingsOpen,
@@ -81,10 +200,28 @@ const App = () => {
     closeSettings,
   } = useAppMenuState();
   const promptOpen = usePromptStore((state) => Boolean(state.prompt));
+  const [renameTarget, setRenameTarget] = useState<EntryContextTarget | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [suppressInternalPresence, setSuppressInternalPresence] = useState(false);
+  const [suppressExternalPresence, setSuppressExternalPresence] = useState(false);
+  const suppressPresence = suppressInternalPresence || suppressExternalPresence;
+  const renameCommitRef = useRef(false);
   const [thumbResetNonce, setThumbResetNonce] = useState(0);
   const { currentPath, parentPath, entries, entryMeta, totalCount, loading, status } =
     fileManager;
-  const { activeTabId, activeTab, viewMode, sidebarOpen, sortState, tabs } = tabSession;
+  const {
+    activeTabId,
+    activeTab,
+    viewMode,
+    sortState,
+    tabs,
+    canGoBack,
+    canGoForward,
+    goBack,
+    goForward,
+  } = tabSession;
+  // Sidebar visibility is global (not per-tab) so it feels consistent across navigation.
+  const sidebarOpen = settings.sidebarOpen;
   // Path, search, and view state for the main content area.
   const {
     pathValue,
@@ -101,15 +238,51 @@ const App = () => {
     currentPath,
     parentPath,
     loading,
-    loadDir: fileManager.loadDir,
     jumpTo: tabSession.jumpTo,
     browseTo: tabSession.browseTo,
   });
+
+  const activeSearch = activeTab?.search ?? "";
+  const searchSyncRef = useRef(false);
+  const lastSearchTabIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (activeTabId === lastSearchTabIdRef.current) return;
+    lastSearchTabIdRef.current = activeTabId;
+    // Keep the search input synced with the newly active tab's filter.
+    searchSyncRef.current = true;
+    setSearchValue(activeSearch);
+  }, [activeSearch, activeTabId, setSearchValue]);
+
+  useEffect(() => {
+    if (!activeTabId) return;
+    if (searchSyncRef.current) {
+      searchSyncRef.current = false;
+      return;
+    }
+    if (activeSearch === searchValue) return;
+    tabSession.setSearch(searchValue);
+  }, [activeSearch, activeTabId, searchValue, tabSession]);
 
   useSearchHotkey(searchInputRef);
   useCssVarHeight(topstackRef, "--topstack-height");
   useCssVarHeight(statusbarRef, "--statusbar-height");
   useWindowSize();
+  // Check available shells once so future actions can choose a supported target.
+  const shellAvailability = useShellAvailability({ enabled: isTauriEnv() });
+  // Watch the active directory for changes and refresh quietly when needed.
+  useDirWatch({
+    enabled: isTauriEnv(),
+    activeTabId,
+    activeTabPath: activeTab?.path ?? "",
+    currentPath,
+    tabs,
+    sortState,
+    searchQuery: activeSearch,
+    loadDir: fileManager.loadDir,
+    loading,
+    onPresenceToggle: setSuppressExternalPresence,
+  });
 
   // Global appearance settings reflected in CSS variables.
   useAppAppearance({
@@ -118,11 +291,28 @@ const App = () => {
     blurOverlays: settings.blurOverlays,
     gridRounded: settings.gridRounded,
     gridCentered: settings.gridCentered,
+    compactMode: settings.compactMode,
   });
 
   useEffect(() => {
     useTooltipStore.getState().hideTooltip();
   }, [activeTabId, currentPath, sidebarOpen, viewMode]);
+
+  useEffect(() => {
+    // Clear rename state on navigation or view switches.
+    setRenameTarget(null);
+    setRenameValue("");
+  }, [activeTabId, currentPath, viewMode]);
+
+  useEffect(() => {
+    if (activeTabId === lastActiveTabIdRef.current) return;
+    lastActiveTabIdRef.current = activeTabId;
+    const tabPath = activeTab?.path ?? "";
+    if (!tabPath.trim() && currentPath.trim()) {
+      // Ensure untitled tabs show the lander instead of the previous tab contents.
+      fileManager.clearDir({ silent: true });
+    }
+  }, [activeTab?.path, activeTabId, currentPath, fileManager]);
 
   useEffect(() => {
     viewLog(
@@ -139,7 +329,10 @@ const App = () => {
     const activePath = activeTab?.path ?? currentPath;
     const currentKey = normalizePath(currentPath);
     const activeKey = normalizePath(activePath);
-    if (activeKey && currentKey && activeKey !== currentKey) return;
+    // Only refresh when the active tab path matches the current view.
+    if (activeKey !== currentKey) return;
+    // Wait until the deferred query matches the active tab search.
+    if (deferredSearchValue !== activeSearch) return;
     void fileManager.loadDir(currentPath, {
       sort: sortState,
       search: deferredSearchValue,
@@ -147,6 +340,7 @@ const App = () => {
     });
   }, [
     activeTab?.path,
+    activeSearch,
     currentPath,
     deferredSearchValue,
     fileManager.loadDir,
@@ -164,28 +358,19 @@ const App = () => {
     [tabSession.jumpTo],
   );
   const stashActiveScroll = useCallback(() => {
+    if (!activeTabId) return;
     const main = mainRef.current;
     if (!main) return;
     const listBody = main.querySelector<HTMLElement>(".list-body");
     if (listBody) {
-      if (activeTabId) {
-        tabScrollTopsRef.current.set(
-          activeTabId,
-          Math.max(0, Math.round(listBody.scrollTop)),
-        );
-      }
+      tabSession.setTabScrollTop(activeTabId, listBody.scrollTop);
       return;
     }
     const thumbViewport = main.querySelector<HTMLElement>(".thumb-viewport");
     if (thumbViewport) {
-      if (activeTabId) {
-        tabScrollTopsRef.current.set(
-          activeTabId,
-          Math.max(0, Math.round(thumbViewport.scrollTop)),
-        );
-      }
+      tabSession.setTabScrollTop(activeTabId, thumbViewport.scrollTop);
     }
-  }, [activeTabId, mainRef]);
+  }, [activeTabId, mainRef, tabSession]);
   const handleSelectTab = useCallback(
     (id: string) => {
       if (id === activeTabId) return;
@@ -201,7 +386,6 @@ const App = () => {
         stashActiveScroll();
       }
       tabSession.closeTab(id);
-      tabScrollTopsRef.current.delete(id);
     },
     [activeTabId, stashActiveScroll, tabSession],
   );
@@ -216,10 +400,55 @@ const App = () => {
     },
     [stashActiveScroll, tabSession],
   );
+  // Persist the current tab scroll before the app unloads.
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      stashActiveScroll();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [stashActiveScroll]);
+  const handleToggleSidebar = useCallback(() => {
+    settings.updateSettings({ sidebarOpen: !settings.sidebarOpen });
+  }, [settings]);
 
   const handleRefresh = useCallback(() => {
     void fileManager.refresh();
   }, [fileManager.refresh]);
+
+  const handleBack = useCallback(() => {
+    if (loading) return;
+    goBack();
+  }, [goBack, loading]);
+
+  const handleForward = useCallback(() => {
+    if (loading) return;
+    goForward();
+  }, [goForward, loading]);
+
+  const handleSortChange = useCallback(
+    (next: SortState) => {
+      tabSession.setSort(next);
+      if (!currentPath || loading) return;
+      const activePath = activeTab?.path ?? currentPath;
+      const currentKey = normalizePath(currentPath);
+      const activeKey = normalizePath(activePath);
+      if (!currentKey || currentKey !== activeKey) return;
+      void fileManager.loadDir(currentPath, {
+        sort: next,
+        search: activeSearch,
+        silent: true,
+      });
+    },
+    [
+      activeSearch,
+      activeTab?.path,
+      currentPath,
+      fileManager.loadDir,
+      loading,
+      tabSession,
+    ],
+  );
 
   // Thumbnail pipeline input config.
   const thumbnailOptions = useMemo(
@@ -238,7 +467,8 @@ const App = () => {
       settings.thumbnailVideos,
     ],
   );
-  const thumbnailResetKey = `${currentPath}:${thumbResetNonce}`;
+  // Only reset the thumbnail cache when explicitly requested.
+  const thumbnailResetKey = `reset:${thumbResetNonce}`;
   const { thumbnails, requestThumbnails } = useThumbnails(
     thumbnailOptions,
     settings.thumbnailsEnabled,
@@ -278,12 +508,41 @@ const App = () => {
     canGoUp && settings.showParentEntry && !isFiltered ? parentPath : null;
   const showLander = !currentPath.trim() && !loading;
   const viewPath = activeTab?.path ?? currentPath;
-  const viewKey = `${activeTabId ?? "none"}:${normalizePath(viewPath ?? "")}`;
-  const scrollRestoreKey = activeTabId ?? "none";
-  const scrollRestoreTop =
-    activeTabId ? tabScrollTopsRef.current.get(activeTabId) ?? 0 : 0;
+  // Keep a per-tab trail so breadcrumb crumbs can show the deepest path visited.
+  const crumbTrailPath = activeTab?.crumbTrailPath ?? viewPath;
+  const viewPathKey = normalizePath(viewPath ?? "");
+  const viewKey = `${activeTabId ?? "none"}:${viewPathKey}`;
+  const lastView = lastViewRef.current;
+  const shouldResetScroll =
+    lastView?.tabId === activeTabId && lastView?.pathKey !== viewPathKey;
+  const scrollRestoreKey = viewKey;
+  const scrollRestoreTop = shouldResetScroll
+    ? 0
+    : activeTabId
+      ? activeTab?.scrollTop ?? 0
+      : 0;
+
+  useEffect(() => {
+    if (!shouldResetScroll || !activeTabId) return;
+    // Reset the stored scroll position when a tab navigates to a new path.
+    tabSession.setTabScrollTop(activeTabId, 0);
+  }, [activeTabId, shouldResetScroll, tabSession]);
   const contextMenuActive = Boolean(contextMenu);
+  // Keep clipboard state synced with OS file copy/cut payloads.
+  const { refreshFromOs: refreshClipboardFromOs } = useClipboardSync({
+    enabled: isTauriEnv(),
+    contextMenuOpen: contextMenuActive,
+  });
   const viewModel = useFileViewModel(sortedEntries, viewParentPath);
+  const requestScrollToIndexForView = useCallback(
+    (index: number) => requestScrollToIndex(index, viewKey),
+    [requestScrollToIndex, viewKey],
+  );
+
+  useEffect(() => {
+    // Remember the last tab/path so we can detect in-tab navigation.
+    lastViewRef.current = { tabId: activeTabId, pathKey: viewPathKey };
+  }, [activeTabId, viewPathKey]);
 
   useEffect(() => {
     const trimmed = viewPath?.trim() ?? "";
@@ -317,8 +576,140 @@ const App = () => {
     settingsOpen,
     contextMenuOpen: contextMenuActive,
     mainRef,
-    requestScrollToIndex,
+    requestScrollToIndex: requestScrollToIndexForView,
   });
+
+  const handleRenameCancel = useCallback(() => {
+    setRenameTarget(null);
+    setRenameValue("");
+  }, []);
+
+  const handleRenameCommit = useCallback((reason: RenameCommitReason = "enter") => {
+    if (!renameTarget) return;
+    if (renameCommitRef.current) return;
+    const nextName = renameValue.trim();
+    const originalName = renameTarget.name.trim();
+    const selectionTargets = getSelectionTargets(selected, viewParentPath);
+    const isMultiRename =
+      selectionTargets.length > 1 && selectionTargets.includes(renameTarget.path);
+    setRenameTarget(null);
+    setRenameValue("");
+    const hideExtension = settings.gridNameHideExtension && !renameTarget.isDir;
+    const resolvedNextName = applyHiddenExtension(
+      nextName,
+      renameTarget.name,
+      hideExtension,
+      renameTarget.isDir,
+    );
+    if (!resolvedNextName || (!isMultiRename && resolvedNextName === originalName)) {
+      renameCommitRef.current = false;
+      return;
+    }
+    const shouldSelect = reason === "enter";
+    if (!isMultiRename) {
+      renameCommitRef.current = true;
+      setSuppressInternalPresence(true);
+      void fileManager
+        .renameEntry(renameTarget.path, resolvedNextName)
+        .then((nextPath) => {
+          if (!nextPath) return;
+          if (!shouldSelect) return;
+          setSelection([nextPath], nextPath);
+        })
+        .finally(() => {
+          renameCommitRef.current = false;
+          setSuppressInternalPresence(false);
+        });
+      return;
+    }
+
+    // Explorer-style bulk rename uses the typed base name and preserves extensions.
+    const baseName = renameTarget.isDir
+      ? nextName
+      : splitNameExtension(nextName).base.trim();
+    if (!baseName) {
+      renameCommitRef.current = false;
+      return;
+    }
+
+    const { ordered, plan } = buildBulkRenamePlan(
+      baseName,
+      selectionTargets,
+      viewModel.entryByPath,
+      entries,
+      viewModel.indexMap,
+    );
+    if (plan.length === 0) {
+      renameCommitRef.current = false;
+      return;
+    }
+    renameCommitRef.current = true;
+    setSuppressInternalPresence(true);
+    void fileManager
+      .renameEntries(plan)
+      .then((result) => {
+        if (!result || !shouldSelect) return;
+        const renamed = result.renamed;
+        const nextSelection = ordered.map((path) => renamed.get(path) ?? path);
+        const nextAnchor = renamed.get(renameTarget.path) ?? renameTarget.path;
+        setSelection(nextSelection, nextAnchor);
+      })
+      .finally(() => {
+        renameCommitRef.current = false;
+        setSuppressInternalPresence(false);
+      });
+  }, [
+    entries,
+    fileManager,
+    renameTarget,
+    renameValue,
+    settings.gridNameHideExtension,
+    selected,
+    setSelection,
+    viewModel.entryByPath,
+    viewModel.indexMap,
+    viewParentPath,
+  ]);
+
+  // Cancel inline rename when the selection moves away from the rename target.
+  const handleSelectionChange = useCallback(
+    (paths: string[], anchor?: string) => {
+      if (renameTarget && !paths.includes(renameTarget.path)) {
+        handleRenameCommit("blur");
+      }
+      setSelection(paths, anchor);
+    },
+    [handleRenameCommit, renameTarget, setSelection],
+  );
+
+  const handleClearSelection = useCallback(() => {
+    if (renameTarget) {
+      handleRenameCommit("blur");
+    }
+    clearSelection();
+  }, [clearSelection, handleRenameCommit, renameTarget]);
+
+  const handleSelectItemWithRename = useCallback(
+    (path: string, index: number, event: ReactMouseEvent) => {
+      if (renameTarget && renameTarget.path !== path) {
+        handleRenameCommit("blur");
+      }
+      handleSelectItem(path, index, event);
+    },
+    [handleRenameCommit, handleSelectItem, renameTarget],
+  );
+
+  const handleRenameStart = useCallback(
+    (target: EntryContextTarget) => {
+      if (!target?.path) return;
+      if (!selected.has(target.path)) {
+        handleSelectionChange([target.path], target.path);
+      }
+      setRenameTarget(target);
+      setRenameValue(getRenameInputValue(target, settings.gridNameHideExtension));
+    },
+    [handleSelectionChange, selected, settings.gridNameHideExtension],
+  );
   const selectionTargets = useMemo(
     () => getSelectionTargets(selected, viewParentPath),
     [selected, viewParentPath],
@@ -327,6 +718,19 @@ const App = () => {
     viewParentPath,
     onRefresh: fileManager.refresh,
   });
+  const handleInternalDrop = useCallback(
+    (paths: string[], target: DropTarget | null) => {
+      if (!target) return;
+      void performDrop(paths, target.path);
+    },
+    [performDrop],
+  );
+  const handleInternalHover = useCallback(
+    (target: DropTarget | null) => {
+      setDropTarget(target);
+    },
+    [setDropTarget],
+  );
   const handleLayoutContextMenu = useCallback(
     (event: ReactMouseEvent) => {
       if (event.defaultPrevented) return;
@@ -337,13 +741,13 @@ const App = () => {
     [openSortMenu],
   );
   const handleEntryContextMenu = useCallback(
-    (event: ReactMouseEvent, target: { path: string; isDir: boolean }) => {
+    (event: ReactMouseEvent, target: EntryContextTarget) => {
       if (!selected.has(target.path)) {
-        setSelection([target.path], target.path);
+        handleSelectionChange([target.path], target.path);
       }
       openEntryMenu(event, target);
     },
-    [openEntryMenu, selected, setSelection],
+    [handleSelectionChange, openEntryMenu, selected],
   );
 
   useSelectionShortcuts({
@@ -357,7 +761,7 @@ const App = () => {
     selectionItems,
     getSelectionIndex,
     selectItem,
-    requestScrollToIndex,
+    requestScrollToIndex: requestScrollToIndexForView,
     getSelectionTarget,
     onOpenDir: browseFromView,
     onOpenEntry: fileManager.openEntry,
@@ -417,28 +821,41 @@ const App = () => {
     [canHandleGlobalKeybind, handleSelectTab, tabs],
   );
 
+  const handleUndoKeybind = useCallback((_event: KeyboardEvent) => {
+    if (!canHandleViewKeybind()) return false;
+    if (!fileManager.canUndo()) return false;
+    void fileManager.undo();
+    return true;
+  }, [canHandleViewKeybind, fileManager]);
+
   const handleDeleteSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
     if (selectionTargets.length === 0) return false;
+    const runDelete = () => {
+      void fileManager.deleteEntries(selectionTargets).then((report) => {
+        if (report?.deleted) {
+          handleClearSelection();
+        }
+      });
+    };
+    if (!settings.confirmDelete) {
+      runDelete();
+      return true;
+    }
     const label = formatDeleteLabel(selectionTargets);
     usePromptStore.getState().showPrompt({
       title: selectionTargets.length === 1 ? "Delete item?" : "Delete items?",
-      content: `Delete ${label}? This cannot be undone.`,
+      content: `Delete ${label}? You can undo with Ctrl+Z.`,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
-      onConfirm: () => {
-        void fileManager.deleteEntries(selectionTargets).then((report) => {
-          if (report?.deleted) {
-            clearSelection();
-          }
-        });
-      },
+      onConfirm: runDelete,
     });
     return true;
   }, [
     canHandleViewKeybind,
-    clearSelection,
+    handleClearSelection,
     fileManager,
+    settings.confirmDelete,
     selectionTargets,
   ]);
 
@@ -460,10 +877,16 @@ const App = () => {
   const handlePasteSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
     const clipboard = useClipboardStore.getState().clipboard;
-    if (!clipboard || clipboard.paths.length === 0) return false;
-    void fileManager.pasteEntries(clipboard.paths);
+    if (clipboard && clipboard.paths.length > 0) {
+      void fileManager.pasteEntries(clipboard.paths);
+      return true;
+    }
+    void refreshClipboardFromOs().then((paths) => {
+      if (!paths || paths.length === 0) return;
+      void fileManager.pasteEntries(paths);
+    });
     return true;
-  }, [canHandleViewKeybind, fileManager]);
+  }, [canHandleViewKeybind, fileManager, refreshClipboardFromOs]);
 
   const handleRefreshKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleGlobalKeybind()) return false;
@@ -473,6 +896,7 @@ const App = () => {
 
   const keybindHandlers = useMemo(
     () => ({
+      undo: handleUndoKeybind,
       newTab: handleNewTabKeybind,
       closeTab: handleCloseTabKeybind,
       deleteSelection: handleDeleteSelectionKeybind,
@@ -486,6 +910,7 @@ const App = () => {
       handleDeleteSelectionKeybind,
       handleDuplicateSelectionKeybind,
       handleNewTabKeybind,
+      handleUndoKeybind,
     ],
   );
 
@@ -545,13 +970,35 @@ const App = () => {
       // Ignore cache clear errors.
     }
   }, []);
+
+  const handleOpenShell = useCallback((kind: ShellKind, path: string) => {
+    const target = path.trim();
+    if (!target) return;
+    void openShell(kind, target).catch((error) => {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Unable to open the shell here.";
+      usePromptStore.getState().showPrompt({
+        title: "Couldn't open shell",
+        content: message,
+        confirmLabel: "OK",
+        cancelLabel: null,
+      });
+    });
+  }, []);
   // Context menu content is derived from the current target + sort state.
   const layoutMenuItems = useLayoutMenuItems({
+    currentPath,
     sortState,
-    onSortChange: tabSession.setSort,
+    onSortChange: handleSortChange,
     onPaste: (paths) => {
       void fileManager.pasteEntries(paths);
     },
+    shellAvailability,
+    menuOpenPwsh: settings.menuOpenPwsh,
+    menuOpenWsl: settings.menuOpenWsl,
+    onOpenShell: handleOpenShell,
   });
   const entryMenuItems = useEntryMenuItems({
     target: contextMenu?.kind === "entry" ? contextMenu.entry : null,
@@ -561,7 +1008,9 @@ const App = () => {
     onOpenEntry: fileManager.openEntry,
     onOpenDir: browseFromView,
     onDeleteEntries: fileManager.deleteEntries,
-    onClearSelection: clearSelection,
+    confirmDelete: settings.confirmDelete,
+    onClearSelection: handleClearSelection,
+    onRenameEntry: handleRenameStart,
     onPasteEntries: (paths, destination) => {
       void fileManager.pasteEntries(paths, destination);
     },
@@ -587,7 +1036,7 @@ const App = () => {
           onSelect: handleSelectDrive,
           onSelectNewTab: handleOpenInNewTab,
           onViewChange: tabSession.setViewMode,
-          onToggleSidebar: tabSession.toggleSidebar,
+          onToggleSidebar: handleToggleSidebar,
           onToggleSettings: toggleSettings,
         }}
         pathBar={{
@@ -596,8 +1045,12 @@ const App = () => {
           onPathChange: setPathValue,
           onSearchChange: setSearchValue,
           onSubmit: handleGo,
+          onBack: handleBack,
+          onForward: handleForward,
           onUp: handleUp,
           onRefresh: handleRefresh,
+          canGoBack,
+          canGoForward,
           canGoUp,
           loading,
           searchInputRef,
@@ -605,6 +1058,7 @@ const App = () => {
         tabsBar={{
           tabs: tabSession.tabs,
           activeId: activeTabId,
+          dropTargetId: dropTargetTabId,
           onSelect: handleSelectTab,
           onClose: handleCloseTab,
           onNew: handleNewTab,
@@ -612,7 +1066,13 @@ const App = () => {
           showTabNumbers: settings.showTabNumbers,
           fixedWidthTabs: settings.fixedWidthTabs,
         }}
-        crumbsBar={{ path: viewPath, onNavigate: browseFromView }}
+        crumbsBar={{
+          path: viewPath,
+          trailPath: crumbTrailPath,
+          dropTargetPath,
+          onNavigate: browseFromView,
+          onNavigateNewTab: handleOpenInNewTab,
+        }}
       />
 
       <AppContent
@@ -636,19 +1096,29 @@ const App = () => {
           items: viewModel.items,
           loading,
           showLander,
+          recentJumps: tabSession.recentJumps,
+          onOpenRecent: browseFromView,
           searchQuery: deferredSearchValue,
           viewKey,
           scrollRestoreKey,
           scrollRestoreTop,
           scrollRequest,
           smoothScroll: settings.smoothScroll,
+          compactMode: settings.compactMode,
+          sortState,
+          onSortChange: handleSortChange,
           selectedPaths: selected,
-          onSetSelection: setSelection,
+          onSetSelection: handleSelectionChange,
           onOpenDir: browseFromView,
           onOpenDirNewTab: handleOpenInNewTab,
           onOpenEntry: fileManager.openEntry,
-          onSelectItem: handleSelectItem,
-          onClearSelection: clearSelection,
+          onSelectItem: handleSelectItemWithRename,
+          onClearSelection: handleClearSelection,
+          renameTargetPath: renameTarget?.path ?? null,
+          renameValue,
+          onRenameChange: setRenameValue,
+          onRenameCommit: handleRenameCommit,
+          onRenameCancel: handleRenameCancel,
           entryMeta,
           onRequestMeta: fileManager.requestEntryMeta,
           thumbnailsEnabled: settings.thumbnailsEnabled,
@@ -662,11 +1132,14 @@ const App = () => {
           gridNameEllipsis: settings.gridNameEllipsis,
           gridNameHideExtension: settings.gridNameHideExtension,
           thumbResetKey: thumbnailResetKey,
+          presenceEnabled: !suppressPresence,
           onContextMenu: openSortMenu,
           onEntryContextMenu: handleEntryContextMenu,
           onGridColumnsChange: handleGridColumnsChange,
           dropTargetPath,
           onStartDragOut: handleStartDragOut,
+          onInternalDrop: handleInternalDrop,
+          onInternalHover: handleInternalHover,
         }}
       />
 

@@ -2,8 +2,15 @@
 import { Suspense, lazy } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { GridNameEllipsis, GridSize, ThumbnailFit } from "@/modules";
-import type { EntryItem } from "@/lib";
-import type { EntryMeta, FileEntry, ThumbnailRequest, ViewMode } from "@/types";
+import type { DropTarget, EntryItem } from "@/lib";
+import type {
+  EntryMeta,
+  FileEntry,
+  RenameCommitReason,
+  SortState,
+  ThumbnailRequest,
+  ViewMode,
+} from "@/types";
 import { LoadingIndicator } from "./LoadingIndicator";
 import { PerfProfiler } from "./PerfProfiler";
 import { StartLander } from "./StartLander";
@@ -17,12 +24,17 @@ type FileViewProps = {
   items: EntryItem[];
   loading: boolean;
   showLander: boolean;
+  recentJumps: string[];
+  onOpenRecent: (path: string) => void;
   searchQuery: string;
   viewKey: string;
   scrollRestoreKey: string;
   scrollRestoreTop: number;
   scrollRequest?: { index: number; nonce: number } | null;
   smoothScroll: boolean;
+  compactMode: boolean;
+  sortState: SortState;
+  onSortChange: (next: SortState) => void;
   selectedPaths: Set<string>;
   onSetSelection: (paths: string[], anchor?: string) => void;
   onOpenDir: (path: string) => void;
@@ -30,6 +42,11 @@ type FileViewProps = {
   onOpenEntry: (path: string) => void;
   onSelectItem: (path: string, index: number, event: ReactMouseEvent) => void;
   onClearSelection: () => void;
+  renameTargetPath?: string | null;
+  renameValue: string;
+  onRenameChange: (value: string) => void;
+  onRenameCommit: (reason: RenameCommitReason) => void;
+  onRenameCancel: () => void;
   entryMeta: Map<string, EntryMeta>;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
@@ -43,19 +60,24 @@ type FileViewProps = {
   gridNameEllipsis: GridNameEllipsis;
   gridNameHideExtension: boolean;
   thumbResetKey?: string;
+  presenceEnabled?: boolean;
   onGridColumnsChange?: (columns: number) => void;
   onContextMenu?: (event: ReactMouseEvent) => void;
   onEntryContextMenu?: (
     event: ReactMouseEvent,
-    target: { path: string; isDir: boolean },
+    target: { name: string; path: string; isDir: boolean },
   ) => void;
   dropTargetPath?: string | null;
   onStartDragOut?: (paths: string[]) => void;
+  onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
+  onInternalHover?: (target: DropTarget | null) => void;
 };
 
 export function FileView({
   viewMode,
   showLander,
+  recentJumps,
+  onOpenRecent,
   thumbnailsEnabled,
   thumbnails,
   onRequestThumbs,
@@ -67,16 +89,22 @@ export function FileView({
   gridNameEllipsis,
   gridNameHideExtension,
   thumbResetKey,
+  presenceEnabled = true,
   onGridColumnsChange,
   dropTargetPath,
   onStartDragOut,
+  onInternalDrop,
+  onInternalHover,
   onEntryContextMenu,
   smoothScroll,
+  compactMode,
+  sortState,
+  onSortChange,
   ...viewProps
 }: FileViewProps) {
   // Keep the heavy views lazy-loaded but render-driven.
   if (showLander) {
-    return <StartLander />;
+    return <StartLander recentJumps={recentJumps} onOpenRecent={onOpenRecent} />;
   }
   return (
     <Suspense
@@ -91,6 +119,7 @@ export function FileView({
           <FileGrid
             {...viewProps}
             smoothScroll={smoothScroll}
+            compactMode={compactMode}
             thumbnailsEnabled={thumbnailsEnabled}
             thumbnails={thumbnails}
             onRequestThumbs={onRequestThumbs}
@@ -102,9 +131,12 @@ export function FileView({
             gridNameEllipsis={gridNameEllipsis}
             gridNameHideExtension={gridNameHideExtension}
             thumbResetKey={thumbResetKey}
+            presenceEnabled={presenceEnabled}
             onGridColumnsChange={onGridColumnsChange}
             dropTargetPath={dropTargetPath}
             onStartDragOut={onStartDragOut}
+            onInternalDrop={onInternalDrop}
+            onInternalHover={onInternalHover}
             onEntryContextMenu={onEntryContextMenu}
           />
         </PerfProfiler>
@@ -113,8 +145,15 @@ export function FileView({
           <FileList
             {...viewProps}
             smoothScroll={smoothScroll}
+            compactMode={compactMode}
+            sortState={sortState}
+            onSortChange={onSortChange}
+            categoryTinting={categoryTinting}
+            presenceEnabled={presenceEnabled}
             dropTargetPath={dropTargetPath}
             onStartDragOut={onStartDragOut}
+            onInternalDrop={onInternalDrop}
+            onInternalHover={onInternalHover}
             onEntryContextMenu={onEntryContextMenu}
           />
         </PerfProfiler>

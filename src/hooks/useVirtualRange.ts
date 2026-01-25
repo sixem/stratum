@@ -14,6 +14,9 @@ export function useVirtualRange(
   itemCount: number,
   itemHeight: number,
   overscan = 6,
+  // Extra scrollable padding before/after the virtualized content.
+  insetTop = 0,
+  insetBottom = 0,
 ): VirtualRange {
   const rafRef = useRef<number | null>(null);
   const rangeRef = useRef<VirtualRange>({
@@ -28,11 +31,14 @@ export function useVirtualRange(
   const updateRange = useCallback(() => {
     const element = containerRef.current;
     if (!element || !itemHeight) {
-      const totalHeight = Math.max(0, itemCount * itemHeight);
+      const safeInsetTop = Math.max(0, insetTop);
+      const safeInsetBottom = Math.max(0, insetBottom);
+      const totalHeight =
+        Math.max(0, itemCount * itemHeight) + safeInsetTop + safeInsetBottom;
       const fallback: VirtualRange = {
         startIndex: 0,
         endIndex: 0,
-        offsetTop: 0,
+        offsetTop: safeInsetTop,
         offsetBottom: totalHeight,
         totalHeight,
       };
@@ -42,20 +48,25 @@ export function useVirtualRange(
     }
 
     const viewportHeight = element.clientHeight;
-    const totalHeight = Math.max(0, itemCount * itemHeight);
+    const safeInsetTop = Math.max(0, insetTop);
+    const safeInsetBottom = Math.max(0, insetBottom);
+    const contentHeight = Math.max(0, itemCount * itemHeight);
+    const totalHeight = contentHeight + safeInsetTop + safeInsetBottom;
     const maxScrollTop = Math.max(0, totalHeight - viewportHeight);
     const scrollTop = Math.min(element.scrollTop, maxScrollTop);
     if (element.scrollTop !== scrollTop) {
       element.scrollTop = scrollTop;
     }
 
-    const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - overscan);
+    const effectiveScrollTop = Math.max(0, scrollTop - safeInsetTop);
+    const startIndex = Math.max(0, Math.floor(effectiveScrollTop / itemHeight) - overscan);
     const endIndex = Math.min(
       itemCount,
-      Math.ceil((scrollTop + viewportHeight) / itemHeight) + overscan,
+      Math.ceil((effectiveScrollTop + viewportHeight) / itemHeight) + overscan,
     );
-    const offsetTop = startIndex * itemHeight;
-    const offsetBottom = Math.max(0, totalHeight - endIndex * itemHeight);
+    const offsetTop = safeInsetTop + startIndex * itemHeight;
+    const offsetBottom =
+      safeInsetBottom + Math.max(0, contentHeight - endIndex * itemHeight);
     const nextRange: VirtualRange = {
       startIndex,
       endIndex,
@@ -76,7 +87,7 @@ export function useVirtualRange(
 
     rangeRef.current = nextRange;
     setRange(nextRange);
-  }, [containerRef, itemCount, itemHeight, overscan]);
+  }, [containerRef, itemCount, itemHeight, insetBottom, insetTop, overscan]);
 
   useLayoutEffect(() => {
     updateRange();

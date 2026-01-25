@@ -13,7 +13,9 @@ type UseEntryMenuItemsOptions = {
   onOpenEntry: (path: string) => void;
   onOpenDir: (path: string) => void;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
+  confirmDelete: boolean;
   onClearSelection: () => void;
+  onRenameEntry: (target: EntryContextTarget) => void;
   onPasteEntries: (paths: string[], destination: string) => Promise<unknown> | void;
 };
 
@@ -37,7 +39,9 @@ export const useEntryMenuItems = ({
   onOpenEntry,
   onOpenDir,
   onDeleteEntries,
+  confirmDelete,
   onClearSelection,
+  onRenameEntry,
   onPasteEntries,
 }: UseEntryMenuItemsOptions) => {
   const clipboard = useClipboardStore((state) => state.clipboard);
@@ -74,6 +78,15 @@ export const useEntryMenuItems = ({
         disabled: !hasTargets,
       },
       {
+        id: "entry-rename",
+        label: "Rename",
+        onSelect: () => {
+          if (!hasTargets) return;
+          onRenameEntry(target);
+        },
+        disabled: !hasTargets,
+      },
+      {
         id: "entry-paste",
         label: target.isDir ? "Paste into folder" : "Paste",
         onSelect: () => {
@@ -90,18 +103,23 @@ export const useEntryMenuItems = ({
           if (!hasTargets) return;
           const count = actionTargets.length;
           const label = count === 1 ? tabLabel(actionTargets[0] ?? "") : `${count} items`;
+          const runDelete = () => {
+            void Promise.resolve(onDeleteEntries(actionTargets)).then((report) => {
+              if (report?.deleted) {
+                onClearSelection();
+              }
+            });
+          };
+          if (!confirmDelete) {
+            runDelete();
+            return;
+          }
           usePromptStore.getState().showPrompt({
             title: count === 1 ? "Delete item?" : "Delete items?",
-            content: `Delete ${label}? This cannot be undone.`,
+            content: `Delete ${label}? You can undo with Ctrl+Z.`,
             confirmLabel: "Delete",
             cancelLabel: "Cancel",
-            onConfirm: () => {
-              void Promise.resolve(onDeleteEntries(actionTargets)).then((report) => {
-                if (report?.deleted) {
-                  onClearSelection();
-                }
-              });
-            },
+            onConfirm: runDelete,
           });
         },
         disabled: !hasTargets,
@@ -133,9 +151,11 @@ export const useEntryMenuItems = ({
     currentPath,
     onClearSelection,
     onDeleteEntries,
+    confirmDelete,
     onOpenDir,
     onOpenEntry,
     onPasteEntries,
+    onRenameEntry,
     parentPath,
     selected,
     target,

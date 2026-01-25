@@ -50,8 +50,29 @@ export type CopyReport = {
   failures: string[];
 };
 
+export type TransferMode = "copy" | "move" | "auto";
+
+export type TransferReport = {
+  copied: number;
+  moved: number;
+  skipped: number;
+  failures: string[];
+};
+
 export type DeleteReport = {
   deleted: number;
   skipped: number;
   failures: string[];
+};
+
+// Emitted when the native watcher detects a change in a watched directory.
+export type DirChangedEvent = {
+  path: string;
+};
+
+// Emitted when the native watcher detects a rename in a watched directory.
+export type DirRenameEvent = {
+  path: string;
+  from: string;
+  to: string;
 };

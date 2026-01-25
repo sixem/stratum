@@ -1,6 +1,6 @@
 // Path input and search bar for quick navigation.
 import type { FormEvent, KeyboardEvent, RefObject } from "react";
-import { ChevronUpIcon, FilterIcon } from "./Icons";
+import { ChevronUpIcon, FilterIcon, NavArrowIcon } from "./Icons";
 
 type PathBarProps = {
   path: string;
@@ -8,8 +8,12 @@ type PathBarProps = {
   onPathChange: (value: string) => void;
   onSearchChange: (value: string) => void;
   onSubmit: () => void;
+  onBack: () => void;
+  onForward: () => void;
   onUp: () => void;
   onRefresh: () => void;
+  canGoBack: boolean;
+  canGoForward: boolean;
   canGoUp: boolean;
   loading: boolean;
   searchInputRef?: RefObject<HTMLInputElement | null>;
@@ -21,8 +25,12 @@ export function PathBar({
   onPathChange,
   onSearchChange,
   onSubmit,
+  onBack,
+  onForward,
   onUp,
   onRefresh,
+  canGoBack,
+  canGoForward,
   canGoUp,
   loading,
   searchInputRef,
@@ -42,16 +50,38 @@ export function PathBar({
 
   return (
     <form className="pathbar" onSubmit={handleSubmit}>
-      <button
-        type="button"
-        className="btn ghost"
-        onClick={onUp}
-        disabled={!canGoUp}
-        aria-disabled={loading || !canGoUp}
-        aria-label="Up one level"
-      >
-        <ChevronUpIcon className="btn-icon" />
-      </button>
+      <div className="path-controls">
+        <button
+          type="button"
+          className="btn ghost"
+          onClick={onBack}
+          disabled={loading || !canGoBack}
+          aria-disabled={loading || !canGoBack}
+          aria-label="Back"
+        >
+          <NavArrowIcon className="btn-icon nav-arrow is-back" />
+        </button>
+        <button
+          type="button"
+          className="btn ghost"
+          onClick={onForward}
+          disabled={loading || !canGoForward}
+          aria-disabled={loading || !canGoForward}
+          aria-label="Forward"
+        >
+          <NavArrowIcon className="btn-icon nav-arrow" />
+        </button>
+        <button
+          type="button"
+          className="btn ghost"
+          onClick={onUp}
+          disabled={loading || !canGoUp}
+          aria-disabled={loading || !canGoUp}
+          aria-label="Up one level"
+        >
+          <ChevronUpIcon className="btn-icon" />
+        </button>
+      </div>
       <input
         value={path}
         onChange={(event) => onPathChange(event.currentTarget.value)}

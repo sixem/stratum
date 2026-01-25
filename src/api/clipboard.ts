@@ -16,6 +16,10 @@ const normalizeClipboardPaths = (paths: string[]) => {
   return next;
 };
 
+// Detect both Tauri v2 and legacy globals so native clipboard paths work.
+const isTauriEnv = () =>
+  "__TAURI_INTERNALS__" in globalThis || "__TAURI__" in globalThis;
+
 const writeClipboardWithFallback = async (text: string) => {
   if (!text) return false;
   const navigatorClipboard = globalThis.navigator?.clipboard;
@@ -52,7 +56,7 @@ export const copyPathsToClipboard = async (paths: string[]) => {
   const normalized = normalizeClipboardPaths(paths);
   if (normalized.length === 0) return false;
 
-  if ("__TAURI__" in globalThis) {
+  if (isTauriEnv()) {
     try {
       await invoke("set_clipboard_paths", { paths: normalized });
       return true;
@@ -62,4 +66,8 @@ export const copyPathsToClipboard = async (paths: string[]) => {
   }
 
   return writeClipboardWithFallback(buildClipboardText(normalized));
+};
+
+export const getClipboardPaths = async () => {
+  return invoke<string[]>("get_clipboard_paths");
 };

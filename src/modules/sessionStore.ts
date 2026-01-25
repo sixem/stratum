@@ -33,18 +33,8 @@ const DEFAULT_SESSION: SessionState = {
   recentJumps: [],
 };
 
-const DEFAULT_TAB = {
-  viewMode: "thumbs" as ViewMode,
-  sidebarOpen: true,
-  sort: { ...DEFAULT_SORT },
-};
-
 const coerceViewMode = (value: unknown): ViewMode => {
   return value === "list" ? "list" : "thumbs";
-};
-
-const coerceSidebarOpen = (value: unknown): boolean => {
-  return typeof value === "boolean" ? value : DEFAULT_TAB.sidebarOpen;
 };
 
 const coerceSortKey = (value: unknown): SortKey => {
@@ -69,6 +59,22 @@ const coerceSort = (value: unknown): SortState => {
   };
 };
 
+const coerceSearch = (value: unknown): string => {
+  return typeof value === "string" ? value : "";
+};
+
+// Keep the stored crumb trail if valid; otherwise fall back to the tab path.
+const coerceCrumbTrailPath = (value: unknown, fallback: string): string => {
+  return typeof value === "string" ? value : fallback;
+};
+
+const coerceScrollTop = (value: unknown): number => {
+  if (typeof value !== "number" || Number.isNaN(value) || !Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.round(value));
+};
+
 const coerceTabs = (value: unknown) => {
   if (!Array.isArray(value)) return [];
   return value
@@ -77,17 +83,21 @@ const coerceTabs = (value: unknown) => {
       const tab = item as {
         id?: unknown;
         path?: unknown;
+        crumbTrailPath?: unknown;
         viewMode?: unknown;
-        sidebarOpen?: unknown;
         sort?: unknown;
+        search?: unknown;
+        scrollTop?: unknown;
       };
       if (typeof tab.id !== "string" || typeof tab.path !== "string") return null;
       return {
         id: tab.id,
         path: tab.path,
+        crumbTrailPath: coerceCrumbTrailPath(tab.crumbTrailPath, tab.path),
         viewMode: coerceViewMode(tab.viewMode),
-        sidebarOpen: coerceSidebarOpen(tab.sidebarOpen),
         sort: coerceSort(tab.sort),
+        search: coerceSearch(tab.search),
+        scrollTop: coerceScrollTop(tab.scrollTop),
       };
     })
     .filter((item): item is Tab => Boolean(item));

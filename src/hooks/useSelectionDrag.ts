@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
+import { isEditableElement, makeDebug } from "@/lib";
 
 export type SelectionBox = {
   left: number;
@@ -37,6 +38,7 @@ type DragState = {
 };
 
 const DRAG_THRESHOLD = 4;
+const log = makeDebug("selection");
 
 const clamp = (value: number, min: number, max: number) => {
   if (value < min) return min;
@@ -68,6 +70,8 @@ export const useSelectionDrag = (
   const pointerIdRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const selectedRef = useRef(selected);
+  const setSelectionRef = useRef(setSelection);
+  const clearSelectionRef = useRef(clearSelection);
   // Cache item rects during a drag so we avoid repeated DOM queries.
   const cacheRef = useRef<CacheState | null>(null);
   const dragRef = useRef<DragState>({
@@ -84,6 +88,14 @@ export const useSelectionDrag = (
   useEffect(() => {
     selectedRef.current = selected;
   }, [selected]);
+
+  useEffect(() => {
+    setSelectionRef.current = setSelection;
+  }, [setSelection]);
+
+  useEffect(() => {
+    clearSelectionRef.current = clearSelection;
+  }, [clearSelection]);
 
   const updateSelection = useCallback(() => {
     const element = ref.current;
@@ -132,7 +144,10 @@ export const useSelectionDrag = (
     if (!items.length) {
       if (!drag.addMode) {
         if (selectedRef.current.size > 0) {
-          setSelection([], undefined);
+          if (log.enabled) {
+            log("update: no items -> clear selection");
+          }
+          setSelectionRef.current([], undefined);
         }
       }
       return;
@@ -155,15 +170,21 @@ export const useSelectionDrag = (
       if (setsMatch(next, selectedRef.current)) {
         return;
       }
-      setSelection(Array.from(next), anchor);
+      if (log.enabled) {
+        log("update: setSelection add=%s count=%d", "yes", next.size);
+      }
+      setSelectionRef.current(Array.from(next), anchor);
       return;
     }
 
     if (selectionMatches(orderedPaths, selectedRef.current)) {
       return;
     }
-    setSelection(orderedPaths, anchor);
-  }, [itemSelector, ref, setSelection]);
+    if (log.enabled) {
+      log("update: setSelection add=%s count=%d", "no", orderedPaths.length);
+    }
+    setSelectionRef.current(orderedPaths, anchor);
+  }, [itemSelector, ref]);
 
   useEffect(() => {
     const element = ref.current;
@@ -171,7 +192,10 @@ export const useSelectionDrag = (
     const dragRoot = element.closest(".main") as HTMLElement | null;
     const dragElement = dragRoot ?? element;
 
-    const resetDrag = (clear = false) => {
+    const resetDrag = (clear: boolean, reason: string) => {
+      if (log.enabled) {
+        log("reset: reason=%s clear=%s dragging=%s", reason, clear ? "yes" : "no", dragRef.current.dragging ? "yes" : "no");
+      }
       dragRef.current.active = false;
       dragRef.current.dragging = false;
       setSelectionBox(null);
@@ -188,7 +212,7 @@ export const useSelectionDrag = (
       }
       pointerIdRef.current = null;
       if (clear) {
-        clearSelection();
+        clearSelectionRef.current();
       }
     };
 
@@ -203,7 +227,29 @@ export const useSelectionDrag = (
     const handlePointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest(itemSelector)) return;
+      if (!target) return;
+      if (target?.closest(itemSelector)) {
+        if (log.enabled) {
+          log("pointerdown ignored: on-item");
+        }
+        return;
+      }
+      if (target.closest("[data-selection-ignore=\"true\"]")) {
+        if (log.enabled) {
+          log("pointerdown ignored: selection-ignore");
+        }
+        return;
+      }
+      if (isEditableElement(target) || target.closest("button, a, [role=\"button\"]")) {
+        if (log.enabled) {
+          log("pointerdown ignored: interactive");
+        }
+        return;
+      }
+
+      if (log.enabled) {
+        log("pointerdown: add=%s id=%s", event.ctrlKey || event.metaKey || event.altKey ? "yes" : "no", event.pointerId);
+      }
 
       dragRef.current = {
         active: true,
@@ -232,6 +278,9 @@ export const useSelectionDrag = (
       if (!drag.dragging && dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) {
         return;
       }
+      if (!drag.dragging && log.enabled) {
+        log("drag-start: dx=%d dy=%d", Math.round(dx), Math.round(dy));
+      }
       drag.dragging = true;
       scheduleUpdate();
     };
@@ -240,34 +289,47 @@ export const useSelectionDrag = (
       if (event.pointerId !== pointerIdRef.current) return;
       const drag = dragRef.current;
       const wasDragging = drag.dragging;
-      resetDrag(false);
+      resetDrag(false, "pointer-up");
       if (!wasDragging && !drag.addMode) {
-        clearSelection();
+        clearSelectionRef.current();
       }
     };
 
-    const handleCancel = () => {
-      if (!dragRef.current.active) return;
-      resetDrag(true);
+    const handlePointerCancel = (event: PointerEvent) => {
+      if (event.pointerId !== pointerIdRef.current) return;
+      const drag = dragRef.current;
+      const wasDragging = drag.dragging;
+      resetDrag(false, "pointer-cancel");
+      if (!wasDragging && !drag.addMode) {
+        clearSelectionRef.current();
+      }
     };
+
+    const handleCancel = (reason: string) => {
+      if (!dragRef.current.active) return;
+      resetDrag(true, reason);
+    };
+
+    const handleScroll = () => handleCancel("scroll");
+    const handleWheel = () => handleCancel("wheel");
 
     dragElement.addEventListener("pointerdown", handlePointerDown);
     dragElement.addEventListener("pointermove", handlePointerMove);
     dragElement.addEventListener("pointerup", handlePointerUp);
-    dragElement.addEventListener("pointercancel", handlePointerUp);
-    element.addEventListener("scroll", handleCancel, { passive: true });
-    element.addEventListener("wheel", handleCancel, { passive: true });
+    dragElement.addEventListener("pointercancel", handlePointerCancel);
+    element.addEventListener("scroll", handleScroll, { passive: true });
+    element.addEventListener("wheel", handleWheel, { passive: true });
 
     return () => {
       dragElement.removeEventListener("pointerdown", handlePointerDown);
       dragElement.removeEventListener("pointermove", handlePointerMove);
       dragElement.removeEventListener("pointerup", handlePointerUp);
-      dragElement.removeEventListener("pointercancel", handlePointerUp);
-      element.removeEventListener("scroll", handleCancel);
-      element.removeEventListener("wheel", handleCancel);
-      resetDrag(false);
+      dragElement.removeEventListener("pointercancel", handlePointerCancel);
+      element.removeEventListener("scroll", handleScroll);
+      element.removeEventListener("wheel", handleWheel);
+      resetDrag(false, "cleanup");
     };
-  }, [clearSelection, itemSelector, ref, updateSelection]);
+  }, [itemSelector, ref, updateSelection]);
 
   return {
     selectionBox,

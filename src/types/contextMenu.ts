@@ -1,7 +1,7 @@
 // Shared shapes for context menu state and items.
 import type { FileEntry } from "./fs";
 
-export type EntryContextTarget = Pick<FileEntry, "path" | "isDir">;
+export type EntryContextTarget = Pick<FileEntry, "name" | "path" | "isDir">;
 
 export type ContextMenuItem =
   | {

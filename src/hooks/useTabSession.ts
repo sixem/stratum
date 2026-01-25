@@ -13,7 +13,44 @@ type TabSessionOptions = {
   recentJumpsLimit: number;
 };
 
+type TabHistory = {
+  back: string[];
+  forward: string[];
+};
+
+const HISTORY_LIMIT = 40;
 const log = makeDebug("tabs");
+
+// Breadcrumb trail helpers keep future crumbs visible when navigating up.
+const splitPathKey = (pathKey: string) => {
+  if (!pathKey) return [];
+  return pathKey.split("\\").filter(Boolean);
+};
+
+const isPathKeyPrefix = (prefixKey: string, fullKey: string) => {
+  const prefixParts = splitPathKey(prefixKey);
+  const fullParts = splitPathKey(fullKey);
+  if (prefixParts.length === 0) return false;
+  if (prefixParts.length > fullParts.length) return false;
+  return prefixParts.every((part, index) => part === fullParts[index]);
+};
+
+const resolveCrumbTrailPath = (currentPath: string, trailPath: string) => {
+  const trimmedCurrent = currentPath.trim();
+  if (!trimmedCurrent) return "";
+  const trimmedTrail = trailPath.trim();
+  if (!trimmedTrail) return trimmedCurrent;
+  const currentKey = normalizePath(trimmedCurrent);
+  const trailKey = normalizePath(trimmedTrail);
+  if (!currentKey || !trailKey) return trimmedCurrent;
+  if (currentKey === trailKey) return trimmedCurrent;
+  // Keep the deepest path when navigating up within the same branch.
+  if (isPathKeyPrefix(currentKey, trailKey)) return trimmedTrail;
+  // Update the trail when navigating deeper under the same branch.
+  if (isPathKeyPrefix(trailKey, currentKey)) return trimmedCurrent;
+  // Reset the trail when the branch changes.
+  return trimmedCurrent;
+};
 
 export const useTabSession = ({
   currentPath,
@@ -42,20 +79,28 @@ export const useTabSession = ({
   const defaultTabState = useMemo(
     () => ({
       viewMode: defaultViewMode,
-      sidebarOpen: DEFAULT_TAB_STATE.sidebarOpen,
       sort: DEFAULT_TAB_STATE.sort,
+      search: DEFAULT_TAB_STATE.search,
     }),
     [defaultViewMode],
   );
   const viewMode = activeTab?.viewMode ?? defaultTabState.viewMode;
-  const sidebarOpen = activeTab?.sidebarOpen ?? defaultTabState.sidebarOpen;
   const sortState = activeTab?.sort ?? defaultTabState.sort;
+  // Keep search filters tied to their owning tab.
+  const searchValue = activeTab?.search ?? defaultTabState.search;
   const safeRecentLimit = Number.isFinite(recentJumpsLimit)
     ? Math.max(1, Math.round(recentJumpsLimit))
     : 1;
 
   const [pendingJump, setPendingJump] = useState<string | null>(null);
+  const historyRef = useRef<Map<string, TabHistory>>(new Map());
+  const [, forceHistoryUpdate] = useState(0);
   const pendingJumpSourceRef = useRef<"navigate" | "switch" | null>(null);
+  const skipHistoryRef = useRef(false);
+  // Track which tab initiated a navigation so empty tabs do not inherit other paths.
+  const pendingJumpTabRef = useRef<string | null>(null);
+  // Track tabs that should stay empty until the user navigates inside them.
+  const emptyTabIdsRef = useRef<Set<string>>(new Set());
   const restorePathRef = useRef<string | null>(
     tabs.find((tab) => tab.id === activeTabId)?.path ?? null,
   );
@@ -74,9 +119,51 @@ export const useTabSession = ({
     [currentPath],
   );
 
+  const getHistory = useCallback((tabId: string) => {
+    const store = historyRef.current;
+    const existing = store.get(tabId);
+    if (existing) return existing;
+    const created = { back: [], forward: [] };
+    store.set(tabId, created);
+    return created;
+  }, []);
+
+  const bumpHistory = useCallback(() => {
+    forceHistoryUpdate((prev) => prev + 1);
+  }, []);
+
+  const recordHistory = useCallback(
+    (tabId: string, fromPath: string, toPath: string) => {
+      const trimmedFrom = fromPath.trim();
+      const trimmedTo = toPath.trim();
+      if (!trimmedFrom || !trimmedTo) return;
+      const fromKey = normalizePath(trimmedFrom) ?? trimmedFrom;
+      const toKey = normalizePath(trimmedTo) ?? trimmedTo;
+      if (!fromKey || !toKey || fromKey === toKey) return;
+      const history = getHistory(tabId);
+      history.back.push(trimmedFrom);
+      history.forward = [];
+      if (history.back.length > HISTORY_LIMIT) {
+        history.back = history.back.slice(-HISTORY_LIMIT);
+      }
+      bumpHistory();
+    },
+    [bumpHistory, getHistory],
+  );
+
   useEffect(() => {
     // Keep the active tab path synced with the current directory.
     if (!currentPath && activeTabId) return;
+    // Avoid "stealing" a path for untitled tabs unless we explicitly navigated in them.
+    const allowEmptyTabSync =
+      pendingJumpSourceRef.current === "navigate" &&
+      pendingJumpTabRef.current === activeTabId;
+    const isEmptyTab =
+      Boolean(activeTab && emptyTabIdsRef.current.has(activeTab.id)) ||
+      Boolean(activeTab && !activeTab.path.trim());
+    if (isEmptyTab && currentPath.trim() && !allowEmptyTabSync) {
+      return;
+    }
     const pendingPath = pendingTabPathRef.current;
     if (pendingPath) {
       const pendingKey = normalizePath(pendingPath) ?? pendingPath;
@@ -104,10 +191,24 @@ export const useTabSession = ({
       setActiveTabId(nextTab.id);
       return;
     }
-    setTabs((prev) =>
-      prev.map((tab) => (tab.id === activeTabId ? { ...tab, path: currentPath } : tab)),
-    );
-  }, [activeTabId, currentPath, setActiveTabId, setTabs]);
+    setTabs((prev) => {
+      const index = prev.findIndex((tab) => tab.id === activeTabId);
+      if (index === -1) return prev;
+      const tab = prev[index];
+      // Update the crumb trail so breadcrumb "future" crumbs stay visible.
+      const nextTrailPath = resolveCrumbTrailPath(
+        currentPath,
+        tab.crumbTrailPath ?? tab.path,
+      );
+      if (tab.path === currentPath && tab.crumbTrailPath === nextTrailPath) {
+        // Avoid re-setting identical paths to prevent update loops.
+        return prev;
+      }
+      const next = [...prev];
+      next[index] = { ...tab, path: currentPath, crumbTrailPath: nextTrailPath };
+      return next;
+    });
+  }, [activeTab, activeTabId, currentPath, setActiveTabId, setTabs]);
 
   useEffect(() => {
     // Restore the last active tab path once on startup.
@@ -121,8 +222,8 @@ export const useTabSession = ({
       return;
     }
     restoreRequestedRef.current = true;
-    void loadDir(target, { sort: sortState });
-  }, [currentPath, loadDir, sortState]);
+    void loadDir(target, { sort: sortState, search: searchValue });
+  }, [currentPath, loadDir, searchValue, sortState]);
 
   useEffect(() => {
     // Update recent jumps after navigation completes.
@@ -130,6 +231,7 @@ export const useTabSession = ({
     if (pendingJumpSourceRef.current === "switch") {
       setPendingJump(null);
       pendingJumpSourceRef.current = null;
+      pendingJumpTabRef.current = null;
       return;
     }
     const pendingKey = normalizePath(pendingJump);
@@ -141,6 +243,7 @@ export const useTabSession = ({
     });
     setPendingJump(null);
     pendingJumpSourceRef.current = null;
+    pendingJumpTabRef.current = null;
   }, [currentPath, pendingJump, safeRecentLimit, setRecentJumps]);
 
   useEffect(() => {
@@ -150,32 +253,67 @@ export const useTabSession = ({
     });
   }, [safeRecentLimit, setRecentJumps]);
 
-  const jumpTo = useCallback(
-    (path: string, options?: ListDirOptions) => {
+  useEffect(() => {
+    // Drop closed tabs from history to keep memory bounded.
+    const ids = new Set(tabs.map((tab) => tab.id));
+    historyRef.current.forEach((_value, id) => {
+      if (!ids.has(id)) {
+        historyRef.current.delete(id);
+      }
+    });
+  }, [tabs]);
+
+  // Track navigation targets so we can update recents once the load lands.
+  const queuePendingJump = useCallback((path: string, source: "navigate" | "switch") => {
+    pendingJumpSourceRef.current = source;
+    pendingJumpTabRef.current = source === "navigate" ? activeTabId : null;
+    setPendingJump(path);
+  }, [activeTabId]);
+
+  const performNavigation = useCallback(
+    (path: string, options: ListDirOptions | undefined, source: "navigate" | "switch") => {
       const target = path.trim();
       if (!target) {
         clearDir();
         return;
       }
-      pendingJumpSourceRef.current = "navigate";
-      setPendingJump(target);
+      if (source === "navigate" && activeTabId) {
+        emptyTabIdsRef.current.delete(activeTabId);
+      }
+      queuePendingJump(target, source);
       const nextSort = options?.sort ?? sortState;
-      void loadDir(target, { ...options, sort: nextSort });
+      const nextSearch = options?.search ?? searchValue;
+      void loadDir(target, { ...options, sort: nextSort, search: nextSearch });
     },
-    [clearDir, loadDir, sortState],
+    [activeTabId, clearDir, loadDir, queuePendingJump, searchValue, sortState],
+  );
+
+  const navigateTo = useCallback(
+    (path: string, options: ListDirOptions | undefined, source: "navigate" | "switch") => {
+      const skipHistory = skipHistoryRef.current;
+      if (skipHistory) {
+        skipHistoryRef.current = false;
+      } else if (source === "navigate" && activeTabId) {
+        const currentForHistory = activeTab?.path ?? currentPath;
+        recordHistory(activeTabId, currentForHistory, path);
+      }
+      performNavigation(path, options, source);
+    },
+    [activeTab?.path, activeTabId, currentPath, performNavigation, recordHistory],
+  );
+
+  const jumpTo = useCallback(
+    (path: string, options?: ListDirOptions) => {
+      navigateTo(path, options, "navigate");
+    },
+    [navigateTo],
   );
 
   const browseTo = useCallback(
     (path: string, options?: ListDirOptions) => {
-      const target = path.trim();
-      if (!target) {
-        clearDir();
-        return;
-      }
-      const nextSort = options?.sort ?? sortState;
-      void loadDir(target, { ...options, sort: nextSort });
+      navigateTo(path, options, "navigate");
     },
-    [clearDir, loadDir, sortState],
+    [navigateTo],
   );
 
   const updateActiveTab = useCallback(
@@ -186,6 +324,20 @@ export const useTabSession = ({
       );
     },
     [activeTabId, setTabs],
+  );
+
+  const setTabScrollTop = useCallback(
+    (id: string, scrollTop: number) => {
+      if (!id) return;
+      const nextTop = Math.max(0, Math.round(scrollTop));
+      // Skip updates when the stored scroll offset has not changed.
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === id && tab.scrollTop !== nextTop ? { ...tab, scrollTop: nextTop } : tab,
+        ),
+      );
+    },
+    [setTabs],
   );
 
   const setViewMode = useCallback(
@@ -204,61 +356,138 @@ export const useTabSession = ({
     [updateActiveTab],
   );
 
-  const toggleSidebar = useCallback(() => {
-    if (!activeTab) return;
-    log("sidebar -> %s", activeTab.sidebarOpen ? "closed" : "open");
-    updateActiveTab({ sidebarOpen: !activeTab.sidebarOpen });
-  }, [activeTab, updateActiveTab]);
+  const setSearch = useCallback(
+    (search: string) => {
+      log("search -> %s", search);
+      updateActiveTab({ search });
+    },
+    [updateActiveTab],
+  );
 
   const newTab = useCallback(() => {
     log("new tab -> empty");
-    const nextTab = createTab("", activeTab ?? defaultTabState, defaultTabState);
+    const nextTab = createTab("", { viewMode, sort: sortState }, defaultTabState);
+    emptyTabIdsRef.current.add(nextTab.id);
     pendingTabPathRef.current = null;
     setTabs((prev) => [...prev, nextTab]);
     setActiveTabId(nextTab.id);
     clearDir({ silent: true });
-  }, [activeTab, clearDir, defaultTabState, setActiveTabId, setTabs]);
+  }, [clearDir, defaultTabState, setActiveTabId, setTabs, sortState, viewMode]);
 
   const openInNewTab = useCallback(
     (path: string) => {
       const target = path.trim();
       if (!target) return;
       log("open in new tab -> %s", target);
-      pendingJumpSourceRef.current = "navigate";
-      const nextTab = createTab(target, activeTab ?? defaultTabState, defaultTabState);
+      const nextTab = createTab(target, { viewMode, sort: sortState }, defaultTabState);
+      emptyTabIdsRef.current.delete(nextTab.id);
       pendingTabPathRef.current = normalizePath(target) ?? target;
       setTabs((prev) => [...prev, nextTab]);
       setActiveTabId(nextTab.id);
-      jumpTo(target);
+      skipHistoryRef.current = true;
+      jumpTo(target, { sort: nextTab.sort, search: nextTab.search });
     },
-    [activeTab, jumpTo, setActiveTabId, setTabs],
+    [defaultTabState, jumpTo, setActiveTabId, setTabs, sortState, viewMode],
   );
+
+  const canGoBack = Boolean(
+    activeTabId && historyRef.current.get(activeTabId)?.back.length,
+  );
+  const canGoForward = Boolean(
+    activeTabId && historyRef.current.get(activeTabId)?.forward.length,
+  );
+
+  const goBack = useCallback(() => {
+    if (!activeTabId) return;
+    const history = getHistory(activeTabId);
+    if (history.back.length === 0) return;
+    const current = (activeTab?.path ?? currentPath).trim();
+    const next = history.back.pop();
+    if (!next) return;
+    if (current) {
+      history.forward.push(current);
+      if (history.forward.length > HISTORY_LIMIT) {
+        history.forward = history.forward.slice(-HISTORY_LIMIT);
+      }
+    }
+    bumpHistory();
+    performNavigation(next, { sort: sortState, search: searchValue }, "navigate");
+  }, [
+    activeTab?.path,
+    activeTabId,
+    bumpHistory,
+    currentPath,
+    getHistory,
+    performNavigation,
+    searchValue,
+    sortState,
+  ]);
+
+  const goForward = useCallback(() => {
+    if (!activeTabId) return;
+    const history = getHistory(activeTabId);
+    if (history.forward.length === 0) return;
+    const current = (activeTab?.path ?? currentPath).trim();
+    const next = history.forward.pop();
+    if (!next) return;
+    if (current) {
+      history.back.push(current);
+      if (history.back.length > HISTORY_LIMIT) {
+        history.back = history.back.slice(-HISTORY_LIMIT);
+      }
+    }
+    bumpHistory();
+    performNavigation(next, { sort: sortState, search: searchValue }, "navigate");
+  }, [
+    activeTab?.path,
+    activeTabId,
+    bumpHistory,
+    currentPath,
+    getHistory,
+    performNavigation,
+    searchValue,
+    sortState,
+  ]);
 
   const selectTab = useCallback(
     (id: string) => {
       const selected = tabs.find((tab) => tab.id === id);
       if (!selected) return;
       log("select tab -> %s (%s)", id, selected.path);
-      pendingJumpSourceRef.current = "switch";
-      pendingTabPathRef.current = normalizePath(selected.path) ?? selected.path;
-      setActiveTabId(id);
-      if (!selected.path.trim()) {
+      const isEmptyTab =
+        emptyTabIdsRef.current.has(selected.id) || !selected.path.trim();
+      if (isEmptyTab) {
+        pendingTabPathRef.current = null;
+        if (selected.path.trim()) {
+          setTabs((prev) => {
+            const index = prev.findIndex((tab) => tab.id === selected.id);
+            if (index === -1) return prev;
+            const tab = prev[index];
+            if (!tab.path.trim()) return prev;
+            const next = [...prev];
+            next[index] = { ...tab, path: "", crumbTrailPath: "" };
+            return next;
+          });
+        }
+        setActiveTabId(id);
         clearDir({ silent: true });
         return;
       }
+      pendingTabPathRef.current = normalizePath(selected.path) ?? selected.path;
+      setActiveTabId(id);
       if (!shouldLoadPath(selected.path)) {
-        pendingJumpSourceRef.current = null;
         return;
       }
-      jumpTo(selected.path, { sort: selected.sort });
+      navigateTo(selected.path, { sort: selected.sort, search: selected.search }, "switch");
     },
-    [clearDir, jumpTo, setActiveTabId, shouldLoadPath, tabs],
+    [clearDir, navigateTo, setActiveTabId, setTabs, shouldLoadPath, tabs],
   );
 
   const closeTab = useCallback(
     (id: string) => {
       if (tabs.length <= 1) return;
       log("close tab -> %s", id);
+      emptyTabIdsRef.current.delete(id);
       const index = tabs.findIndex((tab) => tab.id === id);
       const nextTabs = tabs.filter((tab) => tab.id !== id);
       setTabs(nextTabs);
@@ -266,7 +495,6 @@ export const useTabSession = ({
       if (id === activeTabId) {
         const fallback = nextTabs[Math.max(0, index - 1)] ?? nextTabs[0];
         if (fallback) {
-          pendingJumpSourceRef.current = "switch";
           pendingTabPathRef.current = normalizePath(fallback.path) ?? fallback.path;
           setActiveTabId(fallback.id);
           if (!fallback.path.trim()) {
@@ -274,14 +502,16 @@ export const useTabSession = ({
             return;
           }
           if (shouldLoadPath(fallback.path)) {
-            jumpTo(fallback.path, { sort: fallback.sort });
-          } else {
-            pendingJumpSourceRef.current = null;
+            navigateTo(
+              fallback.path,
+              { sort: fallback.sort, search: fallback.search },
+              "switch",
+            );
           }
         }
       }
     },
-    [activeTabId, clearDir, jumpTo, setActiveTabId, setTabs, shouldLoadPath, tabs],
+    [activeTabId, clearDir, navigateTo, setActiveTabId, setTabs, shouldLoadPath, tabs],
   );
 
   const reorderTabs = useCallback(
@@ -309,17 +539,22 @@ export const useTabSession = ({
     recentJumps: recentJumps.slice(0, safeRecentLimit),
     activeTab,
     viewMode,
-    sidebarOpen,
     sortState,
+    searchValue,
+    canGoBack,
+    canGoForward,
     jumpTo,
     browseTo,
     setViewMode,
     setSort,
-    toggleSidebar,
+    setSearch,
+    goBack,
+    goForward,
     newTab,
     openInNewTab,
     selectTab,
     closeTab,
     reorderTabs,
+    setTabScrollTop,
   };
 };

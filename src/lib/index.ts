@@ -2,12 +2,15 @@
 export { isEditableElement } from "./dom";
 export { getEmptyMessage } from "./emptyMessage";
 export { buildEntryItems, isEntryItem } from "./entryItems";
+export type { EntryPresence } from "./entryPresence";
 export { formatFailures } from "./failures";
 export { splitNameExtension, stripNameExtension } from "./fileName";
 export { getExtension, getFileKind, isPdfLikeExtension, isSvgLikeExtension } from "./fileKind";
 export { initDebug, makeDebug, measure, measureAsync } from "./debug";
 export { formatBytes, formatCount, formatDate, formatPercent } from "./format";
 export { handleMiddleClick } from "./mouse";
+export { getDropTargetFromPoint, getDropTargetHit } from "./dropTarget";
+export type { DropTarget, DropTargetHit } from "./dropTarget";
 export { activeDrive, getParentPath, normalizePath, tabLabel } from "./paths";
 export { DEFAULT_SORT, getDefaultSortDir, nextSortState, sortEntries } from "./sort";
 export { createTab, DEFAULT_TAB_STATE } from "./tabs";

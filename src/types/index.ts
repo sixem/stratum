@@ -9,8 +9,13 @@ export type {
   ListDirResult,
   ListDirWithParentResult,
   Place,
+  TransferMode,
+  TransferReport,
+  DirChangedEvent,
+  DirRenameEvent,
 } from "./fs";
 export type { ContextMenuItem, EntryContextTarget } from "./contextMenu";
+export type { ShellAvailability, ShellKind } from "./shells";
 export type { SortDir, SortKey, SortState } from "./sort";
 export type { Tab } from "./tabs";
 export type {
@@ -20,4 +25,4 @@ export type {
   ThumbnailRequest,
   ThumbnailRequestOptions,
 } from "./thumbs";
-export type { ViewMode } from "./view";
+export type { RenameCommitReason, ViewMode } from "./view";

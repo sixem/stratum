@@ -1,10 +1,11 @@
 // Virtualized grid view for file entries.
 import type { CSSProperties } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   useElementSize,
   useEntryDragOut,
+  useEntryPresence,
   useEntryMetaRequest,
   useDynamicOverscan,
   useScrollRestore,
@@ -24,12 +25,11 @@ import {
   getExtension,
   getFileKind,
   handleMiddleClick,
-  isEntryItem,
 } from "@/lib";
 import type { FileKind } from "@/lib";
-import type { EntryItem } from "@/lib";
+import type { DropTarget, EntryItem } from "@/lib";
 import type { GridNameEllipsis, GridSize, ThumbnailFit } from "@/modules";
-import type { EntryMeta, FileEntry, ThumbnailRequest } from "@/types";
+import type { EntryMeta, FileEntry, RenameCommitReason, ThumbnailRequest } from "@/types";
 import { EmptyState } from "./EmptyState";
 import { LoadingIndicator } from "./LoadingIndicator";
 import { SelectionRect } from "./SelectionRect";
@@ -45,6 +45,7 @@ type FileGridProps = {
   scrollRestoreTop: number;
   scrollRequest?: { index: number; nonce: number } | null;
   smoothScroll: boolean;
+  compactMode: boolean;
   selectedPaths: Set<string>;
   onSetSelection: (paths: string[], anchor?: string) => void;
   onOpenDir: (path: string) => void;
@@ -52,6 +53,11 @@ type FileGridProps = {
   onOpenEntry: (path: string) => void;
   onSelectItem: (path: string, index: number, event: ReactMouseEvent) => void;
   onClearSelection: () => void;
+  renameTargetPath?: string | null;
+  renameValue: string;
+  onRenameChange: (value: string) => void;
+  onRenameCommit: (reason: RenameCommitReason) => void;
+  onRenameCancel: () => void;
   entryMeta: Map<string, EntryMeta>;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
@@ -65,14 +71,17 @@ type FileGridProps = {
   gridNameEllipsis: GridNameEllipsis;
   gridNameHideExtension: boolean;
   thumbResetKey?: string;
+  presenceEnabled?: boolean;
   onGridColumnsChange?: (columns: number) => void;
   onContextMenu?: (event: ReactMouseEvent) => void;
   onEntryContextMenu?: (
     event: ReactMouseEvent,
-    target: { path: string; isDir: boolean },
+    target: { name: string; path: string; isDir: boolean },
   ) => void;
   dropTargetPath?: string | null;
   onStartDragOut?: (paths: string[]) => void;
+  onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
+  onInternalHover?: (target: DropTarget | null) => void;
 };
 
 type GridPreset = {
@@ -142,8 +151,10 @@ const buildGridSizing = (preset: GridPreset, showMeta: boolean): GridSizing => {
 const GRID_OVERSCAN = 3;
 const GRID_OVERSCAN_MIN = 1;
 const GRID_OVERSCAN_WARMUP_MS = 140;
+const COMPACT_VIEW_INSET = 10;
 // Pause thumbnail work briefly after key presses to keep input responsive.
 const THUMB_TYPING_PAUSE_MS = 320;
+const THUMB_INTERACTION_COOLDOWN_MS = 180;
 const noop = () => {};
 
 type GridDisplayMeta = {
@@ -163,6 +174,7 @@ export default function FileGrid({
   scrollRestoreTop,
   scrollRequest,
   smoothScroll,
+  compactMode,
   selectedPaths,
   onSetSelection,
   onOpenDir,
@@ -170,6 +182,11 @@ export default function FileGrid({
   onOpenEntry,
   onSelectItem,
   onClearSelection,
+  renameTargetPath,
+  renameValue,
+  onRenameChange,
+  onRenameCommit,
+  onRenameCancel,
   entryMeta,
   onRequestMeta,
   thumbnailsEnabled,
@@ -183,19 +200,59 @@ export default function FileGrid({
   gridNameEllipsis,
   gridNameHideExtension,
   thumbResetKey,
+  presenceEnabled = true,
   onGridColumnsChange,
   onContextMenu,
   onEntryContextMenu,
   dropTargetPath,
   onStartDragOut,
+  onInternalDrop,
+  onInternalHover,
 }: FileGridProps) {
   const emptyMessage = useMemo(() => getEmptyMessage(searchQuery), [searchQuery]);
-  const viewItems = items;
+  const { items: viewItems } = useEntryPresence({
+    items,
+    resetKey: viewKey,
+    animate: !loading && presenceEnabled,
+  });
+  const indexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    items.forEach((item, index) => {
+      const key = item.type === "parent" ? item.path : item.entry.path;
+      map.set(key, index);
+    });
+    return map;
+  }, [items]);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const { width: viewportWidth } = useElementSize(viewportRef);
   const scrolling = useScrollSettled(viewportRef);
   const typingActive = useTypingActivity({ resetDelayMs: THUMB_TYPING_PAUSE_MS });
   const interactionActive = scrolling || typingActive;
+  const [thumbsSuppressed, setThumbsSuppressed] = useState(false);
+  const thumbSnapshotRef = useRef<Map<string, string>>(new Map());
+  const lastSuppressedRef = useRef(false);
+
+  useEffect(() => {
+    // Hide thumbnail previews briefly during/after interaction to keep scrolling smooth.
+    if (interactionActive) {
+      setThumbsSuppressed(true);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setThumbsSuppressed(false);
+    }, THUMB_INTERACTION_COOLDOWN_MS);
+    return () => window.clearTimeout(timer);
+  }, [interactionActive]);
+
+  useEffect(() => {
+    // Freeze the current thumbnail map during suppression so loaded thumbs stay visible.
+    if (thumbsSuppressed && !lastSuppressedRef.current) {
+      thumbSnapshotRef.current = thumbnails;
+    } else if (!thumbsSuppressed) {
+      thumbSnapshotRef.current = thumbnails;
+    }
+    lastSuppressedRef.current = thumbsSuppressed;
+  }, [thumbsSuppressed, thumbnails]);
 
   const gridMetaEnabled = gridShowSize || gridShowExtension;
   const gridSizing = useMemo(() => {
@@ -291,10 +348,22 @@ export default function FileGrid({
     min: GRID_OVERSCAN_MIN,
     warmupMs: GRID_OVERSCAN_WARMUP_MS,
   });
-  const virtual = useVirtualRange(viewportRef, rowCount, rowHeight, overscan);
+  const viewInset = compactMode ? COMPACT_VIEW_INSET : 0;
+  const virtual = useVirtualRange(
+    viewportRef,
+    rowCount,
+    rowHeight,
+    overscan,
+    viewInset,
+    viewInset,
+  );
   const startIndex = virtual.startIndex * columnCount;
   const endIndex = Math.min(viewItems.length, virtual.endIndex * columnCount);
-  const visibleItems = viewItems.slice(startIndex, endIndex);
+  // Memoize the visible slice so selection updates don't rebuild metadata/thumb lists.
+  const visibleItems = useMemo(
+    () => viewItems.slice(startIndex, endIndex),
+    [endIndex, startIndex, viewItems],
+  );
   const hasContent = viewItems.length > 0;
   const contentReady = true;
   const viewAnimate = false;
@@ -306,7 +375,8 @@ export default function FileGrid({
     const nextMeta: string[] = [];
     const nextThumbs: ThumbnailRequest[] = [];
     for (const item of visibleItems) {
-      if (!isEntryItem(item)) continue;
+      if (item.type !== "entry") continue;
+      if (item.presence === "removed") continue;
       if (item.entry.isDir) continue;
       const path = item.entry.path;
       nextMeta.push(path);
@@ -331,7 +401,8 @@ export default function FileGrid({
     const cache = entryMetaCacheRef.current;
     const next = new Map<string, GridDisplayMeta>();
     visibleItems.forEach((item) => {
-      if (!isEntryItem(item)) return;
+      if (item.type !== "entry") return;
+      if (item.presence === "removed") return;
       const entry = item.entry;
       const path = entry.path;
       const meta = entryMeta.get(path);
@@ -393,9 +464,11 @@ export default function FileGrid({
       if (!onEntryContextMenu) return;
       const target = event.currentTarget as HTMLElement;
       const path = target.dataset.path;
+      const name = target.dataset.name ?? "";
       if (!path) return;
       onEntryContextMenu(event, {
         path,
+        name,
         isDir: target.dataset.isDir === "true",
       });
     },
@@ -411,6 +484,7 @@ export default function FileGrid({
     rowHeight,
     itemsPerRow: columnCount,
     scrollRequest,
+    scrollKey: viewKey,
   });
   const { selectionBox } = useSelectionDrag(viewportRef, {
     selected: selectedPaths,
@@ -423,6 +497,8 @@ export default function FileGrid({
     selected: selectedPaths,
     onSetSelection,
     onStartDrag: onStartDragOut ?? noop,
+    onInternalDrop,
+    onInternalHover,
     itemSelector: "[data-selectable=\"true\"]",
     enabled: dragEnabled,
   });
@@ -430,6 +506,7 @@ export default function FileGrid({
   // Pause thumbnail generation while the user is actively interacting.
   useThumbnailPause(interactionActive, thumbnailsEnabled);
   const canRequestThumbs = thumbnailsEnabled && !loading && !interactionActive;
+  const thumbSource = thumbsSuppressed ? thumbSnapshotRef.current : thumbnails;
   useThumbnailRequest(
     loading || interactionActive,
     canRequestThumbs,
@@ -476,11 +553,12 @@ export default function FileGrid({
               const index = startIndex + itemIndex;
               if (item.type === "parent") {
                 const isDropTarget = dropTargetPath === item.path;
+                const baseIndex = indexMap.get(item.path) ?? index;
                 return (
                   <ParentCard
                     key={item.key}
                     path={item.path}
-                    index={index}
+                    index={baseIndex}
                     selected={selectedPaths.has(item.path)}
                     dropTarget={isDropTarget}
                     showMeta={gridMetaEnabled}
@@ -493,17 +571,18 @@ export default function FileGrid({
               }
               const isDropTarget = dropTargetPath === item.entry.path;
               const itemMeta = gridMetaByPath.get(item.entry.path);
+              const baseIndex = indexMap.get(item.entry.path) ?? index;
               return (
                 <EntryCard
                   key={item.key}
                   entry={item.entry}
-                  index={index}
+                  index={baseIndex}
                   tooltipText={itemMeta?.tooltipText ?? ""}
                   fileKind={itemMeta?.fileKind ?? "generic"}
                   extension={itemMeta?.extension ?? null}
                   sizeLabel={itemMeta?.sizeLabel ?? ""}
                   thumbUrl={
-                    thumbnailsEnabled ? thumbnails.get(item.entry.path) : undefined
+                    thumbnailsEnabled ? thumbSource.get(item.entry.path) : undefined
                   }
                   showSize={gridShowSize}
                   showExtension={gridShowExtension}
@@ -511,10 +590,16 @@ export default function FileGrid({
                   hideExtension={gridNameHideExtension}
                   selected={selectedPaths.has(item.entry.path)}
                   dropTarget={isDropTarget}
+                  isRenaming={renameTargetPath === item.entry.path}
+                  renameValue={renameValue}
+                  onRenameChange={onRenameChange}
+                  onRenameCommit={onRenameCommit}
+                  onRenameCancel={onRenameCancel}
                   onSelect={handleCardSelect}
                   onOpen={handleCardOpen}
                   onOpenNewTab={handleCardOpenNewTab}
                   onContextMenu={handleEntryContextMenu}
+                  presence={item.presence}
                 />
               );
             })}

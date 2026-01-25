@@ -2,15 +2,25 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import {
   copyEntries,
-  deleteEntries,
+  ensureDir,
   getDrives,
+  getHome,
   getPlaces,
   listDirWithParent,
   listDriveInfo,
   openPath,
+  renameEntry,
   statEntries,
+  transferEntries,
 } from "@/api";
-import { DEFAULT_SORT, formatFailures, makeDebug, normalizePath } from "@/lib";
+import {
+  DEFAULT_SORT,
+  formatFailures,
+  getParentPath,
+  makeDebug,
+  normalizePath,
+  tabLabel,
+} from "@/lib";
 import { usePromptStore } from "@/modules";
 import type {
   DriveInfo,
@@ -47,10 +57,56 @@ type MetaRequestOptions = {
   defer?: boolean;
 };
 
+type RenameRequest = {
+  path: string;
+  nextName: string;
+};
+
+type RenameFailure = {
+  path: string;
+  nextName: string;
+  message: string;
+};
+
+type RenameBatchResult = {
+  renamed: Map<string, string>;
+  failures: RenameFailure[];
+};
+
+type UndoRenameEntry = {
+  from: string;
+  to: string;
+};
+
+type UndoTrashEntry = {
+  originalPath: string;
+  trashPath: string;
+};
+
+type UndoAction =
+  | { type: "rename"; entries: UndoRenameEntry[] }
+  | { type: "trash"; entries: UndoTrashEntry[] };
+
 const log = makeDebug("fs");
 const perf = makeDebug("perf:fs");
 
 const normalizeSearch = (value: string) => value.trim().toLowerCase();
+
+const TRASH_DIR_NAME = ".stratum-trash";
+const UNDO_STACK_LIMIT = 20;
+
+const getPathName = (path: string) => {
+  const trimmed = path.trim().replace(/[\\/]+$/, "");
+  if (!trimmed) return "";
+  const parts = trimmed.split(/[/\\]/);
+  return parts[parts.length - 1] ?? "";
+};
+
+const joinPath = (base: string, name: string) => {
+  const trimmed = base.trim().replace(/[\\/]+$/, "");
+  if (!trimmed) return name;
+  return `${trimmed}\\${name}`;
+};
 
 const buildQueryKey = (path: string, query: ListDirQuery) => {
   const normalizedPath = normalizePath(path);
@@ -120,6 +176,8 @@ export function useFileManager() {
   });
   // Track latest request to avoid stale UI updates (and cancel older backend scans).
   const loadId = useRef(0);
+  // Keep a monotonic generation so backend scan cancellation survives webview reloads.
+  const listGenerationRef = useRef(Date.now());
   // Track the most recent foreground load so background refreshes don't block the loader.
   const foregroundLoadId = useRef(0);
   // Preserve the last query so refresh/navigation reuse the same sort + search.
@@ -143,6 +201,11 @@ export function useFileManager() {
   );
   const deleteInFlightRef = useRef(false);
   const copyInFlightRef = useRef(false);
+  const renameInFlightRef = useRef(false);
+  // In-memory undo stack for the current session.
+  const undoStackRef = useRef<UndoAction[]>([]);
+  // Lazily resolved trash location for soft deletes.
+  const trashRootRef = useRef<string | null>(null);
 
   const reportError = useCallback((title: string, message: string) => {
     usePromptStore.getState().showPrompt({
@@ -152,6 +215,34 @@ export function useFileManager() {
       cancelLabel: null,
     });
     setStatus({ level: "idle", message: "Ready" });
+  }, []);
+
+  const pushUndo = useCallback((action: UndoAction) => {
+    const stack = undoStackRef.current;
+    stack.push(action);
+    if (stack.length > UNDO_STACK_LIMIT) {
+      stack.shift();
+    }
+  }, []);
+
+  const canUndo = useCallback(() => undoStackRef.current.length > 0, []);
+
+  // Use a hidden-ish folder in the user's home as a simple trash bin.
+  const resolveTrashRoot = useCallback(async () => {
+    if (trashRootRef.current) return trashRootRef.current;
+    const home = await getHome();
+    if (!home) {
+      throw new Error("Unable to resolve home directory for trash.");
+    }
+    const root = joinPath(home, TRASH_DIR_NAME);
+    await ensureDir(root);
+    trashRootRef.current = root;
+    return root;
+  }, []);
+
+  const buildTrashBatchDir = useCallback((root: string) => {
+    const nonce = Math.random().toString(36).slice(2, 8);
+    return joinPath(root, `delete-${Date.now()}-${nonce}`);
   }, []);
   const trimMetaCache = useCallback((cache: Map<string, EntryMeta>) => {
     while (cache.size > META_CACHE_LIMIT) {
@@ -246,6 +337,8 @@ export function useFileManager() {
       log("loadDir start: %s", target);
       const currentLoad = loadId.current + 1;
       loadId.current = currentLoad;
+      const listGeneration = Math.max(Date.now(), listGenerationRef.current + 1);
+      listGenerationRef.current = listGeneration;
       const listStart = perf.enabled ? performance.now() : 0;
 
       const cachedEntry = dirCacheRef.current.get(queryKey) ?? null;
@@ -280,7 +373,7 @@ export function useFileManager() {
         const result = await listDirWithParent(target, {
           ...query,
           fast: useFast,
-          generation: currentLoad,
+          generation: listGeneration,
         });
         if (loadId.current !== currentLoad) return;
         const items = result.entries;
@@ -415,6 +508,23 @@ export function useFileManager() {
     }
   }, []);
 
+  // Light-weight refresh for small mutations (delete/rename/copy) to avoid double reloads.
+  const refreshAfterChange = useCallback(async () => {
+    const target = currentPathRef.current;
+    if (!target) return;
+    const lastQuery = lastQueryRef.current;
+    const sort = lastQuery?.sort ?? DEFAULT_SORT;
+    const search = lastQuery?.search ?? "";
+    const allowFast = sort.key === "name";
+    await loadDir(target, {
+      sort,
+      search,
+      force: true,
+      silent: true,
+      fast: allowFast,
+    });
+  }, [loadDir]);
+
   const refresh = useCallback(async () => {
     const target = currentPathRef.current;
     if (!target) return;
@@ -429,6 +539,76 @@ export function useFileManager() {
       );
     }
   }, [loadDir, refreshDriveInfo]);
+
+  const performRenameRequests = useCallback(
+    async (
+      renames: RenameRequest[],
+      options?: { recordUndo?: boolean; failureTitle?: string },
+    ): Promise<RenameBatchResult | null> => {
+      if (renameInFlightRef.current) return null;
+      const nextRenames: RenameRequest[] = [];
+      const seen = new Set<string>();
+      renames.forEach((item) => {
+        const path = item.path.trim();
+        const nextName = item.nextName.trim();
+        if (!path || !nextName) return;
+        if (seen.has(path)) return;
+        seen.add(path);
+        nextRenames.push({ path, nextName });
+      });
+      if (nextRenames.length === 0) return null;
+      renameInFlightRef.current = true;
+      const failures: RenameFailure[] = [];
+      const renamed = new Map<string, string>();
+      try {
+        for (const item of nextRenames) {
+          try {
+            const nextPath = await renameEntry(item.path, item.nextName);
+            if (nextPath) {
+              renamed.set(item.path, nextPath);
+            }
+          } catch (error) {
+            failures.push({
+              path: item.path,
+              nextName: item.nextName,
+              message: toMessage(error, "Failed to rename item."),
+            });
+          }
+        }
+        if (failures.length > 0) {
+          const title = options?.failureTitle ?? "Rename completed with issues";
+          const samples = failures.slice(0, 4).map((failure) => {
+            const label = tabLabel(failure.path);
+            return `${label} -> ${failure.nextName}\n${failure.message}`;
+          });
+          const suffix =
+            failures.length > samples.length
+              ? `\n...and ${failures.length - samples.length} more`
+              : "";
+          usePromptStore.getState().showPrompt({
+            title,
+            content: `${samples.join("\n\n")}${suffix}`,
+            confirmLabel: "OK",
+            cancelLabel: null,
+          });
+        }
+        if (renamed.size > 0) {
+          await refreshAfterChange();
+          if (options?.recordUndo !== false) {
+            const undoEntries = Array.from(renamed).map(([from, to]) => ({
+              from,
+              to,
+            }));
+            pushUndo({ type: "rename", entries: undoEntries });
+          }
+        }
+        return { renamed, failures };
+      } finally {
+        renameInFlightRef.current = false;
+      }
+    },
+    [pushUndo, refreshAfterChange],
+  );
 
   // Clear the current view without hitting the filesystem.
   const clearDir = useCallback(
@@ -456,10 +636,18 @@ export function useFileManager() {
       if (deleteInFlightRef.current) return null;
       const unique = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
       if (unique.length === 0) return null;
-      log("delete entries: %d items", unique.length);
+      log("delete entries (trash): %d items", unique.length);
       deleteInFlightRef.current = true;
       try {
-        const report = await deleteEntries(unique);
+        // Move items into a per-delete batch folder so undo can restore them.
+        const trashRoot = await resolveTrashRoot();
+        const batchDir = buildTrashBatchDir(trashRoot);
+        await ensureDir(batchDir);
+
+        const report = await transferEntries(unique, batchDir, {
+          mode: "move",
+          overwrite: false,
+        });
         if (report.failures.length > 0) {
           usePromptStore.getState().showPrompt({
             title: "Delete completed with issues",
@@ -468,10 +656,28 @@ export function useFileManager() {
             cancelLabel: null,
           });
         }
-        if (report.deleted > 0) {
-          await refresh();
+
+        const trashPaths = unique.map((path) => joinPath(batchDir, getPathName(path)));
+        const trashMeta = await statEntries(trashPaths);
+        const moved: UndoTrashEntry[] = [];
+        trashMeta.forEach((meta, index) => {
+          const exists = meta.size != null || meta.modified != null;
+          if (!exists) return;
+          moved.push({
+            originalPath: unique[index] ?? "",
+            trashPath: trashPaths[index] ?? "",
+          });
+        });
+
+        if (moved.length > 0) {
+          pushUndo({ type: "trash", entries: moved });
+          await refreshAfterChange();
         }
-        return report;
+        return {
+          deleted: moved.length,
+          skipped: Math.max(0, unique.length - moved.length),
+          failures: report.failures,
+        };
       } catch (error) {
         const message =
           error instanceof Error && error.message
@@ -488,7 +694,148 @@ export function useFileManager() {
         deleteInFlightRef.current = false;
       }
     },
-    [refresh],
+    [buildTrashBatchDir, pushUndo, refreshAfterChange, resolveTrashRoot],
+  );
+
+  const restoreTrashedEntries = useCallback(
+    async (entries: UndoTrashEntry[]) => {
+      if (entries.length === 0) {
+        return { restored: 0, remaining: [] };
+      }
+      const originals = entries.map((entry) => entry.originalPath);
+      const existingMeta = await statEntries(originals);
+      const existing = new Set<string>();
+      existingMeta.forEach((meta, index) => {
+        const exists = meta.size != null || meta.modified != null;
+        if (exists) {
+          existing.add(originals[index] ?? "");
+        }
+      });
+
+      const grouped = new Map<string, string[]>();
+      const failures: string[] = [];
+      entries.forEach((entry) => {
+        if (!entry.originalPath || !entry.trashPath) return;
+        if (existing.has(entry.originalPath)) {
+          failures.push(`${entry.originalPath}: destination already exists`);
+          return;
+        }
+        const parent = getParentPath(entry.originalPath);
+        if (!parent) {
+          failures.push(`${entry.originalPath}: missing parent folder`);
+          return;
+        }
+        const list = grouped.get(parent) ?? [];
+        list.push(entry.trashPath);
+        grouped.set(parent, list);
+      });
+
+      let restored = 0;
+      for (const [destination, paths] of grouped) {
+        const report = await transferEntries(paths, destination, {
+          mode: "move",
+          overwrite: false,
+        });
+        restored += report.moved;
+        if (report.failures.length > 0) {
+          failures.push(...report.failures);
+        }
+      }
+
+      const trashMeta = await statEntries(entries.map((entry) => entry.trashPath));
+      const remaining: UndoTrashEntry[] = [];
+      trashMeta.forEach((meta, index) => {
+        const exists = meta.size != null || meta.modified != null;
+        if (!exists) return;
+        const entry = entries[index];
+        if (entry) {
+          remaining.push(entry);
+        }
+      });
+
+      if (failures.length > 0) {
+        usePromptStore.getState().showPrompt({
+          title: "Undo completed with issues",
+          content: formatFailures(failures),
+          confirmLabel: "OK",
+          cancelLabel: null,
+        });
+      }
+
+      if (restored > 0) {
+        await refreshAfterChange();
+      }
+
+      return { restored, remaining };
+    },
+    [refreshAfterChange],
+  );
+
+  const undoLastAction = useCallback(async () => {
+    if (
+      renameInFlightRef.current ||
+      deleteInFlightRef.current ||
+      copyInFlightRef.current
+    ) {
+      return false;
+    }
+    // Pop the last action so undo behaves like standard stacks.
+    const action = undoStackRef.current.pop();
+    if (!action) return false;
+
+    if (action.type === "rename") {
+      const requests: RenameRequest[] = action.entries
+        .map((entry) => ({
+          path: entry.to,
+          nextName: getPathName(entry.from),
+        }))
+        .filter((item) => item.path && item.nextName);
+      const result = await performRenameRequests(requests, {
+        recordUndo: false,
+        failureTitle: "Undo completed with issues",
+      });
+      if (!result) {
+        undoStackRef.current.push(action);
+        return false;
+      }
+      if (result.renamed.size === 0) {
+        undoStackRef.current.push(action);
+        return false;
+      }
+      const remaining = action.entries.filter(
+        (entry) => !result.renamed.has(entry.to),
+      );
+      if (remaining.length > 0) {
+        undoStackRef.current.push({ type: "rename", entries: remaining });
+      }
+      return true;
+    }
+
+    if (action.type === "trash") {
+      const { restored, remaining } = await restoreTrashedEntries(action.entries);
+      if (remaining.length > 0) {
+        undoStackRef.current.push({ type: "trash", entries: remaining });
+      }
+      return restored > 0;
+    }
+
+    return false;
+  }, [performRenameRequests, restoreTrashedEntries]);
+
+  const renameEntryInView = useCallback(
+    async (path: string, newName: string) => {
+      const result = await performRenameRequests([{ path, nextName: newName }]);
+      if (!result) return null;
+      return result.renamed.get(path) ?? null;
+    },
+    [performRenameRequests],
+  );
+
+  // Batch rename with a single refresh + consolidated error reporting.
+  const renameEntriesInView = useCallback(
+    async (renames: RenameRequest[]): Promise<RenameBatchResult | null> =>
+      performRenameRequests(renames),
+    [performRenameRequests],
   );
 
   // Shared copy pipeline for duplicate/paste actions.
@@ -512,7 +859,7 @@ export function useFileManager() {
           });
         }
         if (report.copied > 0 && currentPathRef.current.trim() === target) {
-          await refresh();
+          await refreshAfterChange();
         }
         return report;
       } catch (error) {
@@ -611,5 +958,9 @@ export function useFileManager() {
     deleteEntries: deleteEntriesInView,
     duplicateEntries: duplicateEntriesInView,
     pasteEntries: pasteEntriesInView,
+    renameEntry: renameEntryInView,
+    renameEntries: renameEntriesInView,
+    undo: undoLastAction,
+    canUndo,
   };
 }
