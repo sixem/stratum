@@ -1,0 +1,61 @@
+// Status bar layout and counters.
+.statusbar {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+  background: var(--panel-2);
+  border-top: 1px solid var(--stroke);
+  font-size: 12px;
+  color: var(--muted);
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.statusbar-shell {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 18;
+  height: var(--statusbar-height);
+  contain: layout paint;
+}
+
+.status-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+.status-text.error {
+  color: #ff8b3d;
+}
+
+.status-text.loading {
+  color: var(--accent);
+}
+
+.status-count {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.status-selection {
+  white-space: nowrap;
+  color: var(--text);
+}
+

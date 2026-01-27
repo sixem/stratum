@@ -4,12 +4,11 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { SettingsCacheSection } from "@/components/settings/SettingsCacheSection";
 import { SettingsBarsSection } from "@/components/settings/SettingsBarsSection";
 import { SettingsFlairSection } from "@/components/settings/SettingsFlairSection";
+import { SettingsGeneralSection } from "@/components/settings/SettingsGeneralSection";
 import { SettingsGridSection } from "@/components/settings/SettingsGridSection";
 import { SettingsKeybindsSection } from "@/components/settings/SettingsKeybindsSection";
 import { SettingsMenusSection } from "@/components/settings/SettingsMenusSection";
-import { SettingsSidebarSection } from "@/components/settings/SettingsSidebarSection";
 import { SettingsThumbsSection } from "@/components/settings/SettingsThumbsSection";
-import { SettingsViewSection } from "@/components/settings/SettingsViewSection";
 import { SettingsVitals } from "@/components/settings/SettingsVitals";
 import { useSettings } from "@/hooks";
 import { usePromptStore } from "@/modules";
@@ -35,6 +34,7 @@ export function SettingsOverlay({
     thumbnailVideos,
     thumbnailCacheMb,
     thumbnailFit,
+    thumbnailAppIcons,
     defaultViewMode,
     showTabNumbers,
     fixedWidthTabs,
@@ -44,10 +44,12 @@ export function SettingsOverlay({
     categoryTinting,
     showParentEntry,
     confirmDelete,
+    confirmClose,
     ambientBackground,
     blurOverlays,
     keybinds,
     gridSize,
+    gridAutoColumns,
     gridRounded,
     gridCentered,
     gridShowSize,
@@ -57,19 +59,18 @@ export function SettingsOverlay({
     menuOpenPwsh,
     menuOpenWsl,
     sidebarRecentLimit,
-    sidebarShowTips,
     sidebarSectionOrder,
+    sidebarHiddenSections,
     updateSettings,
     resetSettings,
   } = useSettings();
   const titleId = useId();
-  const viewSectionId = "settings-view";
+  const generalSectionId = "settings-general";
   const barsSectionId = "settings-bars";
   const gridSectionId = "settings-grid";
   const menuSectionId = "settings-menus";
   const flairSectionId = "settings-flair";
   const thumbSectionId = "settings-thumbnails";
-  const sidebarSectionId = "settings-sidebar";
   const keybindSectionId = "settings-keybinds";
   const cacheSectionId = "settings-cache";
   const [captureActive, setCaptureActive] = useState(false);
@@ -147,9 +148,9 @@ export function SettingsOverlay({
               <button
                 type="button"
                 className="settings-nav-item"
-                onClick={handleJump(viewSectionId)}
+                onClick={handleJump(generalSectionId)}
               >
-                View
+                General
               </button>
               <button
                 type="button"
@@ -178,13 +179,6 @@ export function SettingsOverlay({
                 onClick={handleJump(flairSectionId)}
               >
                 Flair
-              </button>
-              <button
-                type="button"
-                className="settings-nav-item"
-                onClick={handleJump(sidebarSectionId)}
-              >
-                Sidebar
               </button>
               <button
                 type="button"
@@ -224,25 +218,30 @@ export function SettingsOverlay({
             <SettingsVitals open={open} />
           </nav>
           <div className="settings-content">
-            <SettingsViewSection
-              sectionId={viewSectionId}
+            <SettingsGeneralSection
+              sectionId={generalSectionId}
               defaultViewMode={defaultViewMode}
               smoothScroll={smoothScroll}
               gridCentered={gridCentered}
               compactMode={compactMode}
               showParentEntry={showParentEntry}
               confirmDelete={confirmDelete}
+              confirmClose={confirmClose}
               onUpdate={updateSettings}
             />
             <SettingsBarsSection
               sectionId={barsSectionId}
               showTabNumbers={showTabNumbers}
               fixedWidthTabs={fixedWidthTabs}
+              sidebarRecentLimit={sidebarRecentLimit}
+              sidebarSectionOrder={sidebarSectionOrder}
+              sidebarHiddenSections={sidebarHiddenSections}
               onUpdate={updateSettings}
             />
             <SettingsGridSection
               sectionId={gridSectionId}
               gridSize={gridSize}
+              gridAutoColumns={gridAutoColumns}
               gridRounded={gridRounded}
               gridShowSize={gridShowSize}
               gridShowExtension={gridShowExtension}
@@ -264,13 +263,6 @@ export function SettingsOverlay({
               blurOverlays={blurOverlays}
               onUpdate={updateSettings}
             />
-            <SettingsSidebarSection
-              sectionId={sidebarSectionId}
-              sidebarRecentLimit={sidebarRecentLimit}
-              sidebarShowTips={sidebarShowTips}
-              sidebarSectionOrder={sidebarSectionOrder}
-              onUpdate={updateSettings}
-            />
             <SettingsThumbsSection
               sectionId={thumbSectionId}
               thumbnailsEnabled={thumbnailsEnabled}
@@ -279,6 +271,7 @@ export function SettingsOverlay({
               thumbnailFormat={thumbnailFormat}
               thumbnailVideos={thumbnailVideos}
               thumbnailFit={thumbnailFit}
+              thumbnailAppIcons={thumbnailAppIcons}
               onUpdate={updateSettings}
             />
             <SettingsKeybindsSection

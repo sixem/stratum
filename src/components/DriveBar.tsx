@@ -1,23 +1,15 @@
-// Drive picker and view toggles for the top bar.
+// Drive picker for the top bar.
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { activeDrive, buildDriveTooltip, handleMiddleClick, normalizePath } from "@/lib";
 import { TooltipWrapper } from "./Tooltip";
-import { ToolbarIconButton } from "./ToolbarIconButton";
-import { GridIcon, ListIcon, SettingsIcon, SidebarIcon } from "./Icons";
-import type { DriveInfo, ViewMode } from "@/types";
+import type { DriveInfo } from "@/types";
 
 type DriveBarProps = {
   drives: string[];
   driveInfo: Map<string, DriveInfo>;
   activePath: string;
-  viewMode: ViewMode;
-  sidebarOpen: boolean;
-  settingsOpen: boolean;
   onSelect: (path: string) => void;
   onSelectNewTab?: (path: string) => void;
-  onViewChange: (mode: ViewMode) => void;
-  onToggleSidebar: () => void;
-  onToggleSettings: () => void;
 };
 
 type DriveListProps = {
@@ -68,23 +60,14 @@ export function DriveBar({
   drives,
   driveInfo,
   activePath,
-  viewMode,
-  sidebarOpen,
-  settingsOpen,
   onSelect,
   onSelectNewTab,
-  onViewChange,
-  onToggleSidebar,
-  onToggleSettings,
 }: DriveBarProps) {
   const currentDrive = activeDrive(activePath, drives);
 
   return (
     <header className="drivebar">
       <div className="brand">
-        <div className="brand-mark">
-          <img src="/favicon.png" alt="" aria-hidden="true" />
-        </div>
         <div className="brand-title">Drives:</div>
       </div>
       <div className="drive-list">
@@ -95,40 +78,6 @@ export function DriveBar({
           onSelect={onSelect}
           onSelectNewTab={onSelectNewTab}
         />
-      </div>
-      <div className="view-switch">
-        <ToolbarIconButton
-          label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-          active={sidebarOpen}
-          pressed={sidebarOpen}
-          onClick={onToggleSidebar}
-        >
-          <SidebarIcon />
-        </ToolbarIconButton>
-        <ToolbarIconButton
-          label="List view"
-          active={viewMode === "list"}
-          pressed={viewMode === "list"}
-          onClick={() => onViewChange("list")}
-        >
-          <ListIcon />
-        </ToolbarIconButton>
-        <ToolbarIconButton
-          label="Thumbnails view"
-          active={viewMode === "thumbs"}
-          pressed={viewMode === "thumbs"}
-          onClick={() => onViewChange("thumbs")}
-        >
-          <GridIcon />
-        </ToolbarIconButton>
-        <ToolbarIconButton
-          label="Settings"
-          active={settingsOpen}
-          pressed={settingsOpen}
-          onClick={onToggleSettings}
-        >
-          <SettingsIcon />
-        </ToolbarIconButton>
       </div>
     </header>
   );

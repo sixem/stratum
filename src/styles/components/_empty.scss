@@ -1,0 +1,252 @@
+// Empty states and new-tab lander content.
+.empty-state {
+  border: 1px dashed var(--stroke);
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  max-width: min(640px, 100%);
+  max-height: min(70vh, 520px);
+  overflow: auto;
+}
+
+:root[data-ambient="true"] .empty-state {
+  background: var(--panel-deep);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.empty-actions {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+  justify-items: stretch;
+  width: min(320px, 100%);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.empty-action {
+  width: 100%;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--stroke);
+  background: var(--surface-control);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.empty-action:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.view-lander {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: clamp(16px, 4vw, 32px);
+}
+
+.view-lander .empty-state {
+  max-width: min(520px, 100%);
+}
+
+.lander-panel {
+  width: min(100%, 1100px);
+  max-height: min(100%, 640px);
+  display: grid;
+  gap: 14px;
+  padding: 20px 22px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: var(--panel-2);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+  overflow: auto;
+}
+
+.lander-panel .empty-state {
+  max-width: none;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.thumb-empty .empty-state,
+.list-empty .empty-state {
+  pointer-events: auto;
+  width: min(360px, 100%);
+  padding: 18px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--stroke);
+  background: var(--surface-control-muted);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-ambient="true"] .view-lander {
+  padding: clamp(16px, 4vw, 32px);
+  background: var(--panel-2);
+}
+
+:root[data-ambient="true"] .thumb-empty,
+:root[data-ambient="true"] .list-empty {
+  padding: clamp(16px, 4vw, 32px);
+  background: transparent;
+}
+
+:root[data-ambient="true"] .empty-state {
+  background: var(--panel-2);
+  border-color: var(--stroke);
+}
+
+
+.lander-recents {
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--surface-control-muted);
+  display: grid;
+  gap: 8px;
+}
+
+.lander-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+
+.lander-recents-empty {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.lander-drives {
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--surface-control-muted);
+  display: grid;
+  gap: 8px;
+}
+
+.lander-drives-empty {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.lander-drives-list {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.lander-drive {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  padding: 6px 8px;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lander-drive:hover {
+  border-color: rgba(var(--accent-rgb), 0.45);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+}
+
+.lander-drive-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.lander-drive-label {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.lander-drive-name {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lander-drive-usage {
+  font-size: 0.75rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lander-drive-usage-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lander-drive-usage-percent {
+  font-size: 0.7rem;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.lander-drive-bar {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.lander-drive-bar[data-known="false"] {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.lander-drive-bar-fill {
+  display: block;
+  height: 100%;
+  background: rgba(var(--accent-rgb), 0.7);
+  border-radius: inherit;
+}
+
+.lander-recents-list {
+  display: grid;
+  gap: 6px;
+}
+
+.lander-place {
+  border-style: solid;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+}
+
+.lander-place-path {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.empty-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.empty-subtitle {
+  margin-top: 6px;
+  font-size: 13px;
+}
+

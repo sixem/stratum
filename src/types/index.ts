@@ -11,10 +11,13 @@ export type {
   Place,
   TransferMode,
   TransferReport,
+  TransferProgressEvent,
   DirChangedEvent,
   DirRenameEvent,
 } from "./fs";
 export type { ContextMenuItem, EntryContextTarget } from "./contextMenu";
+export type { FileIconHit } from "./fileIcons";
+export type { ImageConvertOptions, ImageInfo, ImageTargetFormat } from "./images";
 export type { ShellAvailability, ShellKind } from "./shells";
 export type { SortDir, SortKey, SortState } from "./sort";
 export type { Tab } from "./tabs";

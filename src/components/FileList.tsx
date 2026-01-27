@@ -1,6 +1,9 @@
 // Virtualized list view for file entries.
 import type { CSSProperties } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   useEntryDragOut,
@@ -13,6 +16,7 @@ import {
   useSelectionDrag,
   useWheelSnap,
   useVirtualRange,
+  useCreateEntryPrompt,
 } from "@/hooks";
 import {
   buildEntryTooltip,
@@ -31,6 +35,7 @@ import { SelectionRect } from "./SelectionRect";
 import { EntryRow, ParentRow } from "./fileList/index";
 
 type FileListProps = {
+  currentPath: string;
   entries: FileEntry[];
   items: EntryItem[];
   loading: boolean;
@@ -58,16 +63,25 @@ type FileListProps = {
   onRenameCancel: () => void;
   entryMeta: Map<string, EntryMeta>;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
-  onContextMenu?: (event: ReactMouseEvent) => void;
+  onContextMenu?: (event: ReactPointerEvent) => void;
+  onContextMenuDown?: (event: ReactPointerEvent) => void;
   onEntryContextMenu?: (
-    event: ReactMouseEvent,
+    event: ReactPointerEvent,
+    target: { name: string; path: string; isDir: boolean },
+  ) => void;
+  onEntryContextMenuDown?: (
+    event: ReactPointerEvent,
     target: { name: string; path: string; isDir: boolean },
   ) => void;
   dropTargetPath?: string | null;
   onStartDragOut?: (paths: string[]) => void;
   onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
   onInternalHover?: (target: DropTarget | null) => void;
+  onCreateFolder: (parentPath: string, name: string) => Promise<unknown> | void;
+  onCreateFile: (parentPath: string, name: string) => Promise<unknown> | void;
   presenceEnabled?: boolean;
+  canGoUp?: boolean;
+  onGoUp?: () => void;
 };
 
 const ROW_HEIGHT = 48;
@@ -88,6 +102,7 @@ type RowDisplayMeta = {
 };
 
 export default function FileList({
+  currentPath,
   entries,
   items,
   loading,
@@ -116,12 +131,18 @@ export default function FileList({
   entryMeta,
   onRequestMeta,
   onContextMenu,
+  onContextMenuDown,
   onEntryContextMenu,
+  onEntryContextMenuDown,
   dropTargetPath,
   onStartDragOut,
   onInternalDrop,
   onInternalHover,
+  onCreateFolder,
+  onCreateFile,
   presenceEnabled = true,
+  canGoUp,
+  onGoUp,
 }: FileListProps) {
   const emptyMessage = useMemo(() => getEmptyMessage(searchQuery), [searchQuery]);
   const { items: rows } = useEntryPresence({
@@ -265,8 +286,25 @@ export default function FileList({
     },
     [onOpenDirNewTab],
   );
+  const handleEntryContextMenuDown = useCallback(
+    (event: ReactPointerEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!onEntryContextMenuDown) return;
+      const target = event.currentTarget as HTMLElement;
+      const path = target.dataset.path;
+      const name = target.dataset.name ?? "";
+      if (!path) return;
+      onEntryContextMenuDown(event, {
+        path,
+        name,
+        isDir: target.dataset.isDir === "true",
+      });
+    },
+    [onEntryContextMenuDown],
+  );
   const handleEntryContextMenu = useCallback(
-    (event: ReactMouseEvent) => {
+    (event: ReactPointerEvent) => {
       event.preventDefault();
       event.stopPropagation();
       if (!onEntryContextMenu) return;
@@ -282,7 +320,7 @@ export default function FileList({
     },
     [onEntryContextMenu],
   );
-  const handleParentContextMenu = useCallback((event: ReactMouseEvent) => {
+  const handleParentContextMenu = useCallback((event: ReactPointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
   }, []);
@@ -310,6 +348,7 @@ export default function FileList({
     enabled: dragEnabled,
   });
   useEntryMetaRequest(loading || scrolling, metaPaths, onRequestMeta);
+  const showCreatePrompt = useCreateEntryPrompt();
   const showLoadingOverlay = loading && !hasContent;
 
   return (
@@ -374,13 +413,26 @@ export default function FileList({
               "--list-row-gap": `${rowGap}px`,
             } as CSSProperties
           }
-          onContextMenu={(event) => {
+          onPointerDown={(event) => {
+            if (event.button !== 2) return;
+            if (!onContextMenuDown) return;
+            const target = event.target as HTMLElement | null;
+            if (target?.closest(".row")) return;
+            event.stopPropagation();
+            onContextMenuDown(event);
+          }}
+          onPointerUp={(event) => {
+            if (event.button !== 2) return;
             if (!onContextMenu) return;
             const target = event.target as HTMLElement | null;
             if (target?.closest(".row")) return;
-            event.preventDefault();
             event.stopPropagation();
             onContextMenu(event);
+          }}
+          onContextMenu={(event) => {
+            const target = event.target as HTMLElement | null;
+            if (target?.closest(".row")) return;
+            event.preventDefault();
           }}
         >
           <div
@@ -409,6 +461,7 @@ export default function FileList({
                       onOpen={handleRowOpen}
                       onOpenNewTab={handleRowOpenNewTab}
                       onContextMenu={handleParentContextMenu}
+                      onContextMenuDown={handleEntryContextMenuDown}
                     />
                   );
                 }
@@ -435,6 +488,7 @@ export default function FileList({
                     onOpen={handleRowOpen}
                     onOpenNewTab={handleRowOpenNewTab}
                     onContextMenu={handleEntryContextMenu}
+                    onContextMenuDown={handleEntryContextMenuDown}
                     presence={row.presence}
                   />
                 );
@@ -442,7 +496,42 @@ export default function FileList({
             </div>
             {entries.length === 0 && !loading ? (
               <div className="list-empty">
-                <EmptyState title={emptyMessage.title} subtitle={emptyMessage.subtitle} />
+                <EmptyState
+                  title={emptyMessage.title}
+                  subtitle={emptyMessage.subtitle}
+                  actions={
+                    searchQuery.trim()
+                      ? undefined
+                      : [
+                          ...(canGoUp && onGoUp
+                            ? [
+                                {
+                                  label: "Go up",
+                                  onClick: onGoUp,
+                                },
+                              ]
+                            : []),
+                          {
+                            label: "New folder",
+                            onClick: () =>
+                              showCreatePrompt({
+                                kind: "folder",
+                                parentPath: currentPath,
+                                onCreate: onCreateFolder,
+                              }),
+                          },
+                          {
+                            label: "New file",
+                            onClick: () =>
+                              showCreatePrompt({
+                                kind: "file",
+                                parentPath: currentPath,
+                                onCreate: onCreateFile,
+                              }),
+                          },
+                        ]
+                  }
+                />
               </div>
             ) : null}
           </div>

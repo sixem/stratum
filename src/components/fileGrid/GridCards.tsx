@@ -1,5 +1,8 @@
 // Grid card rendering for file thumbnails and metadata.
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   isPdfLikeExtension,
@@ -33,6 +36,8 @@ type ThumbnailIconProps = {
   fileKind: FileKind;
   extension: string | null;
   thumbUrl?: string;
+  appIconUrl?: string;
+  appIconsEnabled?: boolean;
 };
 
 type ThumbnailPreviewProps = {
@@ -114,14 +119,28 @@ const ThumbnailPreview = ({ src, onReadyChange }: ThumbnailPreviewProps) => {
   );
 };
 
-export const ThumbnailIcon = ({ isDir, fileKind, extension, thumbUrl }: ThumbnailIconProps) => {
+export const ThumbnailIcon = ({
+  isDir,
+  fileKind,
+  extension,
+  thumbUrl,
+  appIconUrl,
+  appIconsEnabled = false,
+}: ThumbnailIconProps) => {
   const [previewReady, setPreviewReady] = useState(false);
+  const [appIconReady, setAppIconReady] = useState(false);
 
   useEffect(() => {
     if (!thumbUrl) {
       setPreviewReady(false);
     }
   }, [thumbUrl]);
+
+  useEffect(() => {
+    if (!appIconUrl) {
+      setAppIconReady(false);
+    }
+  }, [appIconUrl]);
 
   if (isDir) {
     return <FolderIcon className="thumb-svg is-dir" />;
@@ -153,9 +172,27 @@ export const ThumbnailIcon = ({ isDir, fileKind, extension, thumbUrl }: Thumbnai
       Icon = FallbackFileIcon;
       break;
   }
+  const showThumbnail = Boolean(thumbUrl);
+  const showAppIcon = Boolean(appIconUrl) && (!showThumbnail || !previewReady);
+  const allowFallback =
+    !appIconsEnabled || (!showThumbnail && !showAppIcon && !appIconUrl);
+  const showFallback = allowFallback && !previewReady && (!showAppIcon || !appIconReady);
+
   return (
     <>
-      {!previewReady ? <Icon className="thumb-svg" /> : null}
+      {showFallback ? <Icon className="thumb-svg" /> : null}
+      {showAppIcon ? (
+        <img
+          className="thumb-app-icon"
+          src={appIconUrl}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          data-ready={appIconReady ? "true" : "false"}
+          onLoad={() => setAppIconReady(true)}
+          onError={() => setAppIconReady(false)}
+        />
+      ) : null}
       {thumbUrl ? (
         <ThumbnailPreview src={thumbUrl} onReadyChange={setPreviewReady} />
       ) : null}
@@ -172,7 +209,8 @@ type ParentCardProps = {
   onSelect: (event: ReactMouseEvent) => void;
   onOpen: (event: ReactMouseEvent) => void;
   onOpenNewTab?: (event: ReactMouseEvent) => void;
-  onContextMenu?: (event: ReactMouseEvent) => void;
+  onContextMenu?: (event: ReactPointerEvent) => void;
+  onContextMenuDown?: (event: ReactPointerEvent) => void;
 };
 
 export const ParentCard = memo(({
@@ -185,6 +223,7 @@ export const ParentCard = memo(({
   onOpen,
   onOpenNewTab,
   onContextMenu,
+  onContextMenuDown,
 }: ParentCardProps) => {
   const handleMouseDown = (event: ReactMouseEvent) => {
     if (event.button === 0) {
@@ -197,6 +236,16 @@ export const ParentCard = memo(({
     if (event.detail === 0) {
       onSelect(event);
     }
+  };
+  const handleContextMenuDown = (event: ReactPointerEvent) => {
+    if (event.button !== 2) return;
+    event.preventDefault();
+    onContextMenuDown?.(event);
+  };
+  const handleContextMenuUp = (event: ReactPointerEvent) => {
+    if (event.button !== 2) return;
+    event.preventDefault();
+    onContextMenu?.(event);
   };
 
   return (
@@ -212,7 +261,9 @@ export const ParentCard = memo(({
       onClick={handleClick}
       onDoubleClick={onOpen}
       onMouseDown={handleMouseDown}
-      onContextMenu={onContextMenu}
+      onPointerDown={handleContextMenuDown}
+      onPointerUp={handleContextMenuUp}
+      onContextMenu={(event) => event.preventDefault()}
     >
       <div className="thumb-icon">
         <span className="thumb-parent">..</span>
@@ -233,6 +284,8 @@ type EntryCardProps = {
   extension: string | null;
   sizeLabel: string;
   thumbUrl?: string;
+  appIconUrl?: string;
+  appIconsEnabled: boolean;
   showSize: boolean;
   showExtension: boolean;
   nameEllipsis: GridNameEllipsis;
@@ -247,7 +300,8 @@ type EntryCardProps = {
   onSelect: (event: ReactMouseEvent) => void;
   onOpen: (event: ReactMouseEvent) => void;
   onOpenNewTab?: (event: ReactMouseEvent) => void;
-  onContextMenu?: (event: ReactMouseEvent) => void;
+  onContextMenu?: (event: ReactPointerEvent) => void;
+  onContextMenuDown?: (event: ReactPointerEvent) => void;
   presence?: EntryPresence;
 };
 
@@ -278,6 +332,8 @@ export const EntryCard = memo(({
   extension,
   sizeLabel,
   thumbUrl,
+  appIconUrl,
+  appIconsEnabled,
   showSize,
   showExtension,
   nameEllipsis,
@@ -293,6 +349,7 @@ export const EntryCard = memo(({
   onOpen,
   onOpenNewTab,
   onContextMenu,
+  onContextMenuDown,
   presence = "stable",
 }: EntryCardProps) => {
   const resolvedSizeLabel = showSize ? sizeLabel : "";
@@ -339,6 +396,18 @@ export const EntryCard = memo(({
       onSelect(event);
     }
   };
+  const handleContextMenuDown = (event: ReactPointerEvent) => {
+    if (!isInteractive) return;
+    if (event.button !== 2) return;
+    event.preventDefault();
+    onContextMenuDown?.(event);
+  };
+  const handleContextMenuUp = (event: ReactPointerEvent) => {
+    if (!isInteractive) return;
+    if (event.button !== 2) return;
+    event.preventDefault();
+    onContextMenu?.(event);
+  };
 
   return (
     <TooltipWrapper
@@ -363,7 +432,9 @@ export const EntryCard = memo(({
         onClick={isInteractive ? handleClick : undefined}
         onDoubleClick={isInteractive ? onOpen : undefined}
         onMouseDown={isInteractive ? handleMouseDown : undefined}
-        onContextMenu={isInteractive ? onContextMenu : undefined}
+        onPointerDown={isInteractive ? handleContextMenuDown : undefined}
+        onPointerUp={isInteractive ? handleContextMenuUp : undefined}
+        onContextMenu={(event) => event.preventDefault()}
       >
         <div className="thumb-icon">
           <ThumbnailIcon
@@ -371,6 +442,8 @@ export const EntryCard = memo(({
             fileKind={fileKind}
             extension={extension}
             thumbUrl={thumbUrl}
+            appIconUrl={appIconUrl}
+            appIconsEnabled={appIconsEnabled}
           />
         </div>
         <div className="thumb-meta">

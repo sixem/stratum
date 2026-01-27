@@ -5,12 +5,15 @@ import type { Debugger } from "debug";
 const BASE_NAMESPACE = "stratum";
 const DEFAULT_NAMESPACE = `${BASE_NAMESPACE}:*`;
 
-const TIMESTAMP_FORMAT = new Intl.DateTimeFormat(undefined, {
+const TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
   minute: "2-digit",
   second: "2-digit",
-  fractionalSecondDigits: 3,
 });
+const formatTimestamp = (date: Date) => {
+  const ms = `${date.getMilliseconds()}`.padStart(3, "0");
+  return `${TIME_FORMAT.format(date)}.${ms}`;
+};
 
 let initialized = false;
 let formatPatched = false;
@@ -22,15 +25,23 @@ const patchFormatArgs = () => {
 
   // Prepend a compact timestamp to every debug line.
   createDebug.formatArgs = function (args) {
-    const stamp = TIMESTAMP_FORMAT.format(new Date());
+    const stamp = formatTimestamp(new Date());
     args[0] = `${stamp} ${args[0]}`;
     original.call(this, args);
   };
 };
 
+type DebugWithLoad = typeof createDebug & {
+  load?: () => string | undefined;
+};
+const debugWithLoad = createDebug as DebugWithLoad;
+
 const loadStoredNamespaces = () => {
   try {
-    return createDebug.load();
+    if (typeof debugWithLoad.load === "function") {
+      return debugWithLoad.load();
+    }
+    return localStorage.getItem("debug") ?? undefined;
   } catch {
     return undefined;
   }

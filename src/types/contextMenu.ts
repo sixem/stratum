@@ -14,6 +14,14 @@ export type ContextMenuItem =
       disabled?: boolean;
     }
   | {
+      kind: "submenu";
+      id: string;
+      label: string;
+      items: ContextMenuItem[];
+      hint?: string;
+      disabled?: boolean;
+    }
+  | {
       kind: "divider";
       id: string;
     };

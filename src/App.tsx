@@ -1,6 +1,10 @@
 // App shell wiring: composes state hooks, layout blocks, and overlays.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
+import { flushSync } from "react-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   clearThumbCache,
@@ -9,11 +13,21 @@ import {
   openPath,
   openShell,
 } from "@/api";
-import { AppContent, AppOverlays, AppStatusbar, AppTopstack } from "@/components";
+import {
+  AppContent,
+  AppOverlays,
+  AppStatusbar,
+  AppTopstack,
+  DrivePicker,
+  PathBarActions,
+  SidebarIcon,
+  ToolbarIconButton,
+} from "@/components";
 import {
   useAppAppearance,
   useAppMenuState,
   useAppViewState,
+  useCloseConfirm,
   useClipboardSync,
   useCssVarHeight,
   useDragOutHandler,
@@ -36,6 +50,7 @@ import {
   useStatusLabels,
   useTabSession,
   useThumbnails,
+  useTransferProgress,
   useWindowSize,
 } from "@/hooks";
 import {
@@ -60,6 +75,7 @@ import appPackage from "../package.json";
 const viewLog = makeDebug("view");
 const APP_NAME = "Stratum";
 const APP_VERSION = appPackage.version;
+const APP_DESCRIPTION = "A modern, but simple file manager with some added flair.";
 const isTauriEnv = () => {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 };
@@ -207,6 +223,7 @@ const App = () => {
   const suppressPresence = suppressInternalPresence || suppressExternalPresence;
   const renameCommitRef = useRef(false);
   const [thumbResetNonce, setThumbResetNonce] = useState(0);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const { currentPath, parentPath, entries, entryMeta, totalCount, loading, status } =
     fileManager;
   const {
@@ -220,6 +237,16 @@ const App = () => {
     goBack,
     goForward,
   } = tabSession;
+  const viewPath = activeTab?.path ?? currentPath;
+  const viewPathKey = normalizePath(viewPath ?? "");
+  const currentPathKey = normalizePath(currentPath);
+  // When a tab switch happens before the new directory load finishes,
+  // avoid rendering stale entries from the previous path.
+  const viewPending = Boolean(viewPathKey) && viewPathKey !== currentPathKey;
+  const viewLoading = loading || viewPending;
+  const viewEntries = viewPending ? [] : entries;
+  const viewTotalCount = viewPending ? 0 : totalCount;
+  const viewParentPathBase = viewPending ? null : parentPath;
   // Sidebar visibility is global (not per-tab) so it feels consistent across navigation.
   const sidebarOpen = settings.sidebarOpen;
   // Path, search, and view state for the main content area.
@@ -234,9 +261,11 @@ const App = () => {
     browseFromView,
     handleGo,
     handleUp,
+    clearSearchAndFocusView,
   } = useAppViewState({
     currentPath,
-    parentPath,
+    displayPath: viewPath,
+    parentPath: viewPending ? null : parentPath,
     loading,
     jumpTo: tabSession.jumpTo,
     browseTo: tabSession.browseTo,
@@ -264,12 +293,18 @@ const App = () => {
     tabSession.setSearch(searchValue);
   }, [activeSearch, activeTabId, searchValue, tabSession]);
 
-  useSearchHotkey(searchInputRef);
+  useSearchHotkey(searchInputRef, clearSearchAndFocusView);
   useCssVarHeight(topstackRef, "--topstack-height");
   useCssVarHeight(statusbarRef, "--statusbar-height");
-  useWindowSize();
+  const { flushPersist: flushWindowSize } = useWindowSize();
+  useCloseConfirm({
+    enabled: isTauriEnv(),
+    confirmClose: settings.confirmClose,
+    onBeforeClose: flushWindowSize,
+  });
   // Check available shells once so future actions can choose a supported target.
   const shellAvailability = useShellAvailability({ enabled: isTauriEnv() });
+  useTransferProgress({ enabled: isTauriEnv() });
   // Watch the active directory for changes and refresh quietly when needed.
   useDirWatch({
     enabled: isTauriEnv(),
@@ -411,6 +446,12 @@ const App = () => {
   const handleToggleSidebar = useCallback(() => {
     settings.updateSettings({ sidebarOpen: !settings.sidebarOpen });
   }, [settings]);
+  const handleOpenAbout = useCallback(() => {
+    setAboutOpen(true);
+  }, []);
+  const handleCloseAbout = useCallback(() => {
+    setAboutOpen(false);
+  }, []);
 
   const handleRefresh = useCallback(() => {
     void fileManager.refresh();
@@ -474,14 +515,14 @@ const App = () => {
     settings.thumbnailsEnabled,
     thumbnailResetKey,
   );
-  const blockReveal = loading;
+  const blockReveal = viewLoading;
 
   const { sortedEntries, visibleCount, isFiltered, totalCount: resolvedTotalCount } =
     useFilteredEntries({
-    entries,
-    searchValue: deferredSearchValue,
-    totalCount,
-  });
+      entries: viewEntries,
+      searchValue: deferredSearchValue,
+      totalCount: viewTotalCount,
+    });
   const metaPrefetchKey = `${currentPath}:${sortState.key}:${sortState.dir}:${deferredSearchValue}`;
   const shouldPrefetchMeta = sortState.key !== "name";
   useMetaPrefetch({
@@ -497,20 +538,29 @@ const App = () => {
   });
 
   // Drive stats for the statusbar and overlays.
-  const { driveInfoMap, currentDriveInfo } = useDriveInfo({
+  const { currentDriveInfo } = useDriveInfo({
     currentPath,
     drives: fileManager.drives,
     driveInfo: fileManager.driveInfo,
   });
 
   const canGoUp = Boolean(parentPath && parentPath !== currentPath);
+  const showLander = !viewPath.trim() && !viewLoading;
+  const showEmptyFolder =
+    !showLander &&
+    !viewLoading &&
+    viewEntries.length === 0 &&
+    deferredSearchValue.trim().length === 0;
   const viewParentPath =
-    canGoUp && settings.showParentEntry && !isFiltered ? parentPath : null;
-  const showLander = !currentPath.trim() && !loading;
-  const viewPath = activeTab?.path ?? currentPath;
+    viewParentPathBase &&
+    canGoUp &&
+    settings.showParentEntry &&
+    !isFiltered &&
+    !showEmptyFolder
+      ? viewParentPathBase
+      : null;
   // Keep a per-tab trail so breadcrumb crumbs can show the deepest path visited.
   const crumbTrailPath = activeTab?.crumbTrailPath ?? viewPath;
-  const viewPathKey = normalizePath(viewPath ?? "");
   const viewKey = `${activeTabId ?? "none"}:${viewPathKey}`;
   const lastView = lastViewRef.current;
   const shouldResetScroll =
@@ -568,11 +618,11 @@ const App = () => {
   } = useFileViewInteractions({
     viewModel,
     activeTabId,
-    currentPath,
+    currentPath: viewPath,
     deferredSearchValue,
     viewMode,
     blockReveal,
-    loading,
+    loading: viewLoading,
     settingsOpen,
     contextMenuOpen: contextMenuActive,
     mainRef,
@@ -699,6 +749,21 @@ const App = () => {
     [handleRenameCommit, handleSelectItem, renameTarget],
   );
 
+  const aboutMeta = useMemo(() => {
+    const platform =
+      typeof navigator !== "undefined"
+        ? (navigator as Navigator & { userAgentData?: { platform?: string } })
+            .userAgentData?.platform ??
+          navigator.platform ??
+          "Unknown"
+        : "Unknown";
+    return {
+      runtime: isTauriEnv() ? "Tauri" : "Web",
+      platform,
+      buildMode: import.meta.env.MODE ?? "unknown",
+    };
+  }, []);
+
   const handleRenameStart = useCallback(
     (target: EntryContextTarget) => {
       if (!target?.path) return;
@@ -731,8 +796,18 @@ const App = () => {
     },
     [setDropTarget],
   );
+  // Close on right-button press; open on release to avoid flicker.
+  const handleLayoutContextMenuDown = useCallback(
+    (event: ReactPointerEvent) => {
+      if (event.button !== 2) return;
+      event.preventDefault();
+      flushSync(() => closeContextMenu());
+    },
+    [closeContextMenu],
+  );
   const handleLayoutContextMenu = useCallback(
-    (event: ReactMouseEvent) => {
+    (event: ReactPointerEvent) => {
+      if (event.button !== 2) return;
       if (event.defaultPrevented) return;
       const target = event.target as Element | null;
       if (isEditableElement(target)) return;
@@ -740,8 +815,19 @@ const App = () => {
     },
     [openSortMenu],
   );
+  const handleEntryContextMenuDown = useCallback(
+    (event: ReactPointerEvent, target: EntryContextTarget) => {
+      if (event.button !== 2) return;
+      if (!target?.path) return;
+      event.preventDefault();
+      event.stopPropagation();
+      flushSync(() => closeContextMenu());
+    },
+    [closeContextMenu],
+  );
   const handleEntryContextMenu = useCallback(
-    (event: ReactMouseEvent, target: EntryContextTarget) => {
+    (event: ReactPointerEvent, target: EntryContextTarget) => {
+      if (event.button !== 2) return;
       if (!selected.has(target.path)) {
         handleSelectionChange([target.path], target.path);
       }
@@ -753,7 +839,7 @@ const App = () => {
   useSelectionShortcuts({
     blockReveal,
     contextMenuOpen: contextMenuActive,
-    loading,
+    loading: viewLoading,
     settingsOpen,
     viewMode,
     mainRef,
@@ -774,11 +860,11 @@ const App = () => {
 
   const canHandleViewKeybind = useCallback(() => {
     if (!canHandleGlobalKeybind()) return false;
-    if (loading || blockReveal) return false;
+    if (blockReveal) return false;
     const active = document.activeElement;
     if (isEditableElement(active)) return false;
     return true;
-  }, [blockReveal, canHandleGlobalKeybind, loading]);
+  }, [blockReveal, canHandleGlobalKeybind]);
 
   // Keybind handlers are kept explicit for readability and testing.
   const handleNewTabKeybind = useCallback((_event: KeyboardEvent) => {
@@ -859,6 +945,13 @@ const App = () => {
     selectionTargets,
   ]);
 
+  const handleClearSelectionKeybind = useCallback((_event: KeyboardEvent) => {
+    if (!canHandleViewKeybind()) return false;
+    if (selected.size === 0) return false;
+    handleClearSelection();
+    return true;
+  }, [canHandleViewKeybind, handleClearSelection, selected.size]);
+
   const handleDuplicateSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
     if (selectionTargets.length === 0) return false;
@@ -917,6 +1010,7 @@ const App = () => {
   const reservedKeybinds = useMemo(
     () => {
       const map: Record<string, (event: KeyboardEvent) => boolean> = {
+        Escape: handleClearSelectionKeybind,
         F5: handleRefreshKeybind,
         "Control+c": handleCopySelectionKeybind,
         "Control+v": handlePasteSelectionKeybind,
@@ -995,6 +1089,8 @@ const App = () => {
     onPaste: (paths) => {
       void fileManager.pasteEntries(paths);
     },
+    onCreateFolder: fileManager.createFolder,
+    onCreateFile: fileManager.createFile,
     shellAvailability,
     menuOpenPwsh: settings.menuOpenPwsh,
     menuOpenWsl: settings.menuOpenWsl,
@@ -1014,6 +1110,9 @@ const App = () => {
     onPasteEntries: (paths, destination) => {
       void fileManager.pasteEntries(paths, destination);
     },
+    onCreateFolder: fileManager.createFolder,
+    onCreateFile: fileManager.createFile,
+    ffmpegAvailable: Boolean(shellAvailability?.ffmpeg),
   });
   const contextMenuItems =
     contextMenu?.kind === "entry" ? entryMenuItems : layoutMenuItems;
@@ -1026,32 +1125,61 @@ const App = () => {
     <div className="app-shell">
       <AppTopstack
         topstackRef={topstackRef}
-        driveBar={{
-          drives: fileManager.drives,
-          driveInfo: driveInfoMap,
-          activePath: currentPath,
-          viewMode,
-          sidebarOpen,
-          settingsOpen,
-          onSelect: handleSelectDrive,
-          onSelectNewTab: handleOpenInNewTab,
-          onViewChange: tabSession.setViewMode,
-          onToggleSidebar: handleToggleSidebar,
-          onToggleSettings: toggleSettings,
-        }}
         pathBar={{
+          onBack: handleBack,
+          onForward: handleForward,
+          onUp: handleUp,
+          canGoBack,
+          canGoForward,
+          canGoUp,
+          loading,
+          leftSlot: (
+            <>
+              <button
+                type="button"
+                className="pathbar-brand about-trigger"
+                aria-label={`About ${APP_NAME}`}
+                aria-haspopup="dialog"
+                onClick={handleOpenAbout}
+              >
+                <div className="brand-mark">
+                  <img src="/favicon.png" alt="" aria-hidden="true" />
+                </div>
+              </button>
+              <ToolbarIconButton
+                label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+                active={sidebarOpen}
+                pressed={sidebarOpen}
+                onClick={handleToggleSidebar}
+              >
+                <SidebarIcon />
+              </ToolbarIconButton>
+            </>
+          ),
+          driveSlot: (
+            <DrivePicker
+              activePath={viewPath ?? ""}
+              drives={fileManager.drives}
+              driveInfo={fileManager.driveInfo}
+              onSelect={handleSelectDrive}
+            />
+          ),
+          rightSlot: (
+            <PathBarActions
+              viewMode={viewMode}
+              settingsOpen={settingsOpen}
+              onViewChange={tabSession.setViewMode}
+              onToggleSettings={toggleSettings}
+            />
+          ),
+        }}
+        pathInputsBar={{
           path: pathValue,
           search: searchValue,
           onPathChange: setPathValue,
           onSearchChange: setSearchValue,
           onSubmit: handleGo,
-          onBack: handleBack,
-          onForward: handleForward,
-          onUp: handleUp,
           onRefresh: handleRefresh,
-          canGoBack,
-          canGoForward,
-          canGoUp,
           loading,
           searchInputRef,
         }}
@@ -1083,21 +1211,32 @@ const App = () => {
           recentJumps: tabSession.recentJumps,
           activePath: currentPath,
           sectionOrder: settings.sidebarSectionOrder,
-          showTips: settings.sidebarShowTips,
+          hiddenSections: settings.sidebarHiddenSections,
           onSelect: handleSelectPlace,
           onSelectRecent: tabSession.jumpTo,
           onSelectNewTab: handleOpenInNewTab,
         }}
         mainRef={mainRef}
-        onContextMenu={handleLayoutContextMenu}
+        onContextMenu={
+          showLander || showEmptyFolder ? undefined : handleLayoutContextMenu
+        }
+        onContextMenuDown={
+          showLander || showEmptyFolder ? undefined : handleLayoutContextMenuDown
+        }
         fileViewProps={{
+          currentPath: viewPath ?? "",
           viewMode,
-          entries: sortedEntries,
-          items: viewModel.items,
-          loading,
+            entries: sortedEntries,
+            items: viewModel.items,
+          loading: viewLoading,
           showLander,
           recentJumps: tabSession.recentJumps,
           onOpenRecent: browseFromView,
+          drives: fileManager.drives,
+          driveInfo: fileManager.driveInfo,
+          onOpenDrive: handleSelectDrive,
+          canGoUp,
+          onGoUp: handleUp,
           searchQuery: deferredSearchValue,
           viewKey,
           scrollRestoreKey,
@@ -1112,6 +1251,8 @@ const App = () => {
           onOpenDir: browseFromView,
           onOpenDirNewTab: handleOpenInNewTab,
           onOpenEntry: fileManager.openEntry,
+          onCreateFolder: fileManager.createFolder,
+          onCreateFile: fileManager.createFile,
           onSelectItem: handleSelectItemWithRename,
           onClearSelection: handleClearSelection,
           renameTargetPath: renameTarget?.path ?? null,
@@ -1125,16 +1266,22 @@ const App = () => {
           thumbnails,
           onRequestThumbs: requestThumbnails,
           thumbnailFit: settings.thumbnailFit,
+          thumbnailAppIcons: settings.thumbnailAppIcons,
           categoryTinting: settings.categoryTinting,
           gridSize: settings.gridSize,
+          gridAutoColumns: settings.gridAutoColumns,
           gridShowSize: settings.gridShowSize,
           gridShowExtension: settings.gridShowExtension,
           gridNameEllipsis: settings.gridNameEllipsis,
           gridNameHideExtension: settings.gridNameHideExtension,
           thumbResetKey: thumbnailResetKey,
           presenceEnabled: !suppressPresence,
-          onContextMenu: openSortMenu,
+          onContextMenu:
+            showLander || showEmptyFolder ? undefined : handleLayoutContextMenu,
+          onContextMenuDown:
+            showLander || showEmptyFolder ? undefined : handleLayoutContextMenuDown,
           onEntryContextMenu: handleEntryContextMenu,
+          onEntryContextMenuDown: handleEntryContextMenuDown,
           onGridColumnsChange: handleGridColumnsChange,
           dropTargetPath,
           onStartDragOut: handleStartDragOut,
@@ -1153,6 +1300,16 @@ const App = () => {
         }}
       />
       <AppOverlays
+        about={{
+          open: aboutOpen,
+          appName: APP_NAME,
+          description: APP_DESCRIPTION,
+          version: APP_VERSION,
+          buildMode: aboutMeta.buildMode,
+          runtime: aboutMeta.runtime,
+          platform: aboutMeta.platform,
+          onClose: handleCloseAbout,
+        }}
         contextMenu={{
           open: contextMenuOpen,
           x: contextMenu?.x ?? 0,

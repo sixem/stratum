@@ -42,6 +42,7 @@ export type DriveInfo = {
   path: string;
   free: number | null;
   total: number | null;
+  label?: string | null;
 };
 
 export type CopyReport = {
@@ -57,6 +58,16 @@ export type TransferReport = {
   moved: number;
   skipped: number;
   failures: string[];
+};
+
+// Emitted while a copy/move operation progresses.
+export type TransferProgressEvent = {
+  id: string;
+  processed: number;
+  total: number;
+  currentPath?: string | null;
+  currentBytes?: number | null;
+  currentTotalBytes?: number | null;
 };
 
 export type DeleteReport = {

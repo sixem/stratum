@@ -35,7 +35,7 @@ export function SettingsFlairSection({
       <div className="settings-item">
         <div>
           <div className="settings-label">Accent color</div>
-          <div className="settings-desc">Tint highlights and accents across the app.</div>
+          <div className="settings-desc">Tint highlights and accents.</div>
         </div>
         <div className="settings-pills" role="group" aria-label="Accent color">
           {ACCENT_THEMES.map((theme) => (

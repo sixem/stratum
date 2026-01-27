@@ -1,10 +1,13 @@
 // Grid-specific appearance and content controls.
+import { useEffect, useState } from "react";
+import { GRID_AUTO_COLUMNS_MAX, GRID_AUTO_COLUMNS_MIN } from "@/modules";
 import type { GridNameEllipsis, GridSize } from "@/modules";
 import type { SettingsUpdateHandler } from "./types";
 
 type SettingsGridSectionProps = {
   sectionId: string;
   gridSize: GridSize;
+  gridAutoColumns: number;
   gridRounded: boolean;
   gridShowSize: boolean;
   gridShowExtension: boolean;
@@ -17,6 +20,7 @@ const GRID_SIZES: { id: GridSize; label: string }[] = [
   { id: "small", label: "Small" },
   { id: "normal", label: "Normal" },
   { id: "large", label: "Large" },
+  { id: "auto", label: "Auto" },
 ];
 const GRID_NAME_ELLIPSIS: { id: GridNameEllipsis; label: string }[] = [
   { id: "end", label: "End" },
@@ -26,6 +30,7 @@ const GRID_NAME_ELLIPSIS: { id: GridNameEllipsis; label: string }[] = [
 export function SettingsGridSection({
   sectionId,
   gridSize,
+  gridAutoColumns,
   gridRounded,
   gridShowSize,
   gridShowExtension,
@@ -33,13 +38,26 @@ export function SettingsGridSection({
   gridNameHideExtension,
   onUpdate,
 }: SettingsGridSectionProps) {
+  const [autoColumnsDraft, setAutoColumnsDraft] = useState(gridAutoColumns);
+
+  useEffect(() => {
+    setAutoColumnsDraft(gridAutoColumns);
+  }, [gridAutoColumns]);
+
+  const commitAutoColumns = () => {
+    if (autoColumnsDraft === gridAutoColumns) return;
+    onUpdate({ gridAutoColumns: autoColumnsDraft });
+  };
+
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Grid</div>
       <div className="settings-item">
         <div>
           <div className="settings-label">Grid size</div>
-          <div className="settings-desc">Adjust the grid density in thumbnail view.</div>
+          <div className="settings-desc">
+            Choose a preset size or let the grid auto-fit by column count.
+          </div>
         </div>
         <div className="settings-pills" role="group" aria-label="Grid size">
           {GRID_SIZES.map((size) => (
@@ -54,6 +72,36 @@ export function SettingsGridSection({
           ))}
         </div>
       </div>
+      {gridSize === "auto" ? (
+        <div className="settings-item">
+          <div>
+            <div className="settings-label">Auto columns</div>
+            <div className="settings-desc">
+              Pick how many columns the grid should fit across the view.
+            </div>
+          </div>
+          <div className="settings-range">
+            <input
+              type="range"
+              min={GRID_AUTO_COLUMNS_MIN}
+              max={GRID_AUTO_COLUMNS_MAX}
+              step={1}
+              value={autoColumnsDraft}
+              onChange={(event) =>
+                setAutoColumnsDraft(Number(event.currentTarget.value))
+              }
+              onPointerUp={commitAutoColumns}
+              onKeyUp={(event) => {
+                if (event.key === "Enter") {
+                  commitAutoColumns();
+                }
+              }}
+              onBlur={commitAutoColumns}
+            />
+            <span className="settings-value">{autoColumnsDraft}</span>
+          </div>
+        </div>
+      ) : null}
       <div className="settings-item">
         <div>
           <div className="settings-label">Grid corners</div>

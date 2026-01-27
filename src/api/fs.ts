@@ -29,6 +29,14 @@ export function ensureDir(path: string) {
   return invoke<void>("ensure_dir", { path });
 }
 
+export function createFolder(path: string) {
+  return invoke<void>("create_folder", { path });
+}
+
+export function createFile(path: string) {
+  return invoke<void>("create_file", { path });
+}
+
 export function listDriveInfo() {
   return invoke<DriveInfo[]>("list_drive_info");
 }
@@ -49,16 +57,22 @@ export function parentDir(path: string) {
   return invoke<string | null>("parent_dir", { path });
 }
 
-export function copyEntries(paths: string[], destination: string) {
-  return invoke<CopyReport>("copy_entries", { paths, destination });
+export function copyEntries(paths: string[], destination: string, transferId?: string) {
+  return invoke<CopyReport>("copy_entries", { paths, destination, transferId });
 }
 
 export function transferEntries(
   paths: string[],
   destination: string,
   options?: { mode?: TransferMode; overwrite?: boolean },
+  transferId?: string,
 ) {
-  return invoke<TransferReport>("transfer_entries", { paths, destination, options });
+  return invoke<TransferReport>("transfer_entries", {
+    paths,
+    destination,
+    options,
+    transferId,
+  });
 }
 
 export function deleteEntries(paths: string[]) {

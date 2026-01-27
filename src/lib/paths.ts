@@ -1,12 +1,20 @@
 export function tabLabel(path: string) {
   const trimmed = path.trim();
-  if (!trimmed) return "Untitled";
+  if (!trimmed) return "<new tab>";
   const normalized = trimmed.replace(/[\\/]+$/, "");
   if (/^[a-zA-Z]:$/.test(normalized)) {
     return normalized.toUpperCase();
   }
   const parts = normalized.split(/[/\\]/);
   return parts[parts.length - 1] || normalized;
+}
+
+// Returns the last segment of a path for display.
+export function getPathName(path: string) {
+  const trimmed = path.trim().replace(/[\\/]+$/, "");
+  if (!trimmed) return "";
+  const parts = trimmed.split(/[/\\]/);
+  return parts[parts.length - 1] ?? "";
 }
 
 export function normalizePath(path: string) {

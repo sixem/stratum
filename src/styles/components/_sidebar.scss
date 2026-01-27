@@ -1,0 +1,167 @@
+// Sidebar sections, places, and tips.
+.sidebar {
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: var(--panel-radius);
+  padding: var(--sidebar-padding);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  position: sticky;
+  top: 0;
+  overflow: hidden;
+}
+
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 6px;
+  flex: 1;
+  scroll-behavior: auto;
+}
+
+.sidebar-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 12px;
+}
+
+.section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+
+.places {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 2px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  cursor: pointer;
+  width: 100%;
+}
+
+.section-toggle.is-open {
+  color: var(--text);
+}
+
+.toggle-mark {
+  border: 1px solid var(--stroke);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+// Make the +/- badges readable over the ambient transparency.
+:root[data-ambient="true"] .toggle-mark {
+  background: rgba(8, 10, 16, 0.7);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--text);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 6px 14px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-ambient="true"] .section-toggle.is-open .toggle-mark {
+  background: rgba(var(--accent-rgb), 0.22);
+  border-color: rgba(var(--accent-rgb), 0.68);
+}
+
+.place {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--stroke);
+  background: var(--surface-control-muted);
+  text-align: left;
+  cursor: pointer;
+  transition: none;
+}
+
+.place:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--surface-control-strong);
+}
+
+.place.is-active {
+  border-color: var(--accent);
+}
+
+.place.is-recent {
+  border-style: dashed;
+}
+
+.place.is-empty {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.place-name {
+  font-weight: 600;
+}
+
+.place-path {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-tips {
+  margin-top: 10px;
+}
+
+.tips {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+  margin-top: 10px;
+}
+
+.tip {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tip:hover {
+  color: var(--text);
+}
+
+// Compact mode removes the outer container frame while keeping the content intact.
+:root[data-compact="true"] .sidebar {
+  border-left: none;
+}
+

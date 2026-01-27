@@ -1,6 +1,9 @@
 // Virtualized grid view for file entries.
 import type { CSSProperties } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   useElementSize,
@@ -17,6 +20,8 @@ import {
   useTypingActivity,
   useWheelSnap,
   useVirtualRange,
+  useFileIcons,
+  useCreateEntryPrompt,
 } from "@/hooks";
 import {
   buildEntryTooltip,
@@ -28,6 +33,10 @@ import {
 } from "@/lib";
 import type { FileKind } from "@/lib";
 import type { DropTarget, EntryItem } from "@/lib";
+import {
+  GRID_AUTO_COLUMNS_MAX,
+  GRID_AUTO_COLUMNS_MIN,
+} from "@/modules";
 import type { GridNameEllipsis, GridSize, ThumbnailFit } from "@/modules";
 import type { EntryMeta, FileEntry, RenameCommitReason, ThumbnailRequest } from "@/types";
 import { EmptyState } from "./EmptyState";
@@ -36,6 +45,7 @@ import { SelectionRect } from "./SelectionRect";
 import { EntryCard, ParentCard } from "./fileGrid/index";
 
 type FileGridProps = {
+  currentPath: string;
   entries: FileEntry[];
   items: EntryItem[];
   loading: boolean;
@@ -64,8 +74,10 @@ type FileGridProps = {
   thumbnails: Map<string, string>;
   onRequestThumbs: (requests: ThumbnailRequest[]) => void;
   thumbnailFit: ThumbnailFit;
+  thumbnailAppIcons: boolean;
   categoryTinting: boolean;
   gridSize: GridSize;
+  gridAutoColumns: number;
   gridShowSize: boolean;
   gridShowExtension: boolean;
   gridNameEllipsis: GridNameEllipsis;
@@ -73,15 +85,24 @@ type FileGridProps = {
   thumbResetKey?: string;
   presenceEnabled?: boolean;
   onGridColumnsChange?: (columns: number) => void;
-  onContextMenu?: (event: ReactMouseEvent) => void;
+  onContextMenu?: (event: ReactPointerEvent) => void;
+  onContextMenuDown?: (event: ReactPointerEvent) => void;
   onEntryContextMenu?: (
-    event: ReactMouseEvent,
+    event: ReactPointerEvent,
+    target: { name: string; path: string; isDir: boolean },
+  ) => void;
+  onEntryContextMenuDown?: (
+    event: ReactPointerEvent,
     target: { name: string; path: string; isDir: boolean },
   ) => void;
   dropTargetPath?: string | null;
   onStartDragOut?: (paths: string[]) => void;
   onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
   onInternalHover?: (target: DropTarget | null) => void;
+  onCreateFolder: (parentPath: string, name: string) => Promise<unknown> | void;
+  onCreateFile: (parentPath: string, name: string) => Promise<unknown> | void;
+  canGoUp?: boolean;
+  onGoUp?: () => void;
 };
 
 type GridPreset = {
@@ -96,7 +117,7 @@ type GridSizing = GridPreset & {
   rowHeight: number;
 };
 
-const GRID_PRESETS: Record<GridSize, GridPreset> = {
+const GRID_PRESETS: Record<Exclude<GridSize, "auto">, GridPreset> = {
   small: {
     column: 180,
     gap: 12,
@@ -114,7 +135,7 @@ const GRID_PRESETS: Record<GridSize, GridPreset> = {
   },
 };
 
-// Keep these layout numbers in sync with the grid card styles in app.scss.
+// Keep these layout numbers in sync with the grid card styles in components/_file-view.scss.
 const GRID_CARD_BORDER = 1;
 const GRID_CARD_GAP = 3;
 const GRID_META_GAP = 1;
@@ -130,6 +151,28 @@ const getGridIconHeight = (column: number, padding: number) => {
 const getGridMetaHeight = (showMeta: boolean) => {
   if (!showMeta) return GRID_NAME_LINE_HEIGHT;
   return GRID_NAME_LINE_HEIGHT + GRID_META_GAP + GRID_INFO_LINE_HEIGHT;
+};
+
+// Keep auto grid columns within the supported range for readability.
+const clampAutoColumns = (value: number) => {
+  return Math.min(GRID_AUTO_COLUMNS_MAX, Math.max(GRID_AUTO_COLUMNS_MIN, Math.round(value)));
+};
+
+// Compute a preset that fits a fixed column count into the available width.
+const buildAutoPreset = (
+  base: GridPreset,
+  viewportWidth: number,
+  columns: number,
+): GridPreset => {
+  const safeColumns = clampAutoColumns(columns);
+  if (viewportWidth <= 0) {
+    return { ...base };
+  }
+  const contentWidth = Math.max(0, viewportWidth - base.padding * 2);
+  const totalGap = base.gap * Math.max(0, safeColumns - 1);
+  const available = Math.max(0, contentWidth - totalGap);
+  const column = Math.max(1, Math.floor(available / safeColumns));
+  return { ...base, column };
 };
 
 // Derive the virtual row height from the card's real content sizing.
@@ -165,6 +208,7 @@ type GridDisplayMeta = {
 };
 
 export default function FileGrid({
+  currentPath,
   entries,
   items,
   loading,
@@ -193,8 +237,10 @@ export default function FileGrid({
   thumbnails,
   onRequestThumbs,
   thumbnailFit,
+  thumbnailAppIcons,
   categoryTinting,
   gridSize,
+  gridAutoColumns,
   gridShowSize,
   gridShowExtension,
   gridNameEllipsis,
@@ -203,11 +249,17 @@ export default function FileGrid({
   presenceEnabled = true,
   onGridColumnsChange,
   onContextMenu,
+  onContextMenuDown,
   onEntryContextMenu,
+  onEntryContextMenuDown,
   dropTargetPath,
   onStartDragOut,
   onInternalDrop,
   onInternalHover,
+  onCreateFolder,
+  onCreateFile,
+  canGoUp,
+  onGoUp,
 }: FileGridProps) {
   const emptyMessage = useMemo(() => getEmptyMessage(searchQuery), [searchQuery]);
   const { items: viewItems } = useEntryPresence({
@@ -256,9 +308,13 @@ export default function FileGrid({
 
   const gridMetaEnabled = gridShowSize || gridShowExtension;
   const gridSizing = useMemo(() => {
-    const preset = GRID_PRESETS[gridSize] ?? GRID_PRESETS.small;
+    const basePreset = GRID_PRESETS[gridSize === "auto" ? "normal" : gridSize] ?? GRID_PRESETS.small;
+    const preset =
+      gridSize === "auto"
+        ? buildAutoPreset(basePreset, viewportWidth, gridAutoColumns)
+        : basePreset;
     return buildGridSizing(preset, gridMetaEnabled);
-  }, [gridMetaEnabled, gridSize]);
+  }, [gridAutoColumns, gridMetaEnabled, gridSize, viewportWidth]);
   const gridVars = useMemo(
     () =>
       ({
@@ -274,10 +330,13 @@ export default function FileGrid({
     [gridSizing, thumbnailFit],
   );
   const contentWidth = Math.max(0, viewportWidth - gridSizing.padding * 2);
-  const columnCount = Math.max(
-    1,
-    Math.floor((contentWidth + gridSizing.gap) / (gridSizing.column + gridSizing.gap)),
-  );
+  const columnCount =
+    gridSize === "auto"
+      ? clampAutoColumns(gridAutoColumns)
+      : Math.max(
+          1,
+          Math.floor((contentWidth + gridSizing.gap) / (gridSizing.column + gridSizing.gap)),
+        );
   const rowCount = Math.ceil(viewItems.length / columnCount);
   const rowHeight = gridSizing.rowHeight + gridSizing.gap;
   const lastLayoutRef = useRef({ gridSize, columnCount, rowHeight });
@@ -457,8 +516,25 @@ export default function FileGrid({
     },
     [onOpenDirNewTab],
   );
+  const handleEntryContextMenuDown = useCallback(
+    (event: ReactPointerEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!onEntryContextMenuDown) return;
+      const target = event.currentTarget as HTMLElement;
+      const path = target.dataset.path;
+      const name = target.dataset.name ?? "";
+      if (!path) return;
+      onEntryContextMenuDown(event, {
+        path,
+        name,
+        isDir: target.dataset.isDir === "true",
+      });
+    },
+    [onEntryContextMenuDown],
+  );
   const handleEntryContextMenu = useCallback(
-    (event: ReactMouseEvent) => {
+    (event: ReactPointerEvent) => {
       event.preventDefault();
       event.stopPropagation();
       if (!onEntryContextMenu) return;
@@ -474,7 +550,7 @@ export default function FileGrid({
     },
     [onEntryContextMenu],
   );
-  const handleParentContextMenu = useCallback((event: ReactMouseEvent) => {
+  const handleParentContextMenu = useCallback((event: ReactPointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
   }, []);
@@ -502,11 +578,14 @@ export default function FileGrid({
     itemSelector: "[data-selectable=\"true\"]",
     enabled: dragEnabled,
   });
+  const showCreatePrompt = useCreateEntryPrompt();
   useEntryMetaRequest(loading || scrolling, metaPaths, onRequestMeta);
   // Pause thumbnail generation while the user is actively interacting.
   useThumbnailPause(interactionActive, thumbnailsEnabled);
   const canRequestThumbs = thumbnailsEnabled && !loading && !interactionActive;
   const thumbSource = thumbsSuppressed ? thumbSnapshotRef.current : thumbnails;
+  const { icons: fileIcons, requestIcons: requestFileIcons } =
+    useFileIcons(thumbnailAppIcons);
   useThumbnailRequest(
     loading || interactionActive,
     canRequestThumbs,
@@ -514,6 +593,29 @@ export default function FileGrid({
     onRequestThumbs,
     thumbResetKey,
   );
+
+  const iconRequests = useMemo(() => {
+    if (!thumbnailAppIcons || visibleItems.length === 0) {
+      return [];
+    }
+    const requests: string[] = [];
+    const seen = new Set<string>();
+    for (const item of visibleItems) {
+      if (item.type !== "entry") continue;
+      if (item.presence === "removed") continue;
+      if (item.entry.isDir) continue;
+      const extension = getExtension(item.entry.name);
+      if (!extension || seen.has(extension)) continue;
+      seen.add(extension);
+      requests.push(extension);
+    }
+    return requests;
+  }, [thumbnailAppIcons, visibleItems]);
+
+  useEffect(() => {
+    if (iconRequests.length === 0) return;
+    requestFileIcons(iconRequests);
+  }, [iconRequests, requestFileIcons]);
 
   const gridStyle = useMemo(
     () => ({
@@ -533,13 +635,26 @@ export default function FileGrid({
         className="thumb-viewport"
         ref={viewportRef}
         style={gridVars}
-        onContextMenu={(event) => {
+        onPointerDown={(event) => {
+          if (event.button !== 2) return;
+          if (!onContextMenuDown) return;
+          const target = event.target as HTMLElement | null;
+          if (target?.closest(".thumb-card")) return;
+          event.stopPropagation();
+          onContextMenuDown(event);
+        }}
+        onPointerUp={(event) => {
+          if (event.button !== 2) return;
           if (!onContextMenu) return;
           const target = event.target as HTMLElement | null;
           if (target?.closest(".thumb-card")) return;
-          event.preventDefault();
           event.stopPropagation();
           onContextMenu(event);
+        }}
+        onContextMenu={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.closest(".thumb-card")) return;
+          event.preventDefault();
         }}
       >
         <div
@@ -566,12 +681,20 @@ export default function FileGrid({
                     onOpen={handleCardOpen}
                     onOpenNewTab={handleCardOpenNewTab}
                     onContextMenu={handleParentContextMenu}
+                    onContextMenuDown={handleEntryContextMenuDown}
                   />
                 );
               }
               const isDropTarget = dropTargetPath === item.entry.path;
               const itemMeta = gridMetaByPath.get(item.entry.path);
               const baseIndex = indexMap.get(item.entry.path) ?? index;
+              const thumbUrl = thumbnailsEnabled
+                ? thumbSource.get(item.entry.path)
+                : undefined;
+              const appIconUrl =
+                thumbnailAppIcons && itemMeta?.extension
+                  ? fileIcons.get(itemMeta.extension)
+                  : undefined;
               return (
                 <EntryCard
                   key={item.key}
@@ -581,9 +704,9 @@ export default function FileGrid({
                   fileKind={itemMeta?.fileKind ?? "generic"}
                   extension={itemMeta?.extension ?? null}
                   sizeLabel={itemMeta?.sizeLabel ?? ""}
-                  thumbUrl={
-                    thumbnailsEnabled ? thumbSource.get(item.entry.path) : undefined
-                  }
+                  thumbUrl={thumbUrl}
+                  appIconUrl={appIconUrl}
+                  appIconsEnabled={thumbnailAppIcons}
                   showSize={gridShowSize}
                   showExtension={gridShowExtension}
                   nameEllipsis={gridNameEllipsis}
@@ -599,6 +722,7 @@ export default function FileGrid({
                   onOpen={handleCardOpen}
                   onOpenNewTab={handleCardOpenNewTab}
                   onContextMenu={handleEntryContextMenu}
+                  onContextMenuDown={handleEntryContextMenuDown}
                   presence={item.presence}
                 />
               );
@@ -607,7 +731,42 @@ export default function FileGrid({
           <div className="thumb-spacer" style={{ height: `${virtual.offsetBottom}px` }} />
           {entries.length === 0 && !loading ? (
             <div className="thumb-empty">
-              <EmptyState title={emptyMessage.title} subtitle={emptyMessage.subtitle} />
+              <EmptyState
+                title={emptyMessage.title}
+                subtitle={emptyMessage.subtitle}
+                actions={
+                  searchQuery.trim()
+                    ? undefined
+                    : [
+                        ...(canGoUp && onGoUp
+                          ? [
+                              {
+                                label: "Go up",
+                                onClick: onGoUp,
+                              },
+                            ]
+                          : []),
+                        {
+                          label: "New folder",
+                          onClick: () =>
+                            showCreatePrompt({
+                              kind: "folder",
+                              parentPath: currentPath,
+                              onCreate: onCreateFolder,
+                            }),
+                        },
+                        {
+                          label: "New file",
+                          onClick: () =>
+                            showCreatePrompt({
+                              kind: "file",
+                              parentPath: currentPath,
+                              onCreate: onCreateFile,
+                            }),
+                        },
+                      ]
+                }
+              />
             </div>
           ) : null}
         </div>

@@ -1,0 +1,31 @@
+// Overall layout grid and main panel.
+.layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  gap: var(--layout-gap);
+  padding: var(--layout-padding);
+  min-height: 0;
+  min-width: 0;
+}
+
+.layout.is-full {
+  grid-template-columns: 1fr;
+}
+
+.main {
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: var(--panel-radius);
+  padding: var(--main-padding);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+// Compact mode removes the outer container frame while keeping the content intact.
+:root[data-compact="true"] .main {
+  background: transparent;
+  border: none;
+}

@@ -1,0 +1,31 @@
+// Shared scrollbar styling.
+.list-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.thumb-viewport::-webkit-scrollbar {
+  width: 10px;
+}
+
+.list-body::-webkit-scrollbar-thumb {
+  background: #20283a;
+  border-radius: 999px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #20283a transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #20283a;
+  border-radius: 999px;
+}

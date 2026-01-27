@@ -1,6 +1,6 @@
 // Legacy top bar kept for reference; not wired in App.
 import type { FormEvent } from "react";
-import { ChevronUpIcon } from "./Icons";
+import { ChevronUpIcon, RefreshIcon } from "./Icons";
 
 type TopBarProps = {
   path: string;
@@ -61,8 +61,14 @@ export function TopBar({
       </form>
 
       <div className="actions">
-        <button className="btn ghost" type="button" onClick={onRefresh} disabled={loading}>
-          Refresh
+        <button
+          className="btn ghost"
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          aria-label="Refresh"
+        >
+          <RefreshIcon className="btn-icon" />
         </button>
         <div className={`pulse ${loading ? "is-on" : ""}`} aria-hidden="true" />
       </div>

@@ -49,16 +49,16 @@ export const RenameField = ({
     onCommit("enter");
   };
 
-  const handleCancel = () => {
-    if (canceledRef.current || committedRef.current) return;
-    canceledRef.current = true;
-    onCancel();
-  };
-
   const handleCommitOnExit = (reason: RenameCommitReason) => {
     if (committedRef.current) return;
     committedRef.current = true;
     onCommit(reason);
+  };
+
+  const handleCancel = () => {
+    if (canceledRef.current || committedRef.current) return;
+    canceledRef.current = true;
+    onCancel();
   };
 
   return (
@@ -76,7 +76,7 @@ export const RenameField = ({
         }
         if (event.key === "Escape") {
           event.preventDefault();
-          handleCommitOnExit("escape");
+          handleCancel();
         }
       }}
       onBlur={() => handleCommitOnExit("blur")}

@@ -6,7 +6,7 @@ import { coerceKeybinds, DEFAULT_KEYBINDS } from "./keybinds";
 
 type ThumbnailFormat = "webp" | "jpeg";
 export type ThumbnailFit = "cover" | "contain";
-export type GridSize = "small" | "normal" | "large";
+export type GridSize = "small" | "normal" | "large" | "auto";
 export type GridNameEllipsis = "end" | "middle";
 export type AccentTheme =
   | "red"
@@ -25,14 +25,18 @@ export const SIDEBAR_SECTION_DEFINITIONS: { id: SidebarSectionId; label: string 
 ];
 
 export const DEFAULT_SIDEBAR_SECTION_ORDER = SIDEBAR_SECTION_DEFINITIONS.map((item) => item.id);
+export const DEFAULT_SIDEBAR_HIDDEN_SECTIONS: SidebarSectionId[] = [];
 export const SIDEBAR_RECENT_LIMIT_MIN = 1;
-export const SIDEBAR_RECENT_LIMIT_MAX = 20;
+export const SIDEBAR_RECENT_LIMIT_MAX = 40;
+export const GRID_AUTO_COLUMNS_MIN = 3;
+export const GRID_AUTO_COLUMNS_MAX = 10;
+export const GRID_AUTO_COLUMNS_DEFAULT = 5;
 
 type Settings = {
   sidebarOpen: boolean;
   sidebarRecentLimit: number;
-  sidebarShowTips: boolean;
   sidebarSectionOrder: SidebarSectionId[];
+  sidebarHiddenSections: SidebarSectionId[];
   defaultViewMode: ViewMode;
   showTabNumbers: boolean;
   fixedWidthTabs: boolean;
@@ -42,10 +46,12 @@ type Settings = {
   categoryTinting: boolean;
   showParentEntry: boolean;
   confirmDelete: boolean;
+  confirmClose: boolean;
   ambientBackground: boolean;
   blurOverlays: boolean;
   keybinds: KeybindMap;
   gridSize: GridSize;
+  gridAutoColumns: number;
   gridRounded: boolean;
   gridCentered: boolean;
   gridShowSize: boolean;
@@ -61,6 +67,7 @@ type Settings = {
   thumbnailVideos: boolean;
   thumbnailCacheMb: number;
   thumbnailFit: ThumbnailFit;
+  thumbnailAppIcons: boolean;
 };
 
 type SettingsStore = Settings & {
@@ -75,41 +82,44 @@ type StoredSettings = {
 };
 
 const STORAGE_KEY = "stratum.settings";
-const STORAGE_VERSION = 14;
+const STORAGE_VERSION = 18;
 
 const DEFAULT_SETTINGS: Settings = {
   sidebarOpen: true,
-  sidebarRecentLimit: 4,
-  sidebarShowTips: true,
+  sidebarRecentLimit: 8,
   sidebarSectionOrder: DEFAULT_SIDEBAR_SECTION_ORDER,
+  sidebarHiddenSections: DEFAULT_SIDEBAR_HIDDEN_SECTIONS,
   defaultViewMode: "thumbs",
   showTabNumbers: true,
   fixedWidthTabs: false,
   smoothScroll: false,
-  compactMode: false,
+  compactMode: true,
   accentTheme: "red",
   categoryTinting: false,
   showParentEntry: true,
   confirmDelete: true,
+  confirmClose: true,
   ambientBackground: false,
   blurOverlays: false,
   keybinds: DEFAULT_KEYBINDS,
   gridSize: "normal",
+  gridAutoColumns: GRID_AUTO_COLUMNS_DEFAULT,
   gridRounded: true,
   gridCentered: true,
   gridShowSize: true,
   gridShowExtension: true,
-  gridNameEllipsis: "end",
+  gridNameEllipsis: "middle",
   gridNameHideExtension: true,
   menuOpenPwsh: true,
-  menuOpenWsl: true,
+  menuOpenWsl: false,
   thumbnailsEnabled: true,
   thumbnailSize: 256,
   thumbnailQuality: 80,
   thumbnailFormat: "webp",
   thumbnailVideos: true,
   thumbnailCacheMb: 512,
-  thumbnailFit: "cover",
+  thumbnailFit: "contain",
+  thumbnailAppIcons: true,
 };
 
 const clampNumber = (value: unknown, fallback: number, min: number, max: number) => {
@@ -145,8 +155,19 @@ const coerceAccentTheme = (value: unknown): AccentTheme => {
 };
 
 const coerceGridSize = (value: unknown): GridSize => {
-  if (value === "large" || value === "normal" || value === "small") return value;
+  if (value === "large" || value === "normal" || value === "small" || value === "auto") {
+    return value;
+  }
   return value === "compact" ? "small" : DEFAULT_SETTINGS.gridSize;
+};
+
+const coerceGridAutoColumns = (value: unknown): number => {
+  return clampNumber(
+    value,
+    DEFAULT_SETTINGS.gridAutoColumns,
+    GRID_AUTO_COLUMNS_MIN,
+    GRID_AUTO_COLUMNS_MAX,
+  );
 };
 
 const coerceGridNameEllipsis = (value: unknown): GridNameEllipsis => {
@@ -176,6 +197,19 @@ export const normalizeSidebarSectionOrder = (value: unknown): SidebarSectionId[]
   return next;
 };
 
+export const normalizeSidebarHiddenSections = (value: unknown): SidebarSectionId[] => {
+  const hidden: SidebarSectionId[] = [];
+  if (!Array.isArray(value)) return hidden;
+  const seen = new Set<SidebarSectionId>();
+  value.forEach((item) => {
+    if (!isSidebarSectionId(item)) return;
+    if (seen.has(item)) return;
+    seen.add(item);
+    hidden.push(item);
+  });
+  return hidden;
+};
+
 const coerceSidebarRecentLimit = (value: unknown) => {
   return clampNumber(
     value,
@@ -190,11 +224,8 @@ const coerceSettings = (value: Partial<Settings> | null | undefined): Settings =
     sidebarOpen:
       typeof value?.sidebarOpen === "boolean" ? value.sidebarOpen : DEFAULT_SETTINGS.sidebarOpen,
     sidebarRecentLimit: coerceSidebarRecentLimit(value?.sidebarRecentLimit),
-    sidebarShowTips:
-      typeof value?.sidebarShowTips === "boolean"
-        ? value.sidebarShowTips
-        : DEFAULT_SETTINGS.sidebarShowTips,
     sidebarSectionOrder: normalizeSidebarSectionOrder(value?.sidebarSectionOrder),
+    sidebarHiddenSections: normalizeSidebarHiddenSections(value?.sidebarHiddenSections),
     defaultViewMode: coerceViewMode(value?.defaultViewMode),
     showTabNumbers:
       typeof value?.showTabNumbers === "boolean"
@@ -225,6 +256,10 @@ const coerceSettings = (value: Partial<Settings> | null | undefined): Settings =
       typeof value?.confirmDelete === "boolean"
         ? value.confirmDelete
         : DEFAULT_SETTINGS.confirmDelete,
+    confirmClose:
+      typeof value?.confirmClose === "boolean"
+        ? value.confirmClose
+        : DEFAULT_SETTINGS.confirmClose,
     ambientBackground:
       typeof value?.ambientBackground === "boolean"
         ? value.ambientBackground
@@ -235,6 +270,7 @@ const coerceSettings = (value: Partial<Settings> | null | undefined): Settings =
         : DEFAULT_SETTINGS.blurOverlays,
     keybinds: coerceKeybinds(value?.keybinds),
     gridSize: coerceGridSize(value?.gridSize),
+    gridAutoColumns: coerceGridAutoColumns(value?.gridAutoColumns),
     gridRounded:
       typeof value?.gridRounded === "boolean"
         ? value.gridRounded
@@ -287,6 +323,10 @@ const coerceSettings = (value: Partial<Settings> | null | undefined): Settings =
       4096,
     ),
     thumbnailFit: coerceThumbnailFit(value?.thumbnailFit),
+    thumbnailAppIcons:
+      typeof value?.thumbnailAppIcons === "boolean"
+        ? value.thumbnailAppIcons
+        : DEFAULT_SETTINGS.thumbnailAppIcons,
   };
 };
 
@@ -296,14 +336,24 @@ const normalizeLegacySettings = (
   version: number | undefined,
 ): Partial<Settings> => {
   if (version != null && version >= STORAGE_VERSION) return settings;
-  const legacyGridSize = settings.gridSize as string | undefined;
+  let next = settings;
+  const legacyGridSize = next.gridSize as string | undefined;
   if (legacyGridSize === "large") {
-    return { ...settings, gridSize: "normal" };
+    next = { ...next, gridSize: "normal" };
+  } else if (legacyGridSize === "compact") {
+    next = { ...next, gridSize: "small" };
   }
-  if (legacyGridSize === "compact") {
-    return { ...settings, gridSize: "small" };
+  if (!("sidebarHiddenSections" in next)) {
+    const showTips =
+      typeof (next as { sidebarShowTips?: boolean }).sidebarShowTips === "boolean"
+        ? (next as { sidebarShowTips?: boolean }).sidebarShowTips
+        : true;
+    next = {
+      ...next,
+      sidebarHiddenSections: showTips ? [] : ["tips"],
+    };
   }
-  return settings;
+  return next;
 };
 
 const readStoredSettings = () => {
@@ -352,8 +402,8 @@ useSettingsStore.subscribe((state) => {
   writeStoredSettings({
     sidebarOpen: state.sidebarOpen,
     sidebarRecentLimit: state.sidebarRecentLimit,
-    sidebarShowTips: state.sidebarShowTips,
     sidebarSectionOrder: state.sidebarSectionOrder,
+    sidebarHiddenSections: state.sidebarHiddenSections,
     defaultViewMode: state.defaultViewMode,
     showTabNumbers: state.showTabNumbers,
     fixedWidthTabs: state.fixedWidthTabs,
@@ -363,10 +413,12 @@ useSettingsStore.subscribe((state) => {
     categoryTinting: state.categoryTinting,
     showParentEntry: state.showParentEntry,
     confirmDelete: state.confirmDelete,
+    confirmClose: state.confirmClose,
     ambientBackground: state.ambientBackground,
     blurOverlays: state.blurOverlays,
     keybinds: state.keybinds,
     gridSize: state.gridSize,
+    gridAutoColumns: state.gridAutoColumns,
     gridRounded: state.gridRounded,
     gridCentered: state.gridCentered,
     gridShowSize: state.gridShowSize,
@@ -382,6 +434,7 @@ useSettingsStore.subscribe((state) => {
     thumbnailVideos: state.thumbnailVideos,
     thumbnailCacheMb: state.thumbnailCacheMb,
     thumbnailFit: state.thumbnailFit,
+    thumbnailAppIcons: state.thumbnailAppIcons,
   });
 });
 

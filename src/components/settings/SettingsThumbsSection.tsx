@@ -10,6 +10,7 @@ type SettingsThumbsSectionProps = {
   thumbnailFormat: "webp" | "jpeg";
   thumbnailVideos: boolean;
   thumbnailFit: ThumbnailFit;
+  thumbnailAppIcons: boolean;
   onUpdate: SettingsUpdateHandler;
 };
 
@@ -28,6 +29,7 @@ export function SettingsThumbsSection({
   thumbnailFormat,
   thumbnailVideos,
   thumbnailFit,
+  thumbnailAppIcons,
   onUpdate,
 }: SettingsThumbsSectionProps) {
   const isThumbsDisabled = !thumbnailsEnabled;
@@ -102,6 +104,24 @@ export function SettingsThumbsSection({
             checked={thumbnailVideos}
             disabled={isThumbsDisabled}
             onChange={(event) => onUpdate({ thumbnailVideos: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
+      </div>
+      <div className="settings-item">
+        <div>
+          <div className="settings-label">Default app icons</div>
+          <div className="settings-desc">
+            Show the system icon when no thumbnail is available.
+          </div>
+        </div>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={thumbnailAppIcons}
+            onChange={(event) =>
+              onUpdate({ thumbnailAppIcons: event.currentTarget.checked })
+            }
           />
           <span />
         </label>

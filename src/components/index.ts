@@ -1,6 +1,8 @@
 // Barrel exports for shared UI components.
 export * from "./app";
+export { AboutModal } from "./AboutModal";
 export { ContextMenu } from "./ContextMenu";
+export { DrivePicker } from "./DrivePicker";
 export { DriveBar } from "./DriveBar";
 export { EmptyState } from "./EmptyState";
 export { default as FileGrid } from "./FileGrid";
@@ -10,6 +12,8 @@ export * from "./Icons";
 export { LoadingIndicator } from "./LoadingIndicator";
 export { LoadingState } from "./LoadingState";
 export { PathBar } from "./PathBar";
+export { PathInputsBar } from "./PathInputsBar";
+export { PathBarActions } from "./PathBarActions";
 export { PathCrumbsBar } from "./PathCrumbsBar";
 export { PerfProfiler } from "./PerfProfiler";
 export { PromptModal } from "./PromptModal";

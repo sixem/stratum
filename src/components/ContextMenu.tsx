@@ -1,4 +1,4 @@
-// Context menu overlay with viewport-aware positioning.
+﻿// Context menu overlay with viewport-aware positioning.
 import type { CSSProperties } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ContextMenuItem } from "@/types";
@@ -13,6 +13,7 @@ type ContextMenuProps = {
 
 const MENU_EDGE = 10;
 const MENU_GAP = 2;
+const SUBMENU_GAP = 6;
 
 const clamp = (value: number, min: number, max: number) => {
   if (value < min) return min;
@@ -48,7 +49,11 @@ const getViewportSize = () => {
 
 export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) => {
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const submenuRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState({ x, y });
+  const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null);
+  const [submenuSide, setSubmenuSide] = useState<"left" | "right">("right");
+  const lastOpenItemsRef = useRef<ContextMenuItem[]>(items);
   const menuStyle = useMemo<CSSProperties>(
     () => ({
       left: position.x,
@@ -56,6 +61,22 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
     }),
     [position.x, position.y],
   );
+  // Freeze the last visible items so close animations don't flash new content.
+  useLayoutEffect(() => {
+    if (!open) return;
+    lastOpenItemsRef.current = items;
+  }, [items, open]);
+  const renderedItems = open ? items : lastOpenItemsRef.current;
+
+  useEffect(() => {
+    if (!open) {
+      setOpenSubmenuId(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    setOpenSubmenuId(null);
+  }, [items]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -68,6 +89,25 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
     const nextY = alignAxis(y, rect.height, viewport.height);
     setPosition({ x: nextX, y: nextY });
   }, [items.length, open, x, y]);
+
+  useLayoutEffect(() => {
+    if (!open || !openSubmenuId) return;
+    const menu = menuRef.current;
+    const submenu = submenuRef.current;
+    if (!menu || !submenu) return;
+    const anchor = menu.querySelector(
+      `[data-submenu-id="${openSubmenuId}"]`,
+    ) as HTMLElement | null;
+    if (!anchor) return;
+    const anchorRect = anchor.getBoundingClientRect();
+    const submenuRect = submenu.getBoundingClientRect();
+    const viewport = getViewportSize();
+    const fitsRight =
+      anchorRect.right + SUBMENU_GAP + submenuRect.width <= viewport.width - MENU_EDGE;
+    const fitsLeft =
+      anchorRect.left - SUBMENU_GAP - submenuRect.width >= MENU_EDGE;
+    setSubmenuSide(fitsRight || !fitsLeft ? "right" : "left");
+  }, [items.length, open, openSubmenuId]);
 
   useEffect(() => {
     if (!open) return;
@@ -95,6 +135,92 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
     };
   }, [onClose, open]);
 
+  const renderMenuItems = (menuItems: ContextMenuItem[], depth = 0) =>
+    menuItems.map((item) => {
+      if (item.kind === "divider") {
+        return <div key={item.id} className="context-divider" role="separator" />;
+      }
+      if (item.kind === "submenu") {
+        const isOpen = openSubmenuId === item.id;
+        const isDisabled = Boolean(item.disabled);
+        return (
+          <div
+            key={item.id}
+            className={`context-item-group${isOpen ? " is-open" : ""}${
+              isDisabled ? " is-disabled" : ""
+            }`}
+            data-submenu-id={item.id}
+            onPointerEnter={() => {
+              if (isDisabled) return;
+              setOpenSubmenuId(item.id);
+            }}
+          >
+            <button
+              type="button"
+              className="context-item context-item--submenu"
+              onClick={(event) => {
+                event.preventDefault();
+                if (isDisabled) return;
+                setOpenSubmenuId((current) => (current === item.id ? null : item.id));
+              }}
+              role="menuitem"
+              aria-haspopup="menu"
+              aria-expanded={isOpen}
+              disabled={item.disabled}
+            >
+              <span className="context-check" />
+              <span className="context-label">{item.label}</span>
+              <span className="context-right">
+                {item.hint ? <span className="context-hint">{item.hint}</span> : null}
+                <span className="context-caret" aria-hidden="true">
+                  &gt;
+                </span>
+              </span>
+            </button>
+            {isOpen ? (
+              <div
+                ref={submenuRef}
+                className={`context-submenu${submenuSide === "left" ? " is-left" : " is-right"}`}
+                role="menu"
+              >
+                <div className="context-submenu-list">
+                  {renderMenuItems(item.items, depth + 1)}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        );
+      }
+      const isRadio = typeof item.active === "boolean";
+      return (
+        <button
+          key={item.id}
+          type="button"
+          className={`context-item${item.active ? " is-active" : ""}`}
+          onClick={() => {
+            item.onSelect();
+            onClose();
+          }}
+          onPointerEnter={
+            depth === 0
+              ? () => {
+                  if (openSubmenuId) {
+                    setOpenSubmenuId(null);
+                  }
+                }
+              : undefined
+          }
+          role={isRadio ? "menuitemradio" : "menuitem"}
+          aria-checked={isRadio ? (item.active ? true : false) : undefined}
+          disabled={item.disabled}
+        >
+          <span className="context-check">{item.active ? "x" : ""}</span>
+          <span className="context-label">{item.label}</span>
+          {item.hint ? <span className="context-hint">{item.hint}</span> : null}
+        </button>
+      );
+    });
+
   return (
     <div
       ref={menuRef}
@@ -105,30 +231,7 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
       aria-hidden={!open}
       onContextMenu={(event) => event.preventDefault()}
     >
-      {items.map((item) => {
-        if (item.kind === "divider") {
-          return <div key={item.id} className="context-divider" role="separator" />;
-        }
-        const isRadio = typeof item.active === "boolean";
-        return (
-          <button
-            key={item.id}
-            type="button"
-            className={`context-item${item.active ? " is-active" : ""}`}
-            onClick={() => {
-              item.onSelect();
-              onClose();
-            }}
-            role={isRadio ? "menuitemradio" : "menuitem"}
-            aria-checked={isRadio ? (item.active ? true : false) : undefined}
-            disabled={item.disabled}
-          >
-            <span className="context-check">{item.active ? "x" : ""}</span>
-            <span className="context-label">{item.label}</span>
-            {item.hint ? <span className="context-hint">{item.hint}</span> : null}
-          </button>
-        );
-      })}
+      <div className="context-menu-list">{renderMenuItems(renderedItems)}</div>
     </div>
   );
 };

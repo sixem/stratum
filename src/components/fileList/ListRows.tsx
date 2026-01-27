@@ -1,4 +1,7 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 // Row rendering for list view entries.
 import { memo } from "react";
 import type { FileEntry, RenameCommitReason } from "@/types";
@@ -15,7 +18,8 @@ type ParentRowProps = {
   onSelect: (event: ReactMouseEvent) => void;
   onOpen: (event: ReactMouseEvent) => void;
   onOpenNewTab?: (event: ReactMouseEvent) => void;
-  onContextMenu?: (event: ReactMouseEvent) => void;
+  onContextMenu?: (event: ReactPointerEvent) => void;
+  onContextMenuDown?: (event: ReactPointerEvent) => void;
 };
 
 export const ParentRow = memo(({
@@ -27,6 +31,7 @@ export const ParentRow = memo(({
   onOpen,
   onOpenNewTab,
   onContextMenu,
+  onContextMenuDown,
 }: ParentRowProps) => {
   const handleMouseDown = (event: ReactMouseEvent) => {
     if (event.button === 0) {
@@ -40,6 +45,16 @@ export const ParentRow = memo(({
       onSelect(event);
     }
   };
+  const handleContextMenuDown = (event: ReactPointerEvent) => {
+    if (event.button !== 2) return;
+    event.preventDefault();
+    onContextMenuDown?.(event);
+  };
+  const handleContextMenuUp = (event: ReactPointerEvent) => {
+    if (event.button !== 2) return;
+    event.preventDefault();
+    onContextMenu?.(event);
+  };
 
   return (
     <TooltipWrapper text={path} delayMs={FILE_TOOLTIP_DELAY_MS}>
@@ -51,12 +66,14 @@ export const ParentRow = memo(({
         data-index={index}
         data-is-dir="true"
         data-drop-target={dropTarget ? "true" : "false"}
-        aria-selected={selected}
-        onClick={handleClick}
-        onDoubleClick={onOpen}
-        onMouseDown={handleMouseDown}
-        onContextMenu={onContextMenu}
-      >
+      aria-selected={selected}
+      onClick={handleClick}
+      onDoubleClick={onOpen}
+      onMouseDown={handleMouseDown}
+      onPointerDown={handleContextMenuDown}
+      onPointerUp={handleContextMenuUp}
+      onContextMenu={(event) => event.preventDefault()}
+    >
         <span className="name">..</span>
         <span className="size">-</span>
         <span className="modified">-</span>
@@ -82,7 +99,8 @@ type EntryRowProps = {
   onSelect: (event: ReactMouseEvent) => void;
   onOpen: (event: ReactMouseEvent) => void;
   onOpenNewTab?: (event: ReactMouseEvent) => void;
-  onContextMenu?: (event: ReactMouseEvent) => void;
+  onContextMenu?: (event: ReactPointerEvent) => void;
+  onContextMenuDown?: (event: ReactPointerEvent) => void;
   presence?: EntryPresence;
 };
 
@@ -104,6 +122,7 @@ export const EntryRow = memo(({
   onOpen,
   onOpenNewTab,
   onContextMenu,
+  onContextMenuDown,
   presence = "stable",
 }: EntryRowProps) => {
   const isRemoved = presence === "removed";
@@ -127,6 +146,18 @@ export const EntryRow = memo(({
     if (event.detail === 0) {
       onSelect(event);
     }
+  };
+  const handleContextMenuDown = (event: ReactPointerEvent) => {
+    if (!isInteractive) return;
+    if (event.button !== 2) return;
+    event.preventDefault();
+    onContextMenuDown?.(event);
+  };
+  const handleContextMenuUp = (event: ReactPointerEvent) => {
+    if (!isInteractive) return;
+    if (event.button !== 2) return;
+    event.preventDefault();
+    onContextMenu?.(event);
   };
   if (isRenaming) {
     return (
@@ -181,7 +212,9 @@ export const EntryRow = memo(({
         onClick={isInteractive ? handleClick : undefined}
         onDoubleClick={isInteractive ? onOpen : undefined}
         onMouseDown={isInteractive ? handleMouseDown : undefined}
-        onContextMenu={isInteractive ? onContextMenu : undefined}
+        onPointerDown={isInteractive ? handleContextMenuDown : undefined}
+        onPointerUp={isInteractive ? handleContextMenuUp : undefined}
+        onContextMenu={(event) => event.preventDefault()}
       >
         <span className="name">{entry.name}</span>
         <span className="size">{sizeLabel}</span>

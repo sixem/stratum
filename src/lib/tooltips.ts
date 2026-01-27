@@ -67,8 +67,15 @@ export const buildEntryTooltip = (entry: FileEntry, meta?: EntryMeta) => {
 };
 
 export const buildDriveTooltip = (label: string, info?: DriveInfo) => {
-  if (!info || info.free == null) return label;
-  const percent = info.total ? formatPercent(info.free, info.total) : null;
-  const prefix = label.endsWith(":") ? label : `${label}:`;
-  return `${prefix} ${formatBytes(info.free)} free${percent ? ` (${percent})` : ""}`;
+  const heading = label.trim();
+  if (!info || info.total == null || info.free == null) return heading;
+  const used = Math.max(0, info.total - info.free);
+  const usedPercent = formatPercent(used, info.total);
+  const freePercent = formatPercent(info.free, info.total);
+  return [
+    heading,
+    `Used: ${formatBytes(used)}${usedPercent ? ` (${usedPercent})` : ""}`,
+    `Free: ${formatBytes(info.free)}${freePercent ? ` (${freePercent})` : ""}`,
+    `Total: ${formatBytes(info.total)}`,
+  ].join("\n");
 };

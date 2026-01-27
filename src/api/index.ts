@@ -5,6 +5,8 @@ export { copyPathsToClipboard, getClipboardPaths } from "./clipboard";
 export { getShellAvailability, openShell } from "./shells";
 export {
   copyEntries,
+  createFile,
+  createFolder,
   deleteEntries,
   ensureDir,
   getDrives,
@@ -21,6 +23,8 @@ export {
   stopDirWatch,
 } from "./fs";
 export { openPath, openPathProperties } from "./opener";
+export { convertImage, getImageInfo } from "./images";
+export { getFileIcons, toFileIconUrl } from "./fileIcons";
 export {
   clearThumbCache,
   getThumbCacheDir,

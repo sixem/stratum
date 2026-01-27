@@ -97,6 +97,9 @@ export function PathCrumbsBar({
     [path, trailPath],
   );
   const trimmedPath = path.trim();
+  if (!trimmedPath) {
+    return null;
+  }
   const isBarDropTarget = Boolean(trimmedPath && dropTargetPath === trimmedPath);
 
   const handleCrumbMouseDown = (event: ReactMouseEvent, crumbPath: string) => {

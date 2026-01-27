@@ -1,0 +1,18 @@
+// Element-level resets for controls.
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  appearance: none;
+  border: none;
+  background: none;
+}
+
+input {
+  border: none;
+  background: transparent;
+}

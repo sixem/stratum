@@ -1,9 +1,14 @@
 // Sidebar for ordered sections like places, recent jumps, and tips.
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { Fragment, useState } from "react";
 import { handleMiddleClick, normalizePath, tabLabel } from "@/lib";
 import type { SidebarSectionId } from "@/modules";
-import { normalizeSidebarSectionOrder } from "@/modules";
+import {
+  getSessionHint,
+  normalizeSidebarHiddenSections,
+  normalizeSidebarSectionOrder,
+  refreshSessionHint,
+} from "@/modules";
 import { TooltipWrapper } from "./Tooltip";
 import { SidebarSection } from "./SidebarSection";
 import type { Place } from "@/types";
@@ -13,7 +18,7 @@ type SidebarProps = {
   recentJumps: string[];
   activePath: string;
   sectionOrder: SidebarSectionId[];
-  showTips: boolean;
+  hiddenSections: SidebarSectionId[];
   onSelect: (path: string) => void;
   onSelectRecent: (path: string) => void;
   onSelectNewTab?: (path: string) => void;
@@ -68,7 +73,7 @@ export function Sidebar({
   recentJumps,
   activePath,
   sectionOrder,
-  showTips,
+  hiddenSections,
   onSelect,
   onSelectRecent,
   onSelectNewTab,
@@ -77,6 +82,9 @@ export function Sidebar({
   const [recentOpen, setRecentOpen] = useState(true);
   const activeKey = normalizePath(activePath);
   const orderedSections = normalizeSidebarSectionOrder(sectionOrder);
+  const hiddenSectionIds = normalizeSidebarHiddenSections(hiddenSections);
+  const hiddenSectionSet = new Set(hiddenSectionIds);
+  const [hint, setHint] = useState(() => getSessionHint());
 
   const renderSection = (sectionId: SidebarSectionId) => {
     switch (sectionId) {
@@ -130,14 +138,19 @@ export function Sidebar({
           </SidebarSection>
         );
       case "tips":
-        if (!showTips) return null;
         return (
           <div className="sidebar-tips">
             <div className="section-title">Tips</div>
             <div className="tips">
-              <div className="tip">Click a folder row to open it.</div>
-              <div className="tip">Use the path bar to jump anywhere.</div>
-              <div className="tip">Refresh to rescan the folder.</div>
+              <button
+                type="button"
+                className="tip"
+                onClick={() => setHint(refreshSessionHint())}
+                aria-label="Show a new tip"
+                title="Click for another tip"
+              >
+                {hint.text}
+              </button>
             </div>
           </div>
         );
@@ -145,15 +158,23 @@ export function Sidebar({
         return null;
     }
   };
+  // Build the visible section list so we can show a clean empty state when hidden.
+  const renderedSections = orderedSections.reduce<ReactNode[]>((acc, sectionId) => {
+    if (hiddenSectionSet.has(sectionId)) return acc;
+    const content = renderSection(sectionId);
+    if (!content) return acc;
+    acc.push(<Fragment key={sectionId}>{content}</Fragment>);
+    return acc;
+  }, []);
 
   return (
     <aside className="sidebar">
       <div className="sidebar-content">
-        {orderedSections.map((sectionId) => {
-          const content = renderSection(sectionId);
-          if (!content) return null;
-          return <Fragment key={sectionId}>{content}</Fragment>;
-        })}
+        {renderedSections.length === 0 ? (
+          <div className="sidebar-empty">No sidebar sections visible.</div>
+        ) : (
+          renderedSections
+        )}
       </div>
     </aside>
   );

@@ -1,0 +1,391 @@
+// Path bar, drive picker, and path/search inputs.
+.pathbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--stroke);
+  width: 100%;
+}
+
+.pathbar-left,
+.pathbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.pathbar-drive {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.pathbar-right {
+  margin-left: auto;
+}
+
+.pathbar-brand {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+}
+
+.pathbar-brand:focus-visible {
+  outline: 2px solid rgba(var(--accent-rgb), 0.5);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.pathbar-brand:hover .brand-mark {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.drive-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.drive-toggle {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.drive-toggle-body {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--surface-control);
+  padding: 0 2px;
+  overflow: hidden;
+}
+
+.drive-picker-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  height: 100%;
+  flex: 0 0 auto;
+}
+
+.drive-picker-button:hover {
+  color: var(--text);
+}
+
+.drive-picker-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.drive-picker-extend {
+  max-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-6px);
+  transition: none;
+  overflow: hidden;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.drive-picker[data-expanded="true"] .drive-picker-extend {
+  max-width: 100%;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.drive-picker-scroll {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 6px 0 2px;
+  height: 100%;
+}
+
+.drive-picker-scroll::before,
+.drive-picker-scroll::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.drive-picker-scroll::before {
+  left: 0;
+  background: linear-gradient(90deg, rgba(10, 11, 16, 0.95), rgba(10, 11, 16, 0));
+}
+
+.drive-picker-scroll::after {
+  right: 0;
+  background: linear-gradient(270deg, rgba(10, 11, 16, 0.95), rgba(10, 11, 16, 0));
+}
+
+.drive-picker-scroll[data-can-left="true"]::before,
+.drive-picker-scroll[data-can-right="true"]::after {
+  opacity: 1;
+}
+
+.drive-picker-list {
+  display: flex;
+  overflow: hidden;
+  scroll-behavior: smooth;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.drive-picker-item {
+  padding: 2px 12px;
+  border-radius: 2px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.drive-picker-item:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.drive-picker-item.is-active {
+  border-color: rgba(var(--accent-rgb), 0.6);
+  color: var(--accent);
+}
+
+.drive-picker-scroll-button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(47, 54, 70, 0.7);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.drive-picker-chevron {
+  height: 16px;
+  display: block;
+}
+
+.drive-picker-scroll-button.is-left {
+  left: 2px;
+}
+
+.drive-picker-scroll-button.is-right {
+  right: 2px;
+}
+
+.drive-picker-scroll[data-can-left="true"] .drive-picker-scroll-button.is-left,
+.drive-picker-scroll[data-can-right="true"] .drive-picker-scroll-button.is-right {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drive-picker-scroll-button:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--text);
+}
+
+.drive-picker-scroll-button:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pathbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.path-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.nav-arrow {
+  transform-origin: center;
+}
+
+.nav-arrow.is-back {
+  transform: rotate(180deg);
+}
+
+.path-tabs {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-bottom: 1px solid var(--stroke);
+}
+
+.path-inputbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(160px, 220px);
+  gap: 10px;
+  align-items: center;
+  padding: 6px 10px 0 10px;
+  background: transparent;
+}
+
+.path-inputbar .path-input {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--stroke);
+  background: var(--surface-control-strong);
+  color: var(--text);
+  font-size: 13px;
+  height: 30px;
+}
+
+.path-inputbar .path-input:focus {
+  border-color: rgba(var(--accent-rgb), 0.5);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+}
+
+.path-inputbar .search-field {
+  padding: 0 10px;
+  border-left: none;
+  border-radius: 6px;
+  border: 1px solid var(--stroke);
+  background: var(--surface-control-strong);
+  color: var(--muted);
+  height: 30px;
+}
+
+.path-inputbar .search-field:focus-within {
+  border-color: rgba(var(--accent-rgb), 0.5);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+}
+
+.path-inputbar .search-input {
+  padding: 6px 0;
+  min-width: 0;
+  width: 100%;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.path-inputbar .search-input::placeholder {
+  color: var(--muted);
+}
+
+.inputbar-refresh {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--stroke);
+  background: var(--surface-control-strong);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.inputbar-refresh:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  color: var(--text);
+}
+
+.inputbar-refresh:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 10px;
+  border-left: 1px solid var(--stroke);
+  color: var(--muted);
+}
+
+.search-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.btn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--stroke);
+  background: var(--surface-control);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: none;
+}
+
+.btn:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.btn.ghost {
+  background: transparent;
+}
+
+.btn-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+

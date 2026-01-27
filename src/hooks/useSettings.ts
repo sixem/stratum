@@ -1,6 +1,3 @@
-// Exposes the settings store as a hook for components.
-import { useSettingsStore } from "@/modules";
-
-export const useSettings = () => {
-  return useSettingsStore((state) => state);
-};
+﻿// Moved to ./domain/useSettings for strict layering.
+// Re-exported for compatibility.
+export * from "./domain/useSettings";

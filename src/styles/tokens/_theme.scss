@@ -1,0 +1,85 @@
+// Theme tokens and global CSS variables.
+@use "sass:map";
+
+$accent-themes: (
+  "red": (
+    color: #e14c4c,
+    rgb: (225, 76, 76),
+  ),
+  "purple": (
+    color: #b58bff,
+    rgb: (181, 139, 255),
+  ),
+  "green": (
+    color: #71d6a2,
+    rgb: (113, 214, 162),
+  ),
+  "yellow": (
+    color: #f0c96b,
+    rgb: (240, 201, 107),
+  ),
+  "orange": (
+    color: #f59b6a,
+    rgb: (245, 155, 106),
+  ),
+  "teal": (
+    color: #60c4d6,
+    rgb: (96, 196, 214),
+  ),
+  "white": (
+    color: #e6eaf2,
+    rgb: (230, 234, 242),
+  ),
+);
+
+:root {
+  --bg: #0a0b10;
+  --panel: #10131a;
+  --panel-2: #0d1016;
+  --panel-deep: #0b0f16;
+  // Shared surface tokens for controls and cards.
+  --surface-card: #0f131d;
+  --surface-nav: #0f141d;
+  --surface-control-muted: #121621;
+  --surface-control: #151923;
+  --surface-control-strong: #151a26;
+  --stroke: #1b2130;
+  --text: #e2e6f2;
+  --muted: #8c95aa;
+  --accent: #e14c4c;
+  --accent-rgb: 225, 76, 76;
+  --topstack-height: 120px;
+  --statusbar-height: 30px;
+  // Layout sizing tokens to keep density changes centralized.
+  --layout-gap: 16px;
+  --layout-padding: 12px 16px 16px;
+  --panel-radius: 10px;
+  --sidebar-padding: 16px;
+  --main-padding: 12px;
+  --thumb-grid-margin: 0;
+}
+
+@each $name, $theme in $accent-themes {
+  :root[data-accent="#{$name}"] {
+    --accent: #{map.get($theme, color)};
+    --accent-rgb: #{map.get($theme, rgb)};
+  }
+}
+
+:root[data-ambient="true"] {
+  --panel: rgba(16, 19, 26, 0.72);
+  --panel-2: rgba(12, 15, 21, 0.78);
+  --ambient-glow-strong: rgba(var(--accent-rgb), 0.55);
+  --ambient-glow-mid: rgba(var(--accent-rgb), 0.32);
+  --ambient-glow-soft: rgba(var(--accent-rgb), 0.18);
+}
+
+// Compact mode trims layout chrome for an edge-to-edge workspace.
+:root[data-compact="true"] {
+  --layout-gap: 0;
+  --layout-padding: 0;
+  --panel-radius: 0;
+  --main-padding: 0;
+  --thumb-grid-margin: 0;
+  --compact-edge-gap: 10px;
+}

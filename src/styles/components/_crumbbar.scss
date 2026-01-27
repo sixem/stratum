@@ -1,0 +1,68 @@
+// Breadcrumb path bar styling.
+.crumbbar {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--stroke);
+  min-width: 0;
+  width: 100%;
+  height: 28px;
+}
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.crumbs::-webkit-scrollbar {
+  display: none;
+}
+
+.crumb {
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  font-size: 0.775em;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: none;
+}
+
+.crumb[data-drop-target="true"] {
+  border-style: dashed;
+  border-color: rgba(var(--accent-rgb), 0.7);
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.35),
+    inset 0 0 0 1px rgba(var(--accent-rgb), 0.35);
+}
+
+.crumb:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--surface-control);
+}
+
+.crumb[aria-current="page"] {
+  color: var(--accent);
+}
+
+.crumb[data-future="true"]:not([aria-current="page"]) {
+  color: var(--muted);
+}
+
+.crumbbar[data-drop-target="true"] {
+  border-bottom-color: rgba(var(--accent-rgb), 0.7);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.25);
+}
+
+.crumb-sep {
+  font-size: 11px;
+  color: var(--muted);
+}
+

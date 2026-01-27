@@ -1,6 +1,6 @@
 // Owns the main layout body (sidebar + file view) and the focusable main container.
 import type { ComponentProps, RefObject } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { FileView, PerfProfiler, Sidebar } from "@/components";
 
 type AppContentProps = {
@@ -9,7 +9,8 @@ type AppContentProps = {
   sidebarProps: ComponentProps<typeof Sidebar>;
   mainRef: RefObject<HTMLElement | null>;
   fileViewProps: ComponentProps<typeof FileView>;
-  onContextMenu?: (event: ReactMouseEvent) => void;
+  onContextMenu?: (event: ReactPointerEvent) => void;
+  onContextMenuDown?: (event: ReactPointerEvent) => void;
 };
 
 export const AppContent = ({
@@ -19,10 +20,22 @@ export const AppContent = ({
   mainRef,
   fileViewProps,
   onContextMenu,
+  onContextMenuDown,
 }: AppContentProps) => {
   return (
     <PerfProfiler id="app-content">
-      <div className={layoutClass} onContextMenu={onContextMenu}>
+      <div
+        className={layoutClass}
+        onPointerDown={(event) => {
+          if (event.button !== 2) return;
+          onContextMenuDown?.(event);
+        }}
+        onPointerUp={(event) => {
+          if (event.button !== 2) return;
+          onContextMenu?.(event);
+        }}
+        onContextMenu={(event) => event.preventDefault()}
+      >
         {sidebarOpen ? (
           <PerfProfiler id="sidebar">
             <Sidebar {...sidebarProps} />
