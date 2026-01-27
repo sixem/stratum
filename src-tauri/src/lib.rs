@@ -1,9 +1,11 @@
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 mod fs;
 mod drag;
 mod opener;
 mod thumbs;
+mod images;
+mod file_icons;
 mod clipboard;
 mod watch;
 mod shells;
@@ -44,6 +46,20 @@ async fn ensure_dir(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn create_folder(path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || fs::create_folder(path))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+async fn create_file(path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || fs::create_file(path))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
 async fn list_dir(
     path: String,
     options: Option<fs::ListDirOptions>,
@@ -78,20 +94,78 @@ async fn parent_dir(path: String) -> Option<String> {
 }
 
 #[tauri::command]
-async fn copy_entries(paths: Vec<String>, destination: String) -> Result<fs::CopyReport, String> {
-    tauri::async_runtime::spawn_blocking(move || fs::copy_entries(paths, destination))
-        .await
-        .map_err(|err| err.to_string())?
+async fn copy_entries(
+    window: tauri::Window,
+    paths: Vec<String>,
+    destination: String,
+    transfer_id: Option<String>,
+) -> Result<fs::CopyReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        // Only wire progress events when the UI provides a transfer id.
+        let transfer_id = transfer_id
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let mut emitter = transfer_id.map(|id| {
+            let window = window.clone();
+            move |update: fs::TransferProgressUpdate| {
+                let payload = fs::TransferProgress {
+                    id: id.clone(),
+                    processed: update.processed,
+                    total: update.total,
+                    current_path: update.current_path,
+                    current_bytes: update.current_bytes,
+                    current_total_bytes: update.current_total_bytes,
+                };
+                let _ = window.emit("transfer_progress", payload);
+            }
+        });
+        fs::copy_entries(
+            paths,
+            destination,
+            emitter
+                .as_mut()
+                .map(|callback| callback as &mut dyn FnMut(fs::TransferProgressUpdate)),
+        )
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
 async fn transfer_entries(
+    window: tauri::Window,
     paths: Vec<String>,
     destination: String,
     options: Option<fs::TransferOptions>,
+    transfer_id: Option<String>,
 ) -> Result<fs::TransferReport, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        fs::transfer_entries(paths, destination, options)
+        // Only wire progress events when the UI provides a transfer id.
+        let transfer_id = transfer_id
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let mut emitter = transfer_id.map(|id| {
+            let window = window.clone();
+            move |update: fs::TransferProgressUpdate| {
+                let payload = fs::TransferProgress {
+                    id: id.clone(),
+                    processed: update.processed,
+                    total: update.total,
+                    current_path: update.current_path,
+                    current_bytes: update.current_bytes,
+                    current_total_bytes: update.current_total_bytes,
+                };
+                let _ = window.emit("transfer_progress", payload);
+            }
+        });
+        fs::transfer_entries(
+            paths,
+            destination,
+            options,
+            emitter
+                .as_mut()
+                .map(|callback| callback as &mut dyn FnMut(fs::TransferProgressUpdate)),
+        )
     })
     .await
     .map_err(|err| err.to_string())?
@@ -207,10 +281,42 @@ async fn get_thumb_cache_size(app: tauri::AppHandle) -> Result<u64, String> {
 }
 
 #[tauri::command]
+async fn get_file_icons(
+    app: tauri::AppHandle,
+    extensions: Vec<String>,
+) -> Result<Vec<file_icons::FileIconHit>, String> {
+    tauri::async_runtime::spawn_blocking(move || file_icons::get_file_icons(&app, extensions))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+async fn get_image_info(path: String) -> Result<images::ImageInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || images::get_image_info(path))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+async fn convert_image(
+    path: String,
+    destination: String,
+    options: images::ImageConvertOptions,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || images::convert_image(path, destination, options))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
 async fn get_shell_availability() -> shells::ShellAvailability {
     tauri::async_runtime::spawn_blocking(shells::get_shell_availability)
         .await
-        .unwrap_or(shells::ShellAvailability { pwsh: false, wsl: false })
+        .unwrap_or(shells::ShellAvailability {
+            pwsh: false,
+            wsl: false,
+            ffmpeg: false,
+        })
 }
 
 #[tauri::command]
@@ -235,6 +341,8 @@ pub fn run() {
             get_places,
             list_drives,
             ensure_dir,
+            create_folder,
+            create_file,
             list_drive_info,
             list_dir,
             list_dir_with_parent,
@@ -256,6 +364,9 @@ pub fn run() {
             get_thumb_cache_dir,
             clear_thumb_cache,
             get_thumb_cache_size,
+            get_image_info,
+            convert_image,
+            get_file_icons,
             get_shell_availability,
             open_shell
         ])

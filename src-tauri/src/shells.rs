@@ -1,4 +1,4 @@
-// Shell availability helpers for PowerShell 7+ and WSL.
+// Shell availability helpers for PowerShell, WSL, and optional tools like ffmpeg.
 use serde::Serialize;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -8,6 +8,7 @@ use std::process::Command;
 pub struct ShellAvailability {
     pub pwsh: bool,
     pub wsl: bool,
+    pub ffmpeg: bool,
 }
 
 fn build_candidates(command: &str) -> Vec<String> {
@@ -75,6 +76,7 @@ pub fn get_shell_availability() -> ShellAvailability {
     // Treat Windows PowerShell as a fallback when pwsh isn't installed.
     pwsh: is_command_available("pwsh") || is_command_available("powershell"),
     wsl: is_command_available("wsl"),
+    ffmpeg: is_command_available("ffmpeg"),
   }
 }
 
