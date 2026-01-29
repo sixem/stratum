@@ -3,7 +3,7 @@ type LoadingStateProps = {
   rows?: number;
 };
 
-export function LoadingState({ rows = 6 }: LoadingStateProps) {
+export const LoadingState = ({ rows = 6 }: LoadingStateProps) => {
   return (
     <div className="loading-state" aria-live="polite">
       {Array.from({ length: rows }).map((_, index) => (
@@ -15,4 +15,4 @@ export function LoadingState({ rows = 6 }: LoadingStateProps) {
       ))}
     </div>
   );
-}
+};

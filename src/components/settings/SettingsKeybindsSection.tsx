@@ -20,13 +20,13 @@ type SettingsKeybindsSectionProps = {
   onCaptureChange?: (active: boolean) => void;
 };
 
-export function SettingsKeybindsSection({
+export const SettingsKeybindsSection = ({
   sectionId,
   open,
   keybinds,
   onUpdate,
   onCaptureChange,
-}: SettingsKeybindsSectionProps) {
+}: SettingsKeybindsSectionProps) => {
   const [captureAction, setCaptureAction] = useState<KeybindAction | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
 
@@ -163,4 +163,4 @@ export function SettingsKeybindsSection({
       })}
     </section>
   );
-}
+};

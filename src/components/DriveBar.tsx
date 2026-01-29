@@ -1,4 +1,4 @@
-// Drive picker for the top bar.
+// Deprecated drive bar; not wired in App. Remove when safe.
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { activeDrive, buildDriveTooltip, handleMiddleClick, normalizePath } from "@/lib";
 import { TooltipWrapper } from "./Tooltip";
@@ -56,13 +56,13 @@ const DriveList = ({
   });
 };
 
-export function DriveBar({
+export const DriveBar = ({
   drives,
   driveInfo,
   activePath,
   onSelect,
   onSelectNewTab,
-}: DriveBarProps) {
+}: DriveBarProps) => {
   const currentDrive = activeDrive(activePath, drives);
 
   return (
@@ -81,4 +81,4 @@ export function DriveBar({
       </div>
     </header>
   );
-}
+};

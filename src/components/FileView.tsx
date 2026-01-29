@@ -53,6 +53,7 @@ type FileViewProps = {
   onSelectItem: (path: string, index: number, event: ReactMouseEvent) => void;
   onClearSelection: () => void;
   onCreateFolder: (parentPath: string, name: string) => void | Promise<unknown>;
+  onCreateFolderAndGo?: (parentPath: string, name: string) => void | Promise<unknown>;
   onCreateFile: (parentPath: string, name: string) => void | Promise<unknown>;
   renameTargetPath?: string | null;
   renameValue: string;
@@ -92,7 +93,7 @@ type FileViewProps = {
   onInternalHover?: (target: DropTarget | null) => void;
 };
 
-export function FileView({
+export const FileView = ({
   viewMode,
   currentPath,
   showLander,
@@ -130,9 +131,10 @@ export function FileView({
   onSortChange,
   onContextMenuDown,
   onCreateFolder,
+  onCreateFolderAndGo,
   onCreateFile,
   ...viewProps
-}: FileViewProps) {
+}: FileViewProps) => {
   // Keep the heavy views lazy-loaded but render-driven.
   if (showLander) {
     return (
@@ -185,6 +187,7 @@ export function FileView({
             onEntryContextMenu={onEntryContextMenu}
             onEntryContextMenuDown={onEntryContextMenuDown}
             onCreateFolder={onCreateFolder}
+            onCreateFolderAndGo={onCreateFolderAndGo}
             onCreateFile={onCreateFile}
           />
         </PerfProfiler>
@@ -209,10 +212,11 @@ export function FileView({
             onEntryContextMenu={onEntryContextMenu}
             onEntryContextMenuDown={onEntryContextMenuDown}
             onCreateFolder={onCreateFolder}
+            onCreateFolderAndGo={onCreateFolderAndGo}
             onCreateFile={onCreateFile}
           />
         </PerfProfiler>
       )}
     </Suspense>
   );
-}
+};

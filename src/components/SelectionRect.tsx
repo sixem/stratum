@@ -5,7 +5,7 @@ type SelectionRectProps = {
   box: SelectionBox | null;
 };
 
-export function SelectionRect({ box }: SelectionRectProps) {
+export const SelectionRect = ({ box }: SelectionRectProps) => {
   if (!box) return null;
   return (
     <div
@@ -19,4 +19,4 @@ export function SelectionRect({ box }: SelectionRectProps) {
       aria-hidden="true"
     />
   );
-}
+};

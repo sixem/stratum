@@ -1,6 +1,8 @@
 // Sidebar vitals block for the settings panel.
 import { useEffect, useMemo, useState } from "react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { formatBytes } from "@/lib";
+import { usePromptStore, useSettingsStore, useShellStore } from "@/modules";
 
 type SettingsVitalsProps = {
   open: boolean;
@@ -11,6 +13,8 @@ type WindowStats = {
   height: number;
   dpr: number;
 };
+
+const isTauriEnv = () => "__TAURI_INTERNALS__" in globalThis || "__TAURI__" in globalThis;
 
 const formatUptime = (valueMs: number | null) => {
   if (valueMs == null || !Number.isFinite(valueMs)) return "...";
@@ -40,10 +44,13 @@ const getCoreLabel = () => {
   return `${navigator.hardwareConcurrency}`;
 };
 
-export function SettingsVitals({ open }: SettingsVitalsProps) {
+export const SettingsVitals = ({ open }: SettingsVitalsProps) => {
   const [windowStats, setWindowStats] = useState<WindowStats | null>(null);
   const [heapUsageBytes, setHeapUsageBytes] = useState<number | null>(null);
   const [uptimeMs, setUptimeMs] = useState<number | null>(null);
+  const shellAvailability = useShellStore((state) => state.availability);
+  const ffmpegPath = useSettingsStore((state) => state.ffmpegPath);
+  const updateSettings = useSettingsStore((state) => state.updateSettings);
 
   const platformLabel = useMemo(() => getPlatformLabel(), []);
   const coreLabel = useMemo(() => getCoreLabel(), []);
@@ -104,6 +111,79 @@ export function SettingsVitals({ open }: SettingsVitalsProps) {
   const dprLabel = windowStats ? windowStats.dpr.toFixed(2) : "...";
   const heapLabel = heapUsageBytes == null ? "n/a" : formatBytes(heapUsageBytes);
   const uptimeLabel = formatUptime(uptimeMs);
+  const ffmpegCheckReady = shellAvailability !== null;
+  const ffmpegDetected = Boolean(shellAvailability?.ffmpeg) || Boolean(ffmpegPath);
+  const ffmpegStatus = shellAvailability
+    ? ffmpegDetected
+      ? "Available"
+      : "Not found"
+    : "Checking...";
+  const ffmpegStatusClass = ffmpegCheckReady
+    ? ffmpegDetected
+      ? "is-ok"
+      : "is-missing"
+    : "";
+
+  const showLocatePrompt = () => {
+    const initialValue = ffmpegPath;
+    const pathRef = { current: initialValue };
+    const inputId = `ffmpeg-path-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const runSave = () => {
+      updateSettings({ ffmpegPath: pathRef.current.trim() });
+    };
+
+    usePromptStore.getState().showPrompt({
+      title: "Locate FFmpeg",
+      content: (
+        <div className="prompt-field">
+          <label className="prompt-label" htmlFor={inputId}>
+            FFmpeg path
+          </label>
+          <input
+            id={inputId}
+            className="prompt-input"
+            type="text"
+            placeholder="C:\\Tools\\ffmpeg\\bin\\ffmpeg.exe"
+            defaultValue={initialValue}
+            autoFocus
+            onChange={(event) => {
+              pathRef.current = event.currentTarget.value;
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              runSave();
+              usePromptStore.getState().hidePrompt();
+            }}
+          />
+        </div>
+      ),
+      confirmLabel: "Save",
+      cancelLabel: "Cancel",
+      onConfirm: runSave,
+    });
+  };
+
+  const handleLocateFfmpeg = async () => {
+    if (isTauriEnv()) {
+      try {
+        const selection = await openDialog({
+          multiple: false,
+          directory: false,
+          title: "Locate FFmpeg",
+          defaultPath: ffmpegPath || undefined,
+        });
+        if (typeof selection === "string" && selection.trim()) {
+          updateSettings({ ffmpegPath: selection.trim() });
+        }
+        return;
+      } catch {
+        // Fall back to the manual path prompt.
+      }
+    }
+
+    showLocatePrompt();
+  };
 
   return (
     <div className="settings-sidebar-footer">
@@ -133,7 +213,18 @@ export function SettingsVitals({ open }: SettingsVitalsProps) {
           <span>Uptime</span>
           <span>{uptimeLabel}</span>
         </div>
+        <div className="settings-stat">
+          <span>FFmpeg</span>
+          <span className={`settings-stat-value ${ffmpegStatusClass}`}>{ffmpegStatus}</span>
+        </div>
       </div>
+      {ffmpegCheckReady && !ffmpegDetected ? (
+        <div className="settings-vitals-actions">
+          <button type="button" className="btn" onClick={handleLocateFfmpeg}>
+            Locate FFmpeg
+          </button>
+        </div>
+      ) : null}
     </div>
   );
-}
+};

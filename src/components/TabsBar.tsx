@@ -103,9 +103,7 @@ const TabItem = ({
   );
 };
 
-const TabDrop = () => <div className="tab-drop" />;
-
-export function TabsBar({
+export const TabsBar = ({
   tabs,
   activeId,
   dropTargetId,
@@ -115,12 +113,13 @@ export function TabsBar({
   onClose,
   onNew,
   onReorder,
-}: TabsBarProps) {
+}: TabsBarProps) => {
   // Container ref lets the reorder hook measure tab positions.
   const tabsRef = useRef<HTMLDivElement | null>(null);
   const {
     draggingId,
     dropIndex,
+    dropIndicatorX,
     handlePointerDown,
     handleSuppressClick,
   } = useTabDragDrop({
@@ -137,7 +136,6 @@ export function TabsBar({
       >
         {tabs.map((tab, index) => (
           <Fragment key={tab.id}>
-            {dropIndex === index ? <TabDrop /> : null}
             <TabItem
               tab={tab}
               isActive={tab.id === activeId}
@@ -154,11 +152,17 @@ export function TabsBar({
             />
           </Fragment>
         ))}
-        {dropIndex === tabs.length ? <TabDrop /> : null}
+        {dropIndex != null && dropIndicatorX != null ? (
+          <div
+            className="tab-drop-indicator"
+            style={{ left: `${dropIndicatorX}px` }}
+            aria-hidden="true"
+          />
+        ) : null}
         <button type="button" className="tab-new" onClick={onNew} aria-label="New tab">
           <PlusIcon className="tab-new-icon" />
         </button>
       </div>
     </div>
   );
-}
+};

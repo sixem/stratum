@@ -28,6 +28,28 @@ const formatDriveName = (info?: DriveInfo) => {
   return label ? label : null;
 };
 
+const formatRecentLabel = (path: string) => {
+  const trimmed = path.trim().replace(/[\\/]+$/, "");
+  if (!trimmed) return path;
+  const parts = trimmed.split(/[\\/]+/).filter(Boolean);
+  if (parts.length === 0) return trimmed;
+  return parts[parts.length - 1] ?? trimmed;
+};
+
+const formatRecentDriveTag = (path: string) => {
+  const trimmed = path.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("\\\\")) {
+    const parts = trimmed.replace(/^\\\\/, "").split("\\");
+    if (parts.length >= 2) {
+      return `\\\\${parts[0]}\\${parts[1]}`;
+    }
+    return "\\\\";
+  }
+  const match = trimmed.match(/^[a-zA-Z]:/);
+  return match ? match[0].toUpperCase() : null;
+};
+
 const buildDriveInfoMap = (driveInfo: DriveInfo[]) => {
   const map = new Map<string, DriveInfo>();
   driveInfo.forEach((info) => {
@@ -51,6 +73,38 @@ const formatUsage = (info?: DriveInfo) => {
   };
 };
 
+const summarizeStorage = (
+  drives: string[],
+  driveInfoMap: Map<string, DriveInfo>,
+) => {
+  let total = 0;
+  let free = 0;
+  let unknownCount = 0;
+  drives.forEach((drive) => {
+    const info = driveInfoMap.get(normalizePath(drive));
+    if (!info || info.total == null || info.free == null) {
+      unknownCount += 1;
+      return;
+    }
+    total += info.total;
+    free += info.free;
+  });
+  if (total <= 0) {
+    return {
+      label: "Totals unavailable",
+      percent: null,
+      unknownCount,
+    };
+  }
+  const used = Math.max(0, total - free);
+  const percent = total > 0 ? Math.round((used / total) * 100) : 0;
+  return {
+    label: `${formatBytes(used)} / ${formatBytes(total)}`,
+    percent: Math.min(100, Math.max(0, percent)),
+    unknownCount,
+  };
+};
+
 export const StartLander = ({
   recentJumps,
   onOpenRecent,
@@ -59,6 +113,11 @@ export const StartLander = ({
   onOpenDrive,
 }: StartLanderProps) => {
   const driveInfoMap = buildDriveInfoMap(driveInfo);
+  const knownDrives = drives.filter((drive) => {
+    const info = driveInfoMap.get(normalizePath(drive));
+    return info?.total != null && info?.free != null;
+  });
+  const storageSummary = summarizeStorage(knownDrives, driveInfoMap);
   return (
     <div className="view-lander">
       <div className="lander-panel">
@@ -66,75 +125,99 @@ export const StartLander = ({
           title="Start browsing"
           subtitle="Choose a location from the sidebar or enter a path above."
         />
-        <div className="lander-drives">
-          <div className="lander-section-title">Drives</div>
-          {drives.length === 0 ? (
-            <div className="lander-drives-empty">No drives found</div>
-          ) : (
-            <div className="lander-drives-list">
-              {drives.map((drive) => {
-                const info = driveInfoMap.get(normalizePath(drive));
-                const name = formatDriveName(info);
-                const usage = formatUsage(info);
-                return (
-                  <button
-                    key={drive}
-                    type="button"
-                    className="lander-drive"
-                    onClick={() => onOpenDrive(drive)}
-                    title={drive}
-                  >
-                    <div className="lander-drive-head">
-                      <span className="lander-drive-label">
-                        {formatDriveLabel(drive)}
-                      </span>
-                      {name ? <span className="lander-drive-name">{name}</span> : null}
-                    </div>
-                    <div className="lander-drive-usage">
-                      <span className="lander-drive-usage-label">{usage.label}</span>
-                      {usage.percent != null ? (
-                        <span className="lander-drive-usage-percent">
-                          {usage.percent}% used
-                        </span>
-                      ) : null}
-                    </div>
-                    <div
-                      className="lander-drive-bar"
-                      data-known={usage.percent != null ? "true" : "false"}
+        <div className="lander-columns">
+          <div className="lander-drives lander-section">
+            <div className="lander-section-title">Drives</div>
+            <div className="lander-storage-summary">
+              <span className="lander-storage-title">Total storage</span>
+              <span className="lander-storage-value">{storageSummary.label}</span>
+              {storageSummary.percent != null ? (
+                <span className="lander-storage-percent">
+                  {storageSummary.percent}% used
+                </span>
+              ) : null}
+            </div>
+            {storageSummary.percent != null ? (
+              <div className="lander-storage-bar">
+                <span
+                  className="lander-storage-bar-fill"
+                  style={{ width: `${storageSummary.percent}%` }}
+                />
+              </div>
+            ) : null}
+            {knownDrives.length === 0 ? (
+              <div className="lander-drives-empty">No drives with size data</div>
+            ) : (
+              <div className="lander-drives-list">
+                {knownDrives.map((drive) => {
+                  const info = driveInfoMap.get(normalizePath(drive));
+                  const name = formatDriveName(info);
+                  const usage = formatUsage(info);
+                  return (
+                    <button
+                      key={drive}
+                      type="button"
+                      className="lander-drive"
+                      onClick={() => onOpenDrive(drive)}
                     >
-                      <span
-                        className="lander-drive-bar-fill"
-                        style={{
-                          width:
-                            usage.percent != null ? `${usage.percent}%` : "0%",
-                        }}
-                      />
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <div className="lander-recents">
-          <div className="lander-section-title">Recent locations</div>
-          {recentJumps.length === 0 ? (
-            <div className="lander-recents-empty">No jumps yet</div>
-          ) : (
-            <div className="lander-recents-list">
-              {recentJumps.map((path) => (
-                <button
-                  key={path}
-                  type="button"
-                  className="place lander-place"
-                  onClick={() => onOpenRecent(path)}
-                  title={path}
-                >
-                  <span className="lander-place-path">{path}</span>
-                </button>
-              ))}
-            </div>
-          )}
+                      <div className="lander-drive-head">
+                        <span className="lander-drive-label">
+                          {formatDriveLabel(drive)}
+                        </span>
+                        {name ? <span className="lander-drive-name">{name}</span> : null}
+                      </div>
+                      <div className="lander-drive-usage">
+                        <span className="lander-drive-usage-label">{usage.label}</span>
+                        {usage.percent != null ? (
+                          <span className="lander-drive-usage-percent">
+                            {usage.percent}% used
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="lander-drive-bar" data-known="true">
+                        <span
+                          className="lander-drive-bar-fill"
+                          style={{
+                            width:
+                              usage.percent != null ? `${usage.percent}%` : "0%",
+                          }}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="lander-recents lander-section">
+            <div className="lander-section-title">Recent locations</div>
+            {recentJumps.length === 0 ? (
+              <div className="lander-recents-empty">No jumps yet</div>
+            ) : (
+              <div className="lander-recents-list">
+                {recentJumps.map((path) => {
+                  const title = formatRecentLabel(path);
+                  const driveTag = formatRecentDriveTag(path);
+                  return (
+                    <button
+                      key={path}
+                      type="button"
+                      className="place lander-place"
+                      onClick={() => onOpenRecent(path)}
+                    >
+                      <div className="lander-place-head">
+                        <span className="place-name lander-place-name">{title}</span>
+                        {driveTag ? (
+                          <span className="lander-place-drive">{driveTag}</span>
+                        ) : null}
+                      </div>
+                      <span className="place-path lander-place-path">{path}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

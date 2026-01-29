@@ -5,11 +5,11 @@ type LoadingIndicatorProps = {
   label?: string;
 };
 
-export function LoadingIndicator({ label = "Loading" }: LoadingIndicatorProps) {
+export const LoadingIndicator = ({ label = "Loading" }: LoadingIndicatorProps) => {
   return (
     <div className="loading-indicator" aria-live="polite">
       <img src={loader} alt="" />
       {label ? <span className="loading-label">{label}</span> : null}
     </div>
   );
-}
+};

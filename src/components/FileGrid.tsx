@@ -33,6 +33,7 @@ import {
 } from "@/lib";
 import type { FileKind } from "@/lib";
 import type { DropTarget, EntryItem } from "@/lib";
+import { THUMB_INTERACTION_COOLDOWN_MS, THUMB_TYPING_PAUSE_MS } from "@/constants";
 import {
   GRID_AUTO_COLUMNS_MAX,
   GRID_AUTO_COLUMNS_MIN,
@@ -100,6 +101,7 @@ type FileGridProps = {
   onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
   onInternalHover?: (target: DropTarget | null) => void;
   onCreateFolder: (parentPath: string, name: string) => Promise<unknown> | void;
+  onCreateFolderAndGo?: (parentPath: string, name: string) => Promise<unknown> | void;
   onCreateFile: (parentPath: string, name: string) => Promise<unknown> | void;
   canGoUp?: boolean;
   onGoUp?: () => void;
@@ -195,9 +197,8 @@ const GRID_OVERSCAN = 3;
 const GRID_OVERSCAN_MIN = 1;
 const GRID_OVERSCAN_WARMUP_MS = 140;
 const COMPACT_VIEW_INSET = 10;
+const AUTO_GRID_RESIZE_DEBOUNCE_MS = 180;
 // Pause thumbnail work briefly after key presses to keep input responsive.
-const THUMB_TYPING_PAUSE_MS = 320;
-const THUMB_INTERACTION_COOLDOWN_MS = 180;
 const noop = () => {};
 
 type GridDisplayMeta = {
@@ -207,7 +208,7 @@ type GridDisplayMeta = {
   sizeLabel: string;
 };
 
-export default function FileGrid({
+const FileGrid = ({
   currentPath,
   entries,
   items,
@@ -257,10 +258,11 @@ export default function FileGrid({
   onInternalDrop,
   onInternalHover,
   onCreateFolder,
+  onCreateFolderAndGo,
   onCreateFile,
   canGoUp,
   onGoUp,
-}: FileGridProps) {
+}: FileGridProps) => {
   const emptyMessage = useMemo(() => getEmptyMessage(searchQuery), [searchQuery]);
   const { items: viewItems } = useEntryPresence({
     items,
@@ -277,6 +279,9 @@ export default function FileGrid({
   }, [items]);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const { width: viewportWidth } = useElementSize(viewportRef);
+  const [stableViewportWidth, setStableViewportWidth] = useState(viewportWidth);
+  const viewportWidthRef = useRef(viewportWidth);
+  const resizeDebounceRef = useRef<number | null>(null);
   const scrolling = useScrollSettled(viewportRef);
   const typingActive = useTypingActivity({ resetDelayMs: THUMB_TYPING_PAUSE_MS });
   const interactionActive = scrolling || typingActive;
@@ -306,15 +311,56 @@ export default function FileGrid({
     lastSuppressedRef.current = thumbsSuppressed;
   }, [thumbsSuppressed, thumbnails]);
 
+  useEffect(() => {
+    viewportWidthRef.current = viewportWidth;
+  }, [viewportWidth]);
+
+  useEffect(() => {
+    // Debounce auto grid sizing during window resize to avoid layout churn.
+    if (gridSize !== "auto") {
+      if (resizeDebounceRef.current != null) {
+        window.clearTimeout(resizeDebounceRef.current);
+        resizeDebounceRef.current = null;
+      }
+      setStableViewportWidth(viewportWidth);
+      return;
+    }
+
+    if (resizeDebounceRef.current != null) {
+      window.clearTimeout(resizeDebounceRef.current);
+    }
+    resizeDebounceRef.current = window.setTimeout(() => {
+      resizeDebounceRef.current = null;
+      setStableViewportWidth(viewportWidth);
+    }, AUTO_GRID_RESIZE_DEBOUNCE_MS);
+
+    return () => {
+      if (resizeDebounceRef.current != null) {
+        window.clearTimeout(resizeDebounceRef.current);
+        resizeDebounceRef.current = null;
+      }
+    };
+  }, [gridSize, viewportWidth]);
+
+  useEffect(() => {
+    // Snap to the current viewport on tab/view switches without breaking resize debounce.
+    if (resizeDebounceRef.current != null) {
+      window.clearTimeout(resizeDebounceRef.current);
+      resizeDebounceRef.current = null;
+    }
+    setStableViewportWidth(viewportWidthRef.current);
+  }, [viewKey]);
+
   const gridMetaEnabled = gridShowSize || gridShowExtension;
+  const layoutViewportWidth = gridSize === "auto" ? stableViewportWidth : viewportWidth;
   const gridSizing = useMemo(() => {
     const basePreset = GRID_PRESETS[gridSize === "auto" ? "normal" : gridSize] ?? GRID_PRESETS.small;
     const preset =
       gridSize === "auto"
-        ? buildAutoPreset(basePreset, viewportWidth, gridAutoColumns)
+        ? buildAutoPreset(basePreset, layoutViewportWidth, gridAutoColumns)
         : basePreset;
     return buildGridSizing(preset, gridMetaEnabled);
-  }, [gridAutoColumns, gridMetaEnabled, gridSize, viewportWidth]);
+  }, [gridAutoColumns, gridMetaEnabled, gridSize, layoutViewportWidth]);
   const gridVars = useMemo(
     () =>
       ({
@@ -326,10 +372,10 @@ export default function FileGrid({
         "--thumb-meta-height": `${gridSizing.metaHeight}px`,
         "--thumb-fit": thumbnailFit,
         "--thumb-preview-bg": thumbnailFit === "contain" ? "transparent" : "#0f131d",
-      }) as CSSProperties,
+    }) as CSSProperties,
     [gridSizing, thumbnailFit],
   );
-  const contentWidth = Math.max(0, viewportWidth - gridSizing.padding * 2);
+  const contentWidth = Math.max(0, layoutViewportWidth - gridSizing.padding * 2);
   const columnCount =
     gridSize === "auto"
       ? clampAutoColumns(gridAutoColumns)
@@ -753,6 +799,7 @@ export default function FileGrid({
                               kind: "folder",
                               parentPath: currentPath,
                               onCreate: onCreateFolder,
+                              onCreateAndGo: onCreateFolderAndGo,
                             }),
                         },
                         {
@@ -781,4 +828,6 @@ export default function FileGrid({
       </div>
     </div>
   );
-}
+};
+
+export default FileGrid;

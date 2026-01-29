@@ -8,12 +8,12 @@ type SettingsMenusSectionProps = {
   onUpdate: SettingsUpdateHandler;
 };
 
-export function SettingsMenusSection({
+export const SettingsMenusSection = ({
   sectionId,
   menuOpenPwsh,
   menuOpenWsl,
   onUpdate,
-}: SettingsMenusSectionProps) {
+}: SettingsMenusSectionProps) => {
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Menus</div>
@@ -53,4 +53,4 @@ export function SettingsMenusSection({
       </div>
     </section>
   );
-}
+};

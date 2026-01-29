@@ -43,12 +43,12 @@ const formatDriveLabel = (drive: string) => {
   return trimmed;
 };
 
-export function DrivePicker({
+export const DrivePicker = ({
   activePath,
   drives,
   driveInfo,
   onSelect,
-}: DrivePickerProps) {
+}: DrivePickerProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -227,4 +227,4 @@ export function DrivePicker({
       </div>
     </div>
   );
-}
+};

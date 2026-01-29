@@ -78,6 +78,7 @@ type FileListProps = {
   onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
   onInternalHover?: (target: DropTarget | null) => void;
   onCreateFolder: (parentPath: string, name: string) => Promise<unknown> | void;
+  onCreateFolderAndGo?: (parentPath: string, name: string) => Promise<unknown> | void;
   onCreateFile: (parentPath: string, name: string) => Promise<unknown> | void;
   presenceEnabled?: boolean;
   canGoUp?: boolean;
@@ -101,7 +102,7 @@ type RowDisplayMeta = {
   modifiedLabel: string;
 };
 
-export default function FileList({
+const FileList = ({
   currentPath,
   entries,
   items,
@@ -139,11 +140,12 @@ export default function FileList({
   onInternalDrop,
   onInternalHover,
   onCreateFolder,
+  onCreateFolderAndGo,
   onCreateFile,
   presenceEnabled = true,
   canGoUp,
   onGoUp,
-}: FileListProps) {
+}: FileListProps) => {
   const emptyMessage = useMemo(() => getEmptyMessage(searchQuery), [searchQuery]);
   const { items: rows } = useEntryPresence({
     items,
@@ -518,6 +520,7 @@ export default function FileList({
                                 kind: "folder",
                                 parentPath: currentPath,
                                 onCreate: onCreateFolder,
+                                onCreateAndGo: onCreateFolderAndGo,
                               }),
                           },
                           {
@@ -547,4 +550,6 @@ export default function FileList({
       </div>
     </div>
   );
-}
+};
+
+export default FileList;

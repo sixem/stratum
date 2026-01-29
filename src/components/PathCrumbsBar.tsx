@@ -85,13 +85,13 @@ const resolveCrumbs = (path: string, trailPath?: string | null) => {
   return { crumbs: currentCrumbs, activeIndex: currentCrumbs.length - 1 };
 };
 
-export function PathCrumbsBar({
+export const PathCrumbsBar = ({
   path,
   trailPath,
   dropTargetPath,
   onNavigate,
   onNavigateNewTab,
-}: PathCrumbsBarProps) {
+}: PathCrumbsBarProps) => {
   const { crumbs, activeIndex } = useMemo(
     () => resolveCrumbs(path, trailPath),
     [path, trailPath],
@@ -144,4 +144,4 @@ export function PathCrumbsBar({
       </div>
     </div>
   );
-}
+};

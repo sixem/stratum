@@ -2,6 +2,7 @@
 import type { CSSProperties } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ContextMenuItem } from "@/types";
+import { CONTEXT_MENU_EDGE, CONTEXT_MENU_GAP, CONTEXT_SUBMENU_GAP } from "@/constants";
 
 type ContextMenuProps = {
   open: boolean;
@@ -11,9 +12,9 @@ type ContextMenuProps = {
   onClose: () => void;
 };
 
-const MENU_EDGE = 10;
-const MENU_GAP = 2;
-const SUBMENU_GAP = 6;
+const MENU_EDGE = CONTEXT_MENU_EDGE;
+const MENU_GAP = CONTEXT_MENU_GAP;
+const SUBMENU_GAP = CONTEXT_SUBMENU_GAP;
 
 const clamp = (value: number, min: number, max: number) => {
   if (value < min) return min;
@@ -53,6 +54,7 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
   const [position, setPosition] = useState({ x, y });
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null);
   const [submenuSide, setSubmenuSide] = useState<"left" | "right">("right");
+  const [submenuOffset, setSubmenuOffset] = useState(0);
   const lastOpenItemsRef = useRef<ContextMenuItem[]>(items);
   const menuStyle = useMemo<CSSProperties>(
     () => ({
@@ -76,7 +78,14 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
 
   useEffect(() => {
     setOpenSubmenuId(null);
+    setSubmenuOffset(0);
   }, [items]);
+
+  useEffect(() => {
+    if (!openSubmenuId) {
+      setSubmenuOffset(0);
+    }
+  }, [openSubmenuId]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -107,6 +116,11 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
     const fitsLeft =
       anchorRect.left - SUBMENU_GAP - submenuRect.width >= MENU_EDGE;
     setSubmenuSide(fitsRight || !fitsLeft ? "right" : "left");
+    const minTop = MENU_EDGE;
+    const maxTop = viewport.height - MENU_EDGE - submenuRect.height;
+    const safeMax = maxTop < minTop ? minTop : maxTop;
+    const clampedTop = clamp(anchorRect.top, minTop, safeMax);
+    setSubmenuOffset(clampedTop - anchorRect.top);
   }, [items.length, open, openSubmenuId]);
 
   useEffect(() => {
@@ -182,6 +196,7 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
                 ref={submenuRef}
                 className={`context-submenu${submenuSide === "left" ? " is-left" : " is-right"}`}
                 role="menu"
+                style={{ top: submenuOffset }}
               >
                 <div className="context-submenu-list">
                   {renderMenuItems(item.items, depth + 1)}

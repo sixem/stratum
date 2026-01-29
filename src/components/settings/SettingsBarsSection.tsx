@@ -22,7 +22,7 @@ type SettingsBarsSectionProps = {
 
 const RECENT_STEP = 1;
 
-export function SettingsBarsSection({
+export const SettingsBarsSection = ({
   sectionId,
   showTabNumbers,
   fixedWidthTabs,
@@ -30,7 +30,7 @@ export function SettingsBarsSection({
   sidebarSectionOrder,
   sidebarHiddenSections,
   onUpdate,
-}: SettingsBarsSectionProps) {
+}: SettingsBarsSectionProps) => {
   const normalizedSidebarOrder = normalizeSidebarSectionOrder(sidebarSectionOrder);
   const normalizedHiddenSections = normalizeSidebarHiddenSections(sidebarHiddenSections);
   const hiddenSet = new Set(normalizedHiddenSections);
@@ -184,4 +184,4 @@ export function SettingsBarsSection({
       </div>
     </section>
   );
-}
+};

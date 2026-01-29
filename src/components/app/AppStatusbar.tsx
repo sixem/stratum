@@ -5,11 +5,19 @@ import { StatusBar } from "@/components/StatusBar";
 type AppStatusbarProps = {
   statusbarRef: RefObject<HTMLDivElement | null>;
   statusBar: ComponentProps<typeof StatusBar>;
+  hidden?: boolean;
 };
 
-export const AppStatusbar = ({ statusbarRef, statusBar }: AppStatusbarProps) => {
+export const AppStatusbar = ({
+  statusbarRef,
+  statusBar,
+  hidden = false,
+}: AppStatusbarProps) => {
   return (
-    <div className="statusbar-shell" ref={statusbarRef}>
+    <div
+      className={`statusbar-shell${hidden ? " is-hidden" : ""}`}
+      ref={statusbarRef}
+    >
       <StatusBar {...statusBar} />
     </div>
   );

@@ -21,7 +21,7 @@ const QUALITY_MIN = 50;
 const QUALITY_MAX = 95;
 const QUALITY_STEP = 5;
 
-export function SettingsThumbsSection({
+export const SettingsThumbsSection = ({
   sectionId,
   thumbnailsEnabled,
   thumbnailSize,
@@ -31,7 +31,7 @@ export function SettingsThumbsSection({
   thumbnailFit,
   thumbnailAppIcons,
   onUpdate,
-}: SettingsThumbsSectionProps) {
+}: SettingsThumbsSectionProps) => {
   const isThumbsDisabled = !thumbnailsEnabled;
   const canAdjustQuality = !isThumbsDisabled && thumbnailFormat === "jpeg";
   const qualityLabel = thumbnailFormat === "jpeg" ? `${thumbnailQuality}%` : "Lossless";
@@ -154,4 +154,4 @@ export function SettingsThumbsSection({
       </div>
     </section>
   );
-}
+};

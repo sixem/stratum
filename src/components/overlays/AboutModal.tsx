@@ -1,10 +1,9 @@
-// Simple about dialog showing app and build metadata.
+// Deprecated duplicate AboutModal; the canonical version lives in src/components/AboutModal.tsx.
 import type { MouseEvent } from "react";
 import { useEffect, useRef } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { APP_GITHUB_URL } from "@/constants";
 import { isEditableElement } from "@/lib";
-import { useModalFocusTrap } from "@/hooks";
 
 type AboutModalProps = {
   open: boolean;
@@ -39,14 +38,12 @@ export const AboutModal = ({
   onClose,
 }: AboutModalProps) => {
   const shouldCloseRef = useRef(false);
-  const panelRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  useModalFocusTrap({
-    open,
-    containerRef: panelRef,
-    initialFocusRef: closeButtonRef,
-  });
+  useEffect(() => {
+    if (!open) return;
+    closeButtonRef.current?.focus();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -94,8 +91,6 @@ export const AboutModal = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="about-title"
-        ref={panelRef}
-        tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="about-header">

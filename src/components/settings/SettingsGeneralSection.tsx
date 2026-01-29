@@ -14,7 +14,7 @@ type SettingsGeneralSectionProps = {
   onUpdate: SettingsUpdateHandler;
 };
 
-export function SettingsGeneralSection({
+export const SettingsGeneralSection = ({
   sectionId,
   defaultViewMode,
   smoothScroll,
@@ -24,7 +24,7 @@ export function SettingsGeneralSection({
   confirmDelete,
   confirmClose,
   onUpdate,
-}: SettingsGeneralSectionProps) {
+}: SettingsGeneralSectionProps) => {
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">General</div>
@@ -144,4 +144,4 @@ export function SettingsGeneralSection({
       </div>
     </section>
   );
-}
+};

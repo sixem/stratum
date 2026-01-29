@@ -21,14 +21,14 @@ const ACCENT_THEMES: { id: AccentTheme; label: string }[] = [
   { id: "white", label: "White" },
 ];
 
-export function SettingsFlairSection({
+export const SettingsFlairSection = ({
   sectionId,
   accentTheme,
   categoryTinting,
   ambientBackground,
   blurOverlays,
   onUpdate,
-}: SettingsFlairSectionProps) {
+}: SettingsFlairSectionProps) => {
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Flair</div>
@@ -98,4 +98,4 @@ export function SettingsFlairSection({
       </div>
     </section>
   );
-}
+};

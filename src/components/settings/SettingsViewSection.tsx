@@ -1,4 +1,4 @@
-// View defaults and navigation behavior controls.
+// Deprecated view settings section; superseded by SettingsGeneralSection.
 import type { ViewMode } from "@/types";
 import type { SettingsUpdateHandler } from "./types";
 
@@ -13,7 +13,7 @@ type SettingsViewSectionProps = {
   onUpdate: SettingsUpdateHandler;
 };
 
-export function SettingsViewSection({
+export const SettingsViewSection = ({
   sectionId,
   defaultViewMode,
   smoothScroll,
@@ -22,7 +22,7 @@ export function SettingsViewSection({
   showParentEntry,
   confirmDelete,
   onUpdate,
-}: SettingsViewSectionProps) {
+}: SettingsViewSectionProps) => {
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">View</div>
@@ -126,4 +126,4 @@ export function SettingsViewSection({
       </div>
     </section>
   );
-}
+};

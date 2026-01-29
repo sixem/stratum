@@ -68,7 +68,7 @@ const SidebarItem = ({
   );
 };
 
-export function Sidebar({
+export const Sidebar = ({
   places,
   recentJumps,
   activePath,
@@ -77,7 +77,7 @@ export function Sidebar({
   onSelect,
   onSelectRecent,
   onSelectNewTab,
-}: SidebarProps) {
+}: SidebarProps) => {
   const [placesOpen, setPlacesOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
   const activeKey = normalizePath(activePath);
@@ -147,7 +147,6 @@ export function Sidebar({
                 className="tip"
                 onClick={() => setHint(refreshSessionHint())}
                 aria-label="Show a new tip"
-                title="Click for another tip"
               >
                 {hint.text}
               </button>
@@ -178,4 +177,4 @@ export function Sidebar({
       </div>
     </aside>
   );
-}
+};

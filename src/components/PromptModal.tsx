@@ -1,12 +1,21 @@
 // Global prompt modal driven by the prompt store.
 import { useEffect, useRef } from "react";
 import { isEditableElement } from "@/lib";
-import { usePromptStore } from "@/modules";
+import { usePromptStore, type PromptConfig } from "@/modules";
+import { useModalFocusTrap } from "@/hooks";
 
-export function PromptModal() {
+type PromptAction = NonNullable<PromptConfig["actions"]>[number];
+
+export const PromptModal = () => {
   const prompt = usePromptStore((state) => state.prompt);
   const hidePrompt = usePromptStore((state) => state.hidePrompt);
   const shouldCloseRef = useRef(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useModalFocusTrap({
+    open: Boolean(prompt),
+    containerRef: panelRef,
+  });
 
   useEffect(() => {
     if (!prompt) return;
@@ -43,7 +52,8 @@ export function PromptModal() {
     prompt.cancelLabel === undefined ? (prompt.onCancel ? "Cancel" : null) : prompt.cancelLabel;
   const showConfirm = Boolean(confirmLabel && confirmLabel.trim().length > 0);
   const showCancel = Boolean(cancelLabel && cancelLabel.trim().length > 0);
-  const showActions = showConfirm || showCancel;
+  const actions = prompt.actions ?? [];
+  const showActions = showConfirm || showCancel || actions.length > 0;
 
   const handleCancel = () => {
     prompt.onCancel?.();
@@ -53,6 +63,13 @@ export function PromptModal() {
   const handleConfirm = () => {
     prompt.onConfirm?.();
     hidePrompt();
+  };
+
+  const handleAction = (action: PromptAction) => {
+    action.onClick();
+    if (action.closeOnClick !== false) {
+      hidePrompt();
+    }
   };
 
   return (
@@ -75,6 +92,8 @@ export function PromptModal() {
         role="dialog"
         aria-modal="true"
         aria-labelledby={prompt.title ? "prompt-title" : undefined}
+        ref={panelRef}
+        tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
       >
         {prompt.title ? (
@@ -90,6 +109,20 @@ export function PromptModal() {
                 {cancelLabel}
               </button>
             ) : null}
+            {actions.map((action, index) => {
+              const variant = action.variant ?? "ghost";
+              const className = variant === "ghost" ? "btn ghost" : "btn";
+              return (
+                <button
+                  key={`${action.label}-${index}`}
+                  type="button"
+                  className={className}
+                  onClick={() => handleAction(action)}
+                >
+                  {action.label}
+                </button>
+              );
+            })}
             {showConfirm ? (
               <button type="button" className="btn" onClick={handleConfirm}>
                 {confirmLabel}
@@ -100,4 +133,4 @@ export function PromptModal() {
       </div>
     </div>
   );
-}
+};

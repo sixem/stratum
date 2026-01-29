@@ -1,4 +1,4 @@
-// Sidebar order and visibility settings.
+// Deprecated sidebar settings section; superseded by SettingsBarsSection.
 import type { SidebarSectionId } from "@/modules";
 import {
   SIDEBAR_RECENT_LIMIT_MAX,
@@ -20,13 +20,13 @@ type SettingsSidebarSectionProps = {
 
 const RECENT_STEP = 1;
 
-export function SettingsSidebarSection({
+export const SettingsSidebarSection = ({
   sectionId,
   sidebarRecentLimit,
   sidebarSectionOrder,
   sidebarHiddenSections,
   onUpdate,
-}: SettingsSidebarSectionProps) {
+}: SettingsSidebarSectionProps) => {
   const normalizedSidebarOrder = normalizeSidebarSectionOrder(sidebarSectionOrder);
   const normalizedHiddenSections = normalizeSidebarHiddenSections(sidebarHiddenSections);
   const hiddenSet = new Set(normalizedHiddenSections);
@@ -143,4 +143,4 @@ export function SettingsSidebarSection({
       </div>
     </section>
   );
-}
+};

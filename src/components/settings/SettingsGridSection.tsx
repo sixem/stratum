@@ -27,7 +27,7 @@ const GRID_NAME_ELLIPSIS: { id: GridNameEllipsis; label: string }[] = [
   { id: "middle", label: "Middle" },
 ];
 
-export function SettingsGridSection({
+export const SettingsGridSection = ({
   sectionId,
   gridSize,
   gridAutoColumns,
@@ -37,7 +37,7 @@ export function SettingsGridSection({
   gridNameEllipsis,
   gridNameHideExtension,
   onUpdate,
-}: SettingsGridSectionProps) {
+}: SettingsGridSectionProps) => {
   const [autoColumnsDraft, setAutoColumnsDraft] = useState(gridAutoColumns);
 
   useEffect(() => {
@@ -194,4 +194,4 @@ export function SettingsGridSection({
       </div>
     </section>
   );
-}
+};

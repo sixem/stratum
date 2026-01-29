@@ -5,7 +5,7 @@ type EmptyStateProps = {
   actions?: { label: string; onClick: () => void }[];
 };
 
-export function EmptyState({ title, subtitle, actions }: EmptyStateProps) {
+export const EmptyState = ({ title, subtitle, actions }: EmptyStateProps) => {
   return (
     <div className="empty-state" role="status">
       <div className="empty-title">{title}</div>
@@ -26,4 +26,4 @@ export function EmptyState({ title, subtitle, actions }: EmptyStateProps) {
       ) : null}
     </div>
   );
-}
+};

@@ -15,7 +15,7 @@ type PathBarProps = {
   rightSlot?: ReactNode;
 };
 
-export function PathBar({
+export const PathBar = ({
   onBack,
   onForward,
   onUp,
@@ -26,7 +26,7 @@ export function PathBar({
   leftSlot,
   driveSlot,
   rightSlot,
-}: PathBarProps) {
+}: PathBarProps) => {
   return (
     <div className="pathbar">
       {leftSlot ? <div className="pathbar-left">{leftSlot}</div> : null}
@@ -66,4 +66,4 @@ export function PathBar({
       {rightSlot ? <div className="pathbar-right">{rightSlot}</div> : null}
     </div>
   );
-}
+};

@@ -13,7 +13,7 @@ type PathInputsBarProps = {
   searchInputRef?: RefObject<HTMLInputElement | null>;
 };
 
-export function PathInputsBar({
+export const PathInputsBar = ({
   path,
   search,
   onPathChange,
@@ -22,7 +22,7 @@ export function PathInputsBar({
   onRefresh,
   loading,
   searchInputRef,
-}: PathInputsBarProps) {
+}: PathInputsBarProps) => {
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (loading) return;
@@ -78,4 +78,4 @@ export function PathInputsBar({
       </div>
     </form>
   );
-}
+};

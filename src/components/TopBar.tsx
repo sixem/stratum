@@ -1,4 +1,4 @@
-// Legacy top bar kept for reference; not wired in App.
+// Deprecated legacy top bar; not wired in App. Remove when safe.
 import type { FormEvent } from "react";
 import { ChevronUpIcon, RefreshIcon } from "./Icons";
 
@@ -12,7 +12,7 @@ type TopBarProps = {
   loading: boolean;
 };
 
-export function TopBar({
+export const TopBar = ({
   path,
   onPathChange,
   onSubmit,
@@ -20,7 +20,7 @@ export function TopBar({
   onRefresh,
   canGoUp,
   loading,
-}: TopBarProps) {
+}: TopBarProps) => {
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     onSubmit();
@@ -74,4 +74,4 @@ export function TopBar({
       </div>
     </header>
   );
-}
+};

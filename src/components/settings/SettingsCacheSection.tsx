@@ -19,7 +19,7 @@ const CACHE_MIN = 128;
 const CACHE_MAX = 4096;
 const CACHE_STEP = 128;
 
-export function SettingsCacheSection({
+export const SettingsCacheSection = ({
   sectionId,
   open,
   thumbnailsEnabled,
@@ -28,7 +28,7 @@ export function SettingsCacheSection({
   onUpdate,
   onOpenCacheLocation,
   onClearCache,
-}: SettingsCacheSectionProps) {
+}: SettingsCacheSectionProps) => {
   const [cacheBusy, setCacheBusy] = useState(false);
   const [cacheUsageBytes, setCacheUsageBytes] = useState<number | null>(null);
   const isThumbsDisabled = !thumbnailsEnabled;
@@ -146,4 +146,4 @@ export function SettingsCacheSection({
       </div>
     </section>
   );
-}
+};

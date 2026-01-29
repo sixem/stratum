@@ -1,5 +1,5 @@
 // Settings panel for view, flair, and thumbnail options.
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { SettingsCacheSection } from "@/components/settings/SettingsCacheSection";
 import { SettingsBarsSection } from "@/components/settings/SettingsBarsSection";
@@ -10,7 +10,7 @@ import { SettingsKeybindsSection } from "@/components/settings/SettingsKeybindsS
 import { SettingsMenusSection } from "@/components/settings/SettingsMenusSection";
 import { SettingsThumbsSection } from "@/components/settings/SettingsThumbsSection";
 import { SettingsVitals } from "@/components/settings/SettingsVitals";
-import { useSettings } from "@/hooks";
+import { useModalFocusTrap, useSettings } from "@/hooks";
 import { usePromptStore } from "@/modules";
 
 type SettingsOverlayProps = {
@@ -20,12 +20,12 @@ type SettingsOverlayProps = {
   onClearCache?: () => Promise<void>;
 };
 
-export function SettingsOverlay({
+export const SettingsOverlay = ({
   open,
   onClose,
   onOpenCacheLocation,
   onClearCache,
-}: SettingsOverlayProps) {
+}: SettingsOverlayProps) => {
   const {
     thumbnailsEnabled,
     thumbnailSize,
@@ -74,6 +74,14 @@ export function SettingsOverlay({
   const keybindSectionId = "settings-keybinds";
   const cacheSectionId = "settings-cache";
   const [captureActive, setCaptureActive] = useState(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useModalFocusTrap({
+    open,
+    containerRef: panelRef,
+    initialFocusRef: closeButtonRef,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -127,6 +135,8 @@ export function SettingsOverlay({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        ref={panelRef}
+        tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="settings-header">
@@ -138,7 +148,12 @@ export function SettingsOverlay({
               Manage view defaults, flair, thumbnails, and cached previews.
             </p>
           </div>
-          <button type="button" className="btn ghost settings-close" onClick={onClose}>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            className="btn ghost settings-close"
+            onClick={onClose}
+          >
             Close
           </button>
         </div>
@@ -296,4 +311,4 @@ export function SettingsOverlay({
       </div>
     </div>
   );
-}
+};
