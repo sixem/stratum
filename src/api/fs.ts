@@ -13,80 +13,57 @@ import type {
   TransferReport,
 } from "@/types";
 
-export function getHome() {
-  return invoke<string | null>("get_home");
-}
+export const getHome = () => invoke<string | null>("get_home");
 
-export function getPlaces() {
-  return invoke<Place[]>("get_places");
-}
+export const getPlaces = () => invoke<Place[]>("get_places");
 
-export function getDrives() {
-  return invoke<string[]>("list_drives");
-}
+export const getDrives = () => invoke<string[]>("list_drives");
 
-export function ensureDir(path: string) {
-  return invoke<void>("ensure_dir", { path });
-}
+export const ensureDir = (path: string) => invoke<void>("ensure_dir", { path });
 
-export function createFolder(path: string) {
-  return invoke<void>("create_folder", { path });
-}
+export const createFolder = (path: string) => invoke<void>("create_folder", { path });
 
-export function createFile(path: string) {
-  return invoke<void>("create_file", { path });
-}
+export const createFile = (path: string) => invoke<void>("create_file", { path });
 
-export function listDriveInfo() {
-  return invoke<DriveInfo[]>("list_drive_info");
-}
+export const listDriveInfo = () => invoke<DriveInfo[]>("list_drive_info");
 
-export function listDir(path: string, options?: ListDirOptions) {
-  return invoke<ListDirResult>("list_dir", { path, options });
-}
+export const listDir = (path: string, options?: ListDirOptions) =>
+  invoke<ListDirResult>("list_dir", { path, options });
 
-export function listDirWithParent(path: string, options?: ListDirOptions) {
-  return invoke<ListDirWithParentResult>("list_dir_with_parent", { path, options });
-}
+export const listDirWithParent = (path: string, options?: ListDirOptions) =>
+  invoke<ListDirWithParentResult>("list_dir_with_parent", { path, options });
 
-export function statEntries(paths: string[]) {
-  return invoke<EntryMeta[]>("stat_entries", { paths });
-}
+export const statEntries = (paths: string[]) =>
+  invoke<EntryMeta[]>("stat_entries", { paths });
 
-export function parentDir(path: string) {
-  return invoke<string | null>("parent_dir", { path });
-}
+export const parentDir = (path: string) => invoke<string | null>("parent_dir", { path });
 
-export function copyEntries(paths: string[], destination: string, transferId?: string) {
-  return invoke<CopyReport>("copy_entries", { paths, destination, transferId });
-}
+export const copyEntries = (
+  paths: string[],
+  destination: string,
+  transferId?: string,
+) => invoke<CopyReport>("copy_entries", { paths, destination, transferId });
 
-export function transferEntries(
+export const transferEntries = (
   paths: string[],
   destination: string,
   options?: { mode?: TransferMode; overwrite?: boolean },
   transferId?: string,
-) {
-  return invoke<TransferReport>("transfer_entries", {
+) =>
+  invoke<TransferReport>("transfer_entries", {
     paths,
     destination,
     options,
     transferId,
   });
-}
 
-export function deleteEntries(paths: string[]) {
-  return invoke<DeleteReport>("delete_entries", { paths });
-}
+export const deleteEntries = (paths: string[]) =>
+  invoke<DeleteReport>("delete_entries", { paths });
 
-export function renameEntry(path: string, newName: string) {
-  return invoke<string>("rename_entry", { path, newName });
-}
+export const renameEntry = (path: string, newName: string) =>
+  invoke<string>("rename_entry", { path, newName });
 
-export function startDirWatch(path: string) {
-  return invoke<void>("start_dir_watch", { path });
-}
+export const startDirWatch = (path: string) =>
+  invoke<void>("start_dir_watch", { path });
 
-export function stopDirWatch() {
-  return invoke<void>("stop_dir_watch");
-}
+export const stopDirWatch = () => invoke<void>("stop_dir_watch");

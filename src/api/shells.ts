@@ -2,10 +2,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ShellAvailability, ShellKind } from "@/types";
 
-export function getShellAvailability() {
-  return invoke<ShellAvailability>("get_shell_availability");
-}
+export const getShellAvailability = () =>
+  invoke<ShellAvailability>("get_shell_availability");
 
-export function openShell(kind: ShellKind, path: string) {
-  return invoke<void>("open_shell", { kind, path });
-}
+export const openShell = (kind: ShellKind, path: string) =>
+  invoke<void>("open_shell", { kind, path });

@@ -8,12 +8,20 @@
     "core:window:allow-set-size",
     "core:window:allow-set-title",
     "core:window:allow-destroy",
-    "opener:default",
+    "dialog:default",
     {
       "identifier": "opener:allow-open-path",
       "allow": [
         {
           "path": "**"
+        }
+      ]
+    },
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://github.com/*"
         }
       ]
     }

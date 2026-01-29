@@ -12,6 +12,26 @@ use std::time::SystemTime;
 use windows_sys::Win32::Storage::FileSystem::{
     GetDiskFreeSpaceExW, GetLogicalDrives, GetVolumeInformationW,
 };
+#[cfg(target_os = "windows")]
+use std::ffi::OsStr;
+#[cfg(target_os = "windows")]
+use std::os::windows::ffi::OsStrExt;
+#[cfg(target_os = "windows")]
+use windows::core::PCWSTR;
+#[cfg(target_os = "windows")]
+use windows::Win32::Foundation::HWND;
+#[cfg(target_os = "windows")]
+use windows_core::BOOL;
+#[cfg(target_os = "windows")]
+use windows::Win32::Storage::FileSystem::GetDriveTypeW;
+#[cfg(target_os = "windows")]
+use windows::Win32::UI::Shell::{
+    SHFileOperationW, FO_DELETE, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT,
+    SHFILEOPSTRUCTW,
+};
+
+#[cfg(target_os = "windows")]
+const DRIVE_FIXED: u32 = 3;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1232,6 +1252,69 @@ pub fn transfer_entries(
     Ok(report)
 }
 
+#[cfg(target_os = "windows")]
+fn to_wide_double_null(value: &str) -> Vec<u16> {
+    let mut wide: Vec<u16> = OsStr::new(value).encode_wide().collect();
+    wide.push(0);
+    wide.push(0);
+    wide
+}
+
+#[cfg(target_os = "windows")]
+fn drive_root(path: &str) -> Option<String> {
+    if path.starts_with("\\\\") {
+        let mut parts = path.trim_start_matches("\\\\").split('\\');
+        let server = parts.next()?;
+        let share = parts.next()?;
+        return Some(format!("\\\\{}\\{}\\", server, share));
+    }
+    if path.len() >= 2 && path.as_bytes()[1] == b':' {
+        return Some(format!("{}\\", &path[..2]));
+    }
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn can_use_recycle_bin(path: &Path) -> bool {
+    // Recycle Bin is only reliable on fixed local drives.
+    let path_str = path.to_string_lossy();
+    let root = match drive_root(&path_str) {
+        Some(value) => value,
+        None => return false,
+    };
+    if root.starts_with("\\\\") {
+        return false;
+    }
+    let wide = to_wide_double_null(&root);
+    let drive_type = unsafe { GetDriveTypeW(PCWSTR(wide.as_ptr())) };
+    drive_type == DRIVE_FIXED
+}
+
+#[cfg(target_os = "windows")]
+fn delete_to_recycle_bin(path: &Path) -> Result<(), String> {
+    let path_str = path.to_string_lossy();
+    let wide = to_wide_double_null(&path_str);
+    let flags = (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT).0 as u16;
+    let mut operation = SHFILEOPSTRUCTW {
+        hwnd: HWND(std::ptr::null_mut()),
+        wFunc: FO_DELETE,
+        pFrom: PCWSTR(wide.as_ptr()),
+        pTo: PCWSTR::null(),
+        fFlags: flags,
+        fAnyOperationsAborted: BOOL(0),
+        hNameMappings: std::ptr::null_mut(),
+        lpszProgressTitle: PCWSTR::null(),
+    };
+    let result = unsafe { SHFileOperationW(&mut operation) };
+    if result != 0 {
+        return Err(format!("Recycle bin delete failed ({})", result));
+    }
+    if operation.fAnyOperationsAborted.as_bool() {
+        return Err("Recycle bin delete canceled".to_string());
+    }
+    Ok(())
+}
+
 pub fn delete_entries(paths: Vec<String>) -> Result<DeleteReport, String> {
     let mut report = DeleteReport {
         deleted: 0,
@@ -1255,12 +1338,29 @@ pub fn delete_entries(paths: Vec<String>) -> Result<DeleteReport, String> {
                 continue;
             }
         };
-        let result = if metadata.is_dir() {
-            fs::remove_dir_all(&target)
-        } else {
-            fs::remove_file(&target)
+        let hard_delete = || {
+            if metadata.is_dir() {
+                fs::remove_dir_all(&target)
+            } else {
+                fs::remove_file(&target)
+            }
         };
-        match result {
+        #[cfg(target_os = "windows")]
+        {
+            if can_use_recycle_bin(&target) {
+                match delete_to_recycle_bin(&target) {
+                    Ok(_) => {
+                        report.deleted += 1;
+                        continue;
+                    }
+                    Err(err) => {
+                        report.failures.push(format!("{}: {}", trimmed, err));
+                        continue;
+                    }
+                }
+            }
+        }
+        match hard_delete() {
             Ok(_) => report.deleted += 1,
             Err(err) => report
                 .failures
