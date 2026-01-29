@@ -1,4 +1,4 @@
-export function tabLabel(path: string) {
+export const tabLabel = (path: string) => {
   const trimmed = path.trim();
   if (!trimmed) return "<new tab>";
   const normalized = trimmed.replace(/[\\/]+$/, "");
@@ -7,23 +7,23 @@ export function tabLabel(path: string) {
   }
   const parts = normalized.split(/[/\\]/);
   return parts[parts.length - 1] || normalized;
-}
+};
 
 // Returns the last segment of a path for display.
-export function getPathName(path: string) {
+export const getPathName = (path: string) => {
   const trimmed = path.trim().replace(/[\\/]+$/, "");
   if (!trimmed) return "";
   const parts = trimmed.split(/[/\\]/);
   return parts[parts.length - 1] ?? "";
-}
+};
 
-export function normalizePath(path: string) {
+export const normalizePath = (path: string) => {
   const normalized = path.trim().replace(/\//g, "\\");
   return normalized.replace(/[\\]+$/, "").toLowerCase();
-}
+};
 
 // Returns the parent directory for a path, or null when it cannot be resolved.
-export function getParentPath(path: string) {
+export const getParentPath = (path: string) => {
   const normalized = path.trim().replace(/\//g, "\\");
   if (!normalized) return null;
   const trimmed = normalized.replace(/[\\]+$/, "");
@@ -40,11 +40,11 @@ export function getParentPath(path: string) {
     return parent.toUpperCase();
   }
   return parent;
-}
+};
 
-export function activeDrive(path: string, drives: string[]) {
+export const activeDrive = (path: string, drives: string[]) => {
   const current = normalizePath(path);
   return (
     drives.find((drive) => current.startsWith(normalizePath(drive))) ?? null
   );
-}
+};

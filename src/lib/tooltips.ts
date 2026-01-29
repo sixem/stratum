@@ -1,8 +1,7 @@
 // Tooltip text builders for entries and drives.
 import type { DriveInfo, EntryMeta, FileEntry } from "@/types";
+import { TOOLTIP_CACHE_LIMIT } from "@/constants";
 import { formatBytes, formatDate, formatPercent } from "./format";
-
-const TOOLTIP_CACHE_LIMIT = 10000;
 const entryTooltipCache = new Map<string, string>();
 
 const getFileTypeLabel = (name: string) => {

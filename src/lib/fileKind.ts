@@ -1,3 +1,15 @@
+import {
+  ARCHIVE_EXTENSIONS,
+  AUDIO_EXTENSIONS,
+  DOCUMENT_EXTENSIONS,
+  EXECUTABLE_EXTENSIONS,
+  IMAGE_EXTENSIONS,
+  PDF_LIKE_EXTENSIONS,
+  SECURE_EXTENSIONS,
+  SVG_LIKE_EXTENSIONS,
+  VIDEO_EXTENSIONS,
+} from "@/constants";
+
 export type FileKind =
   | "secure"
   | "document"
@@ -7,179 +19,6 @@ export type FileKind =
   | "executable"
   | "archive"
   | "generic";
-
-const DOCUMENT_EXTENSIONS = new Set([
-  "adoc",
-  "asciidoc",
-  "cfg",
-  "conf",
-  "config",
-  "doc",
-  "docx",
-  "odt",
-  "rtf",
-  "txt",
-  "md",
-  "markdown",
-  "mdx",
-  "rst",
-  "pdf",
-  "ppt",
-  "pptx",
-  "xls",
-  "xlsx",
-  "csv",
-  "tsv",
-  "json",
-  "jsonc",
-  "json5",
-  "yaml",
-  "yml",
-  "toml",
-  "ini",
-  "properties",
-  "env",
-  "log",
-  "xml",
-  "html",
-  "htm",
-  "css",
-  "scss",
-  "sass",
-  "less",
-  "js",
-  "jsx",
-  "ts",
-  "tsx",
-  "mjs",
-  "cjs",
-  "c",
-  "h",
-  "cpp",
-  "hpp",
-  "cc",
-  "hh",
-  "cs",
-  "java",
-  "kt",
-  "kts",
-  "swift",
-  "py",
-  "rb",
-  "php",
-  "go",
-  "rs",
-  "sql",
-  "gql",
-  "graphql",
-  "pages",
-  "numbers",
-  "key",
-  "epub",
-]);
-
-const SECURE_EXTENSIONS = new Set([
-  "pem",
-  "key",
-  "p8",
-  "p12",
-  "pfx",
-  "p7b",
-  "p7c",
-  "p7s",
-  "cer",
-  "crt",
-  "der",
-  "csr",
-  "ppk",
-  "gpg",
-  "pgp",
-  "jks",
-  "keystore",
-  "kdb",
-  "kdbx",
-]);
-
-const PDF_LIKE_EXTENSIONS = new Set(["pdf"]);
-// Vector formats that should use the SVG-style icon in the grid.
-const SVG_LIKE_EXTENSIONS = new Set(["svg", "svgz"]);
-
-const ARCHIVE_EXTENSIONS = new Set([
-  "zip",
-  "zipx",
-  "rar",
-  "7z",
-  "tar",
-  "gz",
-  "tgz",
-  "bz2",
-  "xz",
-  "zst",
-]);
-
-const VIDEO_EXTENSIONS = new Set([
-  "mp4",
-  "mov",
-  "mkv",
-  "avi",
-  "webm",
-  "m4v",
-  "mpg",
-  "mpeg",
-  "wmv",
-  "flv",
-  "3gp",
-  "ogv",
-]);
-
-const IMAGE_EXTENSIONS = new Set([
-  "jpg",
-  "jpeg",
-  "png",
-  "webp",
-  "gif",
-  "bmp",
-  "tif",
-  "tiff",
-  "ico",
-  "svg",
-  "svgz",
-]);
-
-const AUDIO_EXTENSIONS = new Set([
-  "mp3",
-  "wav",
-  "flac",
-  "aac",
-  "m4a",
-  "ogg",
-  "oga",
-  "opus",
-  "wma",
-  "aiff",
-  "aif",
-  "alac",
-]);
-
-const EXECUTABLE_EXTENSIONS = new Set([
-  "exe",
-  "msi",
-  "bat",
-  "cmd",
-  "com",
-  "ps1",
-  "psm1",
-  "vbs",
-  "vbe",
-  "sh",
-  "bash",
-  "zsh",
-  "fish",
-  "app",
-  "appimage",
-  "run",
-  "bin",
-]);
 
 export const isPdfLikeExtension = (extension: string | null): boolean => {
   if (!extension) return false;

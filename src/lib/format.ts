@@ -9,7 +9,7 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
   minute: "2-digit",
 });
 
-export function formatBytes(value: number | null) {
+export const formatBytes = (value: number | null) => {
   if (value === null) return "...";
   if (value <= 0) return "0 B";
   let size = value;
@@ -20,21 +20,19 @@ export function formatBytes(value: number | null) {
   }
   const decimals = size < 10 && unitIndex > 0 ? 1 : 0;
   return `${size.toFixed(decimals)} ${sizeUnits[unitIndex]}`;
-}
+};
 
-export function formatCount(value: number) {
-  return countFormatter.format(value);
-}
+export const formatCount = (value: number) => countFormatter.format(value);
 
-export function formatPercent(value: number, total: number, decimals = 0) {
+export const formatPercent = (value: number, total: number, decimals = 0) => {
   if (!Number.isFinite(value) || !Number.isFinite(total) || total <= 0) {
     return null;
   }
   const percent = (value / total) * 100;
   return `${percent.toFixed(decimals)}%`;
-}
+};
 
-export function formatDate(epochMs: number | null) {
+export const formatDate = (epochMs: number | null) => {
   if (epochMs === null) return "-";
   return dateFormatter.format(new Date(epochMs));
-}
+};
