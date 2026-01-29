@@ -1,62 +1,79 @@
 ﻿// Barrel exports for shared app hooks.
-// Domain hooks: data access, tab state, and OS-facing workflows.
-export { useClipboardSync } from "./domain/useClipboardSync";
-export { useDirWatch } from "./domain/useDirWatch";
-export { useDriveInfo } from "./domain/useDriveInfo";
-export { useEntryMetaRequest } from "./domain/useEntryMetaRequest";
-export { useEntryPresence } from "./domain/useEntryPresence";
-export { useFileIcons } from "./domain/useFileIcons";
-export { useFileDrop } from "./domain/useFileDrop";
-export { useFileManager } from "./domain/useFileManager";
-export { useFileViewModel } from "./ui/useFileViewModel";
-export { useFilteredEntries } from "./domain/useFilteredEntries";
-export { useMetaPrefetch } from "./domain/useMetaPrefetch";
-export { useSettings } from "./domain/useSettings";
-export { useShellAvailability } from "./domain/useShellAvailability";
-export { useStatusLabels } from "./domain/useStatusLabels";
-export { useTabSession } from "./domain/useTabSession";
-export { useThumbnails } from "./domain/useThumbnails";
-export { useTransferProgress } from "./domain/useTransferProgress";
+// Domain hooks: filesystem workflows.
+export { useClipboardSync } from "./domain/filesystem/useClipboardSync";
+export { useDirWatch } from "./domain/filesystem/useDirWatch";
+export { useDriveInfo } from "./domain/filesystem/useDriveInfo";
+export { useFileDrop } from "./domain/filesystem/useFileDrop";
+export { useFileManager } from "./domain/filesystem/useFileManager";
+export { useShellAvailability } from "./domain/filesystem/useShellAvailability";
+export { useTransferProgress } from "./domain/filesystem/useTransferProgress";
 
-// UI hooks: presentation orchestration, menus, and interaction state.
-export { useAppAppearance } from "./ui/useAppAppearance";
-export { useAppMenuState } from "./ui/useAppMenuState";
-export { useAppViewState } from "./ui/useAppViewState";
-export { useCloseConfirm } from "./ui/useCloseConfirm";
-export { useCreateEntryPrompt } from "./ui/useCreateEntryPrompt";
-export { useCssVarHeight } from "./ui/useCssVarHeight";
-export { useDragOutHandler } from "./ui/useDragOutHandler";
-export { useEntryDragOut } from "./ui/useEntryDragOut";
-export { useEntryMenuItems } from "./ui/useEntryMenuItems";
-export { useFileViewInteractions } from "./ui/useFileViewInteractions";
-export { useFileViewSelection } from "./ui/useFileViewSelection";
-export { useKeybinds } from "./ui/useKeybinds";
-export { useLayoutMenuItems } from "./ui/useLayoutMenuItems";
-export { useSearchHotkey } from "./ui/useSearchHotkey";
-export { useSelection } from "./ui/useSelection";
-export { useSelectionDrag } from "./ui/useSelectionDrag";
-export { useSelectionShortcuts } from "./ui/useSelectionShortcuts";
-export { useSortMenuItems } from "./ui/useSortMenuItems";
-export { useTabDragDrop } from "./ui/useTabDragDrop";
-export { useTypeaheadSelection } from "./ui/useTypeaheadSelection";
+// Domain hooks: entry metadata and derived labels.
+export { useEntryMetaRequest } from "./domain/metadata/useEntryMetaRequest";
+export { useEntryPresence } from "./domain/metadata/useEntryPresence";
+export { useFileIcons } from "./domain/metadata/useFileIcons";
+export { useFilteredEntries } from "./domain/metadata/useFilteredEntries";
+export { useMetaPrefetch } from "./domain/metadata/useMetaPrefetch";
+export { useStatusLabels } from "./domain/metadata/useStatusLabels";
+export { useThumbnails } from "./domain/metadata/useThumbnails";
 
-// Perf hooks: scrolling, sizing, and throttled view work.
-export { useDynamicOverscan } from "./perf/useDynamicOverscan";
-export { useElementSize } from "./perf/useElementSize";
-export { useLayoutBusy } from "./perf/useLayoutBusy";
-export { useNowTick } from "./perf/useNowTick";
-export { useScrollRequest } from "./perf/useScrollRequest";
-export { useScrollReset } from "./perf/useScrollReset";
-export { useScrollRestore } from "./perf/useScrollRestore";
-export { useScrollSettled } from "./perf/useScrollSettled";
-export { useScrollToIndex } from "./perf/useScrollToIndex";
-export { useThumbnailPause } from "./perf/useThumbnailPause";
-export { useThumbnailRequest } from "./perf/useThumbnailRequest";
-export { useTypingActivity } from "./perf/useTypingActivity";
-export { useViewReady } from "./perf/useViewReady";
-export { useVirtualRange } from "./perf/useVirtualRange";
-export { useWheelSnap } from "./perf/useWheelSnap";
-export { useWindowSize } from "./perf/useWindowSize";
+// Domain hooks: session and settings state.
+export { useSettings } from "./domain/session/useSettings";
+export { useTabSession } from "./domain/session/useTabSession";
 
-export type { SelectionBox } from "./ui/useSelectionDrag";
-export type { TypeaheadItem } from "./ui/useTypeaheadSelection";
+// UI hooks: global app state and overlays.
+export { useAppAppearance } from "./ui/app/useAppAppearance";
+export { useAppMenuState } from "./ui/app/useAppMenuState";
+export { useAppViewState } from "./ui/app/useAppViewState";
+export { useCloseConfirm } from "./ui/app/useCloseConfirm";
+export { useCreateEntryPrompt } from "./ui/app/useCreateEntryPrompt";
+export { useModalFocusTrap } from "./ui/app/useModalFocusTrap";
+
+// UI hooks: view composition.
+export { useCssVarHeight } from "./ui/view/useCssVarHeight";
+export { useFileViewInteractions } from "./ui/view/useFileViewInteractions";
+export { useFileViewModel } from "./ui/view/useFileViewModel";
+
+// UI hooks: selection and typeahead.
+export { useEntryDragOut } from "./ui/selection/useEntryDragOut";
+export { useFileViewSelection } from "./ui/selection/useFileViewSelection";
+export { useSelection } from "./ui/selection/useSelection";
+export { useSelectionDrag } from "./ui/selection/useSelectionDrag";
+export { useSelectionShortcuts } from "./ui/selection/useSelectionShortcuts";
+export { useTypeaheadSelection } from "./ui/selection/useTypeaheadSelection";
+
+// UI hooks: menus.
+export { useEntryMenuItems } from "./ui/menus/useEntryMenuItems";
+export { useLayoutMenuItems } from "./ui/menus/useLayoutMenuItems";
+export { useSortMenuItems } from "./ui/menus/useSortMenuItems";
+
+// UI hooks: input bindings.
+export { useDragOutHandler } from "./ui/inputs/useDragOutHandler";
+export { useKeybinds } from "./ui/inputs/useKeybinds";
+export { useSearchHotkey } from "./ui/inputs/useSearchHotkey";
+export { useTabDragDrop } from "./ui/inputs/useTabDragDrop";
+
+// Perf hooks: scroll + virtualization.
+export { useDynamicOverscan } from "./perf/scroll/useDynamicOverscan";
+export { useScrollRequest } from "./perf/scroll/useScrollRequest";
+export { useScrollReset } from "./perf/scroll/useScrollReset";
+export { useScrollRestore } from "./perf/scroll/useScrollRestore";
+export { useScrollSettled } from "./perf/scroll/useScrollSettled";
+export { useScrollToIndex } from "./perf/scroll/useScrollToIndex";
+export { useVirtualRange } from "./perf/scroll/useVirtualRange";
+export { useWheelSnap } from "./perf/scroll/useWheelSnap";
+
+// Perf hooks: resize + measurement.
+export { useElementSize } from "./perf/resize/useElementSize";
+export { useLayoutBusy } from "./perf/resize/useLayoutBusy";
+export { useWindowSize } from "./perf/resize/useWindowSize";
+
+// Perf hooks: timing + throttling.
+export { useNowTick } from "./perf/timing/useNowTick";
+export { useThumbnailPause } from "./perf/timing/useThumbnailPause";
+export { useThumbnailRequest } from "./perf/timing/useThumbnailRequest";
+export { useTypingActivity } from "./perf/timing/useTypingActivity";
+export { useViewReady } from "./perf/timing/useViewReady";
+
+export type { SelectionBox } from "./ui/selection/useSelectionDrag";
+export type { TypeaheadItem } from "./ui/selection/useTypeaheadSelection";

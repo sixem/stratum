@@ -1,16 +1,4 @@
-// Tracks pending scroll requests for virtualized views.
-import { useCallback, useRef, useState } from "react";
+﻿// Moved to ./scroll/useScrollRequest for subdomain organization.
+// Re-exported for compatibility.
+export * from "./scroll/useScrollRequest";
 
-type ScrollRequest = { index: number; nonce: number; scopeKey?: string } | null;
-
-export const useScrollRequest = () => {
-  const [scrollRequest, setScrollRequest] = useState<ScrollRequest>(null);
-  const scrollNonceRef = useRef(0);
-
-  const requestScrollToIndex = useCallback((index: number, scopeKey?: string) => {
-    scrollNonceRef.current += 1;
-    setScrollRequest({ index, nonce: scrollNonceRef.current, scopeKey });
-  }, []);
-
-  return { scrollRequest, requestScrollToIndex };
-};

@@ -1,31 +1,4 @@
-import { useLayoutEffect, useState } from "react";
-import type { RefObject } from "react";
+﻿// Moved to ./resize/useElementSize for subdomain organization.
+// Re-exported for compatibility.
+export * from "./resize/useElementSize";
 
-type ElementSize = {
-  width: number;
-  height: number;
-};
-
-export const useElementSize = (ref: RefObject<HTMLElement | null>) => {
-  const [size, setSize] = useState<ElementSize>({ width: 0, height: 0 });
-
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-
-    const updateSize = () => {
-      setSize({
-        width: element.clientWidth,
-        height: element.clientHeight,
-      });
-    };
-
-    updateSize();
-    const observer = new ResizeObserver(() => updateSize());
-    observer.observe(element);
-
-    return () => observer.disconnect();
-  }, [ref]);
-
-  return size;
-};

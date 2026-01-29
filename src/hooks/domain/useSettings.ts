@@ -1,6 +1,4 @@
-// Exposes the settings store as a hook for components.
-import { useSettingsStore } from "@/modules";
+﻿// Moved to ./session/useSettings for subdomain organization.
+// Re-exported for compatibility.
+export * from "./session/useSettings";
 
-export const useSettings = () => {
-  return useSettingsStore((state) => state);
-};

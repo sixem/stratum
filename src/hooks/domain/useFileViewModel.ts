@@ -1,3 +1,3 @@
-﻿// Moved to ../ui/useFileViewModel for strict layering.
+﻿// Moved to ../ui/view/useFileViewModel for strict layering.
 // Re-exported for compatibility.
-export * from "../ui/useFileViewModel";
+export * from "../ui/view/useFileViewModel";

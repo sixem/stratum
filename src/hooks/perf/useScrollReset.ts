@@ -1,10 +1,4 @@
-import { useEffect } from "react";
-import type { RefObject } from "react";
+﻿// Moved to ./scroll/useScrollReset for subdomain organization.
+// Re-exported for compatibility.
+export * from "./scroll/useScrollReset";
 
-export const useScrollReset = (ref: RefObject<HTMLElement | null>, deps: unknown[]) => {
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    element.scrollTop = 0;
-  }, [ref, ...deps]);
-};
