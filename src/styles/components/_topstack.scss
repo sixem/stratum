@@ -9,9 +9,12 @@
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
 }
 
-.header {
-  display: flex;
-  flex-direction: column;
+// Scope topstack internals without increasing specificity.
+:where(.topstack) {
+  .header {
+    display: flex;
+    flex-direction: column;
+  }
 }
 
 .drivebar {
@@ -25,78 +28,85 @@
   width: 100%;
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 600;
+// Brand marks appear in the path bar, drive bar, and legacy top bar.
+:where(.drivebar, .topbar, .pathbar) {
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+  }
+
+  .brand-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--stroke);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    overflow: hidden;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+  }
+
+  .brand-title {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
 }
 
-.brand-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--stroke);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-  overflow: hidden;
+:where(.drivebar) {
+  .drive-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .drive {
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--stroke);
+    background: var(--panel);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: none;
+  }
+
+  .drive:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .drive.is-active {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .drive.is-empty {
+    cursor: default;
+    opacity: 0.6;
+  }
 }
 
-.brand-mark img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
-
-.brand-title {
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.drive-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-  flex: 1;
-}
-
-.drive {
-  padding: 4px 10px;
-  border-radius: 4px;
-  border: 1px solid var(--stroke);
-  background: var(--panel);
-  font-weight: 600;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: none;
-}
-
-.drive:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.drive.is-active {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.drive.is-empty {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.view-switch {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+:where(.pathbar-actions) {
+  .view-switch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
 }
 
 // Lightweight transfer status button + popover in the header.
@@ -106,171 +116,174 @@
   align-items: center;
 }
 
-.transfer-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--stroke);
-  background: var(--surface-control);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  color: var(--muted);
-  cursor: pointer;
-}
+// Scope transfer UI pieces to the transfer status container.
+:where(.transfer-status) {
+  .transfer-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--stroke);
+    background: var(--surface-control);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    cursor: pointer;
+  }
 
-.transfer-button.is-open {
-  border-color: rgba(var(--accent-rgb), 0.5);
-  color: var(--text);
-  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.15);
-}
+  .transfer-button.is-open {
+    border-color: rgba(var(--accent-rgb), 0.5);
+    color: var(--text);
+    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.15);
+  }
 
-.transfer-label {
-  font-weight: 600;
-  color: var(--text);
-}
+  .transfer-label {
+    font-weight: 600;
+    color: var(--text);
+  }
 
-.transfer-count {
-  font-size: 10px;
-  color: var(--muted);
-}
+  .transfer-count {
+    font-size: 10px;
+    color: var(--muted);
+  }
 
-.transfer-indicator {
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  border: 2px solid rgba(140, 149, 170, 0.35);
-  border-top-color: var(--accent);
-  animation: transfer-spin 0.9s linear infinite;
-}
+  .transfer-indicator {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    border: 2px solid rgba(140, 149, 170, 0.35);
+    border-top-color: var(--accent);
+    animation: transfer-spin 0.9s linear infinite;
+  }
 
-.transfer-indicator.is-complete {
-  animation: none;
-  border-color: rgba(var(--accent-rgb), 0.5);
-  background: rgba(var(--accent-rgb), 0.2);
-}
+  .transfer-indicator.is-complete {
+    animation: none;
+    border-color: rgba(var(--accent-rgb), 0.5);
+    background: rgba(var(--accent-rgb), 0.2);
+  }
 
-.transfer-popover {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 320px;
-  padding: 12px;
-  border-radius: 10px;
-  border: 1px solid var(--stroke);
-  background: var(--panel);
-  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.4);
-  z-index: 30;
-}
+  .transfer-popover {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 320px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--stroke);
+    background: var(--panel);
+    box-shadow: 0 16px 30px rgba(0, 0, 0, 0.4);
+    z-index: 30;
+  }
 
-.transfer-popover-title {
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
+  .transfer-popover-title {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
 
-.transfer-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 260px;
-  overflow-y: auto;
-}
+  .transfer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 260px;
+    overflow-y: auto;
+  }
 
-.transfer-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: var(--panel-2);
-}
+  .transfer-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: var(--panel-2);
+  }
 
-.transfer-item-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12px;
-}
+  .transfer-item-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+  }
 
-.transfer-item-title {
-  font-weight: 600;
-}
+  .transfer-item-title {
+    font-weight: 600;
+  }
 
-.transfer-item-count {
-  color: var(--muted);
-  font-size: 11px;
-}
+  .transfer-item-count {
+    color: var(--muted);
+    font-size: 11px;
+  }
 
-.transfer-item-file {
-  display: flex;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-}
+  .transfer-item-file {
+    display: flex;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+  }
 
-.transfer-item-file-label {
-  flex: 0 0 auto;
-  color: var(--text);
-}
+  .transfer-item-file-label {
+    flex: 0 0 auto;
+    color: var(--text);
+  }
 
-.transfer-item-file-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+  .transfer-item-file-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
-.transfer-progress {
-  width: 100%;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-}
+  .transfer-progress {
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+  }
 
-.transfer-progress-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent);
-  transition: width 120ms linear;
-}
+  .transfer-progress-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+    transition: width 120ms linear;
+  }
 
-.transfer-progress[data-indeterminate="true"] .transfer-progress-fill {
-  width: 100%;
-  background: linear-gradient(
-    90deg,
-    rgba(var(--accent-rgb), 0.2),
-    rgba(var(--accent-rgb), 0.7),
-    rgba(var(--accent-rgb), 0.2)
-  );
-  background-size: 200% 100%;
-  animation: transfer-shimmer 1.1s linear infinite;
-}
+  .transfer-progress[data-indeterminate="true"] .transfer-progress-fill {
+    width: 100%;
+    background: linear-gradient(
+      90deg,
+      rgba(var(--accent-rgb), 0.2),
+      rgba(var(--accent-rgb), 0.7),
+      rgba(var(--accent-rgb), 0.2)
+    );
+    background-size: 200% 100%;
+    animation: transfer-shimmer 1.1s linear infinite;
+  }
 
-.transfer-item-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 10px;
-  color: var(--muted);
-}
+  .transfer-item-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 10px;
+    color: var(--muted);
+  }
 
-.transfer-item-failed {
-  border-color: rgba(225, 76, 76, 0.35);
-}
+  .transfer-item-failed {
+    border-color: rgba(225, 76, 76, 0.35);
+  }
 
-.transfer-item-failed .transfer-progress-fill {
-  background: #e14c4c;
-}
+  .transfer-item-failed .transfer-progress-fill {
+    background: #e14c4c;
+  }
 
-.transfer-popover-note {
-  margin-top: 8px;
-  font-size: 10px;
-  color: var(--muted);
+  .transfer-popover-note {
+    margin-top: 8px;
+    font-size: 10px;
+    color: var(--muted);
+  }
 }
 
 .view-btn {
@@ -317,4 +330,3 @@
     background-position: 200% 50%;
   }
 }
-

@@ -1,24 +1,17 @@
 // Status bar layout and counters.
 .statusbar {
   display: flex;
-  gap: 12px;
+  gap: 0.75rem;
   justify-content: space-between;
   align-items: center;
-  padding: 0 10px;
+  padding: 0.3125rem 0.625rem;
   background: var(--panel-2);
   border-top: 1px solid var(--stroke);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
   width: 100%;
   height: 100%;
   overflow: hidden;
-}
-
-.status-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
 }
 
 .statusbar-shell {
@@ -27,35 +20,55 @@
   left: 0;
   right: 0;
   z-index: 18;
-  height: var(--statusbar-height);
   contain: layout paint;
 }
 
-.status-text {
-  flex: 0 1 auto;
-  min-width: 0;
-  white-space: nowrap;
+.statusbar-shell.is-hidden {
+  height: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: right;
+  pointer-events: none;
 }
 
-.status-text.error {
-  color: #ff8b3d;
+.statusbar-shell.is-hidden .statusbar {
+  border: 0;
+  padding: 0;
+  opacity: 0;
 }
 
-.status-text.loading {
-  color: var(--accent);
-}
+// Scope status bar content to the bar without increasing specificity.
+:where(.statusbar) {
+  .status-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+  }
 
-.status-count {
-  flex: 0 0 auto;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
+  .status-text {
+    flex: 0 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: right;
+  }
 
-.status-selection {
-  white-space: nowrap;
-  color: var(--text);
-}
+  .status-text.error {
+    color: #ff8b3d;
+  }
 
+  .status-text.loading {
+    color: var(--accent);
+  }
+
+  .status-count {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .status-selection {
+    white-space: nowrap;
+    color: var(--text);
+  }
+}
