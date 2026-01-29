@@ -1,6 +1,15 @@
 // Persistent user settings with defaults and coercion.
 import { createWithEqualityFn } from "zustand/traditional";
 import type { ViewMode } from "@/types";
+import {
+  GRID_AUTO_COLUMNS_DEFAULT,
+  GRID_AUTO_COLUMNS_MAX,
+  GRID_AUTO_COLUMNS_MIN,
+  SETTINGS_STORAGE_KEY,
+  SETTINGS_STORAGE_VERSION,
+  SIDEBAR_RECENT_LIMIT_MAX,
+  SIDEBAR_RECENT_LIMIT_MIN,
+} from "@/constants";
 import type { KeybindMap } from "./keybinds";
 import { coerceKeybinds, DEFAULT_KEYBINDS } from "./keybinds";
 
@@ -26,11 +35,6 @@ export const SIDEBAR_SECTION_DEFINITIONS: { id: SidebarSectionId; label: string 
 
 export const DEFAULT_SIDEBAR_SECTION_ORDER = SIDEBAR_SECTION_DEFINITIONS.map((item) => item.id);
 export const DEFAULT_SIDEBAR_HIDDEN_SECTIONS: SidebarSectionId[] = [];
-export const SIDEBAR_RECENT_LIMIT_MIN = 1;
-export const SIDEBAR_RECENT_LIMIT_MAX = 40;
-export const GRID_AUTO_COLUMNS_MIN = 3;
-export const GRID_AUTO_COLUMNS_MAX = 10;
-export const GRID_AUTO_COLUMNS_DEFAULT = 5;
 
 type Settings = {
   sidebarOpen: boolean;
@@ -68,6 +72,7 @@ type Settings = {
   thumbnailCacheMb: number;
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;
+  ffmpegPath: string;
 };
 
 type SettingsStore = Settings & {
@@ -81,8 +86,8 @@ type StoredSettings = {
   settings: Settings;
 };
 
-const STORAGE_KEY = "stratum.settings";
-const STORAGE_VERSION = 18;
+const STORAGE_KEY = SETTINGS_STORAGE_KEY;
+const STORAGE_VERSION = SETTINGS_STORAGE_VERSION;
 
 const DEFAULT_SETTINGS: Settings = {
   sidebarOpen: true,
@@ -120,6 +125,7 @@ const DEFAULT_SETTINGS: Settings = {
   thumbnailCacheMb: 512,
   thumbnailFit: "contain",
   thumbnailAppIcons: true,
+  ffmpegPath: "",
 };
 
 const clampNumber = (value: unknown, fallback: number, min: number, max: number) => {
@@ -327,6 +333,8 @@ const coerceSettings = (value: Partial<Settings> | null | undefined): Settings =
       typeof value?.thumbnailAppIcons === "boolean"
         ? value.thumbnailAppIcons
         : DEFAULT_SETTINGS.thumbnailAppIcons,
+    ffmpegPath:
+      typeof value?.ffmpegPath === "string" ? value.ffmpegPath : DEFAULT_SETTINGS.ffmpegPath,
   };
 };
 
@@ -435,6 +443,7 @@ useSettingsStore.subscribe((state) => {
     thumbnailCacheMb: state.thumbnailCacheMb,
     thumbnailFit: state.thumbnailFit,
     thumbnailAppIcons: state.thumbnailAppIcons,
+    ffmpegPath: state.ffmpegPath,
   });
 });
 

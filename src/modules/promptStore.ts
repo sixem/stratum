@@ -7,6 +7,13 @@ export type PromptConfig = {
   content: ReactNode;
   confirmLabel?: string | null;
   cancelLabel?: string | null;
+  // Optional extra actions rendered alongside the confirm/cancel buttons.
+  actions?: {
+    label: string;
+    onClick: () => void;
+    variant?: "primary" | "ghost";
+    closeOnClick?: boolean;
+  }[];
   onConfirm?: () => void;
   onCancel?: () => void;
   blocking?: boolean;

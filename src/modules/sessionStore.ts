@@ -2,7 +2,12 @@
 import { createWithEqualityFn } from "zustand/traditional";
 import type { SortDir, SortKey, SortState, Tab, ViewMode } from "@/types";
 import { DEFAULT_SORT, getDefaultSortDir } from "@/lib";
-import { SIDEBAR_RECENT_LIMIT_MAX } from "./settings";
+import {
+  SESSION_LEGACY_STORAGE_KEY,
+  SESSION_STORAGE_KEY,
+  SESSION_STORAGE_VERSION,
+  SIDEBAR_RECENT_LIMIT_MAX,
+} from "@/constants";
 
 type SessionState = {
   tabs: Tab[];
@@ -23,9 +28,9 @@ type StoredSession = {
   session: SessionState;
 };
 
-const STORAGE_KEY = "stratum.session";
-const LEGACY_STORAGE_KEY = "hashman.session";
-const STORAGE_VERSION = 4;
+const STORAGE_KEY = SESSION_STORAGE_KEY;
+const LEGACY_STORAGE_KEY = SESSION_LEGACY_STORAGE_KEY;
+const STORAGE_VERSION = SESSION_STORAGE_VERSION;
 
 const DEFAULT_SESSION: SessionState = {
   tabs: [],

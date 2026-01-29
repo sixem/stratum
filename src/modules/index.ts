@@ -19,18 +19,21 @@ export {
   normalizeKeybind,
 } from "./keybinds";
 export type { SessionState } from "./sessionStore";
+export type { PromptConfig } from "./promptStore";
 export {
   DEFAULT_SIDEBAR_SECTION_ORDER,
   DEFAULT_SIDEBAR_HIDDEN_SECTIONS,
+  SIDEBAR_SECTION_DEFINITIONS,
+  normalizeSidebarHiddenSections,
+  normalizeSidebarSectionOrder,
+} from "./settings";
+export {
   GRID_AUTO_COLUMNS_DEFAULT,
   GRID_AUTO_COLUMNS_MAX,
   GRID_AUTO_COLUMNS_MIN,
   SIDEBAR_RECENT_LIMIT_MAX,
   SIDEBAR_RECENT_LIMIT_MIN,
-  SIDEBAR_SECTION_DEFINITIONS,
-  normalizeSidebarHiddenSections,
-  normalizeSidebarSectionOrder,
-} from "./settings";
+} from "@/constants";
 export { HINTS, getSessionHint, pickRandomHint, refreshSessionHint } from "./hints";
 export type {
   AccentTheme,
