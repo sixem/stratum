@@ -69,13 +69,10 @@ import type {
   ShellKind,
   SortState,
 } from "@/types";
+import { APP_DESCRIPTION, APP_NAME, APP_VERSION } from "@/constants";
 import "@/styles/app.scss";
-import appPackage from "../package.json";
 
 const viewLog = makeDebug("view");
-const APP_NAME = "Stratum";
-const APP_VERSION = appPackage.version;
-const APP_DESCRIPTION = "A modern, but simple file manager with some added flair.";
 const isTauriEnv = () => {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 };
@@ -224,6 +221,10 @@ const App = () => {
   const renameCommitRef = useRef(false);
   const [thumbResetNonce, setThumbResetNonce] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [pendingCreateSelection, setPendingCreateSelection] = useState<{
+    path: string;
+    viewKey: string;
+  } | null>(null);
   const { currentPath, parentPath, entries, entryMeta, totalCount, loading, status } =
     fileManager;
   const {
@@ -732,6 +733,37 @@ const App = () => {
     [handleRenameCommit, renameTarget, setSelection],
   );
 
+  // Select and scroll to freshly created entries once the view updates.
+  const queueCreateSelection = useCallback(
+    (createdPath: string, parentPath: string) => {
+      const parentKey = normalizePath(parentPath);
+      if (!parentKey || parentKey !== viewPathKey) return;
+      setPendingCreateSelection({ path: createdPath, viewKey });
+    },
+    [viewKey, viewPathKey],
+  );
+
+  useEffect(() => {
+    if (!pendingCreateSelection) return;
+    if (pendingCreateSelection.viewKey !== viewKey) {
+      setPendingCreateSelection(null);
+      return;
+    }
+    if (viewLoading) return;
+    const index = viewModel.indexMap.get(pendingCreateSelection.path);
+    if (index == null) return;
+    handleSelectionChange([pendingCreateSelection.path], pendingCreateSelection.path);
+    requestScrollToIndexForView(index);
+    setPendingCreateSelection(null);
+  }, [
+    handleSelectionChange,
+    pendingCreateSelection,
+    requestScrollToIndexForView,
+    viewKey,
+    viewLoading,
+    viewModel.indexMap,
+  ]);
+
   const handleClearSelection = useCallback(() => {
     if (renameTarget) {
       handleRenameCommit("blur");
@@ -931,7 +963,7 @@ const App = () => {
     const label = formatDeleteLabel(selectionTargets);
     usePromptStore.getState().showPrompt({
       title: selectionTargets.length === 1 ? "Delete item?" : "Delete items?",
-      content: `Delete ${label}? You can undo with Ctrl+Z.`,
+      content: `Delete ${label}? Items may be moved to the Recycle Bin when available.`,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
       onConfirm: runDelete,
@@ -1065,6 +1097,38 @@ const App = () => {
     }
   }, []);
 
+  const handleCreateFile = useCallback(
+    async (parentPath: string, name: string) => {
+      const createdPath = await fileManager.createFile(parentPath, name);
+      if (createdPath) {
+        queueCreateSelection(createdPath, parentPath);
+      }
+      return createdPath;
+    },
+    [fileManager.createFile, queueCreateSelection],
+  );
+
+  const handleCreateFolder = useCallback(
+    async (parentPath: string, name: string) => {
+      const createdPath = await fileManager.createFolder(parentPath, name);
+      if (createdPath) {
+        queueCreateSelection(createdPath, parentPath);
+      }
+      return createdPath;
+    },
+    [fileManager.createFolder, queueCreateSelection],
+  );
+
+  const handleCreateFolderAndGo = useCallback(
+    async (parentPath: string, name: string) => {
+      const createdPath = await fileManager.createFolder(parentPath, name);
+      if (!createdPath) return null;
+      browseFromView(createdPath);
+      return createdPath;
+    },
+    [browseFromView, fileManager.createFolder],
+  );
+
   const handleOpenShell = useCallback((kind: ShellKind, path: string) => {
     const target = path.trim();
     if (!target) return;
@@ -1089,8 +1153,9 @@ const App = () => {
     onPaste: (paths) => {
       void fileManager.pasteEntries(paths);
     },
-    onCreateFolder: fileManager.createFolder,
-    onCreateFile: fileManager.createFile,
+    onCreateFolder: handleCreateFolder,
+    onCreateFolderAndGo: handleCreateFolderAndGo,
+    onCreateFile: handleCreateFile,
     shellAvailability,
     menuOpenPwsh: settings.menuOpenPwsh,
     menuOpenWsl: settings.menuOpenWsl,
@@ -1110,8 +1175,9 @@ const App = () => {
     onPasteEntries: (paths, destination) => {
       void fileManager.pasteEntries(paths, destination);
     },
-    onCreateFolder: fileManager.createFolder,
-    onCreateFile: fileManager.createFile,
+    onCreateFolder: handleCreateFolder,
+    onCreateFolderAndGo: handleCreateFolderAndGo,
+    onCreateFile: handleCreateFile,
     ffmpegAvailable: Boolean(shellAvailability?.ffmpeg),
   });
   const contextMenuItems =
@@ -1251,8 +1317,9 @@ const App = () => {
           onOpenDir: browseFromView,
           onOpenDirNewTab: handleOpenInNewTab,
           onOpenEntry: fileManager.openEntry,
-          onCreateFolder: fileManager.createFolder,
-          onCreateFile: fileManager.createFile,
+          onCreateFolder: handleCreateFolder,
+          onCreateFolderAndGo: handleCreateFolderAndGo,
+          onCreateFile: handleCreateFile,
           onSelectItem: handleSelectItemWithRename,
           onClearSelection: handleClearSelection,
           renameTargetPath: renameTarget?.path ?? null,
@@ -1298,6 +1365,7 @@ const App = () => {
           countLabel,
           selectionLabel,
         }}
+        hidden={showLander}
       />
       <AppOverlays
         about={{
