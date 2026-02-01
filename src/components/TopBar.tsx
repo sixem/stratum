@@ -1,6 +1,6 @@
 // Deprecated legacy top bar; not wired in App. Remove when safe.
 import type { FormEvent } from "react";
-import { ChevronUpIcon, RefreshIcon } from "./Icons";
+import { ChevronUpIcon, RefreshIcon } from "./icons";
 
 type TopBarProps = {
   path: string;

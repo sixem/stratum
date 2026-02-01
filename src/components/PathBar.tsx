@@ -1,6 +1,6 @@
 // Navigation controls row that sits above the inputs.
 import type { ReactNode } from "react";
-import { ChevronUpIcon, NavArrowIcon } from "./Icons";
+import { ChevronUpIcon, NavArrowIcon } from "./icons";
 
 type PathBarProps = {
   onBack: () => void;

@@ -7,7 +7,7 @@ export { EmptyState } from "./EmptyState";
 export { default as FileGrid } from "./FileGrid";
 export { default as FileList } from "./FileList";
 export { FileView } from "./FileView";
-export * from "./Icons";
+export * from "./icons";
 export { LoadingIndicator } from "./LoadingIndicator";
 export { LoadingState } from "./LoadingState";
 export { PathBar } from "./PathBar";

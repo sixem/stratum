@@ -1,7 +1,7 @@
 // Action cluster aligned to the right side of the path bar.
 import { TransferStatusButton } from "./TransferStatusButton";
 import { ToolbarIconButton } from "./ToolbarIconButton";
-import { GridIcon, ListIcon, SettingsIcon } from "./Icons";
+import { GridIcon, ListIcon, SettingsIcon } from "./icons";
 import type { ViewMode } from "@/types";
 
 type PathBarActionsProps = {

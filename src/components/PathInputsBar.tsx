@@ -1,6 +1,6 @@
 // Dedicated bar for the path and search inputs.
 import type { FormEvent, KeyboardEvent, RefObject } from "react";
-import { FilterIcon, RefreshIcon } from "./Icons";
+import { FilterIcon, RefreshIcon } from "./icons";
 
 type PathInputsBarProps = {
   path: string;

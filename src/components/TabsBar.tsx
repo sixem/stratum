@@ -4,7 +4,7 @@ import { Fragment, startTransition, useRef } from "react";
 import { handleMiddleClick, tabLabel } from "@/lib";
 import { useTabDragDrop } from "@/hooks";
 import type { Tab } from "@/types";
-import { PlusIcon, TabCloseIcon } from "./Icons";
+import { PlusIcon, TabCloseIcon } from "./icons";
 import { TooltipWrapper } from "./Tooltip";
 
 type TabsBarProps = {
