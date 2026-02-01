@@ -1,29 +1,20 @@
 // Manages filesystem state, navigation, and status messaging.
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import {
-  copyEntries,
-  createFile,
-  createFolder,
-  deleteEntries as deleteEntriesApi,
-  ensureDir,
   getDrives,
-  getHome,
   getPlaces,
   listDirWithParent,
   listDriveInfo,
   openPath,
   renameEntry,
   statEntries,
-  transferEntries,
 } from "@/api";
 import {
   DEFAULT_SORT,
-  formatFailures,
-  getParentPath,
-  getPathName,
   makeDebug,
   normalizePath,
   tabLabel,
+  toMessage,
 } from "@/lib";
 import {
   DIR_CACHE_LIMIT,
@@ -32,16 +23,20 @@ import {
   META_FLUSH_INTERVAL_MS,
   UNDO_STACK_LIMIT,
 } from "@/constants";
-import { usePromptStore, useTransferStore } from "@/modules";
+import { usePromptStore } from "@/modules";
 import type {
   DriveInfo,
-  DeleteReport,
   EntryMeta,
   FileEntry,
   ListDirOptions,
   Place,
   SortState,
 } from "@/types";
+import { useFileManagerCopy } from "./fileManagerCopy";
+import { useFileManagerCreate } from "./fileManagerCreate";
+import { useFileManagerDelete } from "./fileManagerDelete";
+import { useFileManagerUndo } from "./fileManagerUndo";
+import type { UndoAction } from "./fileManagerUndo";
 
 type StatusLevel = "idle" | "loading" | "error";
 
@@ -86,51 +81,12 @@ type RenameBatchResult = {
   failures: RenameFailure[];
 };
 
-type UndoRenameEntry = {
-  from: string;
-  to: string;
-};
-
-type UndoTrashEntry = {
-  originalPath: string;
-  trashPath: string;
-};
-
-type UndoAction =
-  | { type: "rename"; entries: UndoRenameEntry[] }
-  | { type: "trash"; entries: UndoTrashEntry[] };
+// Undo action types live in fileManagerUndo.
 
 const log = makeDebug("fs");
 const perf = makeDebug("perf:fs");
 
 const normalizeSearch = (value: string) => value.trim().toLowerCase();
-
-const TRASH_DIR_NAME = ".stratum-trash";
-
-const joinPath = (base: string, name: string) => {
-  const trimmed = base.trim().replace(/[\\/]+$/, "");
-  if (!trimmed) return name;
-  return `${trimmed}\\${name}`;
-};
-
-// Normalize a path down to its volume root (drive letter or UNC share).
-const getDriveKey = (path: string) => {
-  const normalized = normalizePath(path);
-  if (!normalized) return null;
-  if (normalized.startsWith("\\\\")) {
-    const parts = normalized.slice(2).split("\\");
-    if (parts.length < 2) return null;
-    return `\\\\${parts[0]}\\${parts[1]}`;
-  }
-  const driveMatch = /^[a-z]:/.exec(normalized);
-  if (driveMatch) return driveMatch[0];
-  if (normalized.startsWith("/")) return "/";
-  return null;
-};
-
-const entryExists = (meta: EntryMeta | null | undefined) => {
-  return Boolean(meta && (meta.size != null || meta.modified != null));
-};
 
 const buildQueryKey = (path: string, query: ListDirQuery) => {
   const normalizedPath = normalizePath(path);
@@ -153,36 +109,6 @@ const toEntryMeta = (entry: FileEntry): EntryMeta | null => {
     modified: entry.modified ?? null,
   };
 };
-
-function toMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  if (typeof error === "string" && error.trim().length > 0) {
-    return error;
-  }
-  if (typeof error === "object" && error) {
-    const record = error as Record<string, unknown>;
-    const message = record.message;
-    if (typeof message === "string" && message.trim().length > 0) {
-      return message;
-    }
-    const cause = record.cause;
-    if (typeof cause === "string" && cause.trim().length > 0) {
-      return cause;
-    }
-    const nested = record.error;
-    if (typeof nested === "string" && nested.trim().length > 0) {
-      return nested;
-    }
-    try {
-      return JSON.stringify(error);
-    } catch {
-      // Ignore serialization errors.
-    }
-  }
-  return fallback;
-}
 
 export function useFileManager() {
   const [currentPath, setCurrentPath] = useState("");
@@ -220,11 +146,10 @@ export function useFileManager() {
   const createInFlightRef = useRef(false);
   // In-memory undo stack for the current session.
   const undoStackRef = useRef<UndoAction[]>([]);
-  // Lazily resolved trash location for soft deletes.
-  const trashRootRef = useRef<string | null>(null);
-  const startTransferJob = useTransferStore((state) => state.startJob);
-  const completeTransferJob = useTransferStore((state) => state.completeJob);
-  const failTransferJob = useTransferStore((state) => state.failJob);
+  // Lazily resolved trash locations for soft deletes (keyed by drive root).
+  const trashRootRef = useRef<Map<string, string>>(new Map());
+  const homePathRef = useRef<string | null>(null);
+  const homeDriveKeyRef = useRef<string | null>(null);
 
   const reportError = useCallback((title: string, message: string) => {
     usePromptStore.getState().showPrompt({
@@ -246,23 +171,6 @@ export function useFileManager() {
 
   const canUndo = useCallback(() => undoStackRef.current.length > 0, []);
 
-  // Use a hidden-ish folder in the user's home as a simple trash bin.
-  const resolveTrashRoot = useCallback(async () => {
-    if (trashRootRef.current) return trashRootRef.current;
-    const home = await getHome();
-    if (!home) {
-      throw new Error("Unable to resolve home directory for trash.");
-    }
-    const root = joinPath(home, TRASH_DIR_NAME);
-    await ensureDir(root);
-    trashRootRef.current = root;
-    return root;
-  }, []);
-
-  const buildTrashBatchDir = useCallback((root: string) => {
-    const nonce = Math.random().toString(36).slice(2, 8);
-    return joinPath(root, `delete-${Date.now()}-${nonce}`);
-  }, []);
   const trimMetaCache = useCallback((cache: Map<string, EntryMeta>) => {
     while (cache.size > META_CACHE_LIMIT) {
       const oldest = cache.keys().next().value;
@@ -568,44 +476,28 @@ export function useFileManager() {
     });
   }, [loadDir]);
 
-  const createEntryInView = useCallback(
-    async (parentPath: string, name: string, kind: "folder" | "file") => {
-      if (createInFlightRef.current) return null;
-      const parent = parentPath.trim();
-      const trimmedName = name.trim();
-      if (!parent || !trimmedName) return null;
-      const targetPath = joinPath(parent, trimmedName);
-      createInFlightRef.current = true;
-      try {
-        if (kind === "folder") {
-          await createFolder(targetPath);
-        } else {
-          await createFile(targetPath);
-        }
-        const parentKey = normalizePath(parent);
-        const currentKey = normalizePath(currentPathRef.current);
-        if (parentKey && currentKey && parentKey === currentKey) {
-          await refreshAfterChange();
-        }
-        return targetPath;
-      } catch (error) {
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : `Failed to create ${kind}.`;
-        usePromptStore.getState().showPrompt({
-          title: kind === "folder" ? "Create folder failed" : "Create file failed",
-          content: message,
-          confirmLabel: "OK",
-          cancelLabel: null,
-        });
-        return null;
-      } finally {
-        createInFlightRef.current = false;
-      }
-    },
-    [refreshAfterChange],
-  );
+  const { createFolderInView, createFileInView } = useFileManagerCreate({
+    currentPathRef,
+    createInFlightRef,
+    refreshAfterChange,
+  });
+
+  const { duplicateEntriesInView, pasteEntriesInView } = useFileManagerCopy({
+    currentPathRef,
+    copyInFlightRef,
+    refreshAfterChange,
+    log,
+  });
+
+  const { deleteEntriesInView } = useFileManagerDelete({
+    deleteInFlightRef,
+    trashRootRef,
+    homePathRef,
+    homeDriveKeyRef,
+    pushUndo,
+    refreshAfterChange,
+    log,
+  });
 
   const refresh = useCallback(async () => {
     const target = currentPathRef.current;
@@ -714,311 +606,6 @@ export function useFileManager() {
     [primeEntryMeta],
   );
 
-  const deleteEntriesInView = useCallback(
-    async (paths: string[]): Promise<DeleteReport | null> => {
-      if (deleteInFlightRef.current) return null;
-      const unique = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
-      if (unique.length === 0) return null;
-      log("delete entries (trash): %d items", unique.length);
-      deleteInFlightRef.current = true;
-      try {
-        let trashRoot: string | null = null;
-        let trashRootError: string | null = null;
-        try {
-          trashRoot = await resolveTrashRoot();
-        } catch (error) {
-          trashRootError = toMessage(error, "Trash is unavailable.");
-        }
-
-        const trashKey = trashRoot ? getDriveKey(trashRoot) : null;
-        const trashCandidates: string[] = [];
-        const crossDrive: string[] = [];
-
-        if (trashRoot) {
-          unique.forEach((path) => {
-            const pathKey = trashKey ? getDriveKey(path) : null;
-            if (trashKey && pathKey && pathKey !== trashKey) {
-              crossDrive.push(path);
-              return;
-            }
-            trashCandidates.push(path);
-          });
-        } else {
-          crossDrive.push(...unique);
-        }
-
-        let report: Awaited<ReturnType<typeof transferEntries>> | null = null;
-        const moved: UndoTrashEntry[] = [];
-        const remaining = new Set<string>();
-
-        if (trashRoot && trashCandidates.length > 0) {
-          // Move items into a per-delete batch folder so undo can restore them.
-          const batchDir = buildTrashBatchDir(trashRoot);
-          await ensureDir(batchDir);
-
-          report = await transferEntries(trashCandidates, batchDir, {
-            mode: "move",
-            overwrite: false,
-          });
-
-          // Verify what actually disappeared from the source path before we mark it as trashed.
-          const originalMeta = await statEntries(trashCandidates);
-          originalMeta.forEach((meta, index) => {
-            const path = trashCandidates[index] ?? "";
-            if (!path) return;
-            if (entryExists(meta)) {
-              remaining.add(path);
-              return;
-            }
-            moved.push({
-              originalPath: path,
-              trashPath: joinPath(batchDir, getPathName(path)),
-            });
-          });
-
-          if (moved.length > 0) {
-            pushUndo({ type: "trash", entries: moved });
-            await refreshAfterChange();
-          }
-        }
-
-        crossDrive.forEach((path) => remaining.add(path));
-        const remainingPaths = Array.from(remaining);
-        const transferFailures = report?.failures ?? [];
-
-        if (remainingPaths.length > 0) {
-          const reasons: string[] = [];
-          if (!trashRoot) {
-            reasons.push(trashRootError ?? "Trash is unavailable.");
-          } else if (crossDrive.length > 0) {
-            reasons.push(
-              "Some items are on a different drive than the Trash (including network drives), so they can't be moved there.",
-            );
-          }
-          if (transferFailures.length > 0) {
-            reasons.push(
-              `Move to Trash failed for some items:\n${formatFailures(transferFailures)}`,
-            );
-          }
-          if (reasons.length === 0) {
-            reasons.push("Some items could not be moved to the Trash.");
-          }
-          const countLabel =
-            remainingPaths.length === 1
-              ? "this item"
-              : `${remainingPaths.length} items`;
-          return await new Promise<DeleteReport>((resolve) => {
-            usePromptStore.getState().showPrompt({
-              title: "Couldn't move items to Trash",
-              content: `${reasons.join("\n\n")}\n\nDelete ${countLabel} permanently instead? This cannot be undone.`,
-              confirmLabel: "Delete permanently",
-              cancelLabel: "Cancel",
-              onConfirm: async () => {
-                let hardReport = null;
-                try {
-                  hardReport = await deleteEntriesApi(remainingPaths);
-                } catch (error) {
-                  usePromptStore.getState().showPrompt({
-                    title: "Delete failed",
-                    content: toMessage(error, "Failed to delete selected items."),
-                    confirmLabel: "OK",
-                    cancelLabel: null,
-                  });
-                  resolve({
-                    deleted: moved.length,
-                    skipped: Math.max(0, unique.length - moved.length),
-                    failures: transferFailures,
-                  });
-                  return;
-                }
-                if (hardReport.failures.length > 0) {
-                  usePromptStore.getState().showPrompt({
-                    title: "Delete completed with issues",
-                    content: formatFailures(hardReport.failures),
-                    confirmLabel: "OK",
-                    cancelLabel: null,
-                  });
-                }
-                if (hardReport.deleted > 0) {
-                  await refreshAfterChange();
-                }
-                resolve({
-                  deleted: moved.length + hardReport.deleted,
-                  skipped: Math.max(
-                    0,
-                    unique.length - moved.length - hardReport.deleted,
-                  ),
-                  failures: [...transferFailures, ...hardReport.failures],
-                });
-              },
-              onCancel: () => {
-                resolve({
-                  deleted: moved.length,
-                  skipped: Math.max(0, unique.length - moved.length),
-                  failures: transferFailures,
-                });
-              },
-            });
-          });
-        }
-
-        if (transferFailures.length > 0) {
-          usePromptStore.getState().showPrompt({
-            title: "Delete completed with issues",
-            content: formatFailures(transferFailures),
-            confirmLabel: "OK",
-            cancelLabel: null,
-          });
-        }
-        return {
-          deleted: moved.length,
-          skipped: Math.max(0, unique.length - moved.length),
-          failures: transferFailures,
-        };
-      } catch (error) {
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : "Failed to delete selected items.";
-        usePromptStore.getState().showPrompt({
-          title: "Delete failed",
-          content: message,
-          confirmLabel: "OK",
-          cancelLabel: null,
-        });
-        return null;
-      } finally {
-        deleteInFlightRef.current = false;
-      }
-    },
-    [buildTrashBatchDir, pushUndo, refreshAfterChange, resolveTrashRoot],
-  );
-
-  const restoreTrashedEntries = useCallback(
-    async (entries: UndoTrashEntry[]) => {
-      if (entries.length === 0) {
-        return { restored: 0, remaining: [] };
-      }
-      const originals = entries.map((entry) => entry.originalPath);
-      const existingMeta = await statEntries(originals);
-      const existing = new Set<string>();
-      existingMeta.forEach((meta, index) => {
-        const exists = meta.size != null || meta.modified != null;
-        if (exists) {
-          existing.add(originals[index] ?? "");
-        }
-      });
-
-      const grouped = new Map<string, string[]>();
-      const failures: string[] = [];
-      entries.forEach((entry) => {
-        if (!entry.originalPath || !entry.trashPath) return;
-        if (existing.has(entry.originalPath)) {
-          failures.push(`${entry.originalPath}: destination already exists`);
-          return;
-        }
-        const parent = getParentPath(entry.originalPath);
-        if (!parent) {
-          failures.push(`${entry.originalPath}: missing parent folder`);
-          return;
-        }
-        const list = grouped.get(parent) ?? [];
-        list.push(entry.trashPath);
-        grouped.set(parent, list);
-      });
-
-      let restored = 0;
-      for (const [destination, paths] of grouped) {
-        const report = await transferEntries(paths, destination, {
-          mode: "move",
-          overwrite: false,
-        });
-        restored += report.moved;
-        if (report.failures.length > 0) {
-          failures.push(...report.failures);
-        }
-      }
-
-      const trashMeta = await statEntries(entries.map((entry) => entry.trashPath));
-      const remaining: UndoTrashEntry[] = [];
-      trashMeta.forEach((meta, index) => {
-        const exists = meta.size != null || meta.modified != null;
-        if (!exists) return;
-        const entry = entries[index];
-        if (entry) {
-          remaining.push(entry);
-        }
-      });
-
-      if (failures.length > 0) {
-        usePromptStore.getState().showPrompt({
-          title: "Undo completed with issues",
-          content: formatFailures(failures),
-          confirmLabel: "OK",
-          cancelLabel: null,
-        });
-      }
-
-      if (restored > 0) {
-        await refreshAfterChange();
-      }
-
-      return { restored, remaining };
-    },
-    [refreshAfterChange],
-  );
-
-  const undoLastAction = useCallback(async () => {
-    if (
-      renameInFlightRef.current ||
-      deleteInFlightRef.current ||
-      copyInFlightRef.current
-    ) {
-      return false;
-    }
-    // Pop the last action so undo behaves like standard stacks.
-    const action = undoStackRef.current.pop();
-    if (!action) return false;
-
-    if (action.type === "rename") {
-      const requests: RenameRequest[] = action.entries
-        .map((entry) => ({
-          path: entry.to,
-          nextName: getPathName(entry.from),
-        }))
-        .filter((item) => item.path && item.nextName);
-      const result = await performRenameRequests(requests, {
-        recordUndo: false,
-        failureTitle: "Undo completed with issues",
-      });
-      if (!result) {
-        undoStackRef.current.push(action);
-        return false;
-      }
-      if (result.renamed.size === 0) {
-        undoStackRef.current.push(action);
-        return false;
-      }
-      const remaining = action.entries.filter(
-        (entry) => !result.renamed.has(entry.to),
-      );
-      if (remaining.length > 0) {
-        undoStackRef.current.push({ type: "rename", entries: remaining });
-      }
-      return true;
-    }
-
-    if (action.type === "trash") {
-      const { restored, remaining } = await restoreTrashedEntries(action.entries);
-      if (remaining.length > 0) {
-        undoStackRef.current.push({ type: "trash", entries: remaining });
-      }
-      return restored > 0;
-    }
-
-    return false;
-  }, [performRenameRequests, restoreTrashedEntries]);
-
   const renameEntryInView = useCallback(
     async (path: string, newName: string) => {
       const result = await performRenameRequests([{ path, nextName: newName }]);
@@ -1035,85 +622,14 @@ export function useFileManager() {
     [performRenameRequests],
   );
 
-  // Shared copy pipeline for duplicate/paste actions.
-  const runCopyOperation = useCallback(
-    async (paths: string[], destination: string, operationLabel: string) => {
-      if (copyInFlightRef.current) return null;
-      const target = destination.trim();
-      if (!target) return null;
-      const unique = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
-      if (unique.length === 0) return null;
-      log("%s entries: %d items -> %s", operationLabel, unique.length, target);
-      copyInFlightRef.current = true;
-      const job = startTransferJob({
-        label: operationLabel,
-        total: unique.length,
-        items: unique,
-      });
-      try {
-        const report = await copyEntries(unique, target, job.id);
-        if (report.failures.length > 0) {
-          usePromptStore.getState().showPrompt({
-            title: `${operationLabel} completed with issues`,
-            content: formatFailures(report.failures),
-            confirmLabel: "OK",
-            cancelLabel: null,
-          });
-        }
-        if (report.copied > 0 && currentPathRef.current.trim() === target) {
-          await refreshAfterChange();
-        }
-        completeTransferJob(job.id, {
-          copied: report.copied,
-          skipped: report.skipped,
-          failures: report.failures.length,
-        });
-        return report;
-      } catch (error) {
-        failTransferJob(job.id);
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : `Failed to ${operationLabel.toLowerCase()} selected items.`;
-        usePromptStore.getState().showPrompt({
-          title: `${operationLabel} failed`,
-          content: message,
-          confirmLabel: "OK",
-          cancelLabel: null,
-        });
-        return null;
-      } finally {
-        copyInFlightRef.current = false;
-      }
-    },
-    [completeTransferJob, failTransferJob, refreshAfterChange, startTransferJob],
-  );
-
-  const duplicateEntriesInView = useCallback(
-    async (paths: string[]) =>
-      runCopyOperation(paths, currentPathRef.current, "Duplicate"),
-    [runCopyOperation],
-  );
-
-  const pasteEntriesInView = useCallback(
-    async (paths: string[], destination?: string) => {
-      const target = destination ?? currentPathRef.current;
-      return runCopyOperation(paths, target, "Paste");
-    },
-    [runCopyOperation],
-  );
-
-  const createFolderInView = useCallback(
-    async (parentPath: string, name: string) =>
-      createEntryInView(parentPath, name, "folder"),
-    [createEntryInView],
-  );
-
-  const createFileInView = useCallback(
-    async (parentPath: string, name: string) =>
-      createEntryInView(parentPath, name, "file"),
-    [createEntryInView],
-  );
+  const { undoLastAction } = useFileManagerUndo({
+    undoStackRef,
+    renameInFlightRef,
+    deleteInFlightRef,
+    copyInFlightRef,
+    performRenameRequests,
+    refreshAfterChange,
+  });
 
   useEffect(() => {
     let active = true;
