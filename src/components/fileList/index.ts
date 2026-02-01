@@ -1,2 +1,3 @@
 // Barrel exports for list row components.
-export { EntryRow, ParentRow } from "./ListRows";
+export { EntryRow } from "./EntryRow";
+export { ParentRow } from "./ParentRow";

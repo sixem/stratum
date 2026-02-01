@@ -1,0 +1,54 @@
+// Virtual range calculation for the list view.
+import type { RefObject } from "react";
+import { useMemo } from "react";
+import { useDynamicOverscan, useVirtualRange } from "@/hooks";
+import type { EntryItem } from "@/lib";
+
+const COMPACT_VIEW_INSET = 10;
+const OVERSCAN = 10;
+const OVERSCAN_MIN = 2;
+const OVERSCAN_WARMUP_MS = 140;
+
+type UseListVirtualOptions = {
+  listRef: RefObject<HTMLDivElement | null>;
+  viewKey: string;
+  itemHeight: number;
+  compactMode: boolean;
+  rows: EntryItem[];
+};
+
+type ListVirtualState = {
+  virtual: ReturnType<typeof useVirtualRange>;
+  visibleRows: EntryItem[];
+};
+
+export const useListVirtual = ({
+  listRef,
+  viewKey,
+  itemHeight,
+  compactMode,
+  rows,
+}: UseListVirtualOptions): ListVirtualState => {
+  const overscan = useDynamicOverscan({
+    resetKey: viewKey,
+    base: OVERSCAN,
+    min: OVERSCAN_MIN,
+    warmupMs: OVERSCAN_WARMUP_MS,
+  });
+  const viewInset = compactMode ? COMPACT_VIEW_INSET : 0;
+  const virtual = useVirtualRange(
+    listRef,
+    rows.length,
+    itemHeight,
+    overscan,
+    viewInset,
+    viewInset,
+  );
+  // Memoize the visible slice so selection drags don't rebuild row metadata.
+  const visibleRows = useMemo(
+    () => rows.slice(virtual.startIndex, virtual.endIndex),
+    [rows, virtual.endIndex, virtual.startIndex],
+  );
+
+  return { virtual, visibleRows };
+};

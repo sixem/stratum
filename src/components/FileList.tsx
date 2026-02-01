@@ -1,38 +1,26 @@
 // Virtualized list view for file entries.
-import type { CSSProperties } from "react";
 import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useMemo } from "react";
 import {
-  useEntryDragOut,
-  useEntryPresence,
-  useEntryMetaRequest,
-  useDynamicOverscan,
-  useScrollRestore,
-  useScrollSettled,
-  useScrollToIndex,
-  useSelectionDrag,
-  useWheelSnap,
-  useVirtualRange,
   useCreateEntryPrompt,
+  useEntryPresence,
+  useScrollToIndex,
 } from "@/hooks";
-import {
-  buildEntryTooltip,
-  formatBytes,
-  formatDate,
-  getEmptyMessage,
-  getFileKind,
-  nextSortState,
-  handleMiddleClick,
-} from "@/lib";
-import type { DropTarget, EntryItem, FileKind } from "@/lib";
-import type { EntryMeta, FileEntry, RenameCommitReason, SortKey, SortState } from "@/types";
+import { getEmptyMessage, handleMiddleClick } from "@/lib";
+import type { DropTarget, EntryItem } from "@/lib";
+import type { EntryMeta, FileEntry, RenameCommitReason, SortState } from "@/types";
 import { EmptyState } from "./EmptyState";
 import { LoadingIndicator } from "./LoadingIndicator";
 import { SelectionRect } from "./SelectionRect";
-import { EntryRow, ParentRow } from "./fileList/index";
+import { EntryRow, ParentRow } from "./fileList";
+import { ListHeader } from "./fileList/ListHeader";
+import { useListLayout } from "./fileList/useListLayout";
+import { useListMeta } from "./fileList/useListMeta";
+import { useListSelection } from "./fileList/useListSelection";
+import { useListVirtual } from "./fileList/useListVirtual";
 
 type FileListProps = {
   currentPath: string;
@@ -84,23 +72,6 @@ type FileListProps = {
   presenceEnabled?: boolean;
   canGoUp?: boolean;
   onGoUp?: () => void;
-};
-
-const ROW_HEIGHT = 48;
-const ROW_GAP = 8;
-const COMPACT_ROW_HEIGHT = 36;
-const COMPACT_ROW_GAP = 6;
-const COMPACT_VIEW_INSET = 10;
-const OVERSCAN = 10;
-const OVERSCAN_MIN = 2;
-const OVERSCAN_WARMUP_MS = 140;
-const noop = () => {};
-
-type RowDisplayMeta = {
-  tooltipText: string;
-  fileKind: FileKind;
-  sizeLabel: string;
-  modifiedLabel: string;
 };
 
 const FileList = ({
@@ -164,98 +135,49 @@ const FileList = ({
   }, [items]);
   const resolvedIndexMap = indexMap ?? fallbackIndexMap;
 
-  const listRef = useRef<HTMLDivElement | null>(null);
-  // Match virtualization height with compact spacing when enabled.
-  const rowHeight = compactMode ? COMPACT_ROW_HEIGHT : ROW_HEIGHT;
-  const rowGap = compactMode ? COMPACT_ROW_GAP : ROW_GAP;
-  const itemHeight = rowHeight + rowGap;
-  // When smooth scrolling is disabled, snap wheel input to a single row.
-  useWheelSnap(listRef, smoothScroll ? 0 : itemHeight);
-  // Restore the stored scroll offset once the list height is ready.
-  useScrollRestore(listRef, {
-    restoreKey: scrollRestoreKey,
-    restoreTop: scrollRestoreTop,
-    restoreReady: !loading,
+  const { listRef, itemHeight, listVars } = useListLayout({
+    compactMode,
+    smoothScroll,
+    scrollRestoreKey,
+    scrollRestoreTop,
+    loading,
   });
-  const scrolling = useScrollSettled(listRef);
-  const overscan = useDynamicOverscan({
-    resetKey: viewKey,
-    base: OVERSCAN,
-    min: OVERSCAN_MIN,
-    warmupMs: OVERSCAN_WARMUP_MS,
-  });
-  const viewInset = compactMode ? COMPACT_VIEW_INSET : 0;
-  const virtual = useVirtualRange(
+
+  const { virtual, visibleRows } = useListVirtual({
     listRef,
-    rows.length,
+    viewKey,
     itemHeight,
-    overscan,
-    viewInset,
-    viewInset,
-  );
-  // Memoize the visible slice so selection drags don't rebuild row metadata.
-  const visibleRows = useMemo(
-    () => rows.slice(virtual.startIndex, virtual.endIndex),
-    [rows, virtual.endIndex, virtual.startIndex],
-  );
-  const hasContent = rows.length > 0;
-  const contentReady = true;
-  const viewAnimate = false;
-  // Header buttons reuse the global sort state.
-  const handleSortClick = useCallback(
-    (key: SortKey) => {
-      onSortChange(nextSortState(sortState, key));
-    },
-    [onSortChange, sortState],
-  );
-  const metaPaths = useMemo(() => {
-    const next: string[] = [];
-    visibleRows.forEach((row) => {
-      if (row.type !== "entry") return;
-      if (row.presence === "removed") return;
-      if (row.entry.isDir) return;
-      next.push(row.entry.path);
-    });
-    return next;
-  }, [visibleRows]);
-  const rowMetaCacheRef = useRef<Map<string, RowDisplayMeta>>(new Map());
+    compactMode,
+    rows,
+  });
 
-  useEffect(() => {
-    // Reset cached row labels on view changes to keep memory bounded.
-    rowMetaCacheRef.current.clear();
-  }, [viewKey]);
+  useScrollToIndex(listRef, {
+    itemCount: rows.length,
+    rowHeight: itemHeight,
+    scrollRequest,
+    scrollKey: viewKey,
+  });
 
-  const rowMetaByPath = useMemo(() => {
-    const cache = rowMetaCacheRef.current;
-    const next = new Map<string, RowDisplayMeta>();
-    visibleRows.forEach((row) => {
-      if (row.type !== "entry") return;
-      if (row.presence === "removed") return;
-      const entry = row.entry;
-      const path = entry.path;
-      const meta = entryMeta.get(path);
-      const cacheKey = `${path}:${meta?.modified ?? "none"}:${meta?.size ?? "none"}`;
-      let resolved = cache.get(cacheKey);
-      if (!resolved) {
-        const sizeLabel = entry.isDir ? "-" : formatBytes(meta?.size ?? null);
-        const modifiedLabel = entry.isDir
-          ? "-"
-          : meta?.modified == null
-            ? "..."
-            : formatDate(meta.modified);
-        resolved = {
-          tooltipText: buildEntryTooltip(row.entry, meta),
-          // File kind drives category tinting for list view dots.
-          fileKind: entry.isDir ? "generic" : getFileKind(entry.name),
-          sizeLabel,
-          modifiedLabel,
-        };
-        cache.set(cacheKey, resolved);
-      }
-      next.set(path, resolved);
-    });
-    return next;
-  }, [entryMeta, visibleRows]);
+  const rowMetaByPath = useListMeta({
+    listRef,
+    viewKey,
+    visibleRows,
+    entryMeta,
+    onRequestMeta,
+    loading,
+  });
+
+  const { selectionBox } = useListSelection({
+    listRef,
+    selectedPaths,
+    onSetSelection,
+    onClearSelection,
+    onStartDragOut,
+    onInternalDrop,
+    onInternalHover,
+    loading,
+  });
+
   const handleRowSelect = useCallback(
     (event: ReactMouseEvent) => {
       const target = event.currentTarget as HTMLElement;
@@ -266,6 +188,7 @@ const FileList = ({
     },
     [onSelectItem],
   );
+
   const handleRowOpen = useCallback(
     (event: ReactMouseEvent) => {
       const target = event.currentTarget as HTMLElement;
@@ -280,6 +203,7 @@ const FileList = ({
     },
     [onOpenDir, onOpenEntry],
   );
+
   const handleRowOpenNewTab = useCallback(
     (event: ReactMouseEvent) => {
       if (!onOpenDirNewTab) return;
@@ -291,6 +215,7 @@ const FileList = ({
     },
     [onOpenDirNewTab],
   );
+
   const handleEntryContextMenuDown = useCallback(
     (event: ReactPointerEvent) => {
       event.preventDefault();
@@ -308,6 +233,7 @@ const FileList = ({
     },
     [onEntryContextMenuDown],
   );
+
   const handleEntryContextMenu = useCallback(
     (event: ReactPointerEvent) => {
       event.preventDefault();
@@ -325,99 +251,26 @@ const FileList = ({
     },
     [onEntryContextMenu],
   );
+
   const handleParentContextMenu = useCallback((event: ReactPointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
   }, []);
 
-  useScrollToIndex(listRef, {
-    itemCount: rows.length,
-    rowHeight: itemHeight,
-    scrollRequest,
-    scrollKey: viewKey,
-  });
-  const { selectionBox } = useSelectionDrag(listRef, {
-    selected: selectedPaths,
-    setSelection: onSetSelection,
-    clearSelection: onClearSelection,
-    itemSelector: "[data-selectable=\"true\"]",
-  });
-  const dragEnabled = Boolean(onStartDragOut) && !loading;
-  useEntryDragOut(listRef, {
-    selected: selectedPaths,
-    onSetSelection,
-    onStartDrag: onStartDragOut ?? noop,
-    onInternalDrop,
-    onInternalHover,
-    itemSelector: "[data-selectable=\"true\"]",
-    enabled: dragEnabled,
-  });
-  useEntryMetaRequest(loading || scrolling, metaPaths, onRequestMeta);
   const showCreatePrompt = useCreateEntryPrompt();
+  const hasContent = rows.length > 0;
+  const contentReady = true;
+  const viewAnimate = false;
   const showLoadingOverlay = loading && !hasContent;
 
   return (
     <div className="file-list">
-      <div className="list-header" role="row" data-selection-ignore="true">
-        <button
-          type="button"
-          className="list-header-button"
-          data-sort-active={sortState.key === "name" ? "true" : "false"}
-          data-sort-dir={sortState.dir}
-          aria-sort={
-            sortState.key === "name"
-              ? sortState.dir === "asc"
-                ? "ascending"
-                : "descending"
-              : "none"
-          }
-          onClick={() => handleSortClick("name")}
-        >
-          Name
-        </button>
-        <button
-          type="button"
-          className="list-header-button is-right"
-          data-sort-active={sortState.key === "size" ? "true" : "false"}
-          data-sort-dir={sortState.dir}
-          aria-sort={
-            sortState.key === "size"
-              ? sortState.dir === "asc"
-                ? "ascending"
-                : "descending"
-              : "none"
-          }
-          onClick={() => handleSortClick("size")}
-        >
-          Size
-        </button>
-        <button
-          type="button"
-          className="list-header-button is-right"
-          data-sort-active={sortState.key === "modified" ? "true" : "false"}
-          data-sort-dir={sortState.dir}
-          aria-sort={
-            sortState.key === "modified"
-              ? sortState.dir === "asc"
-                ? "ascending"
-                : "descending"
-              : "none"
-          }
-          onClick={() => handleSortClick("modified")}
-        >
-          Modified
-        </button>
-      </div>
+      <ListHeader sortState={sortState} onSortChange={onSortChange} />
       <div className="list-shell" data-category-tint={categoryTinting ? "true" : "false"}>
         <div
           className="list-body"
           ref={listRef}
-          style={
-            {
-              "--list-row-height": `${rowHeight}px`,
-              "--list-row-gap": `${rowGap}px`,
-            } as CSSProperties
-          }
+          style={listVars}
           onPointerDown={(event) => {
             if (event.button !== 2) return;
             if (!onContextMenuDown) return;
