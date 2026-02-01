@@ -5,6 +5,9 @@ import {
   GRID_AUTO_COLUMNS_DEFAULT,
   GRID_AUTO_COLUMNS_MAX,
   GRID_AUTO_COLUMNS_MIN,
+  GRID_GAP_DEFAULT,
+  GRID_GAP_MAX,
+  GRID_GAP_MIN,
   SETTINGS_STORAGE_KEY,
   SETTINGS_STORAGE_VERSION,
   SIDEBAR_RECENT_LIMIT_MAX,
@@ -56,6 +59,7 @@ type Settings = {
   keybinds: KeybindMap;
   gridSize: GridSize;
   gridAutoColumns: number;
+  gridGap: number;
   gridRounded: boolean;
   gridCentered: boolean;
   gridShowSize: boolean;
@@ -109,6 +113,7 @@ const DEFAULT_SETTINGS: Settings = {
   keybinds: DEFAULT_KEYBINDS,
   gridSize: "normal",
   gridAutoColumns: GRID_AUTO_COLUMNS_DEFAULT,
+  gridGap: GRID_GAP_DEFAULT,
   gridRounded: true,
   gridCentered: true,
   gridShowSize: true,
@@ -174,6 +179,10 @@ const coerceGridAutoColumns = (value: unknown): number => {
     GRID_AUTO_COLUMNS_MIN,
     GRID_AUTO_COLUMNS_MAX,
   );
+};
+
+const coerceGridGap = (value: unknown): number => {
+  return clampNumber(value, DEFAULT_SETTINGS.gridGap, GRID_GAP_MIN, GRID_GAP_MAX);
 };
 
 const coerceGridNameEllipsis = (value: unknown): GridNameEllipsis => {
@@ -277,6 +286,7 @@ const coerceSettings = (value: Partial<Settings> | null | undefined): Settings =
     keybinds: coerceKeybinds(value?.keybinds),
     gridSize: coerceGridSize(value?.gridSize),
     gridAutoColumns: coerceGridAutoColumns(value?.gridAutoColumns),
+    gridGap: coerceGridGap(value?.gridGap),
     gridRounded:
       typeof value?.gridRounded === "boolean"
         ? value.gridRounded
@@ -427,6 +437,7 @@ useSettingsStore.subscribe((state) => {
     keybinds: state.keybinds,
     gridSize: state.gridSize,
     gridAutoColumns: state.gridAutoColumns,
+    gridGap: state.gridGap,
     gridRounded: state.gridRounded,
     gridCentered: state.gridCentered,
     gridShowSize: state.gridShowSize,

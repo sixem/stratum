@@ -76,6 +76,28 @@ export type DeleteReport = {
   failures: string[];
 };
 
+export type RecycleEntry = {
+  originalPath: string;
+  infoPath: string;
+  dataPath: string;
+  deletedAt?: number | null;
+};
+
+export type TrashReport = {
+  deleted: number;
+  skipped: number;
+  failures: string[];
+  failedPaths: string[];
+  recycled: RecycleEntry[];
+};
+
+export type RestoreReport = {
+  restored: number;
+  skipped: number;
+  failures: string[];
+  remaining: RecycleEntry[];
+};
+
 // Emitted when the native watcher detects a change in a watched directory.
 export type DirChangedEvent = {
   path: string;
