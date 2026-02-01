@@ -1,13 +1,8 @@
 // App shell wiring: composes state hooks, layout blocks, and overlays.
 import { useCallback, useMemo, useRef, useState } from "react";
+import { AppOverlays, AppShellLayout } from "@/components";
 import {
-  clearThumbCache,
-  getThumbCacheDir,
-  openPath,
-  openShell,
-} from "@/api";
-import { AppShell } from "@/components";
-import {
+  useAppCommands,
   useAppContextMenus,
   useAppEffects,
   useAppKeybinds,
@@ -38,9 +33,7 @@ import {
   useWindowSize,
 } from "@/hooks";
 import { makeDebug, normalizePath } from "@/lib";
-import type { DropTarget } from "@/lib";
 import { usePromptStore } from "@/modules";
-import type { ShellKind } from "@/types";
 import { APP_DESCRIPTION, APP_NAME, APP_VERSION } from "@/constants";
 import "@/styles/app.scss";
 
@@ -392,7 +385,6 @@ const App = () => {
     viewLog,
   });
 
-
   const aboutMeta = useMemo(() => {
     const platform =
       typeof navigator !== "undefined"
@@ -408,71 +400,30 @@ const App = () => {
     };
   }, []);
 
-  const handleCreateFile = useCallback(
-    async (parentPath: string, name: string) => {
-      const createdPath = await fileManager.createFile(parentPath, name);
-      if (createdPath) {
-        queueCreateSelection(createdPath, parentPath);
-      }
-      return createdPath;
-    },
-    [fileManager.createFile, queueCreateSelection],
-  );
+  // Bundle filesystem + shell commands so view wiring stays readable.
+  const {
+    handleCreateFile,
+    handleCreateFolder,
+    handleCreateFolderAndGo,
+    handleOpenShell,
+    handleInternalDrop,
+    handleInternalHover,
+    handleOpenThumbCache,
+    handleClearThumbCache,
+  } = useAppCommands({
+    browseFromView,
+    queueCreateSelection,
+    createFile: fileManager.createFile,
+    createFolder: fileManager.createFolder,
+    performDrop,
+    setDropTarget,
+    setThumbResetNonce,
+  });
 
-  const handleCreateFolder = useCallback(
-    async (parentPath: string, name: string) => {
-      const createdPath = await fileManager.createFolder(parentPath, name);
-      if (createdPath) {
-        queueCreateSelection(createdPath, parentPath);
-      }
-      return createdPath;
-    },
-    [fileManager.createFolder, queueCreateSelection],
-  );
-
-  const handleCreateFolderAndGo = useCallback(
-    async (parentPath: string, name: string) => {
-      const createdPath = await fileManager.createFolder(parentPath, name);
-      if (!createdPath) return null;
-      browseFromView(createdPath);
-      return createdPath;
-    },
-    [browseFromView, fileManager.createFolder],
-  );
-
-  const handleOpenShell = useCallback((kind: ShellKind, path: string) => {
-    const target = path.trim();
-    if (!target) return;
-    void openShell(kind, target).catch((error) => {
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : "Unable to open the shell here.";
-      usePromptStore.getState().showPrompt({
-        title: "Couldn't open shell",
-        content: message,
-        confirmLabel: "OK",
-        cancelLabel: null,
-      });
-    });
-  }, []);
   const handleStartDragOut = useDragOutHandler({
     viewParentPath,
     onRefresh: fileManager.refresh,
   });
-  const handleInternalDrop = useCallback(
-    (paths: string[], target: DropTarget | null) => {
-      if (!target) return;
-      void performDrop(paths, target.path);
-    },
-    [performDrop],
-  );
-  const handleInternalHover = useCallback(
-    (target: DropTarget | null) => {
-      setDropTarget(target);
-    },
-    [setDropTarget],
-  );
   const {
     contextMenuItems,
     contextMenuOpen,
@@ -562,26 +513,6 @@ const App = () => {
     selected,
     entryMeta,
   });
-
-  // Cache actions for the settings panel.
-  const handleOpenThumbCache = useCallback(async () => {
-    try {
-      const cacheDir = await getThumbCacheDir();
-      if (!cacheDir) return;
-      await openPath(cacheDir);
-    } catch {
-      // Ignore cache open errors.
-    }
-  }, []);
-
-  const handleClearThumbCache = useCallback(async () => {
-    try {
-      await clearThumbCache();
-      setThumbResetNonce((prev) => prev + 1);
-    } catch {
-      // Ignore cache clear errors.
-    }
-  }, []);
 
   // Layout class toggles full-width mode when the sidebar is closed.
   const layoutClass = `layout${sidebarOpen ? "" : " is-full"}`;
@@ -740,11 +671,12 @@ const App = () => {
     },
   });
 
+
   return (
-    <AppShell
-      layout={{
-        topstack: topstackProps,
-        content: {
+    <div className="app-shell">
+      <AppShellLayout
+        topstack={topstackProps}
+        content={{
           layoutClass,
           sidebarOpen,
           sidebarProps: {
@@ -761,20 +693,20 @@ const App = () => {
           onContextMenu: layoutContextMenu,
           onContextMenuDown: layoutContextMenuDown,
           fileViewProps,
-        },
-      }}
-      statusbar={{
-        statusbarRef,
-        statusBar: {
-          message: status.message,
-          level: status.level,
-          countLabel,
-          selectionLabel,
-        },
-        hidden: showLander,
-      }}
-      overlays={{
-        about: {
+        }}
+        statusbar={{
+          statusbarRef,
+          statusBar: {
+            message: status.message,
+            level: status.level,
+            countLabel,
+            selectionLabel,
+          },
+          hidden: showLander,
+        }}
+      />
+      <AppOverlays
+        about={{
           open: aboutOpen,
           appName: APP_NAME,
           description: APP_DESCRIPTION,
@@ -783,22 +715,22 @@ const App = () => {
           runtime: aboutMeta.runtime,
           platform: aboutMeta.platform,
           onClose: handleCloseAbout,
-        },
-        contextMenu: {
+        }}
+        contextMenu={{
           open: contextMenuOpen,
           x: contextMenu?.x ?? 0,
           y: contextMenu?.y ?? 0,
           items: contextMenuItems,
           onClose: closeContextMenu,
-        },
-        settings: {
+        }}
+        settings={{
           open: settingsOpen,
           onClose: closeSettings,
           onOpenCacheLocation: handleOpenThumbCache,
           onClearCache: handleClearThumbCache,
-        },
-      }}
-    />
+        }}
+      />
+    </div>
   );
 };
 
