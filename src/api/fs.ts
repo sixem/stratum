@@ -9,8 +9,11 @@ import type {
   ListDirResult,
   ListDirWithParentResult,
   Place,
+  RecycleEntry,
+  RestoreReport,
   TransferMode,
   TransferReport,
+  TrashReport,
 } from "@/types";
 
 export const getHome = () => invoke<string | null>("get_home");
@@ -59,6 +62,12 @@ export const transferEntries = (
 
 export const deleteEntries = (paths: string[]) =>
   invoke<DeleteReport>("delete_entries", { paths });
+
+export const trashEntries = (paths: string[]) =>
+  invoke<TrashReport>("trash_entries", { paths });
+
+export const restoreRecycleEntries = (entries: RecycleEntry[]) =>
+  invoke<RestoreReport>("restore_recycle_entries", { entries });
 
 export const renameEntry = (path: string, newName: string) =>
   invoke<string>("rename_entry", { path, newName });

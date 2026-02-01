@@ -16,11 +16,13 @@ export {
   listDirWithParent,
   listDriveInfo,
   parentDir,
+  restoreRecycleEntries,
   transferEntries,
   renameEntry,
   startDirWatch,
   statEntries,
   stopDirWatch,
+  trashEntries,
 } from "./fs";
 export { openPath, openPathProperties } from "./opener";
 export { convertImage, getImageInfo } from "./images";
