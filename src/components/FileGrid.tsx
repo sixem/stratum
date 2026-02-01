@@ -49,6 +49,7 @@ type FileGridProps = {
   currentPath: string;
   entries: FileEntry[];
   items: EntryItem[];
+  indexMap?: Map<string, number>;
   loading: boolean;
   searchQuery: string;
   viewKey: string;
@@ -79,10 +80,13 @@ type FileGridProps = {
   categoryTinting: boolean;
   gridSize: GridSize;
   gridAutoColumns: number;
+  gridGap: number;
   gridShowSize: boolean;
   gridShowExtension: boolean;
   gridNameEllipsis: GridNameEllipsis;
   gridNameHideExtension: boolean;
+  autoViewportWidth?: number;
+  onAutoViewportWidthChange?: (width: number) => void;
   thumbResetKey?: string;
   presenceEnabled?: boolean;
   onGridColumnsChange?: (columns: number) => void;
@@ -165,12 +169,13 @@ const buildAutoPreset = (
   base: GridPreset,
   viewportWidth: number,
   columns: number,
+  viewportPadding: number,
 ): GridPreset => {
   const safeColumns = clampAutoColumns(columns);
   if (viewportWidth <= 0) {
     return { ...base };
   }
-  const contentWidth = Math.max(0, viewportWidth - base.padding * 2);
+  const contentWidth = Math.max(0, viewportWidth - viewportPadding * 2);
   const totalGap = base.gap * Math.max(0, safeColumns - 1);
   const available = Math.max(0, contentWidth - totalGap);
   const column = Math.max(1, Math.floor(available / safeColumns));
@@ -212,6 +217,7 @@ const FileGrid = ({
   currentPath,
   entries,
   items,
+  indexMap,
   loading,
   searchQuery,
   viewKey,
@@ -242,10 +248,13 @@ const FileGrid = ({
   categoryTinting,
   gridSize,
   gridAutoColumns,
+  gridGap,
   gridShowSize,
   gridShowExtension,
   gridNameEllipsis,
   gridNameHideExtension,
+  autoViewportWidth,
+  onAutoViewportWidthChange,
   thumbResetKey,
   presenceEnabled = true,
   onGridColumnsChange,
@@ -269,7 +278,7 @@ const FileGrid = ({
     resetKey: viewKey,
     animate: !loading && presenceEnabled,
   });
-  const indexMap = useMemo(() => {
+  const fallbackIndexMap = useMemo(() => {
     const map = new Map<string, number>();
     items.forEach((item, index) => {
       const key = item.type === "parent" ? item.path : item.entry.path;
@@ -277,9 +286,12 @@ const FileGrid = ({
     });
     return map;
   }, [items]);
+  const resolvedIndexMap = indexMap ?? fallbackIndexMap;
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const { width: viewportWidth } = useElementSize(viewportRef);
-  const [stableViewportWidth, setStableViewportWidth] = useState(viewportWidth);
+  const [stableViewportWidth, setStableViewportWidth] = useState(
+    () => autoViewportWidth ?? viewportWidth,
+  );
   const viewportWidthRef = useRef(viewportWidth);
   const resizeDebounceRef = useRef<number | null>(null);
   const scrolling = useScrollSettled(viewportRef);
@@ -348,34 +360,58 @@ const FileGrid = ({
       window.clearTimeout(resizeDebounceRef.current);
       resizeDebounceRef.current = null;
     }
-    setStableViewportWidth(viewportWidthRef.current);
-  }, [viewKey]);
+    const nextWidth = viewportWidthRef.current;
+    if (gridSize === "auto" && nextWidth <= 0) return;
+    setStableViewportWidth(nextWidth);
+  }, [gridSize, viewKey]);
+
+  useEffect(() => {
+    if (!onAutoViewportWidthChange) return;
+    if (gridSize !== "auto") return;
+    if (stableViewportWidth <= 0) return;
+    // Persist the most recent auto-fit width so we can reuse it across view resets.
+    onAutoViewportWidthChange(stableViewportWidth);
+  }, [gridSize, onAutoViewportWidthChange, stableViewportWidth]);
 
   const gridMetaEnabled = gridShowSize || gridShowExtension;
+  // Keep the outer grid padding aligned with the configured grid gap.
+  const viewportPadding = gridGap;
   const layoutViewportWidth = gridSize === "auto" ? stableViewportWidth : viewportWidth;
   const gridSizing = useMemo(() => {
     const basePreset = GRID_PRESETS[gridSize === "auto" ? "normal" : gridSize] ?? GRID_PRESETS.small;
+    // Apply the user-configured gap while preserving preset padding/column sizing.
+    const gapPreset = {
+      ...basePreset,
+      gap: gridGap,
+    };
     const preset =
       gridSize === "auto"
-        ? buildAutoPreset(basePreset, layoutViewportWidth, gridAutoColumns)
-        : basePreset;
+        ? buildAutoPreset(gapPreset, layoutViewportWidth, gridAutoColumns, viewportPadding)
+        : gapPreset;
     return buildGridSizing(preset, gridMetaEnabled);
-  }, [gridAutoColumns, gridMetaEnabled, gridSize, layoutViewportWidth]);
+  }, [
+    gridAutoColumns,
+    gridGap,
+    gridMetaEnabled,
+    gridSize,
+    layoutViewportWidth,
+    viewportPadding,
+  ]);
   const gridVars = useMemo(
     () =>
       ({
         "--thumb-column": `${gridSizing.column}px`,
         "--thumb-gap": `${gridSizing.gap}px`,
         "--thumb-row-height": `${gridSizing.rowHeight}px`,
-        "--thumb-padding": `${gridSizing.padding}px`,
+        "--thumb-padding": `${viewportPadding}px`,
         "--thumb-icon-height": `${gridSizing.iconHeight}px`,
         "--thumb-meta-height": `${gridSizing.metaHeight}px`,
         "--thumb-fit": thumbnailFit,
         "--thumb-preview-bg": thumbnailFit === "contain" ? "transparent" : "#0f131d",
     }) as CSSProperties,
-    [gridSizing, thumbnailFit],
+    [gridSizing, thumbnailFit, viewportPadding],
   );
-  const contentWidth = Math.max(0, layoutViewportWidth - gridSizing.padding * 2);
+  const contentWidth = Math.max(0, layoutViewportWidth - viewportPadding * 2);
   const columnCount =
     gridSize === "auto"
       ? clampAutoColumns(gridAutoColumns)
@@ -714,7 +750,7 @@ const FileGrid = ({
               const index = startIndex + itemIndex;
               if (item.type === "parent") {
                 const isDropTarget = dropTargetPath === item.path;
-                const baseIndex = indexMap.get(item.path) ?? index;
+                const baseIndex = resolvedIndexMap.get(item.path) ?? index;
                 return (
                   <ParentCard
                     key={item.key}
@@ -733,7 +769,7 @@ const FileGrid = ({
               }
               const isDropTarget = dropTargetPath === item.entry.path;
               const itemMeta = gridMetaByPath.get(item.entry.path);
-              const baseIndex = indexMap.get(item.entry.path) ?? index;
+              const baseIndex = resolvedIndexMap.get(item.entry.path) ?? index;
               const thumbUrl = thumbnailsEnabled
                 ? thumbSource.get(item.entry.path)
                 : undefined;

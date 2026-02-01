@@ -1,6 +1,6 @@
 // Compact drive selector used in the path bar.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { activeDrive, buildDriveTooltip, normalizePath } from "@/lib";
+import { activeDrive, buildDriveTooltip, handleMiddleClick, normalizePath } from "@/lib";
 import type { DriveInfo } from "@/types";
 import { TooltipWrapper } from "./Tooltip";
 
@@ -9,6 +9,7 @@ type DrivePickerProps = {
   drives: string[];
   driveInfo: DriveInfo[];
   onSelect: (path: string) => void;
+  onSelectNewTab?: (path: string) => void;
 };
 
 const ChevronIcon = ({ direction }: { direction: "left" | "right" }) => {
@@ -48,6 +49,7 @@ export const DrivePicker = ({
   drives,
   driveInfo,
   onSelect,
+  onSelectNewTab,
 }: DrivePickerProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -197,6 +199,13 @@ export const DrivePicker = ({
                         onClick={() => {
                           setExpanded(false);
                           onSelect(drive);
+                        }}
+                        onMouseDown={(event) => {
+                          if (!onSelectNewTab) return;
+                          handleMiddleClick(event, () => {
+                            setExpanded(false);
+                            onSelectNewTab(drive);
+                          });
                         }}
                       >
                         {driveLabel}

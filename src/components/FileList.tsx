@@ -38,6 +38,7 @@ type FileListProps = {
   currentPath: string;
   entries: FileEntry[];
   items: EntryItem[];
+  indexMap?: Map<string, number>;
   loading: boolean;
   searchQuery: string;
   viewKey: string;
@@ -106,6 +107,7 @@ const FileList = ({
   currentPath,
   entries,
   items,
+  indexMap,
   loading,
   searchQuery,
   viewKey,
@@ -152,7 +154,7 @@ const FileList = ({
     resetKey: viewKey,
     animate: !loading && presenceEnabled,
   });
-  const indexMap = useMemo(() => {
+  const fallbackIndexMap = useMemo(() => {
     const map = new Map<string, number>();
     items.forEach((item, index) => {
       const key = item.type === "parent" ? item.path : item.entry.path;
@@ -160,6 +162,7 @@ const FileList = ({
     });
     return map;
   }, [items]);
+  const resolvedIndexMap = indexMap ?? fallbackIndexMap;
 
   const listRef = useRef<HTMLDivElement | null>(null);
   // Match virtualization height with compact spacing when enabled.
@@ -451,7 +454,7 @@ const FileList = ({
                 const index = virtual.startIndex + rowIndex;
                 if (row.type === "parent") {
                   const isDropTarget = dropTargetPath === row.path;
-                  const baseIndex = indexMap.get(row.path) ?? index;
+                  const baseIndex = resolvedIndexMap.get(row.path) ?? index;
                   return (
                     <ParentRow
                       key={row.key}
@@ -469,7 +472,7 @@ const FileList = ({
                 }
                 const isDropTarget = dropTargetPath === row.entry.path;
                 const rowMeta = rowMetaByPath.get(row.entry.path);
-                const baseIndex = indexMap.get(row.entry.path) ?? index;
+                const baseIndex = resolvedIndexMap.get(row.entry.path) ?? index;
                 return (
                   <EntryRow
                     key={row.key}

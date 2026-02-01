@@ -1,6 +1,11 @@
 // Grid-specific appearance and content controls.
 import { useEffect, useState } from "react";
-import { GRID_AUTO_COLUMNS_MAX, GRID_AUTO_COLUMNS_MIN } from "@/modules";
+import {
+  GRID_AUTO_COLUMNS_MAX,
+  GRID_AUTO_COLUMNS_MIN,
+  GRID_GAP_MAX,
+  GRID_GAP_MIN,
+} from "@/modules";
 import type { GridNameEllipsis, GridSize } from "@/modules";
 import type { SettingsUpdateHandler } from "./types";
 
@@ -8,6 +13,7 @@ type SettingsGridSectionProps = {
   sectionId: string;
   gridSize: GridSize;
   gridAutoColumns: number;
+  gridGap: number;
   gridRounded: boolean;
   gridShowSize: boolean;
   gridShowExtension: boolean;
@@ -31,6 +37,7 @@ export const SettingsGridSection = ({
   sectionId,
   gridSize,
   gridAutoColumns,
+  gridGap,
   gridRounded,
   gridShowSize,
   gridShowExtension,
@@ -39,14 +46,22 @@ export const SettingsGridSection = ({
   onUpdate,
 }: SettingsGridSectionProps) => {
   const [autoColumnsDraft, setAutoColumnsDraft] = useState(gridAutoColumns);
+  const [gridGapDraft, setGridGapDraft] = useState(gridGap);
 
   useEffect(() => {
     setAutoColumnsDraft(gridAutoColumns);
   }, [gridAutoColumns]);
+  useEffect(() => {
+    setGridGapDraft(gridGap);
+  }, [gridGap]);
 
   const commitAutoColumns = () => {
     if (autoColumnsDraft === gridAutoColumns) return;
     onUpdate({ gridAutoColumns: autoColumnsDraft });
+  };
+  const commitGridGap = () => {
+    if (gridGapDraft === gridGap) return;
+    onUpdate({ gridGap: gridGapDraft });
   };
 
   return (
@@ -102,6 +117,30 @@ export const SettingsGridSection = ({
           </div>
         </div>
       ) : null}
+      <div className="settings-item">
+        <div>
+          <div className="settings-label">Grid gap</div>
+          <div className="settings-desc">Adjust the spacing between grid cards.</div>
+        </div>
+        <div className="settings-range">
+          <input
+            type="range"
+            min={GRID_GAP_MIN}
+            max={GRID_GAP_MAX}
+            step={1}
+            value={gridGapDraft}
+            onChange={(event) => setGridGapDraft(Number(event.currentTarget.value))}
+            onPointerUp={commitGridGap}
+            onKeyUp={(event) => {
+              if (event.key === "Enter") {
+                commitGridGap();
+              }
+            }}
+            onBlur={commitGridGap}
+          />
+          <span className="settings-value">{gridGapDraft}px</span>
+        </div>
+      </div>
       <div className="settings-item">
         <div>
           <div className="settings-label">Grid corners</div>

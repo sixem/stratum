@@ -1,5 +1,5 @@
 // Switches between list and grid file views.
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useCallback, useRef } from "react";
 import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
@@ -27,13 +27,16 @@ type FileViewProps = {
   currentPath: string;
   entries: FileEntry[];
   items: EntryItem[];
+  indexMap?: Map<string, number>;
   loading: boolean;
   showLander: boolean;
   recentJumps: string[];
   onOpenRecent: (path: string) => void;
+  onOpenRecentNewTab?: (path: string) => void;
   drives: string[];
   driveInfo: DriveInfo[];
   onOpenDrive: (path: string) => void;
+  onOpenDriveNewTab?: (path: string) => void;
   canGoUp: boolean;
   onGoUp: () => void;
   searchQuery: string;
@@ -70,6 +73,7 @@ type FileViewProps = {
   categoryTinting: boolean;
   gridSize: GridSize;
   gridAutoColumns: number;
+  gridGap: number;
   gridShowSize: boolean;
   gridShowExtension: boolean;
   gridNameEllipsis: GridNameEllipsis;
@@ -99,9 +103,11 @@ export const FileView = ({
   showLander,
   recentJumps,
   onOpenRecent,
+  onOpenRecentNewTab,
   drives,
   driveInfo,
   onOpenDrive,
+  onOpenDriveNewTab,
   canGoUp,
   onGoUp,
   thumbnailsEnabled,
@@ -112,6 +118,7 @@ export const FileView = ({
   categoryTinting,
   gridSize,
   gridAutoColumns,
+  gridGap,
   gridShowSize,
   gridShowExtension,
   gridNameEllipsis,
@@ -135,15 +142,24 @@ export const FileView = ({
   onCreateFile,
   ...viewProps
 }: FileViewProps) => {
+  // Cache the last stable auto-grid width so we can avoid a layout jump
+  // when the new-tab lander temporarily unmounts the grid.
+  const autoGridViewportWidthRef = useRef<number | null>(null);
+  const handleAutoGridViewportWidth = useCallback((width: number) => {
+    autoGridViewportWidthRef.current = width;
+  }, []);
+
   // Keep the heavy views lazy-loaded but render-driven.
   if (showLander) {
     return (
       <StartLander
         recentJumps={recentJumps}
         onOpenRecent={onOpenRecent}
+        onOpenRecentNewTab={onOpenRecentNewTab}
         drives={drives}
         driveInfo={driveInfo}
         onOpenDrive={onOpenDrive}
+        onOpenDriveNewTab={onOpenDriveNewTab}
       />
     );
   }
@@ -172,10 +188,13 @@ export const FileView = ({
             categoryTinting={categoryTinting}
             gridSize={gridSize}
             gridAutoColumns={gridAutoColumns}
+            gridGap={gridGap}
             gridShowSize={gridShowSize}
             gridShowExtension={gridShowExtension}
             gridNameEllipsis={gridNameEllipsis}
             gridNameHideExtension={gridNameHideExtension}
+            autoViewportWidth={autoGridViewportWidthRef.current ?? undefined}
+            onAutoViewportWidthChange={handleAutoGridViewportWidth}
             thumbResetKey={thumbResetKey}
             presenceEnabled={presenceEnabled}
             onGridColumnsChange={onGridColumnsChange}

@@ -50,6 +50,7 @@ export const SettingsOverlay = ({
     keybinds,
     gridSize,
     gridAutoColumns,
+    gridGap,
     gridRounded,
     gridCentered,
     gridShowSize,
@@ -257,6 +258,7 @@ export const SettingsOverlay = ({
               sectionId={gridSectionId}
               gridSize={gridSize}
               gridAutoColumns={gridAutoColumns}
+              gridGap={gridGap}
               gridRounded={gridRounded}
               gridShowSize={gridShowSize}
               gridShowExtension={gridShowExtension}

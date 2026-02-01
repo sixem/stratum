@@ -69,7 +69,7 @@ export const SettingsGeneralSection = ({
       <div className="settings-item">
         <div>
           <div className="settings-label">Center grid items</div>
-          <div className="settings-desc">Center the grid within the viewport.</div>
+          <div className="settings-desc">Center the grid within the viewport. Will not have an effect with autosized grids.</div>
         </div>
         <label className="settings-toggle">
           <input

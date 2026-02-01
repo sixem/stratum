@@ -1,14 +1,16 @@
 // Landing content shown when no folder is selected in the active tab.
-import { formatBytes, normalizePath } from "@/lib";
+import { formatBytes, handleMiddleClick, normalizePath } from "@/lib";
 import type { DriveInfo } from "@/types";
 import { EmptyState } from "./EmptyState";
 
 type StartLanderProps = {
   recentJumps: string[];
   onOpenRecent: (path: string) => void;
+  onOpenRecentNewTab?: (path: string) => void;
   drives: string[];
   driveInfo: DriveInfo[];
   onOpenDrive: (path: string) => void;
+  onOpenDriveNewTab?: (path: string) => void;
 };
 
 const formatDriveLabel = (drive: string) => {
@@ -108,10 +110,13 @@ const summarizeStorage = (
 export const StartLander = ({
   recentJumps,
   onOpenRecent,
+  onOpenRecentNewTab,
   drives,
   driveInfo,
   onOpenDrive,
+  onOpenDriveNewTab,
 }: StartLanderProps) => {
+  const visibleRecents = recentJumps.slice(0, 5);
   const driveInfoMap = buildDriveInfoMap(driveInfo);
   const knownDrives = drives.filter((drive) => {
     const info = driveInfoMap.get(normalizePath(drive));
@@ -159,6 +164,10 @@ export const StartLander = ({
                       type="button"
                       className="lander-drive"
                       onClick={() => onOpenDrive(drive)}
+                      onMouseDown={(event) => {
+                        if (!onOpenDriveNewTab) return;
+                        handleMiddleClick(event, () => onOpenDriveNewTab(drive));
+                      }}
                     >
                       <div className="lander-drive-head">
                         <span className="lander-drive-label">
@@ -195,7 +204,7 @@ export const StartLander = ({
               <div className="lander-recents-empty">No jumps yet</div>
             ) : (
               <div className="lander-recents-list">
-                {recentJumps.map((path) => {
+                {visibleRecents.map((path) => {
                   const title = formatRecentLabel(path);
                   const driveTag = formatRecentDriveTag(path);
                   return (
@@ -204,6 +213,10 @@ export const StartLander = ({
                       type="button"
                       className="place lander-place"
                       onClick={() => onOpenRecent(path)}
+                      onMouseDown={(event) => {
+                        if (!onOpenRecentNewTab) return;
+                        handleMiddleClick(event, () => onOpenRecentNewTab(path));
+                      }}
                     >
                       <div className="lander-place-head">
                         <span className="place-name lander-place-name">{title}</span>
