@@ -193,6 +193,22 @@ async fn delete_entries(paths: Vec<String>) -> Result<fs::DeleteReport, String> 
 }
 
 #[tauri::command]
+async fn trash_entries(paths: Vec<String>) -> Result<fs::TrashReport, String> {
+    tauri::async_runtime::spawn_blocking(move || fs::trash_entries(paths))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+async fn restore_recycle_entries(
+    entries: Vec<fs::RecycleEntry>,
+) -> Result<fs::RestoreReport, String> {
+    tauri::async_runtime::spawn_blocking(move || fs::restore_recycle_entries(entries))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
 async fn rename_entry(path: String, new_name: String) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || fs::rename_entry(path, new_name))
         .await
@@ -354,6 +370,8 @@ pub fn run() {
             set_clipboard_paths,
             get_clipboard_paths,
             delete_entries,
+            trash_entries,
+            restore_recycle_entries,
             rename_entry,
             watch::start_dir_watch,
             watch::stop_dir_watch,

@@ -1,6 +1,7 @@
 // Filesystem helpers backing the Tauri commands.
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::io::{Read, Write};
@@ -169,6 +170,35 @@ pub struct DeleteReport {
     pub deleted: usize,
     pub skipped: usize,
     pub failures: Vec<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecycleEntry {
+    pub original_path: String,
+    pub info_path: String,
+    pub data_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deleted_at: Option<u64>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashReport {
+    pub deleted: usize,
+    pub skipped: usize,
+    pub failures: Vec<String>,
+    pub failed_paths: Vec<String>,
+    pub recycled: Vec<RecycleEntry>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreReport {
+    pub restored: usize,
+    pub skipped: usize,
+    pub failures: Vec<String>,
+    pub remaining: Vec<RecycleEntry>,
 }
 
 #[derive(Clone, Serialize)]
@@ -1315,6 +1345,256 @@ fn delete_to_recycle_bin(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
+fn filetime_to_epoch_ms(filetime: u64) -> Option<u64> {
+    const FILETIME_EPOCH: u64 = 116_444_736_000_000_000;
+    if filetime < FILETIME_EPOCH {
+        return None;
+    }
+    Some((filetime - FILETIME_EPOCH) / 10_000)
+}
+
+#[cfg(target_os = "windows")]
+fn normalize_path_ci(value: &str) -> String {
+    value.trim().replace('/', "\\").to_lowercase()
+}
+
+#[cfg(target_os = "windows")]
+fn parse_recycle_info(info_path: &Path) -> Option<(String, Option<u64>)> {
+    let mut file = fs::File::open(info_path).ok()?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer).ok()?;
+    if buffer.len() < 24 {
+        return None;
+    }
+    let deleted_raw = u64::from_le_bytes(buffer[16..24].try_into().ok()?);
+    let deleted_at = filetime_to_epoch_ms(deleted_raw);
+    let mut utf16 = Vec::new();
+    let mut index = 24;
+    while index + 1 < buffer.len() {
+        let value = u16::from_le_bytes([buffer[index], buffer[index + 1]]);
+        if value == 0 {
+            break;
+        }
+        utf16.push(value);
+        index += 2;
+    }
+    if utf16.is_empty() {
+        return None;
+    }
+    let original_path = String::from_utf16_lossy(&utf16);
+    if original_path.trim().is_empty() {
+        return None;
+    }
+    Some((original_path, deleted_at))
+}
+
+#[cfg(target_os = "windows")]
+fn list_recycle_entries_for_drive(root: &Path) -> Vec<RecycleEntry> {
+    let mut entries = Vec::new();
+    let recycle_root = root.join("$Recycle.Bin");
+    let sid_dirs = match fs::read_dir(&recycle_root) {
+        Ok(value) => value,
+        Err(_) => return entries,
+    };
+    for sid in sid_dirs {
+        let sid = match sid {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        let sid_path = sid.path();
+        if !sid_path.is_dir() {
+            continue;
+        }
+        let items = match fs::read_dir(&sid_path) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        for item in items {
+            let item = match item {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
+            let name = item.file_name().to_string_lossy().to_string();
+            if !name.starts_with("$I") || name.len() < 3 {
+                continue;
+            }
+            let info_path = item.path();
+            let (original_path, deleted_at) = match parse_recycle_info(&info_path) {
+                Some(value) => value,
+                None => continue,
+            };
+            let data_name = format!("$R{}", &name[2..]);
+            let data_path = info_path
+                .parent()
+                .unwrap_or(&sid_path)
+                .join(data_name);
+            entries.push(RecycleEntry {
+                original_path,
+                info_path: info_path.to_string_lossy().to_string(),
+                data_path: data_path.to_string_lossy().to_string(),
+                deleted_at,
+            });
+        }
+    }
+    entries
+}
+
+#[cfg(target_os = "windows")]
+fn find_recycle_entries_for_paths(
+    paths: &[String],
+    min_deleted_at: Option<u64>,
+) -> Vec<RecycleEntry> {
+    let mut targets = HashSet::new();
+    let mut drive_roots = HashSet::new();
+    for path in paths {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        targets.insert(normalize_path_ci(trimmed));
+        if let Some(root) = drive_root(trimmed) {
+            drive_roots.insert(root);
+        }
+    }
+    let mut matched: HashMap<String, RecycleEntry> = HashMap::new();
+    for root in drive_roots {
+        let entries = list_recycle_entries_for_drive(Path::new(&root));
+        for entry in entries {
+            let key = normalize_path_ci(&entry.original_path);
+            if !targets.contains(&key) {
+                continue;
+            }
+            if let (Some(min), Some(deleted_at)) = (min_deleted_at, entry.deleted_at) {
+                if deleted_at < min {
+                    continue;
+                }
+            }
+            let replace = match matched.get(&key) {
+                None => true,
+                Some(existing) => match (existing.deleted_at, entry.deleted_at) {
+                    (Some(left), Some(right)) => right > left,
+                    (None, Some(_)) => true,
+                    _ => false,
+                },
+            };
+            if replace {
+                matched.insert(key, entry);
+            }
+        }
+    }
+    matched.into_values().collect()
+}
+
+#[cfg(target_os = "windows")]
+pub fn trash_entries(paths: Vec<String>) -> Result<TrashReport, String> {
+    let mut report = TrashReport {
+        deleted: 0,
+        skipped: 0,
+        failures: Vec::new(),
+        failed_paths: Vec::new(),
+        recycled: Vec::new(),
+    };
+    let mut recycled_paths: Vec<String> = Vec::new();
+    for path in paths {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            report.skipped += 1;
+            continue;
+        }
+        let target = PathBuf::from(trimmed);
+        if !can_use_recycle_bin(&target) {
+            report
+                .failures
+                .push(format!("{}: Recycle Bin unavailable", trimmed));
+            report.failed_paths.push(trimmed.to_string());
+            continue;
+        }
+        match delete_to_recycle_bin(&target) {
+            Ok(_) => {
+                report.deleted += 1;
+                recycled_paths.push(trimmed.to_string());
+            }
+            Err(err) => {
+                report.failures.push(format!("{}: {}", trimmed, err));
+                report.failed_paths.push(trimmed.to_string());
+            }
+        }
+    }
+    let min_deleted_at = to_epoch_ms(SystemTime::now()).map(|value| value.saturating_sub(300_000));
+    report.recycled = find_recycle_entries_for_paths(&recycled_paths, min_deleted_at);
+    Ok(report)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn trash_entries(_paths: Vec<String>) -> Result<TrashReport, String> {
+    Err("Native trash is only supported on Windows.".to_string())
+}
+
+#[cfg(target_os = "windows")]
+pub fn restore_recycle_entries(entries: Vec<RecycleEntry>) -> Result<RestoreReport, String> {
+    let mut report = RestoreReport {
+        restored: 0,
+        skipped: 0,
+        failures: Vec::new(),
+        remaining: Vec::new(),
+    };
+    for entry in entries {
+        let original = entry.original_path.trim().to_string();
+        let data = entry.data_path.trim().to_string();
+        let info = entry.info_path.trim().to_string();
+        if original.is_empty() || data.is_empty() {
+            report.skipped += 1;
+            continue;
+        }
+        let original_path = PathBuf::from(&original);
+        if original_path.exists() {
+            report
+                .failures
+                .push(format!("{}: destination already exists", original));
+            report.remaining.push(entry);
+            continue;
+        }
+        if let Some(parent) = original_path.parent() {
+            if let Err(err) = fs::create_dir_all(parent) {
+                report
+                    .failures
+                    .push(format!("{}: {}", original, err.to_string()));
+                report.remaining.push(entry);
+                continue;
+            }
+        }
+        let data_path = PathBuf::from(&data);
+        if !data_path.exists() {
+            report
+                .failures
+                .push(format!("{}: recycle entry missing", original));
+            report.remaining.push(entry);
+            continue;
+        }
+        match fs::rename(&data_path, &original_path) {
+            Ok(_) => {
+                report.restored += 1;
+                if !info.is_empty() {
+                    let _ = fs::remove_file(info);
+                }
+            }
+            Err(err) => {
+                report
+                    .failures
+                    .push(format!("{}: {}", original, err.to_string()));
+                report.remaining.push(entry);
+            }
+        }
+    }
+    Ok(report)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn restore_recycle_entries(_entries: Vec<RecycleEntry>) -> Result<RestoreReport, String> {
+    Err("Recycle restore is only supported on Windows.".to_string())
+}
+
 pub fn delete_entries(paths: Vec<String>) -> Result<DeleteReport, String> {
     let mut report = DeleteReport {
         deleted: 0,
@@ -1345,21 +1625,6 @@ pub fn delete_entries(paths: Vec<String>) -> Result<DeleteReport, String> {
                 fs::remove_file(&target)
             }
         };
-        #[cfg(target_os = "windows")]
-        {
-            if can_use_recycle_bin(&target) {
-                match delete_to_recycle_bin(&target) {
-                    Ok(_) => {
-                        report.deleted += 1;
-                        continue;
-                    }
-                    Err(err) => {
-                        report.failures.push(format!("{}: {}", trimmed, err));
-                        continue;
-                    }
-                }
-            }
-        }
         match hard_delete() {
             Ok(_) => report.deleted += 1,
             Err(err) => report
