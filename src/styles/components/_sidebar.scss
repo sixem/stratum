@@ -22,7 +22,10 @@
     gap: 16px;
     min-height: 0;
     overflow: auto;
-    padding-right: 6px;
+    // Reserve a stable scrollbar gutter and align the scrollbar to the panel edge.
+    scrollbar-gutter: stable;
+    margin-right: calc(var(--sidebar-padding) * -1);
+    padding-right: calc(var(--sidebar-padding) + 6px);
     flex: 1;
     scroll-behavior: auto;
   }

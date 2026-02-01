@@ -49,6 +49,8 @@
 
 
 :where(.thumb-shell) {
+  --thumb-scrollbar-size: 10px;
+
   .thumb-viewport {
     position: relative;
     overflow-x: hidden;
@@ -56,6 +58,11 @@
     min-height: 0;
     flex: 1;
     padding: var(--thumb-padding, 6px);
+    // Compensate for the reserved scrollbar gutter so side + top gaps stay even.
+    padding-right: max(
+      calc(var(--thumb-padding, 6px) - var(--thumb-scrollbar-size, 10px)),
+      0px
+    );
     scroll-behavior: auto;
     scrollbar-gutter: stable;
     scrollbar-width: auto;
@@ -402,6 +409,24 @@
 
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card {
   background: rgba(18, 22, 33, 0.82);
+}
+
+// In compact mode, soften the default grid borders while keeping selection visible.
+:root[data-ambient="true"][data-compact="true"] :where(.thumb-shell) .thumb-card {
+  border-color: transparent;
+}
+
+:root[data-ambient="true"][data-compact="true"] :where(.thumb-shell) .thumb-card.is-selected {
+  border-color: rgba(var(--accent-rgb), 0.7);
+  background: rgba(var(--accent-rgb), 0.12);
+}
+
+:root[data-ambient="true"][data-compact="true"]
+  :where(.thumb-shell)
+  .thumb-card[data-drop-target="true"] {
+  border-color: rgba(var(--accent-rgb), 0.9);
+  background: rgba(var(--accent-rgb), 0.18);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.35);
 }
 
 :where(.thumb-shell)[data-category-tint="true"] .thumb-card[data-kind="document"] {

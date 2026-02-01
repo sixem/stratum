@@ -1,20 +1,28 @@
 // Shared scrollbar styling.
+:root {
+  --scrollbar-thumb: #20283a;
+}
+
+:root[data-compact="true"] {
+  // Lighter thumb helps the scrollbar stay visible in dense layouts.
+  --scrollbar-thumb: #d9deea;
+}
 .list-body::-webkit-scrollbar {
   width: 10px;
 }
 
 .thumb-viewport::-webkit-scrollbar {
-  width: 10px;
+  width: var(--thumb-scrollbar-size, 10px);
 }
 
 .list-body::-webkit-scrollbar-thumb {
-  background: #20283a;
+  background: var(--scrollbar-thumb);
   border-radius: 999px;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #20283a transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -26,6 +34,6 @@
 }
 
 *::-webkit-scrollbar-thumb {
-  background: #20283a;
+  background: var(--scrollbar-thumb);
   border-radius: 999px;
 }
