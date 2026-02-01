@@ -1,0 +1,58 @@
+// Default values and sidebar definitions for settings storage.
+import {
+  GRID_AUTO_COLUMNS_DEFAULT,
+  GRID_GAP_DEFAULT,
+} from "@/constants";
+import { DEFAULT_KEYBINDS } from "./keybinds";
+import type { Settings, SidebarSectionId } from "./settings.types";
+
+export const SIDEBAR_SECTION_DEFINITIONS: { id: SidebarSectionId; label: string }[] = [
+  { id: "places", label: "Places" },
+  { id: "recent", label: "Recent jumps" },
+  { id: "tips", label: "Tips" },
+];
+
+export const DEFAULT_SIDEBAR_SECTION_ORDER = SIDEBAR_SECTION_DEFINITIONS.map(
+  (item) => item.id,
+);
+export const DEFAULT_SIDEBAR_HIDDEN_SECTIONS: SidebarSectionId[] = [];
+
+export const DEFAULT_SETTINGS: Settings = {
+  sidebarOpen: true,
+  sidebarRecentLimit: 8,
+  sidebarSectionOrder: DEFAULT_SIDEBAR_SECTION_ORDER,
+  sidebarHiddenSections: DEFAULT_SIDEBAR_HIDDEN_SECTIONS,
+  defaultViewMode: "thumbs",
+  showTabNumbers: true,
+  fixedWidthTabs: false,
+  smoothScroll: false,
+  compactMode: true,
+  accentTheme: "red",
+  categoryTinting: false,
+  showParentEntry: true,
+  confirmDelete: true,
+  confirmClose: true,
+  ambientBackground: false,
+  blurOverlays: false,
+  keybinds: DEFAULT_KEYBINDS,
+  gridSize: "normal",
+  gridAutoColumns: GRID_AUTO_COLUMNS_DEFAULT,
+  gridGap: GRID_GAP_DEFAULT,
+  gridRounded: true,
+  gridCentered: true,
+  gridShowSize: true,
+  gridShowExtension: true,
+  gridNameEllipsis: "middle",
+  gridNameHideExtension: true,
+  menuOpenPwsh: true,
+  menuOpenWsl: false,
+  thumbnailsEnabled: true,
+  thumbnailSize: 256,
+  thumbnailQuality: 80,
+  thumbnailFormat: "webp",
+  thumbnailVideos: true,
+  thumbnailCacheMb: 512,
+  thumbnailFit: "contain",
+  thumbnailAppIcons: true,
+  ffmpegPath: "",
+};
