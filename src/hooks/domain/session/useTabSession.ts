@@ -1,11 +1,13 @@
 // Orchestrates tab state, view settings, and navigation flows.
-import { startTransition, useCallback, useEffect, useMemo, useRef } from "react";
+import { startTransition, useCallback, useMemo, useRef } from "react";
 import { shallow } from "zustand/shallow";
 import type { ListDirOptions, SortState, Tab, ViewMode } from "@/types";
 import { createTab, DEFAULT_TAB_STATE, makeDebug, normalizePath } from "@/lib";
 import { useSessionStore } from "@/modules";
 import { useTabHistory } from "./tabHistory";
 import { usePendingJump } from "./tabNavigation";
+import { useTabPersistence } from "./useTabPersistence";
+import { useTabScroll } from "./useTabScroll";
 
 type TabSessionOptions = {
   currentPath: string;
@@ -16,37 +18,6 @@ type TabSessionOptions = {
 };
 
 const log = makeDebug("tabs");
-
-// Breadcrumb trail helpers keep future crumbs visible when navigating up.
-const splitPathKey = (pathKey: string) => {
-  if (!pathKey) return [];
-  return pathKey.split("\\").filter(Boolean);
-};
-
-const isPathKeyPrefix = (prefixKey: string, fullKey: string) => {
-  const prefixParts = splitPathKey(prefixKey);
-  const fullParts = splitPathKey(fullKey);
-  if (prefixParts.length === 0) return false;
-  if (prefixParts.length > fullParts.length) return false;
-  return prefixParts.every((part, index) => part === fullParts[index]);
-};
-
-const resolveCrumbTrailPath = (currentPath: string, trailPath: string) => {
-  const trimmedCurrent = currentPath.trim();
-  if (!trimmedCurrent) return "";
-  const trimmedTrail = trailPath.trim();
-  if (!trimmedTrail) return trimmedCurrent;
-  const currentKey = normalizePath(trimmedCurrent);
-  const trailKey = normalizePath(trimmedTrail);
-  if (!currentKey || !trailKey) return trimmedCurrent;
-  if (currentKey === trailKey) return trimmedCurrent;
-  // Keep the deepest path when navigating up within the same branch.
-  if (isPathKeyPrefix(currentKey, trailKey)) return trimmedTrail;
-  // Update the trail when navigating deeper under the same branch.
-  if (isPathKeyPrefix(trailKey, currentKey)) return trimmedCurrent;
-  // Reset the trail when the branch changes.
-  return trimmedCurrent;
-};
 
 export const useTabSession = ({
   currentPath,
@@ -98,15 +69,20 @@ export const useTabSession = ({
     recentLimit: safeRecentLimit,
     setRecentJumps,
   });
-  // Track tabs that should stay empty until the user navigates inside them.
-  const emptyTabIdsRef = useRef<Set<string>>(new Set());
-  const restorePathRef = useRef<string | null>(
-    tabs.find((tab) => tab.id === activeTabId)?.path ?? null,
-  );
-  const restoreRequestedRef = useRef(false);
-  const suppressTabSyncRef = useRef(Boolean(restorePathRef.current));
-  // Hold target path after tab switches to avoid transient path flicker.
-  const pendingTabPathRef = useRef<string | null>(null);
+  const { emptyTabIdsRef, pendingTabPathRef } = useTabPersistence({
+    tabs,
+    activeTabId,
+    activeTab,
+    currentPath,
+    sortState,
+    searchValue,
+    loadDir,
+    setTabs,
+    setRecentJumps,
+    recentLimit: safeRecentLimit,
+    shouldSyncEmptyTab,
+  });
+  const { setTabScrollTop } = useTabScroll({ setTabs });
   // Avoid redundant reloads when switching tabs that point at the current path.
   const shouldLoadPath = useCallback(
     (path: string) => {
@@ -117,80 +93,6 @@ export const useTabSession = ({
     },
     [currentPath],
   );
-
-  useEffect(() => {
-    // Keep the active tab path synced with the current directory.
-    if (!currentPath && activeTabId) return;
-    if (!activeTabId) return;
-    // Avoid "stealing" a path for untitled tabs unless we explicitly navigated in them.
-    const allowEmptyTabSync = shouldSyncEmptyTab(activeTabId);
-    const isExplicitEmptyTab = Boolean(
-      activeTab && emptyTabIdsRef.current.has(activeTab.id),
-    );
-    if (isExplicitEmptyTab && currentPath.trim() && !allowEmptyTabSync) {
-      return;
-    }
-    const pendingPath = pendingTabPathRef.current;
-    if (pendingPath) {
-      const pendingKey = normalizePath(pendingPath) ?? pendingPath;
-      const currentKey = normalizePath(currentPath) ?? currentPath;
-      if (pendingKey && currentKey && pendingKey !== currentKey) {
-        return;
-      }
-      pendingTabPathRef.current = null;
-    }
-    if (suppressTabSyncRef.current) {
-      const target = restorePathRef.current;
-      if (target) {
-        const targetKey = normalizePath(target);
-        const currentKey = normalizePath(currentPath);
-        if (targetKey && targetKey !== currentKey) {
-          return;
-        }
-      }
-      suppressTabSyncRef.current = false;
-      restorePathRef.current = null;
-    }
-    setTabs((prev) => {
-      const index = prev.findIndex((tab) => tab.id === activeTabId);
-      if (index === -1) return prev;
-      const tab = prev[index];
-      // Update the crumb trail so breadcrumb "future" crumbs stay visible.
-      const nextTrailPath = resolveCrumbTrailPath(
-        currentPath,
-        tab.crumbTrailPath ?? tab.path,
-      );
-      if (tab.path === currentPath && tab.crumbTrailPath === nextTrailPath) {
-        // Avoid re-setting identical paths to prevent update loops.
-        return prev;
-      }
-      const next = [...prev];
-      next[index] = { ...tab, path: currentPath, crumbTrailPath: nextTrailPath };
-      return next;
-    });
-  }, [activeTab, activeTabId, currentPath, setTabs, shouldSyncEmptyTab]);
-
-  useEffect(() => {
-    // Restore the last active tab path once on startup.
-    const target = restorePathRef.current;
-    if (!target || restoreRequestedRef.current) return;
-    const targetKey = normalizePath(target);
-    const currentKey = normalizePath(currentPath);
-    if (!targetKey || targetKey === currentKey) {
-      suppressTabSyncRef.current = false;
-      restorePathRef.current = null;
-      return;
-    }
-    restoreRequestedRef.current = true;
-    void loadDir(target, { sort: sortState, search: searchValue });
-  }, [currentPath, loadDir, searchValue, sortState]);
-
-  useEffect(() => {
-    setRecentJumps((prev) => {
-      if (prev.length <= safeRecentLimit) return prev;
-      return prev.slice(0, safeRecentLimit);
-    });
-  }, [safeRecentLimit, setRecentJumps]);
 
   const ensureActiveTab = useCallback(
     (path: string) => {
@@ -270,20 +172,6 @@ export const useTabSession = ({
       );
     },
     [activeTabId, setTabs],
-  );
-
-  const setTabScrollTop = useCallback(
-    (id: string, scrollTop: number) => {
-      if (!id) return;
-      const nextTop = Math.max(0, Math.round(scrollTop));
-      // Skip updates when the stored scroll offset has not changed.
-      setTabs((prev) =>
-        prev.map((tab) =>
-          tab.id === id && tab.scrollTop !== nextTop ? { ...tab, scrollTop: nextTop } : tab,
-        ),
-      );
-    },
-    [setTabs],
   );
 
   const setViewMode = useCallback(
