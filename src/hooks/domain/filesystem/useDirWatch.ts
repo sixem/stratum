@@ -5,6 +5,11 @@ import { startDirWatch, stopDirWatch } from "@/api";
 import { makeDebug, normalizePath } from "@/lib";
 import type { DirChangedEvent, DirRenameEvent, ListDirOptions, SortState, Tab } from "@/types";
 
+type MetaRequestOptions = {
+  force?: boolean;
+  defer?: boolean;
+};
+
 type UseDirWatchOptions = {
   enabled: boolean;
   activeTabId: string | null;
@@ -14,6 +19,7 @@ type UseDirWatchOptions = {
   sortState: SortState;
   searchQuery: string;
   loadDir: (path: string, options?: DirLoadOptions) => Promise<void>;
+  requestEntryMeta?: (paths: string[], options?: MetaRequestOptions) => Promise<unknown>;
   loading: boolean;
   onPresenceToggle?: (suppress: boolean) => void;
 };
@@ -39,6 +45,7 @@ export const useDirWatch = ({
   sortState,
   searchQuery,
   loadDir,
+  requestEntryMeta,
   loading,
   onPresenceToggle,
 }: UseDirWatchOptions) => {
@@ -50,6 +57,8 @@ export const useDirWatch = ({
   const sortRef = useRef(sortState);
   const searchRef = useRef(searchQuery);
   const loadDirRef = useRef(loadDir);
+  // Optional metadata refresh for changed entries to keep thumbnails accurate.
+  const requestEntryMetaRef = useRef(requestEntryMeta);
   const loadingRef = useRef(loading);
   const dirtyTabIdsRef = useRef<Set<string>>(new Set());
   const renameDirtyTabIdsRef = useRef<Set<string>>(new Set());
@@ -62,6 +71,7 @@ export const useDirWatch = ({
   const externalSuppressedRef = useRef(false);
   const suppressNextRefreshRef = useRef(false);
   const pendingPathsRef = useRef<Set<string>>(new Set());
+  const pendingEntryPathsRef = useRef<Set<string>>(new Set());
   const flushTimerRef = useRef<number | null>(null);
   const lastTabIdRef = useRef<string | null>(null);
   const tabCheckTimerRef = useRef<number | null>(null);
@@ -75,6 +85,7 @@ export const useDirWatch = ({
     sortRef.current = sortState;
     searchRef.current = searchQuery;
     loadDirRef.current = loadDir;
+    requestEntryMetaRef.current = requestEntryMeta;
     loadingRef.current = loading;
     presenceToggleRef.current = onPresenceToggle ?? null;
   }, [
@@ -85,6 +96,7 @@ export const useDirWatch = ({
     loadDir,
     loading,
     onPresenceToggle,
+    requestEntryMeta,
     searchQuery,
     sortState,
     tabs,
@@ -163,9 +175,18 @@ export const useDirWatch = ({
   }, [refreshActive]);
 
   const flushPendingChanges = useCallback(() => {
-    if (pendingPathsRef.current.size === 0) return;
+    if (
+      pendingPathsRef.current.size === 0 &&
+      pendingEntryPathsRef.current.size === 0
+    ) {
+      return;
+    }
     const pending = Array.from(pendingPathsRef.current);
     pendingPathsRef.current.clear();
+    const metaPaths = Array.from(pendingEntryPathsRef.current)
+      .map((path) => path.trim())
+      .filter(Boolean);
+    pendingEntryPathsRef.current.clear();
     const renamePending = new Set(pendingRenamePathsRef.current);
     pendingRenamePathsRef.current.clear();
     const renameKeys = new Set<string>();
@@ -209,6 +230,11 @@ export const useDirWatch = ({
       }
       refreshActiveRef.current("fs-event");
     }
+
+    if (metaPaths.length > 0) {
+      // Force metadata refresh for changed entries so thumbnail signatures update.
+      void requestEntryMetaRef.current?.(metaPaths, { force: true }).catch(() => {});
+    }
   }, []);
 
   const scheduleFlush = useCallback(() => {
@@ -229,6 +255,11 @@ export const useDirWatch = ({
           const payload = event.payload;
           if (!payload?.path) return;
           pendingPathsRef.current.add(payload.path);
+          payload.paths?.forEach((path) => {
+            if (path?.trim()) {
+              pendingEntryPathsRef.current.add(path);
+            }
+          });
           scheduleFlush();
         });
         if (!active) {
@@ -260,6 +291,19 @@ export const useDirWatch = ({
           if (!payload?.path) return;
           pendingPathsRef.current.add(payload.path);
           pendingRenamePathsRef.current.add(payload.path);
+          if (payload.paths && payload.paths.length > 0) {
+            payload.paths.forEach((path) => {
+              if (path?.trim()) {
+                pendingEntryPathsRef.current.add(path);
+              }
+            });
+          } else {
+            [payload.from, payload.to].forEach((path) => {
+              if (path?.trim()) {
+                pendingEntryPathsRef.current.add(path);
+              }
+            });
+          }
           scheduleFlush();
         });
         if (!active) {

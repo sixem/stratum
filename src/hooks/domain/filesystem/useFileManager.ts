@@ -63,6 +63,8 @@ type DirCacheEntry = {
 
 type MetaRequestOptions = {
   defer?: boolean;
+  // Force re-stat even when metadata is already cached.
+  force?: boolean;
 };
 
 type RenameRequest = {
@@ -195,6 +197,14 @@ export function useFileManager() {
     },
     [trimDirCache],
   );
+  const peekDirCache = useCallback((path: string, options?: ListDirOptions) => {
+    const target = path.trim();
+    if (!target) return null;
+    // Read-only cache access so the UI can render from warm entries immediately.
+    const query = resolveQuery(options, lastQueryRef.current);
+    const queryKey = buildQueryKey(target, query);
+    return dirCacheRef.current.get(queryKey) ?? null;
+  }, []);
 
   // Batch entry metadata updates to avoid a React commit on every small batch.
   const scheduleMetaFlush = useCallback(() => {
@@ -401,7 +411,8 @@ export function useFileManager() {
       const unique = new Set(paths.map((path) => path.trim()).filter(Boolean));
       const meta = entryMetaRef.current;
       const missing = Array.from(unique).filter(
-        (path) => !meta.has(path) && !pendingMeta.current.has(path),
+        (path) =>
+          !pendingMeta.current.has(path) && (options?.force ? true : !meta.has(path)),
       );
       if (missing.length === 0) return [];
 
@@ -689,6 +700,7 @@ export function useFileManager() {
     clearDir,
     openEntry,
     refresh,
+    peekDirCache,
     requestEntryMeta,
     flushEntryMeta,
     deleteEntries: deleteEntriesInView,

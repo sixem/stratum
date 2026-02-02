@@ -54,6 +54,10 @@ type AppEffectActions = {
   setTabSearch: (value: string) => void;
   flushWindowSize: () => void;
   loadDir: (path: string, options?: { sort?: SortState; search?: string; silent?: boolean }) => void;
+  requestEntryMeta: (
+    paths: string[],
+    options?: { force?: boolean; defer?: boolean },
+  ) => Promise<unknown>;
   clearDir: (options?: { silent?: boolean }) => void;
   setRenameTarget: (value: EntryContextTarget | null) => void;
   setRenameValue: (value: string) => void;
@@ -116,6 +120,7 @@ export const useAppEffects = ({
     setTabSearch,
     flushWindowSize,
     loadDir,
+    requestEntryMeta,
     clearDir,
     setRenameTarget,
     setRenameValue,
@@ -145,6 +150,7 @@ export const useAppEffects = ({
     sortState,
     searchQuery: activeSearch,
     loadDir,
+    requestEntryMeta,
     loading,
     onPresenceToggle,
   });
