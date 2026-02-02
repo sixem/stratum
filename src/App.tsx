@@ -32,7 +32,7 @@ import {
   useThumbnails,
   useWindowSize,
 } from "@/hooks";
-import { makeDebug, normalizePath } from "@/lib";
+import { getPlatformLabel, makeDebug, normalizePath } from "@/lib";
 import { usePromptStore } from "@/modules";
 import { APP_DESCRIPTION, APP_NAME, APP_VERSION } from "@/constants";
 import "@/styles/app.scss";
@@ -88,16 +88,22 @@ const App = () => {
     goBack,
     goForward,
   } = tabSession;
-  const viewPath = activeTab?.path ?? currentPath;
+  const activeSearch = activeTab?.search ?? "";
+  const activeTabPath = activeTab?.path ?? "";
+  const viewPath = activeTabPath || currentPath;
   const viewPathKey = normalizePath(viewPath ?? "");
   const currentPathKey = normalizePath(currentPath);
   // When a tab switch happens before the new directory load finishes,
-  // avoid rendering stale entries from the previous path.
+  // reuse cached entries to avoid a visible loading flash.
   const viewPending = Boolean(viewPathKey) && viewPathKey !== currentPathKey;
-  const viewLoading = loading || viewPending;
-  const viewEntries = viewPending ? [] : entries;
-  const viewTotalCount = viewPending ? 0 : totalCount;
-  const viewParentPathBase = viewPending ? null : parentPath;
+  const cachedView =
+    viewPending && viewPathKey
+      ? fileManager.peekDirCache(viewPath, { sort: sortState, search: activeSearch })
+      : null;
+  const viewLoading = viewPending ? loading && !cachedView : loading;
+  const viewEntries = viewPending ? cachedView?.entries ?? [] : entries;
+  const viewTotalCount = viewPending ? cachedView?.totalCount ?? 0 : totalCount;
+  const viewParentPathBase = viewPending ? cachedView?.parentPath ?? null : parentPath;
   // Sidebar visibility is global (not per-tab) so it feels consistent across navigation.
   const sidebarOpen = settings.sidebarOpen;
   // Path, search, and view state for the main content area.
@@ -116,14 +122,11 @@ const App = () => {
   } = useAppViewState({
     currentPath,
     displayPath: viewPath,
-    parentPath: viewPending ? null : parentPath,
-    loading,
+    parentPath: viewParentPathBase,
+    loading: viewLoading,
     jumpTo: tabSession.jumpTo,
     browseTo: tabSession.browseTo,
   });
-
-  const activeSearch = activeTab?.search ?? "";
-  const activeTabPath = activeTab?.path ?? "";
   const { flushPersist: flushWindowSize } = useWindowSize();
   // Check available shells once so future actions can choose a supported target.
   const shellAvailability = useShellAvailability({ enabled: isTauriEnv() });
@@ -174,6 +177,7 @@ const App = () => {
       quality: settings.thumbnailQuality,
       format: settings.thumbnailFormat,
       allowVideos: settings.thumbnailVideos,
+      allowSvgs: settings.thumbnailSvgs,
       cacheMb: settings.thumbnailCacheMb,
     }),
     [
@@ -181,6 +185,7 @@ const App = () => {
       settings.thumbnailFormat,
       settings.thumbnailQuality,
       settings.thumbnailSize,
+      settings.thumbnailSvgs,
       settings.thumbnailVideos,
     ],
   );
@@ -374,6 +379,7 @@ const App = () => {
       setTabSearch: tabSession.setSearch,
       flushWindowSize,
       loadDir: fileManager.loadDir,
+      requestEntryMeta: fileManager.requestEntryMeta,
       clearDir: fileManager.clearDir,
       setRenameTarget,
       setRenameValue,
@@ -386,16 +392,9 @@ const App = () => {
   });
 
   const aboutMeta = useMemo(() => {
-    const platform =
-      typeof navigator !== "undefined"
-        ? (navigator as Navigator & { userAgentData?: { platform?: string } })
-            .userAgentData?.platform ??
-          navigator.platform ??
-          "Unknown"
-        : "Unknown";
     return {
       runtime: isTauriEnv() ? "Tauri" : "Web",
-      platform,
+      platform: getPlatformLabel(),
       buildMode: import.meta.env.MODE ?? "unknown",
     };
   }, []);
