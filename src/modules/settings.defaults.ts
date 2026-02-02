@@ -19,7 +19,7 @@ export const DEFAULT_SIDEBAR_HIDDEN_SECTIONS: SidebarSectionId[] = [];
 
 export const DEFAULT_SETTINGS: Settings = {
   sidebarOpen: true,
-  sidebarRecentLimit: 8,
+  sidebarRecentLimit: 10,
   sidebarSectionOrder: DEFAULT_SIDEBAR_SECTION_ORDER,
   sidebarHiddenSections: DEFAULT_SIDEBAR_HIDDEN_SECTIONS,
   defaultViewMode: "thumbs",
@@ -51,6 +51,7 @@ export const DEFAULT_SETTINGS: Settings = {
   thumbnailQuality: 80,
   thumbnailFormat: "webp",
   thumbnailVideos: true,
+  thumbnailSvgs: false,
   thumbnailCacheMb: 512,
   thumbnailFit: "contain",
   thumbnailAppIcons: true,
