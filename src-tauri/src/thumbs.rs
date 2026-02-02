@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};
 use std::fs;
 use std::hash::{Hash, Hasher};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, SystemTime};
@@ -32,6 +33,8 @@ use windows::Win32::UI::Shell::{
 };
 
 use tauri::{AppHandle, Emitter, Manager};
+use resvg::tiny_skia::{Pixmap, Transform};
+use resvg::usvg::{self, TreeParsing};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +43,7 @@ pub struct ThumbOptions {
     pub quality: u8,
     pub format: ThumbFormat,
     pub allow_videos: bool,
+    pub allow_svgs: bool,
     pub cache_mb: u32,
 }
 
@@ -50,6 +54,8 @@ pub struct ThumbRequest {
     pub path: String,
     pub size: Option<u64>,
     pub modified: Option<u64>,
+    // Optional UI-provided signature so async events can confirm freshness.
+    pub signature: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -63,6 +69,7 @@ pub enum ThumbFormat {
 enum ThumbKind {
     Image,
     Video,
+    Svg,
 }
 
 #[derive(Clone, Serialize)]
@@ -71,6 +78,7 @@ pub struct ThumbHit {
     pub path: String,
     pub thumb_path: String,
     pub key: String,
+    pub signature: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -79,6 +87,7 @@ pub struct ThumbReady {
     pub path: String,
     pub thumb_path: String,
     pub key: String,
+    pub signature: String,
 }
 
 struct ThumbJob {
@@ -86,6 +95,7 @@ struct ThumbJob {
     path: PathBuf,
     thumb_path: PathBuf,
     key: String,
+    signature: String,
     options: ThumbOptions,
     kind: ThumbKind,
 }
@@ -112,6 +122,7 @@ pub struct ThumbnailState {
 pub type ThumbnailHandle = Arc<ThumbnailState>;
 
 const MAX_THUMB_WORKERS: usize = 3;
+const MAX_THUMB_SIZE: u32 = 320;
 
 pub fn init(app_handle: AppHandle) -> ThumbnailHandle {
     let cache_dir = resolve_cache_dir(&app_handle);
@@ -165,6 +176,7 @@ pub fn request_thumbnails(
         let Some(meta) = resolve_thumb_meta(&input_path, &request) else {
             continue;
         };
+        let signature = resolve_request_signature(trimmed, &request, &key);
 
         let (thumb_path, thumb_id) =
             build_thumb_path(&state.cache_dir, &input_path, &meta, &key, &options.format);
@@ -173,6 +185,7 @@ pub fn request_thumbnails(
                 path: trimmed.to_string(),
                 thumb_path: thumb_path.to_string_lossy().to_string(),
                 key: key.clone(),
+                signature: signature.clone(),
             });
             continue;
         }
@@ -188,6 +201,7 @@ pub fn request_thumbnails(
             path: input_path,
             thumb_path,
             key: key.clone(),
+            signature,
             options: options.clone(),
             kind,
         });
@@ -232,6 +246,7 @@ fn worker_loop(state: ThumbnailHandle) {
                 path: job.path.to_string_lossy().to_string(),
                 thumb_path: path.to_string_lossy().to_string(),
                 key: job.key,
+                signature: job.signature,
             };
             let _ = state.app_handle.emit("thumb_ready", payload);
         }
@@ -248,8 +263,9 @@ fn render_thumbnail(job: &ThumbJob) -> Result<PathBuf, String> {
         .ok_or_else(|| "invalid thumbnail path".to_string())?;
     fs::create_dir_all(parent).map_err(|err| err.to_string())?;
 
-    let image = load_source_image(job)?;
-    let resized = image.thumbnail(job.options.size, job.options.size);
+    let target_size = clamp_thumb_size(job.options.size);
+    let image = load_source_image(job, target_size)?;
+    let resized = image.thumbnail(target_size, target_size);
     let mut file = fs::File::create(&job.thumb_path).map_err(|err| err.to_string())?;
     match job.options.format {
         ThumbFormat::Webp => resized
@@ -265,10 +281,15 @@ fn render_thumbnail(job: &ThumbJob) -> Result<PathBuf, String> {
     Ok(job.thumb_path.clone())
 }
 
-fn load_source_image(job: &ThumbJob) -> Result<image::DynamicImage, String> {
+fn clamp_thumb_size(size: u32) -> u32 {
+    size.max(1).min(MAX_THUMB_SIZE)
+}
+
+fn load_source_image(job: &ThumbJob, target_size: u32) -> Result<image::DynamicImage, String> {
     match job.kind {
         ThumbKind::Image => image::open(&job.path).map_err(|err| err.to_string()),
-        ThumbKind::Video => render_video_thumbnail(&job.path, job.options.size),
+        ThumbKind::Video => render_video_thumbnail(&job.path, target_size),
+        ThumbKind::Svg => render_svg_thumbnail(&job.path, target_size),
     }
 }
 
@@ -301,6 +322,61 @@ fn render_video_thumbnail(path: &Path, size: u32) -> Result<image::DynamicImage,
 #[cfg(not(target_os = "windows"))]
 fn render_video_thumbnail(_path: &Path, _size: u32) -> Result<image::DynamicImage, String> {
     Err("Video thumbnails are not supported on this platform".to_string())
+}
+
+// Rasterize SVGs into bitmap previews so they are safe to display.
+fn render_svg_thumbnail(path: &Path, target_size: u32) -> Result<image::DynamicImage, String> {
+    let data = read_svg_data(path)?;
+    let mut options = usvg::Options::default();
+    options.resources_dir = path.parent().map(|parent| parent.to_path_buf());
+    let mut tree = usvg::Tree::from_data(&data, &options).map_err(|err| err.to_string())?;
+    // Resolve transforms and bounds so resvg renders the SVG correctly.
+    tree.calculate_abs_transforms();
+    tree.calculate_bounding_boxes();
+    let size = tree.size.to_int_size();
+    let (width, height) = fit_svg_size(size.width(), size.height(), target_size);
+    let mut pixmap =
+        Pixmap::new(width, height).ok_or_else(|| "Invalid SVG render size".to_string())?;
+    // resvg renders at the tree's intrinsic size, so we scale to the thumbnail size.
+    let transform = Transform::from_scale(
+        width as f32 / size.width() as f32,
+        height as f32 / size.height() as f32,
+    );
+    let mut pixmap_mut = pixmap.as_mut();
+    resvg::render(&tree, transform, &mut pixmap_mut);
+    let image = image::RgbaImage::from_raw(width, height, pixmap.take())
+        .ok_or_else(|| "Invalid SVG render buffer".to_string())?;
+    Ok(image::DynamicImage::ImageRgba8(image))
+}
+
+// Handle both plain SVG and gzipped SVGZ sources.
+fn read_svg_data(path: &Path) -> Result<Vec<u8>, String> {
+    let raw = fs::read(path).map_err(|err| err.to_string())?;
+    let ext = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    if ext != "svgz" {
+        return Ok(raw);
+    }
+    let mut decoder = flate2::read::GzDecoder::new(raw.as_slice());
+    let mut decompressed = Vec::new();
+    decoder
+        .read_to_end(&mut decompressed)
+        .map_err(|err| err.to_string())?;
+    Ok(decompressed)
+}
+
+fn fit_svg_size(width: u32, height: u32, max_size: u32) -> (u32, u32) {
+    if width == 0 || height == 0 {
+        return (max_size.max(1), max_size.max(1));
+    }
+    let max_edge = width.max(height) as f32;
+    let scale = (max_size.max(1) as f32) / max_edge;
+    let target_width = (width as f32 * scale).round().max(1.0) as u32;
+    let target_height = (height as f32 * scale).round().max(1.0) as u32;
+    (target_width, target_height)
 }
 
 #[cfg(target_os = "windows")]
@@ -510,6 +586,21 @@ fn resolve_thumb_meta(input_path: &Path, request: &ThumbRequest) -> Option<Thumb
     })
 }
 
+fn resolve_request_signature(path: &str, request: &ThumbRequest, key: &str) -> String {
+    if let Some(signature) = &request.signature {
+        return signature.clone();
+    }
+    let size = request
+        .size
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "none".to_string());
+    let modified = request
+        .modified
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "none".to_string());
+    format!("{key}:{path}:{size}:{modified}")
+}
+
 fn build_thumb_path(
     cache_dir: &Path,
     input_path: &Path,
@@ -543,6 +634,9 @@ fn to_epoch_ms(time: SystemTime) -> Option<u64> {
 fn select_thumbnail_kind(path: &Path, options: &ThumbOptions) -> Option<ThumbKind> {
     let ext = path.extension().and_then(|value| value.to_str()).unwrap_or("");
     let lower = ext.to_lowercase();
+    if options.allow_svgs && is_supported_svg(&lower) {
+        return Some(ThumbKind::Svg);
+    }
     if is_supported_image(&lower) {
         return Some(ThumbKind::Image);
     }
@@ -564,6 +658,10 @@ fn is_supported_image(extension: &str) -> bool {
         extension,
         "png" | "jpg" | "jpeg" | "webp" | "bmp" | "gif" | "tif" | "tiff" | "ico"
     )
+}
+
+fn is_supported_svg(extension: &str) -> bool {
+    matches!(extension, "svg" | "svgz")
 }
 
 fn is_supported_video(extension: &str) -> bool {

@@ -23,6 +23,7 @@ struct DirWatchState {
 #[derive(Clone, Serialize)]
 struct DirChangedPayload {
     path: String,
+    paths: Vec<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -30,6 +31,7 @@ struct DirRenamePayload {
     path: String,
     from: String,
     to: String,
+    paths: Vec<String>,
 }
 
 fn clear_watch(state: &mut DirWatchState) {
@@ -73,6 +75,11 @@ pub fn start_dir_watch(
             if matches!(event.kind, EventKind::Access(_)) {
                 return;
             }
+            let event_paths: Vec<String> = event
+                .paths
+                .iter()
+                .map(|path| path.to_string_lossy().to_string())
+                .collect();
             if let EventKind::Modify(ModifyKind::Name(mode)) = event.kind {
                 match mode {
                     RenameMode::From => {
@@ -85,12 +92,14 @@ pub fn start_dir_watch(
                     }
                     RenameMode::To => {
                         if let Some(to_path) = event.paths.get(0) {
+                            let to = to_path.to_string_lossy().to_string();
                             if let Ok(mut guard) = rename_buffer.lock() {
                                 if let Some(from) = guard.take() {
                                     let payload = DirRenamePayload {
                                         path: target_path.clone(),
-                                        from,
-                                        to: to_path.to_string_lossy().to_string(),
+                                        from: from.clone(),
+                                        to: to.clone(),
+                                        paths: vec![from, to],
                                     };
                                     let _ = app_handle.emit("dir_rename", payload);
                                     return;
@@ -104,6 +113,7 @@ pub fn start_dir_watch(
                                 path: target_path.clone(),
                                 from: event.paths[0].to_string_lossy().to_string(),
                                 to: event.paths[1].to_string_lossy().to_string(),
+                                paths: event_paths.clone(),
                             };
                             let _ = app_handle.emit("dir_rename", payload);
                             return;
@@ -114,6 +124,7 @@ pub fn start_dir_watch(
             }
             let payload = DirChangedPayload {
                 path: target_path.clone(),
+                paths: event_paths,
             };
             let _ = app_handle.emit("dir_changed", payload);
         },

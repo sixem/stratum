@@ -9,6 +9,7 @@ export { getExtension, getFileKind, isPdfLikeExtension, isSvgLikeExtension } fro
 export { initDebug, makeDebug, measure, measureAsync } from "./debug";
 export { formatBytes, formatCount, formatDate, formatPercent } from "./format";
 export { handleMiddleClick } from "./mouse";
+export { getPlatformLabel } from "./platform";
 export { getDropTargetFromPoint, getDropTargetHit } from "./dropTarget";
 export type { DropTarget, DropTargetHit } from "./dropTarget";
 export { buildDropCandidate, joinPath, normalizeDropPath, sanitizeDropPath } from "./dropPaths";
