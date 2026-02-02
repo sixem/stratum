@@ -32,7 +32,7 @@ import {
   useThumbnails,
   useWindowSize,
 } from "@/hooks";
-import { getPlatformLabel, makeDebug, normalizePath } from "@/lib";
+import { getNextTrailPath, getPlatformLabel, makeDebug, normalizePath } from "@/lib";
 import { usePromptStore } from "@/modules";
 import { APP_DESCRIPTION, APP_NAME, APP_VERSION } from "@/constants";
 import "@/styles/app.scss";
@@ -242,6 +242,16 @@ const App = () => {
       : null;
   // Keep a per-tab trail so breadcrumb crumbs can show the deepest path visited.
   const crumbTrailPath = activeTab?.crumbTrailPath ?? viewPath;
+  // Step into the next "ghost" crumb when a deeper trail exists.
+  const nextTrailPath = useMemo(
+    () => getNextTrailPath(viewPath, crumbTrailPath),
+    [crumbTrailPath, viewPath],
+  );
+  const canGoDown = Boolean(nextTrailPath);
+  const handleDown = useCallback(() => {
+    if (!nextTrailPath) return;
+    browseFromView(nextTrailPath);
+  }, [browseFromView, nextTrailPath]);
   const viewKey = `${activeTabId ?? "none"}:${viewPathKey}`;
   const lastView = lastViewRef.current;
   const shouldResetScroll =
@@ -528,9 +538,11 @@ const App = () => {
       onBack: handleBack,
       onForward: handleForward,
       onUp: handleUp,
+      onDown: handleDown,
       canGoBack,
       canGoForward,
       canGoUp,
+      canGoDown,
       loading,
     },
     pathInputsBar: {
