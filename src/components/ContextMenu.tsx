@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ContextMenuItem } from "@/types";
 import { CONTEXT_MENU_EDGE, CONTEXT_MENU_GAP, CONTEXT_SUBMENU_GAP } from "@/constants";
+import { PressButton } from "./PressButton";
 
 type ContextMenuProps = {
   open: boolean;
@@ -169,7 +170,7 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
               setOpenSubmenuId(item.id);
             }}
           >
-            <button
+            <PressButton
               type="button"
               className="context-item context-item--submenu"
               onClick={(event) => {
@@ -190,7 +191,7 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
                   &gt;
                 </span>
               </span>
-            </button>
+            </PressButton>
             {isOpen ? (
               <div
                 ref={submenuRef}
@@ -208,7 +209,7 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
       }
       const isRadio = typeof item.active === "boolean";
       return (
-        <button
+        <PressButton
           key={item.id}
           type="button"
           className={`context-item${item.active ? " is-active" : ""}`}
@@ -232,7 +233,7 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
           <span className="context-check">{item.active ? "x" : ""}</span>
           <span className="context-label">{item.label}</span>
           {item.hint ? <span className="context-hint">{item.hint}</span> : null}
-        </button>
+        </PressButton>
       );
     });
 

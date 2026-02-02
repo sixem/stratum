@@ -1,5 +1,6 @@
 // Collapsible sidebar section wrapper.
 import type { ReactNode } from "react";
+import { PressButton } from "./PressButton";
 
 type SidebarSectionProps = {
   title: string;
@@ -11,7 +12,7 @@ type SidebarSectionProps = {
 export const SidebarSection = ({ title, isOpen, onToggle, children }: SidebarSectionProps) => {
   return (
     <>
-      <button
+      <PressButton
         type="button"
         className={`section-toggle${isOpen ? " is-open" : ""}`}
         onClick={onToggle}
@@ -23,7 +24,7 @@ export const SidebarSection = ({ title, isOpen, onToggle, children }: SidebarSec
       >
         <span>{title}</span>
         <span className="toggle-mark">{isOpen ? "-" : "+"}</span>
-      </button>
+      </PressButton>
       {isOpen ? <div className="places">{children}</div> : null}
     </>
   );

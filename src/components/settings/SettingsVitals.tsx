@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { formatBytes, getPlatformLabel } from "@/lib";
+import { PressButton } from "../PressButton";
 import { usePromptStore, useSettingsStore, useShellStore } from "@/modules";
 
 type SettingsVitalsProps = {
@@ -212,9 +213,9 @@ export const SettingsVitals = ({ open }: SettingsVitalsProps) => {
       </div>
       {ffmpegCheckReady && !ffmpegDetected ? (
         <div className="settings-vitals-actions">
-          <button type="button" className="btn" onClick={handleLocateFfmpeg}>
+          <PressButton type="button" className="btn" onClick={handleLocateFfmpeg}>
             Locate FFmpeg
-          </button>
+          </PressButton>
         </div>
       ) : null}
     </div>

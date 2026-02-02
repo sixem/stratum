@@ -8,6 +8,8 @@ import {
   normalizeSidebarSectionOrder,
 } from "@/modules";
 import { EyeIcon, EyeOffIcon } from "@/components";
+import { PressButton } from "../PressButton";
+import { useDeferredRange } from "./useDeferredRange";
 import type { SettingsUpdateHandler } from "./types";
 
 type SettingsSidebarSectionProps = {
@@ -30,6 +32,10 @@ export const SettingsSidebarSection = ({
   const normalizedSidebarOrder = normalizeSidebarSectionOrder(sidebarSectionOrder);
   const normalizedHiddenSections = normalizeSidebarHiddenSections(sidebarHiddenSections);
   const hiddenSet = new Set(normalizedHiddenSections);
+  const recentRange = useDeferredRange({
+    value: sidebarRecentLimit,
+    onCommit: (value) => onUpdate({ sidebarRecentLimit: value }),
+  });
   const buildHiddenList = (nextHidden: Set<SidebarSectionId>) =>
     SIDEBAR_SECTION_DEFINITIONS.filter((item) => nextHidden.has(item.id)).map(
       (item) => item.id,
@@ -71,12 +77,9 @@ export const SettingsSidebarSection = ({
             min={SIDEBAR_RECENT_LIMIT_MIN}
             max={SIDEBAR_RECENT_LIMIT_MAX}
             step={RECENT_STEP}
-            value={sidebarRecentLimit}
-            onChange={(event) =>
-              onUpdate({ sidebarRecentLimit: Number(event.currentTarget.value) })
-            }
+            {...recentRange.bind}
           />
-          <span className="settings-value">{sidebarRecentLimit}</span>
+          <span className="settings-value">{recentRange.draft}</span>
         </div>
       </div>
       <div className="settings-item is-stacked">
@@ -101,7 +104,7 @@ export const SettingsSidebarSection = ({
                   {section?.label ?? sectionIdValue}
                 </span>
                 <div className="settings-order-actions">
-                  <button
+                  <PressButton
                     type="button"
                     className={`settings-order-visibility${
                       isHidden ? " is-hidden" : ""
@@ -116,8 +119,8 @@ export const SettingsSidebarSection = ({
                     ) : (
                       <EyeIcon className="settings-order-icon" />
                     )}
-                  </button>
-                  <button
+                  </PressButton>
+                  <PressButton
                     type="button"
                     className="btn ghost"
                     disabled={index === 0}
@@ -125,8 +128,8 @@ export const SettingsSidebarSection = ({
                     aria-label={`Move ${section?.label ?? sectionIdValue} up`}
                   >
                     Up
-                  </button>
-                  <button
+                  </PressButton>
+                  <PressButton
                     type="button"
                     className="btn ghost"
                     disabled={index === normalizedSidebarOrder.length - 1}
@@ -134,7 +137,7 @@ export const SettingsSidebarSection = ({
                     aria-label={`Move ${section?.label ?? sectionIdValue} down`}
                   >
                     Down
-                  </button>
+                  </PressButton>
                 </div>
               </div>
             );

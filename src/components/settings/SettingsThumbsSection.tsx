@@ -1,5 +1,7 @@
 // Thumbnail generation and preview tuning.
 import type { ThumbnailFit } from "@/modules";
+import { PressButton } from "../PressButton";
+import { useDeferredRange } from "./useDeferredRange";
 import type { SettingsUpdateHandler } from "./types";
 
 type SettingsThumbsSectionProps = {
@@ -36,7 +38,16 @@ export const SettingsThumbsSection = ({
 }: SettingsThumbsSectionProps) => {
   const isThumbsDisabled = !thumbnailsEnabled;
   const canAdjustQuality = !isThumbsDisabled && thumbnailFormat === "jpeg";
-  const qualityLabel = thumbnailFormat === "jpeg" ? `${thumbnailQuality}%` : "Lossless";
+  const sizeRange = useDeferredRange({
+    value: thumbnailSize,
+    onCommit: (value) => onUpdate({ thumbnailSize: value }),
+  });
+  const qualityRange = useDeferredRange({
+    value: thumbnailQuality,
+    onCommit: (value) => onUpdate({ thumbnailQuality: value }),
+  });
+  const qualityLabel =
+    thumbnailFormat === "jpeg" ? `${qualityRange.draft}%` : "Lossless";
 
   return (
     <section className="settings-section" id={sectionId}>
@@ -66,11 +77,10 @@ export const SettingsThumbsSection = ({
             min={SIZE_MIN}
             max={SIZE_MAX}
             step={SIZE_STEP}
-            value={thumbnailSize}
             disabled={isThumbsDisabled}
-            onChange={(event) => onUpdate({ thumbnailSize: Number(event.currentTarget.value) })}
+            {...sizeRange.bind}
           />
-          <span className="settings-value">{thumbnailSize}px</span>
+          <span className="settings-value">{sizeRange.draft}px</span>
         </div>
       </div>
       <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
@@ -84,11 +94,8 @@ export const SettingsThumbsSection = ({
             min={QUALITY_MIN}
             max={QUALITY_MAX}
             step={QUALITY_STEP}
-            value={thumbnailQuality}
             disabled={!canAdjustQuality}
-            onChange={(event) =>
-              onUpdate({ thumbnailQuality: Number(event.currentTarget.value) })
-            }
+            {...qualityRange.bind}
           />
           <span className="settings-value">{qualityLabel}</span>
         </div>
@@ -153,22 +160,22 @@ export const SettingsThumbsSection = ({
           </div>
         </div>
         <div className="settings-pills" role="group" aria-label="Thumbnail display">
-          <button
+          <PressButton
             type="button"
             disabled={isThumbsDisabled}
             className={`settings-pill${thumbnailFit === "cover" ? " is-active" : ""}`}
             onClick={() => onUpdate({ thumbnailFit: "cover" })}
           >
             Cover
-          </button>
-          <button
+          </PressButton>
+          <PressButton
             type="button"
             disabled={isThumbsDisabled}
             className={`settings-pill${thumbnailFit === "contain" ? " is-active" : ""}`}
             onClick={() => onUpdate({ thumbnailFit: "contain" })}
           >
             Fit
-          </button>
+          </PressButton>
         </div>
       </div>
     </section>

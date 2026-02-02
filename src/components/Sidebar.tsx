@@ -9,6 +9,7 @@ import {
   normalizeSidebarSectionOrder,
   refreshSessionHint,
 } from "@/modules";
+import { PressButton } from "./PressButton";
 import { TooltipWrapper } from "./Tooltip";
 import { SidebarSection } from "./SidebarSection";
 import type { Place } from "@/types";
@@ -34,8 +35,6 @@ type SidebarItemProps = {
   onSelectNewTab?: (path: string) => void;
 };
 
-const SIDEBAR_RECENT_LIMIT = 4;
-
 const SidebarItem = ({
   path,
   title,
@@ -56,7 +55,7 @@ const SidebarItem = ({
 
   return (
     <TooltipWrapper text={path}>
-      <button
+      <PressButton
         type="button"
         className={`place${isRecent ? " is-recent" : ""}${isActive ? " is-active" : ""}`}
         onClick={() => onSelect(path)}
@@ -65,7 +64,7 @@ const SidebarItem = ({
       >
         <span className="place-name">{title}</span>
         <span className="place-path">{subtitle}</span>
-      </button>
+      </PressButton>
     </TooltipWrapper>
   );
 };
@@ -87,7 +86,6 @@ export const Sidebar = ({
   const hiddenSectionIds = normalizeSidebarHiddenSections(hiddenSections);
   const hiddenSectionSet = new Set(hiddenSectionIds);
   const [hint, setHint] = useState(() => getSessionHint());
-  const visibleRecents = recentJumps.slice(0, SIDEBAR_RECENT_LIMIT);
 
   const renderSection = (sectionId: SidebarSectionId) => {
     switch (sectionId) {
@@ -125,7 +123,7 @@ export const Sidebar = ({
             {recentJumps.length === 0 ? (
               <div className="place is-empty">No jumps yet</div>
             ) : (
-              visibleRecents.map((path) => (
+              recentJumps.map((path) => (
                 <SidebarItem
                   key={path}
                   path={path}
@@ -145,14 +143,14 @@ export const Sidebar = ({
           <div className="sidebar-tips">
             <div className="section-title">Tips</div>
             <div className="tips">
-              <button
+              <PressButton
                 type="button"
                 className="tip"
                 onClick={() => setHint(refreshSessionHint())}
                 aria-label="Show a new tip"
               >
                 {hint.text}
-              </button>
+              </PressButton>
             </div>
           </div>
         );

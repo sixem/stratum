@@ -15,6 +15,7 @@ export { PathInputsBar } from "./PathInputsBar";
 export { PathBarActions } from "./PathBarActions";
 export { PathCrumbsBar } from "./PathCrumbsBar";
 export { PerfProfiler } from "./PerfProfiler";
+export { PressButton } from "./PressButton";
 export { PromptModal } from "./PromptModal";
 export { SelectionRect } from "./SelectionRect";
 export { SettingsOverlay } from "./SettingsOverlay";

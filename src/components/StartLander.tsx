@@ -2,6 +2,7 @@
 import { formatBytes, handleMiddleClick, normalizePath } from "@/lib";
 import type { DriveInfo } from "@/types";
 import { EmptyState } from "./EmptyState";
+import { PressButton } from "./PressButton";
 
 type StartLanderProps = {
   recentJumps: string[];
@@ -12,8 +13,6 @@ type StartLanderProps = {
   onOpenDrive: (path: string) => void;
   onOpenDriveNewTab?: (path: string) => void;
 };
-
-const LANDER_RECENT_LIMIT = 10;
 
 const formatDriveLabel = (drive: string) => {
   const trimmed = drive.trim().replace(/[\\/]+$/, "");
@@ -118,8 +117,7 @@ export const StartLander = ({
   onOpenDrive,
   onOpenDriveNewTab,
 }: StartLanderProps) => {
-  // Highlight the broader recent history on the empty-tab landing view.
-  const visibleRecents = recentJumps.slice(0, LANDER_RECENT_LIMIT);
+  const visibleRecents = recentJumps;
   const driveInfoMap = buildDriveInfoMap(driveInfo);
   const knownDrives = drives.filter((drive) => {
     const info = driveInfoMap.get(normalizePath(drive));
@@ -162,7 +160,7 @@ export const StartLander = ({
                   const name = formatDriveName(info);
                   const usage = formatUsage(info);
                   return (
-                    <button
+                    <PressButton
                       key={drive}
                       type="button"
                       className="lander-drive"
@@ -195,7 +193,7 @@ export const StartLander = ({
                           }}
                         />
                       </div>
-                    </button>
+                    </PressButton>
                   );
                 })}
               </div>
@@ -211,7 +209,7 @@ export const StartLander = ({
                   const title = formatRecentLabel(path);
                   const driveTag = formatRecentDriveTag(path);
                   return (
-                    <button
+                    <PressButton
                       key={path}
                       type="button"
                       className="place lander-place"
@@ -228,7 +226,7 @@ export const StartLander = ({
                         ) : null}
                       </div>
                       <span className="place-path lander-place-path">{path}</span>
-                    </button>
+                    </PressButton>
                   );
                 })}
               </div>

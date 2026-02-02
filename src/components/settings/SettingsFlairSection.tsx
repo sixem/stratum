@@ -1,5 +1,6 @@
 // Visual flair toggles (accent + ambient effects).
 import type { AccentTheme } from "@/modules";
+import { PressButton } from "../PressButton";
 import type { SettingsUpdateHandler } from "./types";
 
 type SettingsFlairSectionProps = {
@@ -39,7 +40,7 @@ export const SettingsFlairSection = ({
         </div>
         <div className="settings-pills" role="group" aria-label="Accent color">
           {ACCENT_THEMES.map((theme) => (
-            <button
+            <PressButton
               key={theme.id}
               type="button"
               data-accent={theme.id}
@@ -48,7 +49,7 @@ export const SettingsFlairSection = ({
             >
               <span className="settings-swatch" aria-hidden="true" />
               {theme.label}
-            </button>
+            </PressButton>
           ))}
         </div>
       </div>

@@ -5,6 +5,7 @@ import { useNowTick } from "@/hooks";
 import { useTransferStore } from "@/modules";
 import { TransferStatusItem } from "./TransferStatusItem";
 import { buildTransferSummary } from "./transferStatusView";
+import { PressButton } from "./PressButton";
 
 export const TransferStatusButton = () => {
   const jobs = useTransferStore((state) => state.jobs);
@@ -54,7 +55,7 @@ export const TransferStatusButton = () => {
 
   return (
     <div className="transfer-status tnum" ref={containerRef}>
-      <button
+      <PressButton
         type="button"
         className={`transfer-button${open ? " is-open" : ""}`}
         aria-haspopup="dialog"
@@ -69,7 +70,7 @@ export const TransferStatusButton = () => {
         />
         <span className="transfer-label">Transfers</span>
         <span className="transfer-count tnum">{summary.countLabel}</span>
-      </button>
+      </PressButton>
       {open ? (
         <div
           className="transfer-popover"

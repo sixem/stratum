@@ -1,6 +1,7 @@
 // Deprecated view settings section; superseded by SettingsGeneralSection.
 import type { ViewMode } from "@/types";
 import type { SettingsUpdateHandler } from "./types";
+import { PressButton } from "../PressButton";
 
 type SettingsViewSectionProps = {
   sectionId: string;
@@ -32,20 +33,20 @@ export const SettingsViewSection = ({
           <div className="settings-desc">Used for new tabs and new sessions.</div>
         </div>
         <div className="settings-pills" role="group" aria-label="Default view">
-          <button
+          <PressButton
             type="button"
             className={`settings-pill${defaultViewMode === "thumbs" ? " is-active" : ""}`}
             onClick={() => onUpdate({ defaultViewMode: "thumbs" })}
           >
             Grid
-          </button>
-          <button
+          </PressButton>
+          <PressButton
             type="button"
             className={`settings-pill${defaultViewMode === "list" ? " is-active" : ""}`}
             onClick={() => onUpdate({ defaultViewMode: "list" })}
           >
             List
-          </button>
+          </PressButton>
         </div>
       </div>
       <div className="settings-item">

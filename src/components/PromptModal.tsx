@@ -1,6 +1,7 @@
 // Global prompt modal driven by the prompt store.
 import { useEffect, useRef } from "react";
 import { isEditableElement } from "@/lib";
+import { PressButton } from "./PressButton";
 import { usePromptStore, type PromptConfig } from "@/modules";
 import { useModalFocusTrap } from "@/hooks";
 
@@ -105,28 +106,28 @@ export const PromptModal = () => {
         {showActions ? (
           <div className="prompt-actions">
             {showCancel ? (
-              <button type="button" className="btn ghost" onClick={handleCancel}>
+              <PressButton type="button" className="btn ghost" onClick={handleCancel}>
                 {cancelLabel}
-              </button>
+              </PressButton>
             ) : null}
             {actions.map((action, index) => {
               const variant = action.variant ?? "ghost";
               const className = variant === "ghost" ? "btn ghost" : "btn";
               return (
-                <button
+                <PressButton
                   key={`${action.label}-${index}`}
                   type="button"
                   className={className}
                   onClick={() => handleAction(action)}
                 >
                   {action.label}
-                </button>
+                </PressButton>
               );
             })}
             {showConfirm ? (
-              <button type="button" className="btn" onClick={handleConfirm}>
+              <PressButton type="button" className="btn" onClick={handleConfirm}>
                 {confirmLabel}
-              </button>
+              </PressButton>
             ) : null}
           </div>
         ) : null}

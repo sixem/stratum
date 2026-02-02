@@ -1,5 +1,6 @@
 // Sortable list header for the file list view.
 import { useCallback } from "react";
+import { PressButton } from "../PressButton";
 import { nextSortState } from "@/lib";
 import type { SortKey, SortState } from "@/types";
 
@@ -19,7 +20,7 @@ export const ListHeader = ({ sortState, onSortChange }: ListHeaderProps) => {
 
   return (
     <div className="list-header" role="row" data-selection-ignore="true">
-      <button
+      <PressButton
         type="button"
         className="list-header-button"
         data-sort-active={sortState.key === "name" ? "true" : "false"}
@@ -34,8 +35,8 @@ export const ListHeader = ({ sortState, onSortChange }: ListHeaderProps) => {
         onClick={() => handleSortClick("name")}
       >
         Name
-      </button>
-      <button
+      </PressButton>
+      <PressButton
         type="button"
         className="list-header-button is-right"
         data-sort-active={sortState.key === "size" ? "true" : "false"}
@@ -50,8 +51,8 @@ export const ListHeader = ({ sortState, onSortChange }: ListHeaderProps) => {
         onClick={() => handleSortClick("size")}
       >
         Size
-      </button>
-      <button
+      </PressButton>
+      <PressButton
         type="button"
         className="list-header-button is-right"
         data-sort-active={sortState.key === "modified" ? "true" : "false"}
@@ -66,7 +67,7 @@ export const ListHeader = ({ sortState, onSortChange }: ListHeaderProps) => {
         onClick={() => handleSortClick("modified")}
       >
         Modified
-      </button>
+      </PressButton>
     </div>
   );
 };
