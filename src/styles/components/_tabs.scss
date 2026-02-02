@@ -14,7 +14,7 @@
 .tabs {
   display: flex;
   align-items: stretch;
-  gap: 8px;
+  gap: 5px;
   overflow: auto;
   scrollbar-width: none;
   min-width: 0;
@@ -37,7 +37,7 @@
     border: 1px solid transparent;
     border-top-width: 2px;
     transition: none;
-    border-radius: 5px;
+    border-radius: 3px;
     cursor: grab;
     padding: 2px 6px 2px 0;
     box-sizing: border-box;
@@ -113,7 +113,7 @@
 
   .tab-close {
     padding: 0;
-    border-radius: 2px;
+    border-radius: 6px;
     border: 1px solid transparent;
     display: grid;
     place-items: center;
@@ -125,7 +125,7 @@
     &:hover {
       opacity: 1;
       color: var(--text);
-      background: #1a2030;
+      background: #3e465d;
     }
   }
 

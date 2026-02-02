@@ -78,9 +78,9 @@ export const TextFileIcon = ({ className }: IconProps) => {
   return (
     <svg viewBox="0 0 512 512" aria-hidden="true" className={className} fill="currentColor">
       <path d={FILE_SHEET_PATH} />
-      <rect x="168" y="236" width="176" height="14" rx="7" />
-      <rect x="168" y="264" width="176" height="14" rx="7" />
-      <rect x="168" y="292" width="176" height="14" rx="7" />
+      <rect x="168" y="206" width="176" height="14" rx="7" />
+      <rect x="168" y="234" width="176" height="14" rx="7" />
+      <rect x="168" y="262" width="176" height="14" rx="7" />
     </svg>
   );
 };
@@ -118,7 +118,7 @@ export const SecureFileIcon = ({ className }: IconProps) => {
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        transform="translate(148 210) scale(9)"
+        transform="translate(148 130) scale(9)"
       >
         <path d="M12.3212 10.6852L4 19L6 21M7 16L9 18M20 7.5C20 9.98528 17.9853 12 15.5 12C13.0147 12 11 9.98528 11 7.5C11 5.01472 13.0147 3 15.5 3C17.9853 3 20 5.01472 20 7.5Z" />
       </g>

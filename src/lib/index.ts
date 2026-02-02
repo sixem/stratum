@@ -14,6 +14,12 @@ export { getDropTargetFromPoint, getDropTargetHit } from "./dropTarget";
 export type { DropTarget, DropTargetHit } from "./dropTarget";
 export { buildDropCandidate, joinPath, normalizeDropPath, sanitizeDropPath } from "./dropPaths";
 export type { DropCandidate } from "./dropPaths";
+export {
+  buildPathCrumbs,
+  getNextTrailPath,
+  resolvePathCrumbs,
+} from "./pathCrumbs";
+export type { PathCrumb, PathCrumbsState } from "./pathCrumbs";
 export { activeDrive, getParentPath, getPathName, normalizePath, tabLabel } from "./paths";
 export { entryExists, getDriveKey, toMessage } from "./fsUtils";
 export { applyHiddenExtension, buildBulkRenamePlan, getRenameInputValue } from "./renamePlan";

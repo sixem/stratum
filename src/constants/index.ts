@@ -7,7 +7,13 @@ export {
   TOOLTIP_EDGE_PADDING,
   TOOLTIP_GAP,
 } from "./tooltip";
-export { APP_DESCRIPTION, APP_GITHUB_URL, APP_NAME, APP_VERSION } from "./app";
+export {
+  APP_DESCRIPTION,
+  APP_ISSUES_URL,
+  APP_NAME,
+  APP_REPO_URL,
+  APP_VERSION,
+} from "./app";
 export { FILE_SHEET_PATH } from "./assets";
 export { IMAGE_CONVERT_EXTENSIONS, VIDEO_CONVERT_EXTENSIONS } from "./convert";
 export {

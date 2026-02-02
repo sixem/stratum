@@ -203,9 +203,8 @@
   }
 
   .about-links {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
+    display: grid;
+    gap: 8px;
     font-size: 12px;
 
     a {
