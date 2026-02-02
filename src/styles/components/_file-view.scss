@@ -235,6 +235,10 @@
     cursor: default;
   }
 
+  .thumb-card.is-renaming .thumb-meta {
+    gap: 4px;
+  }
+
   .thumb-card:hover {
     border-color: rgba(255, 255, 255, 0.16);
     background: var(--surface-control-strong);
@@ -399,12 +403,6 @@
     pointer-events: none;
     padding: 24px;
   }
-
-  .rename-input-grid {
-    font-size: 0.75rem;
-    line-height: 0.875rem;
-    font-weight: 600;
-  }
 }
 
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card {
@@ -459,7 +457,7 @@
     display: block;
     width: 100%;
     min-width: 0;
-    padding: 0;
+    padding: 2px 4px;
     border: none;
     border-radius: 0;
     background: transparent;
@@ -486,9 +484,22 @@
   }
 }
 
+// Keep grid rename typography aligned with the thumb name styles.
+:where(.thumb-shell) .rename-input.rename-input-grid {
+  font-size: 12px;
+  line-height: 14px;
+  font-weight: 600;
+}
+
 :where(.file-list) {
   .row.is-renaming .rename-input {
     flex: 1;
+  }
+
+  // Offset rename padding so the row height stays close to the default.
+  .row.is-renaming {
+    padding-top: 8px;
+    padding-bottom: 8px;
   }
 }
 
@@ -717,6 +728,7 @@
 
   .row.is-renaming .name {
     overflow: visible;
+    gap: 8px;
   }
 
   .row.is-parent {
@@ -776,9 +788,18 @@
   border-radius: 6px;
 }
 
+:root[data-compact="true"] :where(.file-list) .row.is-renaming {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
 :root[data-compact="true"] :where(.file-list) .row .name {
   gap: 8px;
   font-size: 13px;
+}
+
+:root[data-compact="true"] :where(.file-list) .row.is-renaming .name {
+  gap: 6px;
 }
 
 :root[data-compact="true"] :where(.file-list) .row .name::before {
