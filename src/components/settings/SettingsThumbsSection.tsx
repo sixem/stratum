@@ -9,6 +9,7 @@ type SettingsThumbsSectionProps = {
   thumbnailQuality: number;
   thumbnailFormat: "webp" | "jpeg";
   thumbnailVideos: boolean;
+  thumbnailSvgs: boolean;
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;
   onUpdate: SettingsUpdateHandler;
@@ -28,6 +29,7 @@ export const SettingsThumbsSection = ({
   thumbnailQuality,
   thumbnailFormat,
   thumbnailVideos,
+  thumbnailSvgs,
   thumbnailFit,
   thumbnailAppIcons,
   onUpdate,
@@ -104,6 +106,23 @@ export const SettingsThumbsSection = ({
             checked={thumbnailVideos}
             disabled={isThumbsDisabled}
             onChange={(event) => onUpdate({ thumbnailVideos: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
+      </div>
+      <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
+        <div>
+          <div className="settings-label">SVG previews</div>
+          <div className="settings-desc">
+            Rasterize SVGs into safe thumbnails using the same size cap.
+          </div>
+        </div>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={thumbnailSvgs}
+            disabled={isThumbsDisabled}
+            onChange={(event) => onUpdate({ thumbnailSvgs: event.currentTarget.checked })}
           />
           <span />
         </label>

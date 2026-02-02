@@ -147,14 +147,25 @@ export const useGridSizing = ({
   );
   const viewportWidthRef = useRef(viewportWidth);
   const resizeDebounceRef = useRef<number | null>(null);
+  const windowResizeRef = useRef(false);
+  const windowResizeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     viewportWidthRef.current = viewportWidth;
   }, [viewportWidth]);
 
   useEffect(() => {
-    // Debounce auto grid sizing during window resize to avoid layout churn.
+    // Keep auto sizing responsive outside of window resizes.
     if (gridSize !== "auto") {
+      if (resizeDebounceRef.current != null) {
+        window.clearTimeout(resizeDebounceRef.current);
+        resizeDebounceRef.current = null;
+      }
+      setStableViewportWidth(viewportWidth);
+      return;
+    }
+
+    if (!windowResizeRef.current) {
       if (resizeDebounceRef.current != null) {
         window.clearTimeout(resizeDebounceRef.current);
         resizeDebounceRef.current = null;
@@ -180,11 +191,29 @@ export const useGridSizing = ({
   }, [gridSize, viewportWidth]);
 
   useEffect(() => {
-    // Snap to the current viewport on tab/view switches without breaking resize debounce.
-    if (resizeDebounceRef.current != null) {
-      window.clearTimeout(resizeDebounceRef.current);
-      resizeDebounceRef.current = null;
-    }
+    const handleWindowResize = () => {
+      windowResizeRef.current = true;
+      if (windowResizeTimerRef.current != null) {
+        window.clearTimeout(windowResizeTimerRef.current);
+      }
+      windowResizeTimerRef.current = window.setTimeout(() => {
+        windowResizeRef.current = false;
+        windowResizeTimerRef.current = null;
+      }, AUTO_GRID_RESIZE_DEBOUNCE_MS);
+    };
+
+    window.addEventListener("resize", handleWindowResize);
+    return () => {
+      window.removeEventListener("resize", handleWindowResize);
+      if (windowResizeTimerRef.current != null) {
+        window.clearTimeout(windowResizeTimerRef.current);
+        windowResizeTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    // Snap to the current viewport on tab/view switches.
     const nextWidth = viewportWidthRef.current;
     if (gridSize === "auto" && nextWidth <= 0) return;
     setStableViewportWidth(nextWidth);

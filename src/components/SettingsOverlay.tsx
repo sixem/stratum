@@ -32,6 +32,7 @@ export const SettingsOverlay = ({
     thumbnailQuality,
     thumbnailFormat,
     thumbnailVideos,
+    thumbnailSvgs,
     thumbnailCacheMb,
     thumbnailFit,
     thumbnailAppIcons,
@@ -287,6 +288,7 @@ export const SettingsOverlay = ({
               thumbnailQuality={thumbnailQuality}
               thumbnailFormat={thumbnailFormat}
               thumbnailVideos={thumbnailVideos}
+              thumbnailSvgs={thumbnailSvgs}
               thumbnailFit={thumbnailFit}
               thumbnailAppIcons={thumbnailAppIcons}
               onUpdate={updateSettings}

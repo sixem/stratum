@@ -19,6 +19,9 @@ import type { ThumbnailIconProps } from "./gridCard.types";
 import { ThumbnailPreview } from "./ThumbnailPreview";
 
 const resolveFallbackIcon = (fileKind: FileKind, extension: string | null) => {
+  if (isSvgLikeExtension(extension)) {
+    return SvgIcon;
+  }
   switch (fileKind) {
     case "document":
       return isPdfLikeExtension(extension) ? PdfIcon : TextFileIcon;
@@ -27,7 +30,7 @@ const resolveFallbackIcon = (fileKind: FileKind, extension: string | null) => {
     case "audio":
       return AudioIcon;
     case "image":
-      return isSvgLikeExtension(extension) ? SvgIcon : ImageIcon;
+      return ImageIcon;
     case "executable":
       return ExecutableFileIcon;
     case "archive":

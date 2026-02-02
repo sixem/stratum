@@ -15,7 +15,7 @@ import type { EntryMeta, FileEntry, RenameCommitReason, SortState } from "@/type
 import { EmptyState } from "./EmptyState";
 import { LoadingIndicator } from "./LoadingIndicator";
 import { SelectionRect } from "./SelectionRect";
-import { EntryRow, ParentRow } from "./fileList";
+import { EntryRow, ParentRow } from "./fileList/index";
 import { ListHeader } from "./fileList/ListHeader";
 import { useListLayout } from "./fileList/useListLayout";
 import { useListMeta } from "./fileList/useListMeta";

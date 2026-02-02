@@ -13,6 +13,8 @@ type StartLanderProps = {
   onOpenDriveNewTab?: (path: string) => void;
 };
 
+const LANDER_RECENT_LIMIT = 10;
+
 const formatDriveLabel = (drive: string) => {
   const trimmed = drive.trim().replace(/[\\/]+$/, "");
   if (!trimmed) return "";
@@ -116,7 +118,8 @@ export const StartLander = ({
   onOpenDrive,
   onOpenDriveNewTab,
 }: StartLanderProps) => {
-  const visibleRecents = recentJumps.slice(0, 5);
+  // Highlight the broader recent history on the empty-tab landing view.
+  const visibleRecents = recentJumps.slice(0, LANDER_RECENT_LIMIT);
   const driveInfoMap = buildDriveInfoMap(driveInfo);
   const knownDrives = drives.filter((drive) => {
     const info = driveInfoMap.get(normalizePath(drive));

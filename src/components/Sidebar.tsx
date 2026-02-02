@@ -34,6 +34,8 @@ type SidebarItemProps = {
   onSelectNewTab?: (path: string) => void;
 };
 
+const SIDEBAR_RECENT_LIMIT = 4;
+
 const SidebarItem = ({
   path,
   title,
@@ -85,6 +87,7 @@ export const Sidebar = ({
   const hiddenSectionIds = normalizeSidebarHiddenSections(hiddenSections);
   const hiddenSectionSet = new Set(hiddenSectionIds);
   const [hint, setHint] = useState(() => getSessionHint());
+  const visibleRecents = recentJumps.slice(0, SIDEBAR_RECENT_LIMIT);
 
   const renderSection = (sectionId: SidebarSectionId) => {
     switch (sectionId) {
@@ -122,7 +125,7 @@ export const Sidebar = ({
             {recentJumps.length === 0 ? (
               <div className="place is-empty">No jumps yet</div>
             ) : (
-              recentJumps.map((path) => (
+              visibleRecents.map((path) => (
                 <SidebarItem
                   key={path}
                   path={path}
