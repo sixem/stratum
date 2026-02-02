@@ -101,6 +101,8 @@ export type RestoreReport = {
 // Emitted when the native watcher detects a change in a watched directory.
 export type DirChangedEvent = {
   path: string;
+  // Paths reported by the native watcher (when available).
+  paths?: string[];
 };
 
 // Emitted when the native watcher detects a rename in a watched directory.
@@ -108,4 +110,6 @@ export type DirRenameEvent = {
   path: string;
   from: string;
   to: string;
+  // Paths reported by the native watcher (when available).
+  paths?: string[];
 };
