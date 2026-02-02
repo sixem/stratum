@@ -235,9 +235,6 @@
     cursor: default;
   }
 
-  .thumb-card.is-renaming .thumb-meta {
-    gap: 4px;
-  }
 
   .thumb-card:hover {
     border-color: rgba(255, 255, 255, 0.16);
@@ -457,10 +454,12 @@
     display: block;
     width: 100%;
     min-width: 0;
-    padding: 2px 4px;
+    padding: 2px 6px;
+    margin: -2px 0;
     border: none;
-    border-radius: 0;
-    background: transparent;
+    border-radius: 4px;
+    background: rgba(8, 10, 16, 0.75);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
     color: inherit;
     font: inherit;
     line-height: inherit;
@@ -470,7 +469,9 @@
 
   .rename-input:focus {
     outline: none;
-    box-shadow: none;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.24),
+      0 0 0 2px rgba(var(--accent-rgb), 0.28);
   }
 
   .rename-input::selection {
@@ -494,12 +495,6 @@
 :where(.file-list) {
   .row.is-renaming .rename-input {
     flex: 1;
-  }
-
-  // Offset rename padding so the row height stays close to the default.
-  .row.is-renaming {
-    padding-top: 8px;
-    padding-bottom: 8px;
   }
 }
 
@@ -788,10 +783,6 @@
   border-radius: 6px;
 }
 
-:root[data-compact="true"] :where(.file-list) .row.is-renaming {
-  padding-top: 4px;
-  padding-bottom: 4px;
-}
 
 :root[data-compact="true"] :where(.file-list) .row .name {
   gap: 8px;

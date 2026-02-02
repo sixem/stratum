@@ -37,8 +37,9 @@ const GRID_PRESETS: Record<Exclude<GridSize, "auto">, GridPreset> = {
 
 // Keep these layout numbers in sync with the grid card styles in components/_file-view.scss.
 const GRID_CARD_BORDER = 1;
-const GRID_CARD_GAP = 3;
-const GRID_META_GAP = 1;
+// These gaps must match the CSS in components/_file-view.scss.
+const GRID_CARD_GAP = 6;
+const GRID_META_GAP = 6;
 const GRID_ICON_RATIO = 3 / 4;
 const GRID_NAME_LINE_HEIGHT = 14;
 const GRID_INFO_LINE_HEIGHT = 13;
@@ -145,7 +146,9 @@ export const useGridSizing = ({
   const [stableViewportWidth, setStableViewportWidth] = useState(
     () => autoViewportWidth ?? viewportWidth,
   );
+  const [measuredRowHeight, setMeasuredRowHeight] = useState<number | null>(null);
   const viewportWidthRef = useRef(viewportWidth);
+  const measuredRowHeightRef = useRef<number | null>(null);
   const resizeDebounceRef = useRef<number | null>(null);
   const windowResizeRef = useRef(false);
   const windowResizeTimerRef = useRef<number | null>(null);
@@ -251,19 +254,60 @@ export const useGridSizing = ({
     viewportPadding,
   ]);
 
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    if (viewItemsLength === 0) {
+      if (measuredRowHeightRef.current != null) {
+        measuredRowHeightRef.current = null;
+        setMeasuredRowHeight(null);
+      }
+      return;
+    }
+
+    let raf = 0;
+    const measure = () => {
+      const card = viewport.querySelector<HTMLElement>(".thumb-card");
+      if (!card) return;
+      const next = Math.round(card.getBoundingClientRect().height);
+      if (!Number.isFinite(next) || next <= 0) return;
+      const current = measuredRowHeightRef.current;
+      if (current != null && Math.abs(current - next) < 1) return;
+      measuredRowHeightRef.current = next;
+      setMeasuredRowHeight(next);
+    };
+
+    raf = window.requestAnimationFrame(measure);
+    return () => {
+      if (raf) {
+        window.cancelAnimationFrame(raf);
+      }
+    };
+  }, [
+    gridMetaEnabled,
+    gridSizing.column,
+    gridSizing.iconHeight,
+    gridSizing.metaHeight,
+    gridSizing.gap,
+    viewItemsLength,
+    viewKey,
+  ]);
+
+  const resolvedRowHeight = measuredRowHeight ?? gridSizing.rowHeight;
+
   const gridVars = useMemo(
     () =>
       ({
         "--thumb-column": `${gridSizing.column}px`,
         "--thumb-gap": `${gridSizing.gap}px`,
-        "--thumb-row-height": `${gridSizing.rowHeight}px`,
+        "--thumb-row-height": `${resolvedRowHeight}px`,
         "--thumb-padding": `${viewportPadding}px`,
         "--thumb-icon-height": `${gridSizing.iconHeight}px`,
         "--thumb-meta-height": `${gridSizing.metaHeight}px`,
         "--thumb-fit": thumbnailFit,
         "--thumb-preview-bg": thumbnailFit === "contain" ? "transparent" : "#0f131d",
       }) as CSSProperties,
-    [gridSizing, thumbnailFit, viewportPadding],
+    [gridSizing, resolvedRowHeight, thumbnailFit, viewportPadding],
   );
 
   const contentWidth = Math.max(0, layoutViewportWidth - viewportPadding * 2);
@@ -275,7 +319,7 @@ export const useGridSizing = ({
           Math.floor((contentWidth + gridSizing.gap) / (gridSizing.column + gridSizing.gap)),
         );
   const rowCount = Math.ceil(viewItemsLength / columnCount);
-  const rowHeight = gridSizing.rowHeight + gridSizing.gap;
+  const rowHeight = resolvedRowHeight + gridSizing.gap;
   const layoutReady = viewportWidth > 0;
 
   // When smooth scrolling is disabled, snap wheel input to a single grid row.
