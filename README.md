@@ -3,8 +3,36 @@
   <h1 align="center">Stratum</h1>
 </p>
 
-<p align="center">A simple file manager with some added flair</p>
+<p align="center">A simple yet powerful file manager designed to be beautiful, intuitive, and genuinely useful.</p>
 
 <p align="center">
-  <img width="1806" height="1025" alt="stratum" src="https://github.com/user-attachments/assets/09220a61-eb9b-4d63-9fe0-b08fb0f08ceb" />
+  <img width="1806" height="1025" alt="stratum" src="https://github.com/user-attachments/assets/c25f5505-4680-4d57-a420-60773db0faba" />
 </p>
+
+## Features
+
+- List and grid views with fast search, tabs, and breadcrumb navigation.
+- Thumbnails, drag + drop, and inline rename.
+- Ambience mode and flair settings (themes, accents, icon tints).
+- Customisable layout, keybinds, and view behavior.
+- Built-in image/video conversion and SVG previews.
+- ... and much more.
+
+## Why Stratum?
+
+Stratum is designed to make file management feel calm, fast, and dependable. It stays out of your way for everyday tasks, but gives you powerful tools when you need to move quickly. It’s open-source, free of bloat, and focused on doing one thing really well: managing files.
+
+<img width="1347" height="836" alt="stratum-settings" src="https://github.com/user-attachments/assets/4dd16caf-f02d-47e5-bd86-fcb869e75c9d" />
+
+## Status
+
+Early beta. The core workflow is stable, but some features and polish are still
+in progress. More features will be added with time, and feedback is very much
+welcome.
+
+## Quick start
+
+```
+pnpm install
+pnpm run tauri dev
+```
