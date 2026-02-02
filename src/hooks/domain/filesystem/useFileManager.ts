@@ -603,7 +603,7 @@ export function useFileManager() {
       foregroundLoadId.current = nextLoad;
       lastQueryRef.current = null;
       lastQueryKeyRef.current = "";
-      dirCacheRef.current.clear();
+      // Preserve cached directories so tab switches can restore instantly.
       primeEntryMeta([]);
       setEntries([]);
       setTotalCount(0);
