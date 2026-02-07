@@ -1,6 +1,6 @@
 ﻿// Context menu overlay with viewport-aware positioning.
 import type { CSSProperties } from "react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ContextMenuItem } from "@/types";
 import { CONTEXT_MENU_EDGE, CONTEXT_MENU_GAP, CONTEXT_SUBMENU_GAP } from "@/constants";
 import { PressButton } from "./PressButton";
@@ -57,6 +57,12 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
   const [submenuSide, setSubmenuSide] = useState<"left" | "right">("right");
   const [submenuOffset, setSubmenuOffset] = useState(0);
   const lastOpenItemsRef = useRef<ContextMenuItem[]>(items);
+
+  const closeSubmenu = useCallback(() => {
+    setOpenSubmenuId(null);
+    setSubmenuOffset(0);
+  }, []);
+
   const menuStyle = useMemo<CSSProperties>(
     () => ({
       left: position.x,
@@ -72,21 +78,13 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
   const renderedItems = open ? items : lastOpenItemsRef.current;
 
   useEffect(() => {
-    if (!open) {
-      setOpenSubmenuId(null);
-    }
-  }, [open]);
+    if (open) return;
+    closeSubmenu();
+  }, [closeSubmenu, open]);
 
   useEffect(() => {
-    setOpenSubmenuId(null);
-    setSubmenuOffset(0);
-  }, [items]);
-
-  useEffect(() => {
-    if (!openSubmenuId) {
-      setSubmenuOffset(0);
-    }
-  }, [openSubmenuId]);
+    closeSubmenu();
+  }, [closeSubmenu, items]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -98,7 +96,7 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
     const nextX = alignAxis(x, rect.width, viewport.width);
     const nextY = alignAxis(y, rect.height, viewport.height);
     setPosition({ x: nextX, y: nextY });
-  }, [items.length, open, x, y]);
+  }, [items, open, x, y]);
 
   useLayoutEffect(() => {
     if (!open || !openSubmenuId) return;
@@ -117,6 +115,7 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
     const fitsLeft =
       anchorRect.left - SUBMENU_GAP - submenuRect.width >= MENU_EDGE;
     setSubmenuSide(fitsRight || !fitsLeft ? "right" : "left");
+
     const minTop = MENU_EDGE;
     const maxTop = viewport.height - MENU_EDGE - submenuRect.height;
     const safeMax = maxTop < minTop ? minTop : maxTop;
@@ -173,10 +172,18 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
             <PressButton
               type="button"
               className="context-item context-item--submenu"
+              pressOnPointerDown={false}
+              onPointerDown={(event) => event.preventDefault()}
               onClick={(event) => {
                 event.preventDefault();
                 if (isDisabled) return;
-                setOpenSubmenuId((current) => (current === item.id ? null : item.id));
+                setOpenSubmenuId((current) => {
+                  if (current === item.id) {
+                    setSubmenuOffset(0);
+                    return null;
+                  }
+                  return item.id;
+                });
               }}
               role="menuitem"
               aria-haspopup="menu"
@@ -213,6 +220,8 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
           key={item.id}
           type="button"
           className={`context-item${item.active ? " is-active" : ""}`}
+          pressOnPointerDown={false}
+          onPointerDown={(event) => event.preventDefault()}
           onClick={() => {
             item.onSelect();
             onClose();
@@ -220,9 +229,8 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
           onPointerEnter={
             depth === 0
               ? () => {
-                  if (openSubmenuId) {
-                    setOpenSubmenuId(null);
-                  }
+                  if (!openSubmenuId) return;
+                  closeSubmenu();
                 }
               : undefined
           }

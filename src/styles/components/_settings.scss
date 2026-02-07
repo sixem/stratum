@@ -33,14 +33,12 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transform: translateY(10px) scale(0.98);
   opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 
 .settings-overlay[data-open="true"] .settings-panel {
   opacity: 1;
-  transform: translateY(0) scale(1);
 }
 
 :where(.settings-panel) {

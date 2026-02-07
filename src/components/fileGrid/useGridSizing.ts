@@ -102,6 +102,7 @@ type UseGridSizingOptions = {
   gridShowSize: boolean;
   gridShowExtension: boolean;
   thumbnailFit: ThumbnailFit;
+  instantResizeKey?: string | number | boolean;
   viewKey: string;
   scrollRestoreKey: string;
   scrollRestoreTop: number;
@@ -118,6 +119,7 @@ export type GridSizingState = {
   gridVars: CSSProperties;
   gridStyle: CSSProperties;
   columnCount: number;
+  columnWidth: number;
   rowCount: number;
   rowHeight: number;
   gridMetaEnabled: boolean;
@@ -130,6 +132,7 @@ export const useGridSizing = ({
   gridShowSize,
   gridShowExtension,
   thumbnailFit,
+  instantResizeKey,
   viewKey,
   scrollRestoreKey,
   scrollRestoreTop,
@@ -220,7 +223,7 @@ export const useGridSizing = ({
     const nextWidth = viewportWidthRef.current;
     if (gridSize === "auto" && nextWidth <= 0) return;
     setStableViewportWidth(nextWidth);
-  }, [gridSize, viewKey]);
+  }, [gridSize, instantResizeKey, viewKey]);
 
   useEffect(() => {
     if (!onAutoViewportWidthChange) return;
@@ -305,7 +308,7 @@ export const useGridSizing = ({
         "--thumb-icon-height": `${gridSizing.iconHeight}px`,
         "--thumb-meta-height": `${gridSizing.metaHeight}px`,
         "--thumb-fit": thumbnailFit,
-        "--thumb-preview-bg": thumbnailFit === "contain" ? "transparent" : "#0f131d",
+        "--thumb-preview-bg": "transparent",
       }) as CSSProperties,
     [gridSizing, resolvedRowHeight, thumbnailFit, viewportPadding],
   );
@@ -390,6 +393,7 @@ export const useGridSizing = ({
     gridVars,
     gridStyle,
     columnCount,
+    columnWidth: gridSizing.column,
     rowCount,
     rowHeight,
     gridMetaEnabled,

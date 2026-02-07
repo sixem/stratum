@@ -12,10 +12,12 @@ type SelectionTarget = {
 
 type UseSelectionShortcutsOptions = {
   blockReveal: boolean;
+  previewOpen: boolean;
   contextMenuOpen: boolean;
   loading: boolean;
   settingsOpen: boolean;
   viewMode: ViewMode;
+  smartTabJump: boolean;
   mainRef: RefObject<HTMLElement | null>;
   gridColumnsRef: RefObject<number>;
   selectionItems: string[];
@@ -33,10 +35,12 @@ type UseSelectionShortcutsOptions = {
 
 export const useSelectionShortcuts = ({
   blockReveal,
+  previewOpen,
   contextMenuOpen,
   loading,
   settingsOpen,
   viewMode,
+  smartTabJump,
   mainRef,
   gridColumnsRef,
   selectionItems,
@@ -87,6 +91,7 @@ export const useSelectionShortcuts = ({
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.isComposing) return;
       if (settingsOpen || contextMenuOpen) return;
+      if (previewOpen) return;
       if (loading || blockReveal) return;
 
       const active = document.activeElement;
@@ -125,6 +130,7 @@ export const useSelectionShortcuts = ({
     return () => unsubscribe();
   }, [
     blockReveal,
+    previewOpen,
     contextMenuOpen,
     gridColumnsRef,
     loading,
@@ -135,12 +141,14 @@ export const useSelectionShortcuts = ({
   ]);
 
   useEffect(() => {
+    if (!smartTabJump) return;
     const handleTabJump = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       if (event.key !== "Tab") return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.isComposing || event.repeat) return;
       if (settingsOpen || contextMenuOpen) return;
+      if (previewOpen) return;
       if (loading || blockReveal) return;
 
       const active = document.activeElement;
@@ -148,10 +156,15 @@ export const useSelectionShortcuts = ({
       if (!document.hasFocus()) return;
 
       const main = mainRef.current;
-      const hasMainFocus = Boolean(main && active && main.contains(active));
+      if (!main) return;
+      const hasMainFocus = Boolean(active && main.contains(active));
       const isRootFocus =
         !active || active === document.body || active === document.documentElement;
-      if (!hasMainFocus && !isRootFocus) return;
+      if (!hasMainFocus && !isRootFocus) {
+        // Switching tabs can leave focus on the tabs bar. Double-tap Tab should still
+        // work, and re-focusing the view keeps subsequent keyboard actions predictable.
+        main.focus({ preventScroll: true });
+      }
 
       // Suppress normal focus traversal so double-tap stays scoped to the view.
       event.preventDefault();
@@ -174,7 +187,15 @@ export const useSelectionShortcuts = ({
 
     window.addEventListener("keydown", handleTabJump);
     return () => window.removeEventListener("keydown", handleTabJump);
-  }, [blockReveal, contextMenuOpen, loading, mainRef, settingsOpen]);
+  }, [
+    blockReveal,
+    contextMenuOpen,
+    loading,
+    mainRef,
+    previewOpen,
+    settingsOpen,
+    smartTabJump,
+  ]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -183,6 +204,7 @@ export const useSelectionShortcuts = ({
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.repeat || event.isComposing) return;
       if (settingsOpen || contextMenuOpen) return;
+      if (previewOpen) return;
       if (loading) return;
 
       const active = document.activeElement;
@@ -216,6 +238,7 @@ export const useSelectionShortcuts = ({
     mainRef,
     onOpenDir,
     onOpenEntry,
+    previewOpen,
     settingsOpen,
   ]);
 };

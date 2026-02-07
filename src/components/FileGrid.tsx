@@ -78,6 +78,8 @@ type FileGridProps = {
     event: ReactPointerEvent,
     target: { name: string; path: string; isDir: boolean },
   ) => void;
+  onEntryPreviewPress?: (path: string) => boolean;
+  onEntryPreviewRelease?: (path: string) => boolean;
   dropTargetPath?: string | null;
   onStartDragOut?: (paths: string[]) => void;
   onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
@@ -139,6 +141,8 @@ const FileGrid = ({
   onContextMenuDown,
   onEntryContextMenu,
   onEntryContextMenuDown,
+  onEntryPreviewPress,
+  onEntryPreviewRelease,
   dropTargetPath,
   onStartDragOut,
   onInternalDrop,
@@ -155,6 +159,14 @@ const FileGrid = ({
     resetKey: viewKey,
     animate: !loading && presenceEnabled,
   });
+  const selectionItems = useMemo(
+    () =>
+      viewItems.map((item) => ({
+        path: item.type === "parent" ? item.path : item.entry.path,
+        selectable: item.presence !== "removed",
+      })),
+    [viewItems],
+  );
   const fallbackIndexMap = useMemo(() => {
     const map = new Map<string, number>();
     items.forEach((item, index) => {
@@ -170,6 +182,7 @@ const FileGrid = ({
     gridVars,
     gridStyle,
     columnCount,
+    columnWidth,
     rowCount,
     rowHeight,
     gridMetaEnabled,
@@ -227,6 +240,12 @@ const FileGrid = ({
   const { selectionBox } = useGridSelection({
     viewportRef,
     selectedPaths,
+    selectionItems,
+    columnCount,
+    columnWidth,
+    rowHeight,
+    gridGap,
+    compactMode,
     onSetSelection,
     onClearSelection,
     onStartDragOut,
@@ -396,6 +415,8 @@ const FileGrid = ({
                 onOpenNewTab={handleCardOpenNewTab}
                 onContextMenu={handleEntryContextMenu}
                 onContextMenuDown={handleEntryContextMenuDown}
+                onPreviewPress={onEntryPreviewPress}
+                onPreviewRelease={onEntryPreviewRelease}
                 presence={item.presence}
               />
             );

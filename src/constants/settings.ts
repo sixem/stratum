@@ -7,7 +7,7 @@ export const GRID_AUTO_COLUMNS_MAX = 10;
 export const GRID_AUTO_COLUMNS_DEFAULT = 5;
 export const GRID_GAP_MIN = 6;
 export const GRID_GAP_MAX = 24;
-export const GRID_GAP_DEFAULT = 10;
+export const GRID_GAP_DEFAULT = 8;
 
 export const SETTINGS_STORAGE_KEY = "stratum.settings";
 export const SETTINGS_STORAGE_VERSION = 18;

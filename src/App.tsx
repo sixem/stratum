@@ -23,6 +23,7 @@ import {
   useFilteredEntries,
   useMetaPrefetch,
   usePendingCreateSelection,
+  useQuickPreview,
   useScrollRequest,
   useSelectionShortcuts,
   useShellAvailability,
@@ -274,6 +275,8 @@ const App = () => {
     (index: number) => requestScrollToIndex(index, viewKey),
     [requestScrollToIndex, viewKey],
   );
+  // Share preview state with typeahead handlers without re-ordering hooks.
+  const previewOpenRef = useRef(false);
 
   const {
     gridColumnsRef,
@@ -292,6 +295,7 @@ const App = () => {
     currentPath: viewPath,
     deferredSearchValue,
     viewMode,
+    previewOpenRef,
     blockReveal,
     loading: viewLoading,
     settingsOpen,
@@ -299,6 +303,32 @@ const App = () => {
     mainRef,
     requestScrollToIndex: requestScrollToIndexForView,
   });
+
+  const {
+    previewOpen,
+    previewPath,
+    openPreview,
+    handlePreviewPress,
+    handlePreviewRelease,
+  } = useQuickPreview({
+    entryByPath: viewModel.entryByPath,
+    mainRef,
+    previewKeybind: settings.keybinds.previewItem,
+    settingsOpen,
+    contextMenuOpen: contextMenuActive,
+    promptOpen,
+    loading: viewLoading,
+  });
+  previewOpenRef.current = previewOpen;
+  const previewMeta = previewPath ? entryMeta.get(previewPath) ?? null : null;
+  const handlePreviewSelect = useCallback(
+    (path: string) => {
+      if (!path) return;
+      setSelection([path], path);
+      openPreview(path);
+    },
+    [openPreview, setSelection],
+  );
 
   const {
     renameTarget,
@@ -474,10 +504,12 @@ const App = () => {
 
   useSelectionShortcuts({
     blockReveal,
+    previewOpen,
     contextMenuOpen: contextMenuActive,
     loading: viewLoading,
     settingsOpen,
     viewMode,
+    smartTabJump: settings.smartTabJump,
     mainRef,
     gridColumnsRef,
     selectionItems,
@@ -495,6 +527,7 @@ const App = () => {
     settingsOpen,
     contextMenuOpen: contextMenuActive,
     promptOpen,
+    previewOpen,
     blockReveal,
     activeTabId,
     tabs,
@@ -677,6 +710,10 @@ const App = () => {
       onInternalDrop: handleInternalDrop,
       onInternalHover: handleInternalHover,
     },
+    preview: {
+      onEntryPreviewPress: handlePreviewPress,
+      onEntryPreviewRelease: handlePreviewRelease,
+    },
     sort: {
       onSortChange: handleSortChange,
     },
@@ -684,7 +721,7 @@ const App = () => {
 
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-preview={previewOpen ? "true" : "false"}>
       <AppShellLayout
         topstack={topstackProps}
         content={{
@@ -694,6 +731,7 @@ const App = () => {
             places: fileManager.places,
             recentJumps: tabSession.recentJumps,
             activePath: currentPath,
+            dropTargetPath,
             sectionOrder: settings.sidebarSectionOrder,
             hiddenSections: settings.sidebarHiddenSections,
             onSelect: handleSelectPlace,
@@ -733,6 +771,21 @@ const App = () => {
           y: contextMenu?.y ?? 0,
           items: contextMenuItems,
           onClose: closeContextMenu,
+        }}
+        quickPreview={{
+          open: previewOpen,
+          path: previewPath,
+          meta: previewMeta,
+          items: sortedEntries,
+          entryMeta,
+          thumbnails,
+          thumbnailsEnabled: settings.thumbnailsEnabled,
+          onRequestMeta: fileManager.requestEntryMeta,
+          onRequestThumbs: requestThumbnails,
+          thumbResetKey: thumbnailResetKey,
+          loading: viewLoading,
+          onSelectPreview: handlePreviewSelect,
+          smartTabJump: settings.smartTabJump,
         }}
         settings={{
           open: settingsOpen,

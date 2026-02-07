@@ -18,6 +18,7 @@ const normalizeKeyToken = (token: string) => {
   const trimmed = token.trim();
   if (!trimmed) return "";
   const lower = trimmed.toLowerCase();
+  // Normalize mouse aliases so stored labels like "Middle Click" remain usable.
   if (lower === "ctrl" || lower === "control") return "Control";
   if (lower === "alt" || lower === "option") return "Alt";
   if (lower === "shift") return "Shift";
@@ -29,6 +30,24 @@ const normalizeKeyToken = (token: string) => {
   if (lower === "escape" || lower === "esc") return "Escape";
   if (lower === "delete" || lower === "del") return "Delete";
   if (lower === " ") return "Space";
+  if (
+    [
+      "mousemiddle",
+      "mouse middle",
+      "mouse-middle",
+      "middlemouse",
+      "middle mouse",
+      "middle-mouse",
+      "middleclick",
+      "middle click",
+      "middle-click",
+      "mouse3",
+      "button2",
+      "mmb",
+    ].includes(lower)
+  ) {
+    return "MouseMiddle";
+  }
   if (/^f\d+$/i.test(lower)) return lower.toUpperCase();
   if (trimmed.length === 1) return trimmed.toLowerCase();
   return trimmed;
@@ -58,6 +77,8 @@ const formatToken = (token: string) => {
       return "Delete";
     case "Space":
       return "Space";
+    case "MouseMiddle":
+      return "Middle Click";
     default:
       return token.length === 1 ? token.toUpperCase() : token;
   }
@@ -144,23 +165,24 @@ const sanitizeKeybinds = (bindings: KeybindMap) => {
   const reserved = new Set(RESERVED_KEYBINDS.map((bind) => normalizeKeybind(bind)));
   const next: KeybindMap = { ...DEFAULT_KEYBINDS };
 
-  const isAllowed = (normalized: string) => {
+  const isAllowed = (normalized: string, action: KeybindAction) => {
     if (!normalized) return false;
     if (reserved.has(normalized)) return false;
     if (isSingleCharacterBinding(normalized)) return false;
     if (used.has(normalized)) return false;
+    if (normalized === "MouseMiddle" && action !== "previewItem") return false;
     return true;
   };
 
   KEYBIND_DEFINITIONS.forEach((definition) => {
     const candidate = normalizeKeybind(bindings[definition.id] ?? "");
     const fallback = normalizeKeybind(definition.default);
-    if (isAllowed(candidate)) {
+    if (isAllowed(candidate, definition.id)) {
       next[definition.id] = candidate;
       used.add(candidate);
       return;
     }
-    if (isAllowed(fallback)) {
+    if (isAllowed(fallback, definition.id)) {
       next[definition.id] = fallback;
       used.add(fallback);
       return;

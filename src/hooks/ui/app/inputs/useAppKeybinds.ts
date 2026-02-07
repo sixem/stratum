@@ -2,7 +2,7 @@
 import { useCallback, useMemo } from "react";
 import { copyPathsToClipboard } from "@/api";
 import { formatDeleteLabel, getSelectionTargets, isEditableElement } from "@/lib";
-import { useKeybinds } from "../inputs/useKeybinds";
+import { useKeybinds } from "../../inputs/useKeybinds";
 import { useClipboardStore, usePromptStore } from "@/modules";
 import type { KeybindMap } from "@/modules/keybinds";
 import type { Tab } from "@/types";
@@ -13,6 +13,7 @@ type UseAppKeybindsOptions = {
   settingsOpen: boolean;
   contextMenuOpen: boolean;
   promptOpen: boolean;
+  previewOpen: boolean;
   blockReveal: boolean;
   activeTabId: string | null;
   tabs: Tab[];
@@ -37,6 +38,7 @@ export const useAppKeybinds = ({
   settingsOpen,
   contextMenuOpen,
   promptOpen,
+  previewOpen,
   blockReveal,
   activeTabId,
   tabs,
@@ -61,8 +63,8 @@ export const useAppKeybinds = ({
 
   // Keybind gating helpers: protect interactions during modal states.
   const canHandleGlobalKeybind = useCallback(() => {
-    return !settingsOpen && !contextMenuOpen && !promptOpen;
-  }, [contextMenuOpen, promptOpen, settingsOpen]);
+    return !settingsOpen && !contextMenuOpen && !promptOpen && !previewOpen;
+  }, [contextMenuOpen, previewOpen, promptOpen, settingsOpen]);
 
   const canHandleViewKeybind = useCallback(() => {
     if (!canHandleGlobalKeybind()) return false;
@@ -159,6 +161,10 @@ export const useAppKeybinds = ({
     return true;
   }, [canHandleViewKeybind, duplicateEntries, selectionTargets]);
 
+  const handlePreviewItemKeybind = useCallback((_event: KeyboardEvent) => {
+    return false;
+  }, []);
+
   const handleCopySelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
     if (selectionTargets.length === 0) return false;
@@ -194,6 +200,7 @@ export const useAppKeybinds = ({
       closeTab: handleCloseTabKeybind,
       deleteSelection: handleDeleteSelectionKeybind,
       duplicateSelection: handleDuplicateSelectionKeybind,
+      previewItem: handlePreviewItemKeybind,
       prevTab: (event: KeyboardEvent) => handleAdjacentTab(event, -1),
       nextTab: (event: KeyboardEvent) => handleAdjacentTab(event, 1),
     }),
@@ -203,6 +210,7 @@ export const useAppKeybinds = ({
       handleDeleteSelectionKeybind,
       handleDuplicateSelectionKeybind,
       handleNewTabKeybind,
+      handlePreviewItemKeybind,
       handleUndoKeybind,
     ],
   );

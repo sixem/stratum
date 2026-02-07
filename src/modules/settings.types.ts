@@ -25,6 +25,7 @@ export type Settings = {
   showTabNumbers: boolean;
   fixedWidthTabs: boolean;
   smoothScroll: boolean;
+  smartTabJump: boolean;
   compactMode: boolean;
   accentTheme: AccentTheme;
   categoryTinting: boolean;

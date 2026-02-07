@@ -2,3 +2,4 @@
 export { useCssVarHeight } from "./useCssVarHeight";
 export { useFileViewInteractions } from "./useFileViewInteractions";
 export { useFileViewModel } from "./useFileViewModel";
+export { useQuickPreview } from "./useQuickPreview";

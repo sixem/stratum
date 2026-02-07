@@ -155,6 +155,12 @@ export const AboutModal = ({
               github.com/sixem/stratum/issues
             </a>
           </div>
+          <div className="about-row">
+            <span className="about-label">Author</span>
+            <span>
+              emy@five.sh
+            </span>
+          </div>
         </div>
 
         <div className="about-footer">Built with Tauri + React.</div>

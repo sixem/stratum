@@ -252,6 +252,8 @@ export const useFileDrop = ({
           const target = getDropTarget(payload);
           if (log.enabled) {
             log("drop: count=%d target=%s", payload.paths.length, target?.path ?? "none");
+            log("drop: paths=%o", payload.paths);
+            log("drop: payload=%o", payload);
           }
           lastHoverRef.current = null;
           setDropTarget(null);

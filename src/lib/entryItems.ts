@@ -1,16 +1,19 @@
 // Maps entry data into display items for list/grid views.
 import type { FileEntry } from "@/types";
+import type { EntryPresence } from "./entryPresence";
 
 export type EntryItem =
   | {
       key: string;
       type: "parent";
       path: string;
+      presence?: EntryPresence;
     }
   | {
       key: string;
       type: "entry";
       entry: FileEntry;
+      presence?: EntryPresence;
     };
 
 export const isEntryItem = (

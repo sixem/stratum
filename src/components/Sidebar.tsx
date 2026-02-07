@@ -10,7 +10,6 @@ import {
   refreshSessionHint,
 } from "@/modules";
 import { PressButton } from "./PressButton";
-import { TooltipWrapper } from "./Tooltip";
 import { SidebarSection } from "./SidebarSection";
 import type { Place } from "@/types";
 
@@ -18,6 +17,7 @@ type SidebarProps = {
   places: Place[];
   recentJumps: string[];
   activePath: string;
+  dropTargetPath?: string | null;
   sectionOrder: SidebarSectionId[];
   hiddenSections: SidebarSectionId[];
   onSelect: (path: string) => void;
@@ -30,6 +30,7 @@ type SidebarItemProps = {
   title: string;
   subtitle: string;
   isActive: boolean;
+  isDropTarget: boolean;
   isRecent?: boolean;
   onSelect: (path: string) => void;
   onSelectNewTab?: (path: string) => void;
@@ -40,6 +41,7 @@ const SidebarItem = ({
   title,
   subtitle,
   isActive,
+  isDropTarget,
   isRecent = false,
   onSelect,
   onSelectNewTab,
@@ -54,18 +56,19 @@ const SidebarItem = ({
   };
 
   return (
-    <TooltipWrapper text={path}>
-      <PressButton
-        type="button"
-        className={`place${isRecent ? " is-recent" : ""}${isActive ? " is-active" : ""}`}
-        onClick={() => onSelect(path)}
-        onMouseDown={handleMiddle}
-        onContextMenu={handleContextMenu}
-      >
-        <span className="place-name">{title}</span>
-        <span className="place-path">{subtitle}</span>
-      </PressButton>
-    </TooltipWrapper>
+    <PressButton
+      type="button"
+      className={`place${isRecent ? " is-recent" : ""}${isActive ? " is-active" : ""}`}
+      data-is-dir="true"
+      data-path={path}
+      data-drop-target={isDropTarget ? "true" : "false"}
+      onClick={() => onSelect(path)}
+      onMouseDown={handleMiddle}
+      onContextMenu={handleContextMenu}
+    >
+      <span className="place-name">{title}</span>
+      <span className="place-path">{subtitle}</span>
+    </PressButton>
   );
 };
 
@@ -73,6 +76,7 @@ export const Sidebar = ({
   places,
   recentJumps,
   activePath,
+  dropTargetPath,
   sectionOrder,
   hiddenSections,
   onSelect,
@@ -82,6 +86,7 @@ export const Sidebar = ({
   const [placesOpen, setPlacesOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
   const activeKey = normalizePath(activePath);
+  const dropTargetKey = dropTargetPath ? normalizePath(dropTargetPath) : null;
   const orderedSections = normalizeSidebarSectionOrder(sectionOrder);
   const hiddenSectionIds = normalizeSidebarHiddenSections(hiddenSections);
   const hiddenSectionSet = new Set(hiddenSectionIds);
@@ -106,6 +111,7 @@ export const Sidebar = ({
                   title={place.name}
                   subtitle={place.path}
                   isActive={activeKey === normalizePath(place.path)}
+                  isDropTarget={dropTargetKey === normalizePath(place.path)}
                   onSelect={onSelect}
                   onSelectNewTab={onSelectNewTab}
                 />
@@ -130,6 +136,7 @@ export const Sidebar = ({
                   title={tabLabel(path)}
                   subtitle={path}
                   isActive={activeKey === normalizePath(path)}
+                  isDropTarget={dropTargetKey === normalizePath(path)}
                   isRecent
                   onSelect={onSelectRecent}
                   onSelectNewTab={onSelectNewTab}

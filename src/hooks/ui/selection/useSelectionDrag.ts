@@ -9,6 +9,29 @@ export type SelectionBox = {
   height: number;
 };
 
+export type SelectionLayoutItem = {
+  path: string;
+  selectable: boolean;
+};
+
+export type SelectionLayout =
+  | {
+      kind: "list";
+      items: SelectionLayoutItem[];
+      itemHeight: number;
+      rowHeight: number;
+      insetTop?: number;
+    }
+  | {
+      kind: "grid";
+      items: SelectionLayoutItem[];
+      columnCount: number;
+      columnWidth: number;
+      rowHeight: number;
+      gap: number;
+      insetTop?: number;
+    };
+
 type CachedItem = {
   path: string;
   rect: DOMRect;
@@ -25,6 +48,7 @@ type SelectionDragOptions = {
   setSelection: (paths: string[], anchor?: string) => void;
   clearSelection: () => void;
   itemSelector: string;
+  layout?: SelectionLayout;
 };
 
 type DragState = {
@@ -39,6 +63,7 @@ type DragState = {
   // Capture scroll offsets at drag start so scroll-driven selection can expand.
   startScrollLeft: number;
   startScrollTop: number;
+  layoutSnapshot: LayoutSnapshot | null;
 };
 
 const DRAG_THRESHOLD = 4;
@@ -66,9 +91,191 @@ const setsMatch = (next: Set<string>, current: Set<string>) => {
   return true;
 };
 
+type ContentRect = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
+type ListLayoutSnapshot = {
+  kind: "list";
+  items: SelectionLayoutItem[];
+  itemHeight: number;
+  rowHeight: number;
+  insetTop: number;
+};
+
+type GridLayoutSnapshot = {
+  kind: "grid";
+  items: SelectionLayoutItem[];
+  columnCount: number;
+  columnWidth: number;
+  rowHeight: number;
+  gap: number;
+  insetTop: number;
+  gridLeft: number;
+  gridTop: number;
+  columnStride: number;
+  cardHeight: number;
+};
+
+type LayoutSnapshot = ListLayoutSnapshot | GridLayoutSnapshot;
+
+const parsePixels = (value: string | null) => {
+  if (!value) return 0;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getGridCentered = () => {
+  const root = document.documentElement;
+  return root?.dataset.gridCenter !== "false";
+};
+
+const buildLayoutSnapshot = (
+  element: HTMLElement,
+  layout: SelectionLayout,
+): LayoutSnapshot | null => {
+  if (layout.kind === "list") {
+    return {
+      kind: "list",
+      items: layout.items,
+      itemHeight: layout.itemHeight,
+      rowHeight: layout.rowHeight,
+      insetTop: layout.insetTop ?? 0,
+    };
+  }
+
+  if (layout.columnCount <= 0 || layout.columnWidth <= 0 || layout.rowHeight <= 0) {
+    return null;
+  }
+
+  const styles = window.getComputedStyle(element);
+  const paddingLeft = parsePixels(styles.paddingLeft);
+  const paddingRight = parsePixels(styles.paddingRight);
+  const paddingTop = parsePixels(styles.paddingTop);
+  const contentWidth = Math.max(0, element.clientWidth - paddingLeft - paddingRight);
+  const columnGap = Math.max(0, layout.gap);
+  const columnWidth = Math.max(0, layout.columnWidth);
+  const columnCount = layout.columnCount;
+  const gridWidth =
+    columnCount * columnWidth + columnGap * Math.max(0, columnCount - 1);
+  const extraLeft = getGridCentered()
+    ? Math.max(0, (contentWidth - gridWidth) / 2)
+    : 0;
+  const insetTop = layout.insetTop ?? 0;
+  const rowHeight = layout.rowHeight;
+  const cardHeight = Math.max(0, rowHeight - columnGap);
+
+  return {
+    kind: "grid",
+    items: layout.items,
+    columnCount,
+    columnWidth,
+    rowHeight,
+    gap: columnGap,
+    insetTop,
+    gridLeft: paddingLeft + extraLeft,
+    gridTop: paddingTop + insetTop,
+    columnStride: columnWidth + columnGap,
+    cardHeight,
+  };
+};
+
+const selectFromListLayout = (
+  layout: ListLayoutSnapshot,
+  rect: ContentRect,
+) => {
+  const orderedPaths: string[] = [];
+  const { items, itemHeight, rowHeight, insetTop } = layout;
+  if (items.length === 0 || itemHeight <= 0 || rowHeight <= 0) {
+    return orderedPaths;
+  }
+
+  const top = Math.min(rect.top, rect.bottom);
+  const bottom = Math.max(rect.top, rect.bottom);
+  const startIndex = Math.max(0, Math.floor((top - insetTop) / itemHeight));
+  const endIndex = Math.min(
+    items.length - 1,
+    Math.floor((bottom - insetTop) / itemHeight),
+  );
+
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    const rowTop = insetTop + index * itemHeight;
+    const rowBottom = rowTop + rowHeight;
+    if (rowBottom < top || rowTop > bottom) continue;
+    const item = items[index];
+    if (!item || !item.selectable) continue;
+    orderedPaths.push(item.path);
+  }
+
+  return orderedPaths;
+};
+
+const selectFromGridLayout = (layout: GridLayoutSnapshot, rect: ContentRect) => {
+  const orderedPaths: string[] = [];
+  const {
+    items,
+    columnCount,
+    columnStride,
+    columnWidth,
+    rowHeight,
+    cardHeight,
+    gridLeft,
+    gridTop,
+  } = layout;
+  if (items.length === 0 || columnCount <= 0 || columnStride <= 0 || rowHeight <= 0) {
+    return orderedPaths;
+  }
+
+  const rectLeft = Math.min(rect.left, rect.right);
+  const rectRight = Math.max(rect.left, rect.right);
+  const rectTop = Math.min(rect.top, rect.bottom);
+  const rectBottom = Math.max(rect.top, rect.bottom);
+
+  const relLeft = rectLeft - gridLeft;
+  const relRight = rectRight - gridLeft;
+  const relTop = rectTop - gridTop;
+  const relBottom = rectBottom - gridTop;
+
+  if (relRight < 0 || relBottom < 0) {
+    return orderedPaths;
+  }
+
+  const maxRowIndex = Math.max(0, Math.ceil(items.length / columnCount) - 1);
+  const startRow = Math.max(0, Math.floor(relTop / rowHeight));
+  const endRow = Math.min(maxRowIndex, Math.floor(relBottom / rowHeight));
+  const startCol = clamp(Math.floor(relLeft / columnStride), 0, columnCount - 1);
+  const endCol = clamp(Math.floor(relRight / columnStride), 0, columnCount - 1);
+
+  if (startRow > endRow || startCol > endCol) {
+    return orderedPaths;
+  }
+
+  for (let row = startRow; row <= endRow; row += 1) {
+    const itemTop = gridTop + row * rowHeight;
+    const itemBottom = itemTop + cardHeight;
+    if (itemBottom < rectTop || itemTop > rectBottom) continue;
+    const rowIndex = row * columnCount;
+    for (let col = startCol; col <= endCol; col += 1) {
+      const itemLeft = gridLeft + col * columnStride;
+      const itemRight = itemLeft + columnWidth;
+      if (itemRight < rectLeft || itemLeft > rectRight) continue;
+      const index = rowIndex + col;
+      if (index >= items.length) continue;
+      const item = items[index];
+      if (!item.selectable) continue;
+      orderedPaths.push(item.path);
+    }
+  }
+
+  return orderedPaths;
+};
+
 export const useSelectionDrag = (
   ref: RefObject<HTMLElement | null>,
-  { selected, setSelection, clearSelection, itemSelector }: SelectionDragOptions,
+  { selected, setSelection, clearSelection, itemSelector, layout }: SelectionDragOptions,
 ) => {
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
   const pointerIdRef = useRef<number | null>(null);
@@ -76,6 +283,7 @@ export const useSelectionDrag = (
   const selectedRef = useRef(selected);
   const setSelectionRef = useRef(setSelection);
   const clearSelectionRef = useRef(clearSelection);
+  const layoutRef = useRef<SelectionLayout | undefined>(layout);
   // Cache item rects during a drag so we avoid repeated DOM queries.
   const cacheRef = useRef<CacheState | null>(null);
   const dragRef = useRef<DragState>({
@@ -88,6 +296,7 @@ export const useSelectionDrag = (
     lastY: 0,
     startScrollLeft: 0,
     startScrollTop: 0,
+    layoutSnapshot: null,
   });
   const baseSelectionRef = useRef<Set<string>>(new Set());
 
@@ -102,6 +311,10 @@ export const useSelectionDrag = (
   useEffect(() => {
     clearSelectionRef.current = clearSelection;
   }, [clearSelection]);
+
+  useEffect(() => {
+    layoutRef.current = layout;
+  }, [layout]);
 
   const updateSelection = useCallback(() => {
     const element = ref.current;
@@ -136,46 +349,65 @@ export const useSelectionDrag = (
       height: bottom - top,
     });
 
-    const cached = cacheRef.current;
-    if (
-      !cached ||
-      cached.scrollTop !== element.scrollTop ||
-      cached.scrollLeft !== element.scrollLeft
-    ) {
-      const items: CachedItem[] = [];
-      element.querySelectorAll<HTMLElement>(itemSelector).forEach((node) => {
-        const path = node.dataset.path;
-        if (!path) return;
-        items.push({ path, rect: node.getBoundingClientRect() });
-      });
-      cacheRef.current = {
-        items,
-        scrollTop: element.scrollTop,
-        scrollLeft: element.scrollLeft,
-      };
-    }
-
-    const items = cacheRef.current?.items ?? [];
-    if (!items.length) {
-      if (!drag.addMode) {
-        if (selectedRef.current.size > 0) {
-          if (log.enabled) {
-            log("update: no items -> clear selection");
-          }
-          setSelectionRef.current([], undefined);
-        }
+    const contentRect = {
+      left: leftContent,
+      right: rightContent,
+      top: topContent,
+      bottom: bottomContent,
+    };
+    let orderedPaths: string[] = [];
+    if (drag.layoutSnapshot) {
+      orderedPaths =
+        drag.layoutSnapshot.kind === "list"
+          ? selectFromListLayout(drag.layoutSnapshot, contentRect)
+          : selectFromGridLayout(drag.layoutSnapshot, contentRect);
+    } else {
+      const cached = cacheRef.current;
+      if (
+        !cached ||
+        cached.scrollTop !== element.scrollTop ||
+        cached.scrollLeft !== element.scrollLeft
+      ) {
+        const items: CachedItem[] = [];
+        element.querySelectorAll<HTMLElement>(itemSelector).forEach((node) => {
+          const path = node.dataset.path;
+          if (!path) return;
+          items.push({ path, rect: node.getBoundingClientRect() });
+        });
+        cacheRef.current = {
+          items,
+          scrollTop: element.scrollTop,
+          scrollLeft: element.scrollLeft,
+        };
       }
-      return;
-    }
 
-    const orderedPaths: string[] = [];
-    items.forEach((item) => {
-      const rect = item.rect;
-      if (rect.right < left || rect.left > right || rect.bottom < top || rect.top > bottom) {
+      const items = cacheRef.current?.items ?? [];
+      if (!items.length) {
+        if (!drag.addMode) {
+          if (selectedRef.current.size > 0) {
+            if (log.enabled) {
+              log("update: no items -> clear selection");
+            }
+            setSelectionRef.current([], undefined);
+          }
+        }
         return;
       }
-      orderedPaths.push(item.path);
-    });
+
+      items.forEach((item) => {
+        const itemRect = item.rect;
+        if (
+          itemRect.right < left ||
+          itemRect.left > right ||
+          itemRect.bottom < top ||
+          itemRect.top > bottom
+        ) {
+          return;
+        }
+        orderedPaths.push(item.path);
+      });
+    }
+
     // Keep DOM order so keyboard navigation matches the on-screen order.
     const anchor = orderedPaths[orderedPaths.length - 1];
 
@@ -213,6 +445,7 @@ export const useSelectionDrag = (
       }
       dragRef.current.active = false;
       dragRef.current.dragging = false;
+      dragRef.current.layoutSnapshot = null;
       setSelectionBox(null);
       cacheRef.current = null;
       if (rafRef.current != null) {
@@ -276,8 +509,13 @@ export const useSelectionDrag = (
         lastY: event.clientY,
         startScrollLeft: element.scrollLeft,
         startScrollTop: element.scrollTop,
+        layoutSnapshot: null,
       };
       baseSelectionRef.current = new Set(selectedRef.current);
+      const layout = layoutRef.current;
+      dragRef.current.layoutSnapshot = layout
+        ? buildLayoutSnapshot(element, layout)
+        : null;
       cacheRef.current = null;
       pointerIdRef.current = event.pointerId;
       dragElement.setPointerCapture(event.pointerId);

@@ -22,11 +22,19 @@ export const PromptModal = () => {
     if (!prompt) return;
     const confirmLabel = prompt.confirmLabel === undefined ? "OK" : prompt.confirmLabel;
     const showConfirm = Boolean(confirmLabel && confirmLabel.trim().length > 0);
+    const cancelLabel =
+      prompt.cancelLabel === undefined ? (prompt.onCancel ? "Cancel" : null) : prompt.cancelLabel;
+    const showCancel = Boolean(cancelLabel && cancelLabel.trim().length > 0);
     const handleKey = (event: KeyboardEvent) => {
       if (event.repeat) return;
       if (isEditableElement(document.activeElement)) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
 
-      if (event.key === "Enter") {
+      const lowerKey = event.key.toLowerCase();
+
+      // Enter is the universal confirm shortcut.
+      // For explicit confirm/cancel dialogs, also allow `y` (yes) to confirm.
+      if (event.key === "Enter" || (lowerKey === "y" && showCancel)) {
         if (!showConfirm) return;
         event.preventDefault();
         event.stopPropagation();

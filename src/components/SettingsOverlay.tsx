@@ -41,6 +41,7 @@ export const SettingsOverlay = ({
     showTabNumbers,
     fixedWidthTabs,
     smoothScroll,
+    smartTabJump,
     compactMode,
     accentTheme,
     categoryTinting,
@@ -298,6 +299,7 @@ export const SettingsOverlay = ({
               sectionId={keybindSectionId}
               open={open}
               keybinds={keybinds}
+              smartTabJump={smartTabJump}
               onUpdate={updateSettings}
               onCaptureChange={setCaptureActive}
             />

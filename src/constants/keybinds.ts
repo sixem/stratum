@@ -6,6 +6,7 @@ export type KeybindAction =
   | "undo"
   | "deleteSelection"
   | "duplicateSelection"
+  | "previewItem"
   | "prevTab"
   | "nextTab";
 
@@ -48,6 +49,12 @@ export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
     label: "Duplicate selection",
     description: "Make a copy in the current folder.",
     default: "Control+d",
+  },
+  {
+    id: "previewItem",
+    label: "Preview item",
+    description: "Preview the hovered item (hold to peek).",
+    default: "MouseMiddle",
   },
   {
     id: "prevTab",

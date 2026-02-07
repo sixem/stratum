@@ -60,5 +60,7 @@ export type EntryCardProps = {
   onOpenNewTab?: (event: ReactMouseEvent) => void;
   onContextMenu?: (event: ReactPointerEvent) => void;
   onContextMenuDown?: (event: ReactPointerEvent) => void;
+  onPreviewPress?: (path: string) => boolean;
+  onPreviewRelease?: (path: string) => boolean;
   presence?: EntryPresence;
 };

@@ -53,7 +53,10 @@ type AppEffectActions = {
   setSearchValue: (value: string) => void;
   setTabSearch: (value: string) => void;
   flushWindowSize: () => void;
-  loadDir: (path: string, options?: { sort?: SortState; search?: string; silent?: boolean }) => void;
+  loadDir: (
+    path: string,
+    options?: { sort?: SortState; search?: string; silent?: boolean },
+  ) => Promise<void>;
   requestEntryMeta: (
     paths: string[],
     options?: { force?: boolean; defer?: boolean },

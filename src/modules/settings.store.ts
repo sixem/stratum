@@ -75,6 +75,7 @@ useSettingsStore.subscribe((state) => {
     showTabNumbers: state.showTabNumbers,
     fixedWidthTabs: state.fixedWidthTabs,
     smoothScroll: state.smoothScroll,
+    smartTabJump: state.smartTabJump,
     compactMode: state.compactMode,
     accentTheme: state.accentTheme,
     categoryTinting: state.categoryTinting,

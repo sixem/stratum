@@ -3,8 +3,8 @@ import type { RefObject } from "react";
 import { useMemo } from "react";
 import { useDynamicOverscan, useVirtualRange } from "@/hooks";
 import type { EntryItem } from "@/lib";
+import { COMPACT_VIEW_INSET } from "../fileView/constants";
 
-const COMPACT_VIEW_INSET = 10;
 const OVERSCAN = 10;
 const OVERSCAN_MIN = 2;
 const OVERSCAN_WARMUP_MS = 140;

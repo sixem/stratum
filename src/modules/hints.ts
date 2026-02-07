@@ -7,11 +7,12 @@ export type Hint = {
 export const HINTS: Hint[] = [
   { id: "escape-clear", text: "Press Escape to clear the current selection." },
   { id: "path-bar", text: "Use the path bar to jump directly to any folder." },
-  { id: "right-click", text: "Right-click items to see available actions." },
   { id: "search-hotkey", text: "Press CTRL + F to focus search (press again to clear)." },
   { id: "new-tab", text: "Middle-click a path to open it in a new tab." },
+  { id: "smart-tab", text: "Double-tap Tab to jump to the top or bottom of the view." },
   { id: "reorder-tabs", text: "Drag tabs to reorder them across the top bar." },
-  { id: "refresh", text: "Hit F5 to rescan the current folder." },
+  { id: "refresh", text: "Hit F5 or CTRL + R to rescan the current folder." },
+  { id: "hide-tips", text: "You can hide these tips in the settings." },
 ];
 
 const FALLBACK_HINT: Hint = {
