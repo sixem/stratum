@@ -62,6 +62,8 @@ type FileListProps = {
     event: ReactPointerEvent,
     target: { name: string; path: string; isDir: boolean },
   ) => void;
+  onEntryPreviewPress?: (path: string) => boolean;
+  onEntryPreviewRelease?: (path: string) => boolean;
   dropTargetPath?: string | null;
   onStartDragOut?: (paths: string[]) => void;
   onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
@@ -108,6 +110,8 @@ const FileList = ({
   onContextMenuDown,
   onEntryContextMenu,
   onEntryContextMenuDown,
+  onEntryPreviewPress,
+  onEntryPreviewRelease,
   dropTargetPath,
   onStartDragOut,
   onInternalDrop,
@@ -125,6 +129,14 @@ const FileList = ({
     resetKey: viewKey,
     animate: !loading && presenceEnabled,
   });
+  const selectionItems = useMemo(
+    () =>
+      rows.map((row) => ({
+        path: row.type === "parent" ? row.path : row.entry.path,
+        selectable: row.presence !== "removed",
+      })),
+    [rows],
+  );
   const fallbackIndexMap = useMemo(() => {
     const map = new Map<string, number>();
     items.forEach((item, index) => {
@@ -135,7 +147,7 @@ const FileList = ({
   }, [items]);
   const resolvedIndexMap = indexMap ?? fallbackIndexMap;
 
-  const { listRef, itemHeight, listVars } = useListLayout({
+  const { listRef, itemHeight, rowHeight, listVars } = useListLayout({
     compactMode,
     smoothScroll,
     scrollRestoreKey,
@@ -170,6 +182,10 @@ const FileList = ({
   const { selectionBox } = useListSelection({
     listRef,
     selectedPaths,
+    selectionItems,
+    itemHeight,
+    rowHeight,
+    compactMode,
     onSetSelection,
     onClearSelection,
     onStartDragOut,
@@ -347,6 +363,8 @@ const FileList = ({
                     onOpenNewTab={handleRowOpenNewTab}
                     onContextMenu={handleEntryContextMenu}
                     onContextMenuDown={handleEntryContextMenuDown}
+                    onPreviewPress={onEntryPreviewPress}
+                    onPreviewRelease={onEntryPreviewRelease}
                     presence={row.presence}
                   />
                 );

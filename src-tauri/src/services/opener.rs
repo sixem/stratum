@@ -1,3 +1,4 @@
+// OS-level helpers for opening paths and properties.
 #[cfg(target_os = "windows")]
 use std::ffi::OsStr;
 #[cfg(target_os = "windows")]

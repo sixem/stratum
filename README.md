@@ -30,6 +30,8 @@ Early beta. The core workflow is stable, but some features and polish are still
 in progress. More features will be added with time, and feedback is very much
 welcome.
 
+Like all betas, this release is still a work in progress. If you spot a bug or see an opportunity for improvement, don't be afraid to submit an issue.
+
 ## Quick start
 
 ```

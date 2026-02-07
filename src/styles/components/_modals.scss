@@ -28,14 +28,12 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  transform: translateY(10px) scale(0.98);
   opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 
 .prompt-modal[data-open="true"] .prompt-panel {
   opacity: 1;
-  transform: translateY(0) scale(1);
 }
 
 // Scope prompt content styles to the panel without adding specificity.
@@ -120,14 +118,12 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  transform: translateY(10px) scale(0.98);
   opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 
 .about-modal[data-open="true"] .about-panel {
   opacity: 1;
-  transform: translateY(0) scale(1);
 }
 
 :where(.about-panel) {

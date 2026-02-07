@@ -3,10 +3,15 @@ import { useCallback } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { flushSync } from "react-dom";
 import { isEditableElement } from "@/lib";
-import type { EntryContextTarget, ShellKind, SortState } from "@/types";
-import { useEntryMenuItems } from "../menus/useEntryMenuItems";
-import { useLayoutMenuItems } from "../menus/useLayoutMenuItems";
-import type { useAppMenuState } from "./useAppMenuState";
+import type {
+  EntryContextTarget,
+  ShellAvailability,
+  ShellKind,
+  SortState,
+} from "@/types";
+import { useEntryMenuItems } from "../../menus/useEntryMenuItems";
+import { useLayoutMenuItems } from "../../menus/useLayoutMenuItems";
+import type { useAppMenuState } from "../useAppMenuState";
 
 type ContextMenuState = ReturnType<typeof useAppMenuState>["contextMenu"];
 
@@ -25,13 +30,13 @@ type UseAppContextMenusOptions = {
   onCreateFolder: (parentPath: string, name: string) => void | Promise<unknown>;
   onCreateFolderAndGo?: (parentPath: string, name: string) => void | Promise<unknown>;
   onCreateFile: (parentPath: string, name: string) => void | Promise<unknown>;
-  shellAvailability: { ffmpeg?: boolean } | null;
+  shellAvailability: ShellAvailability | null;
   menuOpenPwsh: boolean;
   menuOpenWsl: boolean;
   onOpenShell: (kind: ShellKind, path: string) => void;
   onOpenEntry: (path: string) => void;
   onOpenDir: (path: string) => void;
-  onDeleteEntries: (paths: string[]) => Promise<unknown>;
+  onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   confirmDelete: boolean;
   onClearSelection: () => void;
   onRenameEntry: (target: EntryContextTarget) => void;

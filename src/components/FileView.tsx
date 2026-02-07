@@ -92,6 +92,8 @@ type FileViewProps = {
     event: ReactPointerEvent,
     target: { name: string; path: string; isDir: boolean },
   ) => void;
+  onEntryPreviewPress?: (path: string) => boolean;
+  onEntryPreviewRelease?: (path: string) => boolean;
   dropTargetPath?: string | null;
   onStartDragOut?: (paths: string[]) => void;
   onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
@@ -134,6 +136,8 @@ export const FileView = ({
   onInternalHover,
   onEntryContextMenu,
   onEntryContextMenuDown,
+  onEntryPreviewPress,
+  onEntryPreviewRelease,
   smoothScroll,
   compactMode,
   sortState,
@@ -208,6 +212,8 @@ export const FileView = ({
             onInternalHover={onInternalHover}
             onEntryContextMenu={onEntryContextMenu}
             onEntryContextMenuDown={onEntryContextMenuDown}
+            onEntryPreviewPress={onEntryPreviewPress}
+            onEntryPreviewRelease={onEntryPreviewRelease}
             onCreateFolder={onCreateFolder}
             onCreateFolderAndGo={onCreateFolderAndGo}
             onCreateFile={onCreateFile}
@@ -233,6 +239,8 @@ export const FileView = ({
             onInternalHover={onInternalHover}
             onEntryContextMenu={onEntryContextMenu}
             onEntryContextMenuDown={onEntryContextMenuDown}
+            onEntryPreviewPress={onEntryPreviewPress}
+            onEntryPreviewRelease={onEntryPreviewRelease}
             onCreateFolder={onCreateFolder}
             onCreateFolderAndGo={onCreateFolderAndGo}
             onCreateFile={onCreateFile}

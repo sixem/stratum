@@ -403,12 +403,8 @@
 }
 
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card {
-  background: rgba(18, 22, 33, 0.82);
-}
-
-// In compact mode, soften the default grid borders while keeping selection visible.
-:root[data-ambient="true"][data-compact="true"] :where(.thumb-shell) .thumb-card {
-  border-color: transparent;
+  background: rgba(255, 255, 255, 0.025);
+  border-color: rgba(255, 255, 255, 0.040);
 }
 
 :root[data-ambient="true"][data-compact="true"] :where(.thumb-shell) .thumb-card.is-selected {
@@ -457,7 +453,7 @@
     padding: 2px 6px;
     margin: -2px 0;
     border: none;
-    border-radius: 4px;
+    border-radius: 2px;
     background: rgba(8, 10, 16, 0.75);
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
     color: inherit;
@@ -818,4 +814,3 @@
 :where(.file-list) .list-shell[data-category-tint="true"] .row[data-kind="executable"] {
   --list-dot-color: rgba(var(--accent-rgb), 0.85);
 }
-

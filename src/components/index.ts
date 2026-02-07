@@ -17,6 +17,7 @@ export { PathCrumbsBar } from "./PathCrumbsBar";
 export { PerfProfiler } from "./PerfProfiler";
 export { PressButton } from "./PressButton";
 export { PromptModal } from "./PromptModal";
+export { QuickPreviewOverlay } from "./QuickPreviewOverlay";
 export { SelectionRect } from "./SelectionRect";
 export { SettingsOverlay } from "./SettingsOverlay";
 export { Sidebar } from "./Sidebar";

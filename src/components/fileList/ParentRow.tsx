@@ -31,6 +31,11 @@ export const ParentRow = memo(({
   onContextMenuDown,
 }: ParentRowProps) => {
   const handleMouseDown = (event: ReactMouseEvent) => {
+    if (event.button === 1) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (event.button === 0) {
       onSelect(event);
     }

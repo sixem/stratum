@@ -1,3 +1,4 @@
+// Clipboard integration for file path copy/paste.
 pub fn set_clipboard_paths(paths: Vec<String>) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {

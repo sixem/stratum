@@ -19,6 +19,11 @@ export const ParentCard = memo(({
   onContextMenuDown,
 }: ParentCardProps) => {
   const handleMouseDown = (event: ReactMouseEvent) => {
+    if (event.button === 1) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (event.button === 0) {
       onSelect(event);
     }

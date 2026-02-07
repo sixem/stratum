@@ -56,6 +56,8 @@ export const EntryCard = memo(({
   onOpenNewTab,
   onContextMenu,
   onContextMenuDown,
+  onPreviewPress,
+  onPreviewRelease,
   presence = "stable",
 }: EntryCardProps) => {
   const resolvedSizeLabel = showSize ? sizeLabel : "";
@@ -85,6 +87,17 @@ export const EntryCard = memo(({
   }${selected ? " is-selected" : ""}${isRemoved ? " is-removed" : ""}`;
   const handleMouseDown = (event: ReactMouseEvent) => {
     if (!isInteractive) return;
+    if (event.button === 1 && onPreviewPress) {
+      onPreviewPress(entry.path);
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (event.button === 1) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (event.button === 0) {
       const hasModifier =
         event.shiftKey || event.ctrlKey || event.metaKey || event.altKey;
@@ -94,6 +107,14 @@ export const EntryCard = memo(({
       }
     }
     onOpenNewTab?.(event);
+  };
+
+  const handleMouseUp = (event: ReactMouseEvent) => {
+    if (!isInteractive) return;
+    if (event.button !== 1) return;
+    onPreviewRelease?.(entry.path);
+    event.preventDefault();
+    event.stopPropagation();
   };
 
   const handleClick = (event: ReactMouseEvent) => {
@@ -138,6 +159,7 @@ export const EntryCard = memo(({
         onClick={isInteractive ? handleClick : undefined}
         onDoubleClick={isInteractive ? onOpen : undefined}
         onMouseDown={isInteractive ? handleMouseDown : undefined}
+        onMouseUp={isInteractive ? handleMouseUp : undefined}
         onPointerDown={isInteractive ? handleContextMenuDown : undefined}
         onPointerUp={isInteractive ? handleContextMenuUp : undefined}
         onContextMenu={(event) => event.preventDefault()}

@@ -1,5 +1,5 @@
 // Custom keybind capture and management UI.
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { KeybindAction, KeybindMap } from "@/modules";
 import {
   DEFAULT_KEYBINDS,
@@ -17,6 +17,7 @@ type SettingsKeybindsSectionProps = {
   sectionId: string;
   open: boolean;
   keybinds: KeybindMap;
+  smartTabJump: boolean;
   onUpdate: SettingsUpdateHandler;
   onCaptureChange?: (active: boolean) => void;
 };
@@ -25,11 +26,44 @@ export const SettingsKeybindsSection = ({
   sectionId,
   open,
   keybinds,
+  smartTabJump,
   onUpdate,
   onCaptureChange,
 }: SettingsKeybindsSectionProps) => {
   const [captureAction, setCaptureAction] = useState<KeybindAction | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
+
+  const commitKeybind = useCallback(
+    (action: KeybindAction, normalized: string) => {
+      const reservedLabel = getReservedKeybindLabel(normalized);
+      if (reservedLabel) {
+        setCaptureError(`That shortcut is reserved for ${reservedLabel}.`);
+        return false;
+      }
+      if (isBareCharacterKeybind(normalized)) {
+        setCaptureError("Use Ctrl or Alt with single-character shortcuts.");
+        return false;
+      }
+      const conflict = KEYBIND_DEFINITIONS.find((definition) => {
+        if (definition.id === action) return false;
+        return normalizeKeybind(keybinds[definition.id]) === normalized;
+      });
+      if (conflict) {
+        setCaptureError(`Already used by ${conflict.label}.`);
+        return false;
+      }
+      onUpdate({
+        keybinds: {
+          ...keybinds,
+          [action]: normalized,
+        },
+      });
+      setCaptureAction(null);
+      setCaptureError(null);
+      return true;
+    },
+    [keybinds, onUpdate],
+  );
 
   useEffect(() => {
     onCaptureChange?.(Boolean(captureAction));
@@ -56,36 +90,27 @@ export const SettingsKeybindsSection = ({
       if (!next) return;
       const normalized = normalizeKeybind(next);
       if (!normalized) return;
-      const reservedLabel = getReservedKeybindLabel(normalized);
-      if (reservedLabel) {
-        setCaptureError(`That shortcut is reserved for ${reservedLabel}.`);
-        return;
-      }
-      if (isBareCharacterKeybind(normalized)) {
-        setCaptureError("Use Ctrl or Alt with single-character shortcuts.");
-        return;
-      }
-      const conflict = KEYBIND_DEFINITIONS.find((definition) => {
-        if (definition.id === captureAction) return false;
-        return normalizeKeybind(keybinds[definition.id]) === normalized;
-      });
-      if (conflict) {
-        setCaptureError(`Already used by ${conflict.label}.`);
-        return;
-      }
-      onUpdate({
-        keybinds: {
-          ...keybinds,
-          [captureAction]: normalized,
-        },
-      });
-      setCaptureAction(null);
-      setCaptureError(null);
+      commitKeybind(captureAction, normalized);
     };
 
     window.addEventListener("keydown", handleKey, { capture: true });
     return () => window.removeEventListener("keydown", handleKey, { capture: true });
-  }, [captureAction, keybinds, onUpdate, open]);
+  }, [captureAction, commitKeybind, open]);
+
+  useEffect(() => {
+    if (!open || captureAction !== "previewItem") return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.button !== 1) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const normalized = normalizeKeybind("MouseMiddle");
+      if (!normalized) return;
+      commitKeybind(captureAction, normalized);
+    };
+    window.addEventListener("pointerdown", handlePointerDown, { capture: true });
+    return () =>
+      window.removeEventListener("pointerdown", handlePointerDown, { capture: true });
+  }, [captureAction, commitKeybind, open]);
 
   const handleStartCapture = (action: KeybindAction) => {
     if (!open) return;
@@ -121,6 +146,22 @@ export const SettingsKeybindsSection = ({
             Reset all
           </PressButton>
         </div>
+      </div>
+      <div className="settings-item">
+        <div>
+          <div className="settings-label">Smart Tab jump</div>
+          <div className="settings-desc">
+            Double-tap Tab to jump to the top or bottom of the current view.
+          </div>
+        </div>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={smartTabJump}
+            onChange={(event) => onUpdate({ smartTabJump: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
       </div>
       {KEYBIND_DEFINITIONS.map((definition) => {
         const current = keybinds[definition.id];

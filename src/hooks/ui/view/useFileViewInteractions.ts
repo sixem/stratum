@@ -12,6 +12,7 @@ type UseFileViewInteractionsOptions = {
   currentPath: string;
   deferredSearchValue: string;
   viewMode: ViewMode;
+  previewOpenRef: RefObject<boolean>;
   blockReveal: boolean;
   loading: boolean;
   settingsOpen: boolean;
@@ -26,6 +27,7 @@ export const useFileViewInteractions = ({
   currentPath,
   deferredSearchValue,
   viewMode,
+  previewOpenRef,
   blockReveal,
   loading,
   settingsOpen,
@@ -64,6 +66,8 @@ export const useFileViewInteractions = ({
   const shouldHandleTypeahead = useCallback(
     (activeElement: Element | null) => {
       if (settingsOpen || contextMenuOpen) return false;
+      // Block typeahead while quick preview is active to avoid stealing focus.
+      if (previewOpenRef.current) return false;
       if (loading || blockReveal) return false;
       const main = mainRef.current;
       if (!main) return false;
@@ -78,7 +82,7 @@ export const useFileViewInteractions = ({
       }
       return true;
     },
-    [blockReveal, contextMenuOpen, loading, mainRef, settingsOpen],
+    [blockReveal, contextMenuOpen, loading, mainRef, previewOpenRef, settingsOpen],
   );
 
   useTypeaheadSelection({

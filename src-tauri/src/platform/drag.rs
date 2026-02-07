@@ -1,3 +1,4 @@
+// Native drag source for OS-level drag-and-drop.
 use serde::Serialize;
 
 #[cfg(target_os = "windows")]

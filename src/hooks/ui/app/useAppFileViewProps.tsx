@@ -82,6 +82,7 @@ type UseAppFileViewPropsOptions = {
     FileViewProps,
     "dropTargetPath" | "onStartDragOut" | "onInternalDrop" | "onInternalHover"
   >;
+  preview: Pick<FileViewProps, "onEntryPreviewPress" | "onEntryPreviewRelease">;
   sort: Pick<FileViewProps, "onSortChange">;
 };
 
@@ -96,6 +97,7 @@ export const useAppFileViewProps = ({
   grid,
   contextMenu,
   dragDrop,
+  preview,
   sort,
 }: UseAppFileViewPropsOptions): FileViewProps => {
   // Merge grouped inputs into the FileView prop shape expected by AppContent.
@@ -110,6 +112,7 @@ export const useAppFileViewProps = ({
     ...grid,
     ...contextMenu,
     ...dragDrop,
+    ...preview,
     ...sort,
   };
 };

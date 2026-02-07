@@ -1,0 +1,462 @@
+// Full-screen media preview overlay and layout hiding.
+.app-shell {
+  .topstack,
+  .layout,
+  .statusbar-shell {
+    transition: opacity 0.12s ease;
+  }
+
+  .layout {
+    transition: opacity 0.12s ease, filter 0.2s ease;
+  }
+}
+
+.app-shell[data-preview="true"] {
+  .topstack,
+  .statusbar-shell {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .layout {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.quick-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 2450;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  background: rgba(6, 8, 12, 0.42);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+:root[data-blur-overlays="true"] .quick-preview {
+  background: rgba(6, 8, 12, 0.22);
+  backdrop-filter: blur(6px) saturate(1.05);
+  -webkit-backdrop-filter: blur(6px) saturate(1.05);
+}
+
+// Keep a faint, blurred layout visible behind the preview when blur overlays are on.
+:root[data-blur-overlays="true"] .app-shell[data-preview="true"] .layout {
+  opacity: 0.08;
+  filter: blur(10px);
+}
+
+.quick-preview[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.quick-preview-stage {
+  position: relative;
+  min-height: 0;
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.quick-preview-stage.is-dragging {
+  cursor: grabbing;
+}
+
+.quick-preview-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.quick-preview-loading::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(12, 16, 24, 0.55), rgba(6, 8, 12, 0));
+}
+
+.quick-preview-loading[data-visible="true"] {
+  opacity: 1;
+}
+
+.quick-preview-loading-card {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 16px 22px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 12, 18, 0.78);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+.quick-preview-error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  pointer-events: auto;
+}
+
+.quick-preview-error-card {
+  width: min(520px, calc(100% - 24px));
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 12, 18, 0.86);
+  backdrop-filter: blur(6px) saturate(1.05);
+  -webkit-backdrop-filter: blur(6px) saturate(1.05);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  cursor: default;
+  user-select: text;
+  touch-action: auto;
+}
+
+.quick-preview-error-title {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.quick-preview-error-desc {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.quick-preview-error-meta {
+  display: grid;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.quick-preview-error-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.quick-preview-error-meta-value {
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+.quick-preview-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+  pointer-events: auto;
+}
+
+.quick-preview-error-hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.quick-preview-info {
+  position: relative;
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  padding: 8px 16px;
+  // Keep the info bar in the main column so it doesn't overlap the right strip.
+  grid-column: 1 / 2;
+  grid-row: 3;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(8, 10, 16, 0.6);
+  backdrop-filter: blur(2px) saturate(1.05);
+  -webkit-backdrop-filter: blur(2px) saturate(1.05);
+  color: var(--text);
+  pointer-events: none;
+}
+
+.quick-preview-controls {
+  position: relative;
+  // Keep video controls in the main column so they don't overlay the right strip.
+  grid-column: 1 / 2;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 10, 16, 0.55);
+  backdrop-filter: blur(2px) saturate(1.05);
+  -webkit-backdrop-filter: blur(2px) saturate(1.05);
+  color: var(--text);
+  pointer-events: auto;
+}
+
+.quick-preview-control-button {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(12, 14, 20, 0.8);
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.quick-preview-control-button--playback {
+  min-width: 64px;
+  text-align: center;
+}
+
+.quick-preview-control-seek {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quick-preview-control-volume {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+}
+
+.quick-preview-control-volume-slider {
+  display: inline-flex;
+  align-items: center;
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  margin-left: 0;
+  transition: width 0.18s ease, opacity 0.18s ease, margin-left 0.18s ease;
+}
+
+.quick-preview-control-volume[data-open="true"] .quick-preview-control-volume-slider {
+  width: 120px;
+  opacity: 1;
+  pointer-events: auto;
+  margin-left: 8px;
+}
+
+.quick-preview-control-volume-button {
+  min-width: 54px;
+  text-align: center;
+}
+
+.quick-preview-control-range {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.quick-preview-control-range:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.quick-preview-control-seek .quick-preview-control-range {
+  flex: 1;
+  min-width: 0;
+}
+
+.quick-preview-control-time {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+
+// Title fades out after a moment so the media remains the focus.
+.quick-preview-title {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  max-width: min(55vw, 560px);
+  padding: 4px 8px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 10, 16, 0.6);
+  backdrop-filter: blur(2px) saturate(1.05);
+  -webkit-backdrop-filter: blur(2px) saturate(1.05);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  word-break: break-word;
+  pointer-events: none;
+  opacity: 1;
+  animation: quick-preview-title-fade 2.4s ease 2.4s forwards;
+  transition: opacity 0.2s ease;
+}
+
+@keyframes quick-preview-title-fade {
+  0%,
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.quick-preview-info-error {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.quick-preview-info-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.quick-preview-info-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.quick-preview-info-value {
+  color: var(--text);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.quick-preview-strip {
+  position: relative;
+  grid-column: 2;
+  grid-row: 1 / -1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-width: 0;
+  min-height: 0;
+  scrollbar-gutter: stable;
+  background: rgba(8, 10, 16, 0.35);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  touch-action: pan-y;
+  transition: opacity 0.2s ease;
+}
+
+.quick-preview-strip[data-idle="true"] {
+  opacity: 0.55;
+}
+
+.quick-preview-strip[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+.quick-preview-strip[data-dragging="false"] {
+  cursor: grab;
+}
+
+.quick-preview-strip-spacer {
+  width: 100%;
+}
+
+.quick-preview-strip-list {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.quick-preview-strip-item {
+  display: grid;
+  place-items: center;
+  height: 64px;
+  margin: 4px 8px;
+  padding: 0;
+  box-sizing: border-box;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(14, 16, 22, 0.6);
+  overflow: hidden;
+  cursor: pointer;
+  transition: opacity 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.quick-preview-strip-item[data-active="true"] {
+  // Keep the active item obvious but subtle (a soft accent tint, not a full glow).
+  border-color: rgba(var(--accent-rgb), 0.65);
+  background: rgba(18, 22, 30, 0.85);
+}
+
+.quick-preview-strip-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.quick-preview-strip-fallback {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.quick-preview-pan {
+  will-change: transform;
+}
+
+.quick-preview-media {
+  max-width: 100%;
+  max-height: 100%;
+  user-select: none;
+  display: block;
+  transform-origin: center;
+  will-change: transform;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.quick-preview-media.is-image {
+  pointer-events: none;
+}
+
+.quick-preview-media.is-video {
+  pointer-events: auto;
+  background: #000;
+}
+
+.quick-preview-media[data-ready="true"] {
+  opacity: 1;
+}

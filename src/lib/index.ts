@@ -10,6 +10,7 @@ export { initDebug, makeDebug, measure, measureAsync } from "./debug";
 export { formatBytes, formatCount, formatDate, formatPercent } from "./format";
 export { handleMiddleClick } from "./mouse";
 export { getPlatformLabel } from "./platform";
+export { buildPreviewUrl } from "./previewUrl";
 export { getDropTargetFromPoint, getDropTargetHit } from "./dropTarget";
 export type { DropTarget, DropTargetHit } from "./dropTarget";
 export { buildDropCandidate, joinPath, normalizeDropPath, sanitizeDropPath } from "./dropPaths";

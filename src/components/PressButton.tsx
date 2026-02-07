@@ -1,17 +1,17 @@
 // Button helper that fires on pointer down for snappier UI, while keeping keyboard clicks intact.
 import type { ButtonHTMLAttributes, MouseEvent, PointerEvent } from "react";
-import { useRef } from "react";
+import { forwardRef, useRef } from "react";
 
 type PressButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   pressOnPointerDown?: boolean;
 };
 
-export const PressButton = ({
+export const PressButton = forwardRef<HTMLButtonElement, PressButtonProps>(({
   pressOnPointerDown = true,
   onPointerDown,
   onClick,
   ...props
-}: PressButtonProps) => {
+}, ref) => {
   const handledRef = useRef(false);
   const handledTimerRef = useRef<number | null>(null);
 
@@ -56,8 +56,11 @@ export const PressButton = ({
   return (
     <button
       {...props}
+      ref={ref}
       onPointerDown={handlePointerDown}
       onClick={handleClick}
     />
   );
-};
+});
+
+PressButton.displayName = "PressButton";

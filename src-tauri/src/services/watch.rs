@@ -43,7 +43,6 @@ fn clear_watch(state: &mut DirWatchState) {
     state.path = None;
 }
 
-#[tauri::command]
 pub fn start_dir_watch(
     app: AppHandle,
     path: String,
@@ -141,7 +140,6 @@ pub fn start_dir_watch(
     Ok(())
 }
 
-#[tauri::command]
 pub fn stop_dir_watch(state: State<'_, DirWatchHandle>) -> Result<(), String> {
     let mut guard = state
         .state
