@@ -1,6 +1,12 @@
 // Builds the topstack props so App.tsx stays focused on data flow.
 import type { ComponentProps, RefObject } from "react";
-import { DrivePicker, PathBarActions, SidebarIcon, ToolbarIconButton } from "@/components";
+import {
+  DrivePicker,
+  PathBarActions,
+  PressButton,
+  SidebarIcon,
+  ToolbarIconButton,
+} from "@/components";
 import type { AppTopstackContainerProps } from "@/components/app/AppTopstackContainer";
 import { PathBar } from "@/components/PathBar";
 import { PathCrumbsBar } from "@/components/PathCrumbsBar";
@@ -36,7 +42,7 @@ export const useAppTopstackProps = ({
 }: UseAppTopstackPropsOptions): AppTopstackContainerProps => {
   const leftSlot = (
     <>
-      <button
+      <PressButton
         type="button"
         className="pathbar-brand about-trigger"
         aria-label={`About ${appName}`}
@@ -46,7 +52,7 @@ export const useAppTopstackProps = ({
         <div className="brand-mark">
           <img src="/favicon.png" alt="" aria-hidden="true" />
         </div>
-      </button>
+      </PressButton>
       <ToolbarIconButton
         label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
         active={sidebarOpen}

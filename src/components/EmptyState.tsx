@@ -1,4 +1,6 @@
 // Empty state messaging for no-content views.
+import { PressButton } from "./PressButton";
+
 type EmptyStateProps = {
   title: string;
   subtitle?: string;
@@ -13,14 +15,14 @@ export const EmptyState = ({ title, subtitle, actions }: EmptyStateProps) => {
       {actions && actions.length > 0 ? (
         <div className="empty-actions">
           {actions.map((action) => (
-            <button
+            <PressButton
               key={action.label}
               type="button"
               className="empty-action"
               onClick={action.onClick}
             >
               {action.label}
-            </button>
+            </PressButton>
           ))}
         </div>
       ) : null}

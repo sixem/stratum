@@ -100,6 +100,7 @@ useSettingsStore.subscribe((state) => {
     thumbnailQuality: state.thumbnailQuality,
     thumbnailFormat: state.thumbnailFormat,
     thumbnailVideos: state.thumbnailVideos,
+    thumbnailSvgs: state.thumbnailSvgs,
     thumbnailCacheMb: state.thumbnailCacheMb,
     thumbnailFit: state.thumbnailFit,
     thumbnailAppIcons: state.thumbnailAppIcons,

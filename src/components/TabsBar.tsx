@@ -5,6 +5,7 @@ import { handleMiddleClick, tabLabel } from "@/lib";
 import { useTabDragDrop } from "@/hooks";
 import type { Tab } from "@/types";
 import { PlusIcon, TabCloseIcon } from "./icons";
+import { PressButton } from "./PressButton";
 import { TooltipWrapper } from "./Tooltip";
 
 type TabsBarProps = {
@@ -86,7 +87,7 @@ const TabItem = ({
         </button>
       </TooltipWrapper>
       {showClose ? (
-        <button
+        <PressButton
           type="button"
           className="tab-close"
           onClick={() => {
@@ -95,7 +96,7 @@ const TabItem = ({
           aria-label={`Close ${label} tab`}
         >
           <TabCloseIcon className="tab-close-icon" />
-        </button>
+        </PressButton>
       ) : fixedWidthTabs ? (
         <span className="tab-close-spacer" aria-hidden="true" />
       ) : null}
@@ -159,9 +160,9 @@ export const TabsBar = ({
             aria-hidden="true"
           />
         ) : null}
-        <button type="button" className="tab-new" onClick={onNew} aria-label="New tab">
+        <PressButton type="button" className="tab-new" onClick={onNew} aria-label="New tab">
           <PlusIcon className="tab-new-icon" />
-        </button>
+        </PressButton>
       </div>
     </div>
   );

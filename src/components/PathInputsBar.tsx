@@ -1,5 +1,6 @@
 // Dedicated bar for the path and search inputs.
 import type { FormEvent, KeyboardEvent, RefObject } from "react";
+import { PressButton } from "./PressButton";
 import { FilterIcon, RefreshIcon } from "./icons";
 
 type PathInputsBarProps = {
@@ -49,7 +50,7 @@ export const PathInputsBar = ({
         spellCheck={false}
         autoComplete="off"
       />
-      <button
+      <PressButton
         type="button"
         className="inputbar-refresh"
         onClick={onRefresh}
@@ -57,7 +58,7 @@ export const PathInputsBar = ({
         aria-label="Refresh"
       >
         <RefreshIcon className="btn-icon" />
-      </button>
+      </PressButton>
       <div className="search-field">
         <FilterIcon className="search-icon" />
         <input

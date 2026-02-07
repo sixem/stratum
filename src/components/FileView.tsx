@@ -78,6 +78,7 @@ type FileViewProps = {
   gridShowExtension: boolean;
   gridNameEllipsis: GridNameEllipsis;
   gridNameHideExtension: boolean;
+  gridInstantResizeKey?: string | number | boolean;
   thumbResetKey?: string;
   presenceEnabled?: boolean;
   onGridColumnsChange?: (columns: number) => void;
@@ -123,6 +124,7 @@ export const FileView = ({
   gridShowExtension,
   gridNameEllipsis,
   gridNameHideExtension,
+  gridInstantResizeKey,
   thumbResetKey,
   presenceEnabled = true,
   onGridColumnsChange,
@@ -193,6 +195,7 @@ export const FileView = ({
             gridShowExtension={gridShowExtension}
             gridNameEllipsis={gridNameEllipsis}
             gridNameHideExtension={gridNameHideExtension}
+            instantResizeKey={gridInstantResizeKey}
             autoViewportWidth={autoGridViewportWidthRef.current ?? undefined}
             onAutoViewportWidthChange={handleAutoGridViewportWidth}
             thumbResetKey={thumbResetKey}

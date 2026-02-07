@@ -10,6 +10,7 @@ import { SettingsKeybindsSection } from "@/components/settings/SettingsKeybindsS
 import { SettingsMenusSection } from "@/components/settings/SettingsMenusSection";
 import { SettingsThumbsSection } from "@/components/settings/SettingsThumbsSection";
 import { SettingsVitals } from "@/components/settings/SettingsVitals";
+import { PressButton } from "./PressButton";
 import { useModalFocusTrap, useSettings } from "@/hooks";
 import { usePromptStore } from "@/modules";
 
@@ -32,6 +33,7 @@ export const SettingsOverlay = ({
     thumbnailQuality,
     thumbnailFormat,
     thumbnailVideos,
+    thumbnailSvgs,
     thumbnailCacheMb,
     thumbnailFit,
     thumbnailAppIcons,
@@ -149,84 +151,84 @@ export const SettingsOverlay = ({
               Manage view defaults, flair, thumbnails, and cached previews.
             </p>
           </div>
-          <button
+          <PressButton
             ref={closeButtonRef}
             type="button"
             className="btn ghost settings-close"
             onClick={onClose}
           >
             Close
-          </button>
+          </PressButton>
         </div>
         <div className="settings-body">
           <nav className="settings-sidebar" aria-label="Settings sections">
             <div className="settings-nav">
-              <button
+              <PressButton
                 type="button"
                 className="settings-nav-item"
                 onClick={handleJump(generalSectionId)}
               >
                 General
-              </button>
-              <button
+              </PressButton>
+              <PressButton
                 type="button"
                 className="settings-nav-item"
                 onClick={handleJump(barsSectionId)}
               >
                 Bars
-              </button>
-              <button
+              </PressButton>
+              <PressButton
                 type="button"
                 className="settings-nav-item"
                 onClick={handleJump(gridSectionId)}
               >
                 Grid
-              </button>
-              <button
+              </PressButton>
+              <PressButton
                 type="button"
                 className="settings-nav-item"
                 onClick={handleJump(menuSectionId)}
               >
                 Menus
-              </button>
-              <button
+              </PressButton>
+              <PressButton
                 type="button"
                 className="settings-nav-item"
                 onClick={handleJump(flairSectionId)}
               >
                 Flair
-              </button>
-              <button
+              </PressButton>
+              <PressButton
                 type="button"
                 className="settings-nav-item"
                 onClick={handleJump(thumbSectionId)}
               >
                 Thumbnails
-              </button>
-              <button
+              </PressButton>
+              <PressButton
                 type="button"
                 className="settings-nav-item"
                 onClick={handleJump(keybindSectionId)}
               >
                 Keybinds
-              </button>
-              <button
+              </PressButton>
+              <PressButton
                 type="button"
                 className="settings-nav-item"
                 onClick={handleJump(cacheSectionId)}
               >
                 Cache
-              </button>
+              </PressButton>
             </div>
             <div className="settings-sidebar-actions">
               <div className="settings-sidebar-title">Actions</div>
-              <button
+              <PressButton
                 type="button"
                 className="btn settings-reset"
                 onClick={handleResetSettings}
               >
                 Reset all to defaults
-              </button>
+              </PressButton>
               <div className="settings-desc">
                 Resets every setting and keybind back to default.
               </div>
@@ -287,6 +289,7 @@ export const SettingsOverlay = ({
               thumbnailQuality={thumbnailQuality}
               thumbnailFormat={thumbnailFormat}
               thumbnailVideos={thumbnailVideos}
+              thumbnailSvgs={thumbnailSvgs}
               thumbnailFit={thumbnailFit}
               thumbnailAppIcons={thumbnailAppIcons}
               onUpdate={updateSettings}

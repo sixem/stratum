@@ -244,6 +244,8 @@ export const useEntryDragOut = (
     const handlePointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return;
       const target = event.target as HTMLElement | null;
+      // Let inline rename selection happen without kicking off a drag.
+      if (target?.closest(".rename-input")) return;
       const item = target?.closest<HTMLElement>(itemSelector);
       if (!item) return;
       const path = item.dataset.path;

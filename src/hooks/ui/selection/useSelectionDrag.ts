@@ -31,10 +31,14 @@ type DragState = {
   active: boolean;
   dragging: boolean;
   addMode: boolean;
+  // Store pointer coordinates in viewport space (clientX/clientY).
   startX: number;
   startY: number;
   lastX: number;
   lastY: number;
+  // Capture scroll offsets at drag start so scroll-driven selection can expand.
+  startScrollLeft: number;
+  startScrollTop: number;
 };
 
 const DRAG_THRESHOLD = 4;
@@ -82,6 +86,8 @@ export const useSelectionDrag = (
     startY: 0,
     lastX: 0,
     lastY: 0,
+    startScrollLeft: 0,
+    startScrollTop: 0,
   });
   const baseSelectionRef = useRef<Set<string>>(new Set());
 
@@ -105,14 +111,23 @@ export const useSelectionDrag = (
 
     const dragRoot = element.closest(".main") as HTMLElement | null;
     const bounds = (dragRoot ?? element).getBoundingClientRect();
-    const startX = clamp(drag.startX, bounds.left, bounds.right);
-    const startY = clamp(drag.startY, bounds.top, bounds.bottom);
-    const endX = clamp(drag.lastX, bounds.left, bounds.right);
-    const endY = clamp(drag.lastY, bounds.top, bounds.bottom);
-    const left = Math.min(startX, endX);
-    const right = Math.max(startX, endX);
-    const top = Math.min(startY, endY);
-    const bottom = Math.max(startY, endY);
+    const elementBounds = element.getBoundingClientRect();
+    const endClientX = clamp(drag.lastX, bounds.left, bounds.right);
+    const endClientY = clamp(drag.lastY, bounds.top, bounds.bottom);
+    // Convert the start/end points into content space so scrolling expands the box.
+    const startContentX = drag.startX - elementBounds.left + drag.startScrollLeft;
+    const startContentY = drag.startY - elementBounds.top + drag.startScrollTop;
+    const endContentX = endClientX - elementBounds.left + element.scrollLeft;
+    const endContentY = endClientY - elementBounds.top + element.scrollTop;
+    const leftContent = Math.min(startContentX, endContentX);
+    const rightContent = Math.max(startContentX, endContentX);
+    const topContent = Math.min(startContentY, endContentY);
+    const bottomContent = Math.max(startContentY, endContentY);
+    // Convert back to viewport space for rendering and hit-testing.
+    const left = leftContent - element.scrollLeft + elementBounds.left;
+    const right = rightContent - element.scrollLeft + elementBounds.left;
+    const top = topContent - element.scrollTop + elementBounds.top;
+    const bottom = bottomContent - element.scrollTop + elementBounds.top;
 
     setSelectionBox({
       left,
@@ -259,6 +274,8 @@ export const useSelectionDrag = (
         startY: event.clientY,
         lastX: event.clientX,
         lastY: event.clientY,
+        startScrollLeft: element.scrollLeft,
+        startScrollTop: element.scrollTop,
       };
       baseSelectionRef.current = new Set(selectedRef.current);
       cacheRef.current = null;
@@ -305,13 +322,14 @@ export const useSelectionDrag = (
       }
     };
 
-    const handleCancel = (reason: string) => {
+    const handleScroll = () => {
       if (!dragRef.current.active) return;
-      resetDrag(true, reason);
+      scheduleUpdate();
     };
-
-    const handleScroll = () => handleCancel("scroll");
-    const handleWheel = () => handleCancel("wheel");
+    const handleWheel = () => {
+      if (!dragRef.current.active) return;
+      scheduleUpdate();
+    };
 
     dragElement.addEventListener("pointerdown", handlePointerDown);
     dragElement.addEventListener("pointermove", handlePointerMove);

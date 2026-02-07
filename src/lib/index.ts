@@ -9,10 +9,17 @@ export { getExtension, getFileKind, isPdfLikeExtension, isSvgLikeExtension } fro
 export { initDebug, makeDebug, measure, measureAsync } from "./debug";
 export { formatBytes, formatCount, formatDate, formatPercent } from "./format";
 export { handleMiddleClick } from "./mouse";
+export { getPlatformLabel } from "./platform";
 export { getDropTargetFromPoint, getDropTargetHit } from "./dropTarget";
 export type { DropTarget, DropTargetHit } from "./dropTarget";
 export { buildDropCandidate, joinPath, normalizeDropPath, sanitizeDropPath } from "./dropPaths";
 export type { DropCandidate } from "./dropPaths";
+export {
+  buildPathCrumbs,
+  getNextTrailPath,
+  resolvePathCrumbs,
+} from "./pathCrumbs";
+export type { PathCrumb, PathCrumbsState } from "./pathCrumbs";
 export { activeDrive, getParentPath, getPathName, normalizePath, tabLabel } from "./paths";
 export { entryExists, getDriveKey, toMessage } from "./fsUtils";
 export { applyHiddenExtension, buildBulkRenamePlan, getRenameInputValue } from "./renamePlan";

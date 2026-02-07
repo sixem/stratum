@@ -235,6 +235,7 @@
     cursor: default;
   }
 
+
   .thumb-card:hover {
     border-color: rgba(255, 255, 255, 0.16);
     background: var(--surface-control-strong);
@@ -399,12 +400,6 @@
     pointer-events: none;
     padding: 24px;
   }
-
-  .rename-input-grid {
-    font-size: 0.75rem;
-    line-height: 0.875rem;
-    font-weight: 600;
-  }
 }
 
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card {
@@ -459,10 +454,12 @@
     display: block;
     width: 100%;
     min-width: 0;
-    padding: 0;
+    padding: 2px 6px;
+    margin: -2px 0;
     border: none;
-    border-radius: 0;
-    background: transparent;
+    border-radius: 4px;
+    background: rgba(8, 10, 16, 0.75);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
     color: inherit;
     font: inherit;
     line-height: inherit;
@@ -472,7 +469,9 @@
 
   .rename-input:focus {
     outline: none;
-    box-shadow: none;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.24),
+      0 0 0 2px rgba(var(--accent-rgb), 0.28);
   }
 
   .rename-input::selection {
@@ -484,6 +483,13 @@
     background: #fff;
     color: #000;
   }
+}
+
+// Keep grid rename typography aligned with the thumb name styles.
+:where(.thumb-shell) .rename-input.rename-input-grid {
+  font-size: 12px;
+  line-height: 14px;
+  font-weight: 600;
 }
 
 :where(.file-list) {
@@ -717,6 +723,7 @@
 
   .row.is-renaming .name {
     overflow: visible;
+    gap: 8px;
   }
 
   .row.is-parent {
@@ -776,9 +783,14 @@
   border-radius: 6px;
 }
 
+
 :root[data-compact="true"] :where(.file-list) .row .name {
   gap: 8px;
   font-size: 13px;
+}
+
+:root[data-compact="true"] :where(.file-list) .row.is-renaming .name {
+  gap: 6px;
 }
 
 :root[data-compact="true"] :where(.file-list) .row .name::before {

@@ -9,6 +9,7 @@ import {
   normalizeSidebarSectionOrder,
   refreshSessionHint,
 } from "@/modules";
+import { PressButton } from "./PressButton";
 import { TooltipWrapper } from "./Tooltip";
 import { SidebarSection } from "./SidebarSection";
 import type { Place } from "@/types";
@@ -54,7 +55,7 @@ const SidebarItem = ({
 
   return (
     <TooltipWrapper text={path}>
-      <button
+      <PressButton
         type="button"
         className={`place${isRecent ? " is-recent" : ""}${isActive ? " is-active" : ""}`}
         onClick={() => onSelect(path)}
@@ -63,7 +64,7 @@ const SidebarItem = ({
       >
         <span className="place-name">{title}</span>
         <span className="place-path">{subtitle}</span>
-      </button>
+      </PressButton>
     </TooltipWrapper>
   );
 };
@@ -142,14 +143,14 @@ export const Sidebar = ({
           <div className="sidebar-tips">
             <div className="section-title">Tips</div>
             <div className="tips">
-              <button
+              <PressButton
                 type="button"
                 className="tip"
                 onClick={() => setHint(refreshSessionHint())}
                 aria-label="Show a new tip"
               >
                 {hint.text}
-              </button>
+              </PressButton>
             </div>
           </div>
         );

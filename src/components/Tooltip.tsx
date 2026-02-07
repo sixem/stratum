@@ -105,6 +105,10 @@ export const TooltipWrapper = ({
   const child = Children.only(children) as ReactElement<HTMLAttributes<Element>>;
   const rafRef = useRef<number | null>(null);
   const delayRef = useRef<number | null>(null);
+  // Only show hover tooltips after a real pointer move inside the element.
+  const hoveredRef = useRef(false);
+  const hoverMovedRef = useRef(false);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
 
   const showTooltip = (anchorX: number, anchorY: number, requestId: number) => {
     if (disabled || !text) return;
@@ -181,19 +185,32 @@ export const TooltipWrapper = ({
   const props = {
     onMouseEnter: (event: MouseEvent) => {
       child.props.onMouseEnter?.(event);
-      const store = useTooltipStore.getState();
-      if (store.blockUntilPointerMove) return;
-      scheduleTooltip(event.clientX, event.clientY, "mouse");
+      hoveredRef.current = true;
+      hoverMovedRef.current = false;
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
     },
     onMouseMove: (event: MouseEvent) => {
       child.props.onMouseMove?.(event);
+      if (!hoveredRef.current) return;
+      const last = lastPointerRef.current;
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
+      if (!last) return;
+      const moved =
+        Math.abs(event.clientX - last.x) + Math.abs(event.clientY - last.y) >= 1;
+      if (!moved) return;
       const store = useTooltipStore.getState();
-      if (!store.blockUntilPointerMove) return;
-      store.clearTooltipBlock();
+      if (store.blockUntilPointerMove) {
+        store.clearTooltipBlock();
+      }
+      if (hoverMovedRef.current) return;
+      hoverMovedRef.current = true;
       scheduleTooltip(event.clientX, event.clientY, "mouse");
     },
     onMouseLeave: (event: MouseEvent) => {
       child.props.onMouseLeave?.(event);
+      hoveredRef.current = false;
+      hoverMovedRef.current = false;
+      lastPointerRef.current = null;
       hideTooltip();
     },
     onFocus: (event: FocusEvent) => {

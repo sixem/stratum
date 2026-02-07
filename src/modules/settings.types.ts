@@ -50,6 +50,7 @@ export type Settings = {
   thumbnailQuality: number;
   thumbnailFormat: ThumbnailFormat;
   thumbnailVideos: boolean;
+  thumbnailSvgs: boolean;
   thumbnailCacheMb: number;
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;

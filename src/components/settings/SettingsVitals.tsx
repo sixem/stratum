@@ -1,7 +1,8 @@
 // Sidebar vitals block for the settings panel.
 import { useEffect, useMemo, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { formatBytes } from "@/lib";
+import { formatBytes, getPlatformLabel } from "@/lib";
+import { PressButton } from "../PressButton";
 import { usePromptStore, useSettingsStore, useShellStore } from "@/modules";
 
 type SettingsVitalsProps = {
@@ -29,14 +30,6 @@ const formatUptime = (valueMs: number | null) => {
     return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
   }
   return `${seconds}s`;
-};
-
-const getPlatformLabel = () => {
-  if (typeof navigator === "undefined") return "Unknown";
-  const typedNavigator = navigator as Navigator & {
-    userAgentData?: { platform?: string };
-  };
-  return typedNavigator.userAgentData?.platform ?? navigator.platform ?? "Unknown";
 };
 
 const getCoreLabel = () => {
@@ -220,9 +213,9 @@ export const SettingsVitals = ({ open }: SettingsVitalsProps) => {
       </div>
       {ffmpegCheckReady && !ffmpegDetected ? (
         <div className="settings-vitals-actions">
-          <button type="button" className="btn" onClick={handleLocateFfmpeg}>
+          <PressButton type="button" className="btn" onClick={handleLocateFfmpeg}>
             Locate FFmpeg
-          </button>
+          </PressButton>
         </div>
       ) : null}
     </div>

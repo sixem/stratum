@@ -1,5 +1,6 @@
 // Deprecated legacy top bar; not wired in App. Remove when safe.
 import type { FormEvent } from "react";
+import { PressButton } from "./PressButton";
 import { ChevronUpIcon, RefreshIcon } from "./icons";
 
 type TopBarProps = {
@@ -40,7 +41,7 @@ export const TopBar = ({
       </div>
 
       <form className="pathbar" onSubmit={handleSubmit}>
-        <button
+        <PressButton
           className="btn ghost"
           type="button"
           onClick={onUp}
@@ -48,20 +49,20 @@ export const TopBar = ({
           aria-label="Up one level"
         >
           <ChevronUpIcon className="btn-icon" />
-        </button>
+        </PressButton>
         <input
           value={path}
           onChange={(event) => onPathChange(event.currentTarget.value)}
           placeholder="Enter a path"
           spellCheck={false}
         />
-        <button className="btn" type="submit" disabled={loading || !canSubmit}>
+        <PressButton className="btn" type="submit" disabled={loading || !canSubmit}>
           Go
-        </button>
+        </PressButton>
       </form>
 
       <div className="actions">
-        <button
+        <PressButton
           className="btn ghost"
           type="button"
           onClick={onRefresh}
@@ -69,7 +70,7 @@ export const TopBar = ({
           aria-label="Refresh"
         >
           <RefreshIcon className="btn-icon" />
-        </button>
+        </PressButton>
         <div className={`pulse ${loading ? "is-on" : ""}`} aria-hidden="true" />
       </div>
     </header>

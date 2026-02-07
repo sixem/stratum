@@ -1,13 +1,8 @@
 // Breadcrumb navigation for the current filesystem path.
 import { Fragment, useMemo } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { handleMiddleClick, normalizePath } from "@/lib";
-
-type PathCrumb = {
-  label: string;
-  path: string;
-  key: string;
-};
+import { handleMiddleClick, resolvePathCrumbs } from "@/lib";
+import { PressButton } from "./PressButton";
 
 type PathCrumbsBarProps = {
   path: string;
@@ -18,73 +13,6 @@ type PathCrumbsBarProps = {
   onNavigateNewTab?: (path: string) => void;
 };
 
-const buildCrumbs = (path: string): PathCrumb[] => {
-  const trimmed = path.trim();
-  if (!trimmed) return [];
-
-  const normalized = trimmed.replace(/\//g, "\\");
-  const endsWithSlash = /\\$/.test(normalized);
-  const isDrivePath = /^[a-zA-Z]:/.test(normalized);
-  const isUncPath = normalized.startsWith("\\\\");
-  const segments = normalized.split("\\").filter(Boolean);
-  if (segments.length === 0) return [];
-
-  const crumbs: PathCrumb[] = [];
-  let current = "";
-  let startIndex = 0;
-
-  if (isDrivePath) {
-    const drive = segments[0];
-    const hasMore = segments.length > 1;
-    current = hasMore || endsWithSlash ? `${drive}\\` : drive;
-    crumbs.push({ label: drive, path: current, key: current });
-    startIndex = 1;
-  } else if (isUncPath) {
-    const server = segments[0];
-    const share = segments[1];
-    if (server && share) {
-      const hasMore = segments.length > 2;
-      current = `\\\\${server}\\${share}${hasMore || endsWithSlash ? "\\" : ""}`;
-      crumbs.push({ label: `${server}\\${share}`, path: current, key: current });
-      startIndex = 2;
-    } else if (server) {
-      current = `\\\\${server}${endsWithSlash ? "\\" : ""}`;
-      crumbs.push({ label: current, path: current, key: current });
-      startIndex = 1;
-    }
-  }
-
-  for (let index = startIndex; index < segments.length; index += 1) {
-    if (current && !current.endsWith("\\")) {
-      current += "\\";
-    }
-    current += segments[index];
-    crumbs.push({ label: segments[index], path: current, key: current });
-  }
-
-  return crumbs;
-};
-
-// Prefer the stored trail path when it still contains the current path.
-const resolveCrumbs = (path: string, trailPath?: string | null) => {
-  const trimmedPath = path.trim();
-  if (!trimmedPath) {
-    return { crumbs: buildCrumbs(path), activeIndex: -1 };
-  }
-  const trimmedTrail = trailPath?.trim();
-  const displayPath = trimmedTrail ? trimmedTrail : path;
-  const trailCrumbs = buildCrumbs(displayPath);
-  const currentKey = normalizePath(trimmedPath);
-  const currentIndex = trailCrumbs.findIndex(
-    (crumb) => normalizePath(crumb.path) === currentKey,
-  );
-  if (currentIndex !== -1) {
-    return { crumbs: trailCrumbs, activeIndex: currentIndex };
-  }
-  const currentCrumbs = buildCrumbs(path);
-  return { crumbs: currentCrumbs, activeIndex: currentCrumbs.length - 1 };
-};
-
 export const PathCrumbsBar = ({
   path,
   trailPath,
@@ -93,7 +21,7 @@ export const PathCrumbsBar = ({
   onNavigateNewTab,
 }: PathCrumbsBarProps) => {
   const { crumbs, activeIndex } = useMemo(
-    () => resolveCrumbs(path, trailPath),
+    () => resolvePathCrumbs(path, trailPath),
     [path, trailPath],
   );
   const trimmedPath = path.trim();
@@ -121,7 +49,7 @@ export const PathCrumbsBar = ({
       <div className="crumbs">
         {crumbs.map((crumb, index) => (
           <Fragment key={crumb.key}>
-            <button
+            <PressButton
               type="button"
               className="crumb"
               data-is-dir="true"
@@ -135,7 +63,7 @@ export const PathCrumbsBar = ({
               aria-current={index === activeIndex ? "page" : undefined}
             >
               {crumb.label}
-            </button>
+            </PressButton>
             {index < crumbs.length - 1 ? (
               <span className="crumb-sep">{"\\"}</span>
             ) : null}

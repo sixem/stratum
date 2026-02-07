@@ -64,6 +64,7 @@ type FileGridProps = {
   gridNameHideExtension: boolean;
   autoViewportWidth?: number;
   onAutoViewportWidthChange?: (width: number) => void;
+  instantResizeKey?: string | number | boolean;
   thumbResetKey?: string;
   presenceEnabled?: boolean;
   onGridColumnsChange?: (columns: number) => void;
@@ -130,6 +131,7 @@ const FileGrid = ({
   gridNameHideExtension,
   autoViewportWidth,
   onAutoViewportWidthChange,
+  instantResizeKey,
   thumbResetKey,
   presenceEnabled = true,
   onGridColumnsChange,
@@ -178,6 +180,7 @@ const FileGrid = ({
     gridShowSize,
     gridShowExtension,
     thumbnailFit,
+    instantResizeKey,
     viewKey,
     scrollRestoreKey,
     scrollRestoreTop,

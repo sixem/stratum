@@ -1,5 +1,6 @@
 // Icon button with tooltip for toolbar actions.
 import type { ReactNode } from "react";
+import { PressButton } from "./PressButton";
 import { TooltipWrapper } from "./Tooltip";
 
 type ToolbarIconButtonProps = {
@@ -19,7 +20,7 @@ export const ToolbarIconButton = ({
 }: ToolbarIconButtonProps) => {
   return (
     <TooltipWrapper text={label}>
-      <button
+      <PressButton
         type="button"
         className={`view-btn${active ? " is-active" : ""}`}
         onClick={onClick}
@@ -27,7 +28,7 @@ export const ToolbarIconButton = ({
         aria-pressed={pressed}
       >
         {children}
-      </button>
+      </PressButton>
     </TooltipWrapper>
   );
 };

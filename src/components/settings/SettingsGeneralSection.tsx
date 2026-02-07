@@ -1,5 +1,6 @@
 // General settings and view defaults that shape navigation and layout.
 import type { ViewMode } from "@/types";
+import { PressButton } from "../PressButton";
 import type { SettingsUpdateHandler } from "./types";
 
 type SettingsGeneralSectionProps = {
@@ -34,20 +35,20 @@ export const SettingsGeneralSection = ({
           <div className="settings-desc">Used for new tabs and new sessions.</div>
         </div>
         <div className="settings-pills" role="group" aria-label="Default view">
-          <button
+          <PressButton
             type="button"
             className={`settings-pill${defaultViewMode === "thumbs" ? " is-active" : ""}`}
             onClick={() => onUpdate({ defaultViewMode: "thumbs" })}
           >
             Grid
-          </button>
-          <button
+          </PressButton>
+          <PressButton
             type="button"
             className={`settings-pill${defaultViewMode === "list" ? " is-active" : ""}`}
             onClick={() => onUpdate({ defaultViewMode: "list" })}
           >
             List
-          </button>
+          </PressButton>
         </div>
       </div>
       <div className="settings-item">

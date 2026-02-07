@@ -1,14 +1,17 @@
 // Navigation controls row that sits above the inputs.
 import type { ReactNode } from "react";
-import { ChevronUpIcon, NavArrowIcon } from "./icons";
+import { PressButton } from "./PressButton";
+import { ChevronDownIcon, ChevronUpIcon, NavArrowIcon } from "./icons";
 
 type PathBarProps = {
   onBack: () => void;
   onForward: () => void;
   onUp: () => void;
+  onDown: () => void;
   canGoBack: boolean;
   canGoForward: boolean;
   canGoUp: boolean;
+  canGoDown: boolean;
   loading: boolean;
   leftSlot?: ReactNode;
   driveSlot?: ReactNode;
@@ -19,9 +22,11 @@ export const PathBar = ({
   onBack,
   onForward,
   onUp,
+  onDown,
   canGoBack,
   canGoForward,
   canGoUp,
+  canGoDown,
   loading,
   leftSlot,
   driveSlot,
@@ -31,7 +36,7 @@ export const PathBar = ({
     <div className="pathbar">
       {leftSlot ? <div className="pathbar-left">{leftSlot}</div> : null}
       <div className="path-controls">
-        <button
+        <PressButton
           type="button"
           className="btn ghost"
           onClick={onBack}
@@ -40,8 +45,8 @@ export const PathBar = ({
           aria-label="Back"
         >
           <NavArrowIcon className="btn-icon nav-arrow is-back" />
-        </button>
-        <button
+        </PressButton>
+        <PressButton
           type="button"
           className="btn ghost"
           onClick={onForward}
@@ -50,8 +55,8 @@ export const PathBar = ({
           aria-label="Forward"
         >
           <NavArrowIcon className="btn-icon nav-arrow" />
-        </button>
-        <button
+        </PressButton>
+        <PressButton
           type="button"
           className="btn ghost"
           onClick={onUp}
@@ -60,7 +65,17 @@ export const PathBar = ({
           aria-label="Up one level"
         >
           <ChevronUpIcon className="btn-icon" />
-        </button>
+        </PressButton>
+        <PressButton
+          type="button"
+          className="btn ghost"
+          onClick={onDown}
+          disabled={loading || !canGoDown}
+          aria-disabled={loading || !canGoDown}
+          aria-label="Down one level"
+        >
+          <ChevronDownIcon className="btn-icon" />
+        </PressButton>
       </div>
       {driveSlot ? <div className="pathbar-drive">{driveSlot}</div> : null}
       {rightSlot ? <div className="pathbar-right">{rightSlot}</div> : null}

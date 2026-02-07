@@ -2,9 +2,10 @@
 import type { MouseEvent } from "react";
 import { useEffect, useRef } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { APP_GITHUB_URL } from "@/constants";
+import { APP_ISSUES_URL, APP_REPO_URL } from "@/constants";
 import { isEditableElement } from "@/lib";
 import { useModalFocusTrap } from "@/hooks";
+import { PressButton } from "./PressButton";
 
 type AboutModalProps = {
   open: boolean;
@@ -62,13 +63,15 @@ export const AboutModal = ({
     return () => window.removeEventListener("keydown", handleKey, { capture: true });
   }, [onClose, open]);
 
-  const handleLinkClick = async (event: MouseEvent<HTMLAnchorElement>) => {
+  const handleLinkClick = (url: string) => async (
+    event: MouseEvent<HTMLAnchorElement>,
+  ) => {
     if (!isTauriEnv()) return;
     event.preventDefault();
     try {
-      await openUrl(APP_GITHUB_URL);
+      await openUrl(url);
     } catch {
-      window.open(APP_GITHUB_URL, "_blank", "noreferrer");
+      window.open(url, "_blank", "noreferrer");
     }
   };
 
@@ -130,28 +133,41 @@ export const AboutModal = ({
         </div>
 
         <div className="about-links">
-          <span className="about-label">GitHub</span>
-          <a
-            href={APP_GITHUB_URL}
-            target="_blank"
-            rel="noreferrer"
-            onClick={handleLinkClick}
-          >
-            emy
-          </a>
+          <div className="about-row">
+            <span className="about-label">Repo</span>
+            <a
+              href={APP_REPO_URL}
+              target="_blank"
+              rel="noreferrer"
+              onClick={handleLinkClick(APP_REPO_URL)}
+            >
+              sixem/stratum
+            </a>
+          </div>
+          <div className="about-row">
+            <span className="about-label">Issues</span>
+            <a
+              href={APP_ISSUES_URL}
+              target="_blank"
+              rel="noreferrer"
+              onClick={handleLinkClick(APP_ISSUES_URL)}
+            >
+              github.com/sixem/stratum/issues
+            </a>
+          </div>
         </div>
 
         <div className="about-footer">Built with Tauri + React.</div>
 
         <div className="about-actions">
-          <button
+          <PressButton
             ref={closeButtonRef}
             type="button"
             className="btn"
             onClick={onClose}
           >
             Close
-          </button>
+          </PressButton>
         </div>
       </div>
     </div>

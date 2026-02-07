@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { activeDrive, buildDriveTooltip, handleMiddleClick, normalizePath } from "@/lib";
 import type { DriveInfo } from "@/types";
+import { PressButton } from "./PressButton";
 import { TooltipWrapper } from "./Tooltip";
 
 type DrivePickerProps = {
@@ -148,7 +149,7 @@ export const DrivePicker = ({
       <div className="drive-toggle">
         <div className="drive-toggle-body" role="menu">
           <TooltipWrapper text={activeTooltip}>
-            <button
+            <PressButton
               type="button"
               className="drive-picker-button"
               onClick={handleToggle}
@@ -158,7 +159,7 @@ export const DrivePicker = ({
               aria-expanded={expanded}
             >
               {displayLabel}
-            </button>
+            </PressButton>
           </TooltipWrapper>
           <div className="drive-picker-extend">
             <div
@@ -166,7 +167,7 @@ export const DrivePicker = ({
               data-can-left={canScrollLeft ? "true" : "false"}
               data-can-right={canScrollRight ? "true" : "false"}
             >
-              <button
+              <PressButton
                 type="button"
                 className="drive-picker-scroll-button is-left"
                 onClick={() => {
@@ -181,7 +182,7 @@ export const DrivePicker = ({
                 disabled={!canScrollLeft}
               >
                 <ChevronIcon direction="left" />
-              </button>
+              </PressButton>
               <div className="drive-picker-list" role="presentation" ref={listRef}>
                 {drives.map((drive) => {
                   const driveLabel = formatDriveLabel(drive);
@@ -192,7 +193,7 @@ export const DrivePicker = ({
                   );
                   return (
                     <TooltipWrapper key={drive} text={tooltipText}>
-                      <button
+                      <PressButton
                         type="button"
                         role="menuitem"
                         className={`drive-picker-item${isActive ? " is-active" : ""}`}
@@ -209,12 +210,12 @@ export const DrivePicker = ({
                         }}
                       >
                         {driveLabel}
-                      </button>
+                      </PressButton>
                     </TooltipWrapper>
                   );
                 })}
               </div>
-              <button
+              <PressButton
                 type="button"
                 className="drive-picker-scroll-button is-right"
                 onClick={() => {
@@ -229,7 +230,7 @@ export const DrivePicker = ({
                 disabled={!canScrollRight}
               >
                 <ChevronIcon direction="right" />
-              </button>
+              </PressButton>
             </div>
           </div>
         </div>

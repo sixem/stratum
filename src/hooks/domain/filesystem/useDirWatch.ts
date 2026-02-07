@@ -5,6 +5,11 @@ import { startDirWatch, stopDirWatch } from "@/api";
 import { makeDebug, normalizePath } from "@/lib";
 import type { DirChangedEvent, DirRenameEvent, ListDirOptions, SortState, Tab } from "@/types";
 
+type MetaRequestOptions = {
+  force?: boolean;
+  defer?: boolean;
+};
+
 type UseDirWatchOptions = {
   enabled: boolean;
   activeTabId: string | null;
@@ -14,6 +19,7 @@ type UseDirWatchOptions = {
   sortState: SortState;
   searchQuery: string;
   loadDir: (path: string, options?: DirLoadOptions) => Promise<void>;
+  requestEntryMeta?: (paths: string[], options?: MetaRequestOptions) => Promise<unknown>;
   loading: boolean;
   onPresenceToggle?: (suppress: boolean) => void;
 };
@@ -27,6 +33,8 @@ const DIR_CHANGE_DEBOUNCE_MS = 260;
 const TAB_SWITCH_CHECK_DELAY_MS = 140;
 const TAB_SWITCH_REFRESH_COOLDOWN_MS = 2000;
 const REFRESH_COOLDOWN_MS = 900;
+// Extra refreshes after a change help catch slow/partial writes (1s, 2s, 4s).
+const REFRESH_BACKOFF_STEPS_MS = [1000, 2000, 4000];
 
 const log = makeDebug("watch");
 
@@ -39,6 +47,7 @@ export const useDirWatch = ({
   sortState,
   searchQuery,
   loadDir,
+  requestEntryMeta,
   loading,
   onPresenceToggle,
 }: UseDirWatchOptions) => {
@@ -50,6 +59,8 @@ export const useDirWatch = ({
   const sortRef = useRef(sortState);
   const searchRef = useRef(searchQuery);
   const loadDirRef = useRef(loadDir);
+  // Optional metadata refresh for changed entries to keep thumbnails accurate.
+  const requestEntryMetaRef = useRef(requestEntryMeta);
   const loadingRef = useRef(loading);
   const dirtyTabIdsRef = useRef<Set<string>>(new Set());
   const renameDirtyTabIdsRef = useRef<Set<string>>(new Set());
@@ -62,9 +73,13 @@ export const useDirWatch = ({
   const externalSuppressedRef = useRef(false);
   const suppressNextRefreshRef = useRef(false);
   const pendingPathsRef = useRef<Set<string>>(new Set());
+  const pendingEntryPathsRef = useRef<Set<string>>(new Set());
   const flushTimerRef = useRef<number | null>(null);
   const lastTabIdRef = useRef<string | null>(null);
   const tabCheckTimerRef = useRef<number | null>(null);
+  const refreshBackoffTimerRef = useRef<number | null>(null);
+  const refreshBackoffStepRef = useRef(0);
+  const refreshBackoffKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     enabledRef.current = enabled;
@@ -75,6 +90,7 @@ export const useDirWatch = ({
     sortRef.current = sortState;
     searchRef.current = searchQuery;
     loadDirRef.current = loadDir;
+    requestEntryMetaRef.current = requestEntryMeta;
     loadingRef.current = loading;
     presenceToggleRef.current = onPresenceToggle ?? null;
   }, [
@@ -85,6 +101,7 @@ export const useDirWatch = ({
     loadDir,
     loading,
     onPresenceToggle,
+    requestEntryMeta,
     searchQuery,
     sortState,
     tabs,
@@ -162,10 +179,61 @@ export const useDirWatch = ({
     refreshActiveRef.current = refreshActive;
   }, [refreshActive]);
 
+  const clearRefreshBackoff = useCallback(() => {
+    if (refreshBackoffTimerRef.current != null) {
+      window.clearTimeout(refreshBackoffTimerRef.current);
+      refreshBackoffTimerRef.current = null;
+    }
+    refreshBackoffStepRef.current = 0;
+    refreshBackoffKeyRef.current = null;
+  }, []);
+
+  const scheduleRefreshBackoff = useCallback(
+    (path: string) => {
+      const key = normalizePath(path);
+      if (!key) return;
+
+      refreshBackoffKeyRef.current = key;
+      refreshBackoffStepRef.current = 0;
+      if (refreshBackoffTimerRef.current != null) {
+        window.clearTimeout(refreshBackoffTimerRef.current);
+        refreshBackoffTimerRef.current = null;
+      }
+
+      const scheduleStep = (stepIndex: number) => {
+        const delay = REFRESH_BACKOFF_STEPS_MS[stepIndex];
+        if (delay == null) return;
+        refreshBackoffTimerRef.current = window.setTimeout(() => {
+          refreshBackoffTimerRef.current = null;
+          if (!enabledRef.current) return;
+          const activeKey = normalizePath(activeTabPathRef.current);
+          if (!activeKey || activeKey !== refreshBackoffKeyRef.current) return;
+          refreshActiveRef.current("fs-backoff");
+          const nextIndex = stepIndex + 1;
+          if (nextIndex < REFRESH_BACKOFF_STEPS_MS.length) {
+            scheduleStep(nextIndex);
+          }
+        }, delay);
+      };
+
+      scheduleStep(0);
+    },
+    [],
+  );
+
   const flushPendingChanges = useCallback(() => {
-    if (pendingPathsRef.current.size === 0) return;
+    if (
+      pendingPathsRef.current.size === 0 &&
+      pendingEntryPathsRef.current.size === 0
+    ) {
+      return;
+    }
     const pending = Array.from(pendingPathsRef.current);
     pendingPathsRef.current.clear();
+    const metaPaths = Array.from(pendingEntryPathsRef.current)
+      .map((path) => path.trim())
+      .filter(Boolean);
+    pendingEntryPathsRef.current.clear();
     const renamePending = new Set(pendingRenamePathsRef.current);
     pendingRenamePathsRef.current.clear();
     const renameKeys = new Set<string>();
@@ -208,6 +276,13 @@ export const useDirWatch = ({
         suppressNextRefreshRef.current = true;
       }
       refreshActiveRef.current("fs-event");
+      // Re-check after a short backoff in case a large write finishes later.
+      scheduleRefreshBackoff(activeTabPathRef.current);
+    }
+
+    if (metaPaths.length > 0) {
+      // Force metadata refresh for changed entries so thumbnail signatures update.
+      void requestEntryMetaRef.current?.(metaPaths, { force: true }).catch(() => {});
     }
   }, []);
 
@@ -229,6 +304,11 @@ export const useDirWatch = ({
           const payload = event.payload;
           if (!payload?.path) return;
           pendingPathsRef.current.add(payload.path);
+          payload.paths?.forEach((path) => {
+            if (path?.trim()) {
+              pendingEntryPathsRef.current.add(path);
+            }
+          });
           scheduleFlush();
         });
         if (!active) {
@@ -260,6 +340,19 @@ export const useDirWatch = ({
           if (!payload?.path) return;
           pendingPathsRef.current.add(payload.path);
           pendingRenamePathsRef.current.add(payload.path);
+          if (payload.paths && payload.paths.length > 0) {
+            payload.paths.forEach((path) => {
+              if (path?.trim()) {
+                pendingEntryPathsRef.current.add(path);
+              }
+            });
+          } else {
+            [payload.from, payload.to].forEach((path) => {
+              if (path?.trim()) {
+                pendingEntryPathsRef.current.add(path);
+              }
+            });
+          }
           scheduleFlush();
         });
         if (!active) {
@@ -370,6 +463,7 @@ export const useDirWatch = ({
         window.clearTimeout(tabCheckTimerRef.current);
         tabCheckTimerRef.current = null;
       }
+      clearRefreshBackoff();
     };
-  }, []);
+  }, [clearRefreshBackoff]);
 };

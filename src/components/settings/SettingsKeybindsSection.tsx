@@ -10,6 +10,7 @@ import {
   isBareCharacterKeybind,
   normalizeKeybind,
 } from "@/modules";
+import { PressButton } from "../PressButton";
 import type { SettingsUpdateHandler } from "./types";
 
 type SettingsKeybindsSectionProps = {
@@ -116,9 +117,9 @@ export const SettingsKeybindsSection = ({
           </div>
         </div>
         <div className="settings-actions">
-          <button type="button" className="btn ghost" onClick={handleResetKeybinds}>
+          <PressButton type="button" className="btn ghost" onClick={handleResetKeybinds}>
             Reset all
-          </button>
+          </PressButton>
         </div>
       </div>
       {KEYBIND_DEFINITIONS.map((definition) => {
@@ -140,7 +141,7 @@ export const SettingsKeybindsSection = ({
               ) : null}
             </div>
             <div className="settings-actions">
-              <button
+              <PressButton
                 type="button"
                 className={`keybind-button${isCapturing ? " is-capturing" : ""}${
                   showError ? " is-error" : ""
@@ -148,15 +149,15 @@ export const SettingsKeybindsSection = ({
                 onClick={() => handleStartCapture(definition.id)}
               >
                 {displayLabel}
-              </button>
-              <button
+              </PressButton>
+              <PressButton
                 type="button"
                 className="btn ghost"
                 disabled={normalizedCurrent === normalizedDefault}
                 onClick={() => handleResetKeybind(definition.id)}
               >
                 Reset
-              </button>
+              </PressButton>
             </div>
           </div>
         );

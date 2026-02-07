@@ -32,6 +32,8 @@ export const DOCUMENT_EXTENSIONS = new Set([
   "env",
   "log",
   "xml",
+  "svg",
+  "svgz",
   "html",
   "htm",
   "css",
@@ -133,8 +135,6 @@ export const IMAGE_EXTENSIONS = new Set([
   "tif",
   "tiff",
   "ico",
-  "svg",
-  "svgz",
 ]);
 
 export const AUDIO_EXTENSIONS = new Set([

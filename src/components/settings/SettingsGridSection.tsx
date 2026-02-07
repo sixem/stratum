@@ -1,5 +1,4 @@
 // Grid-specific appearance and content controls.
-import { useEffect, useState } from "react";
 import {
   GRID_AUTO_COLUMNS_MAX,
   GRID_AUTO_COLUMNS_MIN,
@@ -7,6 +6,8 @@ import {
   GRID_GAP_MIN,
 } from "@/modules";
 import type { GridNameEllipsis, GridSize } from "@/modules";
+import { PressButton } from "../PressButton";
+import { useDeferredRange } from "./useDeferredRange";
 import type { SettingsUpdateHandler } from "./types";
 
 type SettingsGridSectionProps = {
@@ -45,24 +46,14 @@ export const SettingsGridSection = ({
   gridNameHideExtension,
   onUpdate,
 }: SettingsGridSectionProps) => {
-  const [autoColumnsDraft, setAutoColumnsDraft] = useState(gridAutoColumns);
-  const [gridGapDraft, setGridGapDraft] = useState(gridGap);
-
-  useEffect(() => {
-    setAutoColumnsDraft(gridAutoColumns);
-  }, [gridAutoColumns]);
-  useEffect(() => {
-    setGridGapDraft(gridGap);
-  }, [gridGap]);
-
-  const commitAutoColumns = () => {
-    if (autoColumnsDraft === gridAutoColumns) return;
-    onUpdate({ gridAutoColumns: autoColumnsDraft });
-  };
-  const commitGridGap = () => {
-    if (gridGapDraft === gridGap) return;
-    onUpdate({ gridGap: gridGapDraft });
-  };
+  const autoColumnsRange = useDeferredRange({
+    value: gridAutoColumns,
+    onCommit: (value) => onUpdate({ gridAutoColumns: value }),
+  });
+  const gridGapRange = useDeferredRange({
+    value: gridGap,
+    onCommit: (value) => onUpdate({ gridGap: value }),
+  });
 
   return (
     <section className="settings-section" id={sectionId}>
@@ -76,14 +67,14 @@ export const SettingsGridSection = ({
         </div>
         <div className="settings-pills" role="group" aria-label="Grid size">
           {GRID_SIZES.map((size) => (
-            <button
+            <PressButton
               key={size.id}
               type="button"
               className={`settings-pill${gridSize === size.id ? " is-active" : ""}`}
               onClick={() => onUpdate({ gridSize: size.id })}
             >
               {size.label}
-            </button>
+            </PressButton>
           ))}
         </div>
       </div>
@@ -101,19 +92,9 @@ export const SettingsGridSection = ({
               min={GRID_AUTO_COLUMNS_MIN}
               max={GRID_AUTO_COLUMNS_MAX}
               step={1}
-              value={autoColumnsDraft}
-              onChange={(event) =>
-                setAutoColumnsDraft(Number(event.currentTarget.value))
-              }
-              onPointerUp={commitAutoColumns}
-              onKeyUp={(event) => {
-                if (event.key === "Enter") {
-                  commitAutoColumns();
-                }
-              }}
-              onBlur={commitAutoColumns}
+              {...autoColumnsRange.bind}
             />
-            <span className="settings-value">{autoColumnsDraft}</span>
+            <span className="settings-value">{autoColumnsRange.draft}</span>
           </div>
         </div>
       ) : null}
@@ -128,17 +109,9 @@ export const SettingsGridSection = ({
             min={GRID_GAP_MIN}
             max={GRID_GAP_MAX}
             step={1}
-            value={gridGapDraft}
-            onChange={(event) => setGridGapDraft(Number(event.currentTarget.value))}
-            onPointerUp={commitGridGap}
-            onKeyUp={(event) => {
-              if (event.key === "Enter") {
-                commitGridGap();
-              }
-            }}
-            onBlur={commitGridGap}
+            {...gridGapRange.bind}
           />
-          <span className="settings-value">{gridGapDraft}px</span>
+          <span className="settings-value">{gridGapRange.draft}px</span>
         </div>
       </div>
       <div className="settings-item">
@@ -147,20 +120,20 @@ export const SettingsGridSection = ({
           <div className="settings-desc">Rounded cards or straight edges.</div>
         </div>
         <div className="settings-pills" role="group" aria-label="Grid corners">
-          <button
+          <PressButton
             type="button"
             className={`settings-pill${gridRounded ? " is-active" : ""}`}
             onClick={() => onUpdate({ gridRounded: true })}
           >
             Rounded
-          </button>
-          <button
+          </PressButton>
+          <PressButton
             type="button"
             className={`settings-pill${gridRounded ? "" : " is-active"}`}
             onClick={() => onUpdate({ gridRounded: false })}
           >
             Straight
-          </button>
+          </PressButton>
         </div>
       </div>
       <div className="settings-item">
@@ -220,14 +193,14 @@ export const SettingsGridSection = ({
         </div>
         <div className="settings-pills" role="group" aria-label="Grid name truncation">
           {GRID_NAME_ELLIPSIS.map((mode) => (
-            <button
+            <PressButton
               key={mode.id}
               type="button"
               className={`settings-pill${gridNameEllipsis === mode.id ? " is-active" : ""}`}
               onClick={() => onUpdate({ gridNameEllipsis: mode.id })}
             >
               {mode.label}
-            </button>
+            </PressButton>
           ))}
         </div>
       </div>

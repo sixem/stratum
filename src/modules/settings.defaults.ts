@@ -19,7 +19,7 @@ export const DEFAULT_SIDEBAR_HIDDEN_SECTIONS: SidebarSectionId[] = [];
 
 export const DEFAULT_SETTINGS: Settings = {
   sidebarOpen: true,
-  sidebarRecentLimit: 8,
+  sidebarRecentLimit: 10,
   sidebarSectionOrder: DEFAULT_SIDEBAR_SECTION_ORDER,
   sidebarHiddenSections: DEFAULT_SIDEBAR_HIDDEN_SECTIONS,
   defaultViewMode: "thumbs",
@@ -35,10 +35,10 @@ export const DEFAULT_SETTINGS: Settings = {
   ambientBackground: false,
   blurOverlays: false,
   keybinds: DEFAULT_KEYBINDS,
-  gridSize: "normal",
+  gridSize: "auto",
   gridAutoColumns: GRID_AUTO_COLUMNS_DEFAULT,
   gridGap: GRID_GAP_DEFAULT,
-  gridRounded: true,
+  gridRounded: false,
   gridCentered: true,
   gridShowSize: true,
   gridShowExtension: true,
@@ -51,8 +51,9 @@ export const DEFAULT_SETTINGS: Settings = {
   thumbnailQuality: 80,
   thumbnailFormat: "webp",
   thumbnailVideos: true,
+  thumbnailSvgs: false,
   thumbnailCacheMb: 512,
-  thumbnailFit: "contain",
+  thumbnailFit: "cover",
   thumbnailAppIcons: true,
   ffmpegPath: "",
 };

@@ -72,11 +72,7 @@
   max-height: min(100%, 640px);
   display: grid;
   gap: 14px;
-  padding: 20px 22px;
-  border-radius: 12px;
-  border: 1px solid var(--stroke);
-  background: var(--panel-2);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+  margin: 20px 22px;
   overflow: auto;
 }
 

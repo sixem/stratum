@@ -224,6 +224,10 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.thumbnailVideos === "boolean"
         ? value.thumbnailVideos
         : DEFAULT_SETTINGS.thumbnailVideos,
+    thumbnailSvgs:
+      typeof value?.thumbnailSvgs === "boolean"
+        ? value.thumbnailSvgs
+        : DEFAULT_SETTINGS.thumbnailSvgs,
     thumbnailCacheMb: clampNumber(
       value?.thumbnailCacheMb,
       DEFAULT_SETTINGS.thumbnailCacheMb,

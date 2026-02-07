@@ -174,6 +174,21 @@ export const ChevronUpIcon = ({ className }: IconProps) => {
   );
 };
 
+export const ChevronDownIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
+      <polyline
+        points="3 6 12 18 21 6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
+
 export const TabCloseIcon = ({ className }: IconProps) => {
   // Rounded close mark used for tab close buttons.
   return (

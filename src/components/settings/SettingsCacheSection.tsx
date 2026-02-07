@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { getThumbCacheSize } from "@/api";
 import { formatBytes } from "@/lib";
+import { PressButton } from "../PressButton";
+import { useDeferredRange } from "./useDeferredRange";
 import type { SettingsUpdateHandler } from "./types";
 
 type SettingsCacheSectionProps = {
@@ -32,6 +34,10 @@ export const SettingsCacheSection = ({
   const [cacheBusy, setCacheBusy] = useState(false);
   const [cacheUsageBytes, setCacheUsageBytes] = useState<number | null>(null);
   const isThumbsDisabled = !thumbnailsEnabled;
+  const cacheRange = useDeferredRange({
+    value: thumbnailCacheMb,
+    onCommit: (value) => onUpdate({ thumbnailCacheMb: value }),
+  });
 
   const refreshCacheUsage = useCallback(async () => {
     try {
@@ -79,22 +85,22 @@ export const SettingsCacheSection = ({
           <div className="settings-desc">Pick the saved thumbnail format.</div>
         </div>
         <div className="settings-pills" role="group" aria-label="Thumbnail format">
-          <button
+          <PressButton
             type="button"
             className={`settings-pill${thumbnailFormat === "webp" ? " is-active" : ""}`}
             disabled={isThumbsDisabled}
             onClick={() => onUpdate({ thumbnailFormat: "webp" })}
           >
             WebP
-          </button>
-          <button
+          </PressButton>
+          <PressButton
             type="button"
             className={`settings-pill${thumbnailFormat === "jpeg" ? " is-active" : ""}`}
             disabled={isThumbsDisabled}
             onClick={() => onUpdate({ thumbnailFormat: "jpeg" })}
           >
             JPEG
-          </button>
+          </PressButton>
         </div>
       </div>
       <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
@@ -108,13 +114,10 @@ export const SettingsCacheSection = ({
             min={CACHE_MIN}
             max={CACHE_MAX}
             step={CACHE_STEP}
-            value={thumbnailCacheMb}
             disabled={isThumbsDisabled}
-            onChange={(event) =>
-              onUpdate({ thumbnailCacheMb: Number(event.currentTarget.value) })
-            }
+            {...cacheRange.bind}
           />
-          <span className="settings-value">{thumbnailCacheMb} MB</span>
+          <span className="settings-value">{cacheRange.draft} MB</span>
         </div>
       </div>
       <div className="settings-item">
@@ -126,22 +129,22 @@ export const SettingsCacheSection = ({
           <div className="settings-desc">Open the cache folder or clear stored previews.</div>
         </div>
         <div className="settings-actions">
-          <button
+          <PressButton
             type="button"
             className="btn ghost"
             disabled={cacheBusy || !onOpenCacheLocation}
             onClick={handleOpenCache}
           >
             Open
-          </button>
-          <button
+          </PressButton>
+          <PressButton
             type="button"
             className="btn"
             disabled={cacheBusy || !onClearCache}
             onClick={handleClearCache}
           >
             Clear
-          </button>
+          </PressButton>
         </div>
       </div>
     </section>

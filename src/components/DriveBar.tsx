@@ -1,6 +1,7 @@
 // Deprecated drive bar; not wired in App. Remove when safe.
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { activeDrive, buildDriveTooltip, handleMiddleClick, normalizePath } from "@/lib";
+import { PressButton } from "./PressButton";
 import { TooltipWrapper } from "./Tooltip";
 import type { DriveInfo } from "@/types";
 
@@ -43,14 +44,14 @@ const DriveList = ({
     const tooltipText = buildDriveTooltip(label, info);
     return (
       <TooltipWrapper key={drive} text={tooltipText}>
-        <button
+        <PressButton
           type="button"
           className={`drive${isActive ? " is-active" : ""}`}
           onClick={() => onSelect(drive)}
           onMouseDown={(event) => handleOpenNewTab(event, drive)}
         >
           {label}
-        </button>
+        </PressButton>
       </TooltipWrapper>
     );
   });
