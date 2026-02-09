@@ -329,6 +329,11 @@ const App = () => {
     },
     [openPreview, setSelection],
   );
+  const handleSelectAll = useCallback(() => {
+    if (selectionItems.length === 0) return;
+    // Keep selection order aligned with the rendered view model.
+    setSelection(selectionItems, selectionItems[0]);
+  }, [selectionItems, setSelection]);
 
   const {
     renameTarget,
@@ -366,6 +371,11 @@ const App = () => {
     setRenameTarget,
     setRenameValue,
   });
+  // Manual refresh should clear selection first; internal/background refreshes stay untouched.
+  const handleManualRefresh = useCallback(() => {
+    handleClearSelection();
+    handleRefresh();
+  }, [handleClearSelection, handleRefresh]);
 
   const { queueCreateSelection } = usePendingCreateSelection({
     viewKey,
@@ -542,8 +552,9 @@ const App = () => {
     onNewTab: handleNewTab,
     onCloseTab: handleCloseTab,
     onSelectTab: handleSelectTab,
-    onRefresh: handleRefresh,
+    onRefresh: handleManualRefresh,
     onClearSelection: handleClearSelection,
+    onSelectAll: handleSelectAll,
   });
 
   // Status bar labels are kept in sync with selection and drive stats.
@@ -584,7 +595,7 @@ const App = () => {
       onPathChange: setPathValue,
       onSearchChange: setSearchValue,
       onSubmit: handleGo,
-      onRefresh: handleRefresh,
+      onRefresh: handleManualRefresh,
       loading,
       searchInputRef,
     },

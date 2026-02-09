@@ -83,6 +83,7 @@ export const SINGLE_CHAR_PATTERN = /^.$/;
 // Fixed shortcuts that cannot be reassigned.
 export const RESERVED_KEYBIND_DEFINITIONS = [
   { combo: "Control+f", label: "Search" },
+  { combo: "Control+a", label: "Select all" },
   { combo: "Control+c", label: "Copy" },
   { combo: "Control+v", label: "Paste" },
   { combo: "Control+r", label: "Refresh" },
