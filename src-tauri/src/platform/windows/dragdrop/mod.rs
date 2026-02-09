@@ -3,7 +3,7 @@
 use serde::Serialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use tauri::{AppHandle, Emitter, EventTarget, Manager};
 
@@ -15,7 +15,7 @@ use windows::Win32::Graphics::Gdi::ScreenToClient;
 use windows::Win32::System::Com::IDataObject;
 use windows::Win32::System::Ole::{
     IDropTarget, IDropTarget_Impl, OleInitialize, RegisterDragDrop, RevokeDragDrop, DROPEFFECT,
-    DROPEFFECT_COPY, DROPEFFECT_MOVE, DROPEFFECT_NONE,
+    DROPEFFECT_COPY, DROPEFFECT_LINK, DROPEFFECT_MOVE, DROPEFFECT_NONE,
 };
 use windows::Win32::System::SystemServices::{MODIFIERKEYS_FLAGS, MK_CONTROL, MK_SHIFT};
 use windows::Win32::UI::WindowsAndMessaging::EnumChildWindows;
@@ -35,22 +35,21 @@ const DRAG_LEAVE_EVENT: &str = "tauri://drag-leave";
 
 fn extract_drop_paths_for_transfer(data: &IDataObject) -> Vec<String> {
     // Keep drop extraction layered and easy to extend:
-    // 1) Virtual files (7-Zip etc.) via FileGroupDescriptor + FileContents.
-    // 2) Regular filesystem drops via CF_HDROP paths (with extra staging for temp sources).
+    // 1) Regular filesystem drops via CF_HDROP paths (with extra staging for temp sources).
+    // 2) Virtual files (7-Zip etc.) via FileGroupDescriptor + FileContents.
     // 3) Shell namespace drops (WinSCP etc.) via Shell IDList Array, copied into temp.
     //
-    // Note: we only fall back to shell IDList extraction when `CF_HDROP` is unavailable. Many
-    // normal file drags (Explorer) also expose shell item formats, and we don't want to copy
-    // stable local files into temp unnecessarily.
-
-    let paths = materialize_virtual_paths(data);
-    if !paths.is_empty() {
-        return paths;
-    }
+    // Rationale: many real filesystem drags (Explorer) also expose shell/virtual formats. Trying
+    // CF_HDROP first avoids unnecessary materialization of already-stable files.
 
     let hdrop_paths = extract_hdrop_paths(data);
     if !hdrop_paths.is_empty() {
         return stage_temp_hdrop_paths(&hdrop_paths).unwrap_or(hdrop_paths);
+    }
+
+    let virtual_paths = materialize_virtual_paths(data);
+    if !virtual_paths.is_empty() {
+        return virtual_paths;
     }
 
     materialize_shell_id_list_paths(data)
@@ -115,6 +114,7 @@ struct DropTarget {
     app: AppHandle,
     label: String,
     supported: AtomicBool,
+    allowed_effects: AtomicU32,
 }
 
 impl DropTarget {
@@ -182,6 +182,8 @@ fn register_on_hwnd(hwnd: HWND, app: AppHandle, label: &str) -> Option<IDropTarg
         app,
         label: label.to_string(),
         supported: AtomicBool::new(false),
+        // Atomic storage uses the raw integer representation of the drop mask.
+        allowed_effects: AtomicU32::new(DROPEFFECT_NONE.0),
     }
     .into();
 
@@ -204,7 +206,10 @@ impl IDropTarget_Impl for DropTarget_Impl {
         let data = pdataobj.as_ref();
         let supported = data.map_or(false, supports_drop);
         self.supported.store(supported, Ordering::Relaxed);
-        set_drop_effect(pdweffect, grfkeystate, supported);
+        let allowed_mask = read_effect_mask(pdweffect);
+        self.allowed_effects
+            .store(allowed_mask.0, Ordering::Relaxed);
+        set_drop_effect(pdweffect, grfkeystate, supported, allowed_mask);
         if supported {
             let paths = data.map(extract_hdrop_paths).unwrap_or_default();
             self.emit_event(
@@ -225,7 +230,8 @@ impl IDropTarget_Impl for DropTarget_Impl {
         pdweffect: *mut DROPEFFECT,
     ) -> WinResult<()> {
         let supported = self.supported.load(Ordering::Relaxed);
-        set_drop_effect(pdweffect, grfkeystate, supported);
+        let allowed_mask = DROPEFFECT(self.allowed_effects.load(Ordering::Relaxed));
+        set_drop_effect(pdweffect, grfkeystate, supported, allowed_mask);
         if supported {
             self.emit_event(
                 DRAG_OVER_EVENT,
@@ -253,14 +259,16 @@ impl IDropTarget_Impl for DropTarget_Impl {
         pdweffect: *mut DROPEFFECT,
     ) -> WinResult<()> {
         let Some(data) = pdataobj.as_ref() else {
-            set_drop_effect(pdweffect, grfkeystate, false);
+            let allowed_mask = read_effect_mask(pdweffect);
+            set_drop_effect(pdweffect, grfkeystate, false, allowed_mask);
             return Ok(());
         };
 
         let paths = extract_drop_paths_for_transfer(data);
         let supported = !paths.is_empty();
         self.supported.store(false, Ordering::Relaxed);
-        set_drop_effect(pdweffect, grfkeystate, supported);
+        let allowed_mask = DROPEFFECT(self.allowed_effects.load(Ordering::Relaxed));
+        set_drop_effect(pdweffect, grfkeystate, supported, allowed_mask);
         if supported {
             self.emit_event(
                 DRAG_DROP_EVENT,
@@ -280,17 +288,35 @@ fn set_drop_effect(
     pdweffect: *mut DROPEFFECT,
     grfkeystate: MODIFIERKEYS_FLAGS,
     supported: bool,
+    allowed_mask: DROPEFFECT,
 ) {
     if pdweffect.is_null() {
         return;
     }
+
+    let allowed = allowed_mask;
+    let allow_copy = (allowed & DROPEFFECT_COPY) == DROPEFFECT_COPY;
+    let allow_move = (allowed & DROPEFFECT_MOVE) == DROPEFFECT_MOVE;
+
+    // The source cursor might keep link-only drops alive; we fall back to the mask if neither
+    // copy nor move is allowed rather than forcing NONE immediately.
+    let allow_link = (allowed & DROPEFFECT_LINK) == DROPEFFECT_LINK;
+
     let effect = if supported {
         let prefers_move = (grfkeystate & MK_SHIFT).0 != 0;
         let prefers_copy = (grfkeystate & MK_CONTROL).0 != 0;
-        if prefers_move && !prefers_copy {
+        if prefers_move && !prefers_copy && allow_move {
             DROPEFFECT_MOVE
-        } else {
+        } else if prefers_copy && allow_copy {
             DROPEFFECT_COPY
+        } else if allow_copy {
+            DROPEFFECT_COPY
+        } else if allow_move {
+            DROPEFFECT_MOVE
+        } else if allow_link {
+            DROPEFFECT_LINK
+        } else {
+            DROPEFFECT_NONE
         }
     } else {
         DROPEFFECT_NONE
@@ -298,4 +324,11 @@ fn set_drop_effect(
     unsafe {
         *pdweffect = effect;
     }
+}
+
+fn read_effect_mask(pdweffect: *const DROPEFFECT) -> DROPEFFECT {
+    if pdweffect.is_null() {
+        return DROPEFFECT_NONE;
+    }
+    unsafe { *pdweffect }
 }
