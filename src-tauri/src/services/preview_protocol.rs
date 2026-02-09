@@ -219,7 +219,7 @@ fn content_type_for_path(path: &Path) -> &'static str {
     };
 
     match ext.as_str() {
-        "jpg" | "jpeg" | "jpe" => "image/jpeg",
+        "jpg" | "jpeg" | "jpe" | "jfif" => "image/jpeg",
         "png" => "image/png",
         "gif" => "image/gif",
         "webp" => "image/webp",

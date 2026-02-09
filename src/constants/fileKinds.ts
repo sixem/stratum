@@ -128,6 +128,7 @@ export const VIDEO_EXTENSIONS = new Set([
 export const IMAGE_EXTENSIONS = new Set([
   "jpg",
   "jpeg",
+  "jfif",
   "png",
   "webp",
   "gif",
