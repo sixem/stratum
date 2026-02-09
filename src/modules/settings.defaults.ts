@@ -44,7 +44,7 @@ export const DEFAULT_SETTINGS: Settings = {
   gridShowSize: true,
   gridShowExtension: true,
   gridNameEllipsis: "middle",
-  gridNameHideExtension: true,
+  gridNameHideExtension: false,
   menuOpenPwsh: true,
   menuOpenWsl: false,
   thumbnailsEnabled: true,
