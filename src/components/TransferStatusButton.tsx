@@ -9,12 +9,14 @@ import { PressButton } from "./PressButton";
 
 export const TransferStatusButton = () => {
   const jobs = useTransferStore((state) => state.jobs);
+  const clearAll = useTransferStore((state) => state.clearAll);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const popoverId = useId();
   const summary = useMemo(() => buildTransferSummary(jobs), [jobs]);
+  const canClear = !summary.hasActive && jobs.length > 0;
   // Keep timing labels fresh when the popover is open or transfers are running.
   const now = useNowTick({ enabled: open || summary.hasActive });
 
@@ -93,6 +95,23 @@ export const TransferStatusButton = () => {
               {summary.latestJob.failures === 1 ? "" : "s"}
             </div>
           ) : null}
+          {/* Keep this as a footer action so users can dismiss old entries quickly. */}
+          <div className="transfer-popover-actions">
+            <PressButton
+              type="button"
+              className="transfer-clear-button"
+              onClick={() => {
+                clearAll();
+                setOpen(false);
+              }}
+              disabled={!canClear}
+              title={
+                canClear ? "Clear transfer log" : "Wait until active transfers are done"
+              }
+            >
+              Clear transfer log
+            </PressButton>
+          </div>
         </div>
       ) : null}
     </div>

@@ -1,6 +1,6 @@
 [package]
 name = "stratum"
-version = "0.1.2-b"
+version = "0.1.3"
 description = "Stratum File Manager"
 authors = ["emy"]
 edition = "2021"

@@ -30,6 +30,7 @@ type UseAppKeybindsOptions = {
   onSelectTab: (id: string) => void;
   onRefresh: () => void;
   onClearSelection: () => void;
+  onSelectAll: () => void;
 };
 
 export const useAppKeybinds = ({
@@ -55,6 +56,7 @@ export const useAppKeybinds = ({
   onSelectTab,
   onRefresh,
   onClearSelection,
+  onSelectAll,
 }: UseAppKeybindsOptions) => {
   const selectionTargets = useMemo(
     () => getSelectionTargets(selected, viewParentPath),
@@ -154,6 +156,12 @@ export const useAppKeybinds = ({
     return true;
   }, [canHandleViewKeybind, onClearSelection, selected.size]);
 
+  const handleSelectAllKeybind = useCallback((_event: KeyboardEvent) => {
+    if (!canHandleViewKeybind()) return false;
+    onSelectAll();
+    return true;
+  }, [canHandleViewKeybind, onSelectAll]);
+
   const handleDuplicateSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
     if (selectionTargets.length === 0) return false;
@@ -220,6 +228,7 @@ export const useAppKeybinds = ({
       const map: Record<string, (event: KeyboardEvent) => boolean> = {
         Escape: handleClearSelectionKeybind,
         F5: handleRefreshKeybind,
+        "Control+a": handleSelectAllKeybind,
         "Control+c": handleCopySelectionKeybind,
         "Control+v": handlePasteSelectionKeybind,
         "Control+r": handleRefreshKeybind,
@@ -234,6 +243,7 @@ export const useAppKeybinds = ({
       handleCopySelectionKeybind,
       handlePasteSelectionKeybind,
       handleRefreshKeybind,
+      handleSelectAllKeybind,
       handleSelectTabIndex,
     ],
   );

@@ -35,6 +35,7 @@ use windows::Win32::UI::Shell::{
 use tauri::{AppHandle, Emitter, Manager};
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg::{self, TreeParsing};
+use image::io::Reader as ImageReader;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -287,7 +288,14 @@ fn clamp_thumb_size(size: u32) -> u32 {
 
 fn load_source_image(job: &ThumbJob, target_size: u32) -> Result<image::DynamicImage, String> {
     match job.kind {
-        ThumbKind::Image => image::open(&job.path).map_err(|err| err.to_string()),
+        // Decode by inspecting file bytes so JPEG variants like `.jfif` work even when
+        // the extension is not part of the image crate's default extension table.
+        ThumbKind::Image => ImageReader::open(&job.path)
+            .map_err(|err| err.to_string())?
+            .with_guessed_format()
+            .map_err(|err| err.to_string())?
+            .decode()
+            .map_err(|err| err.to_string()),
         ThumbKind::Video => render_video_thumbnail(&job.path, target_size),
         ThumbKind::Svg => render_svg_thumbnail(&job.path, target_size),
     }
@@ -656,7 +664,7 @@ fn select_thumbnail_kind(path: &Path, options: &ThumbOptions) -> Option<ThumbKin
 fn is_supported_image(extension: &str) -> bool {
     matches!(
         extension,
-        "png" | "jpg" | "jpeg" | "webp" | "bmp" | "gif" | "tif" | "tiff" | "ico"
+        "png" | "jpg" | "jpeg" | "jfif" | "webp" | "bmp" | "gif" | "tif" | "tiff" | "ico"
     )
 }
 
