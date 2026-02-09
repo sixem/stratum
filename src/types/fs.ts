@@ -98,6 +98,13 @@ export type RestoreReport = {
   remaining: RecycleEntry[];
 };
 
+export type RestorePathsReport = {
+  restored: number;
+  skipped: number;
+  failures: string[];
+  remainingPaths: string[];
+};
+
 // Emitted when the native watcher detects a change in a watched directory.
 export type DirChangedEvent = {
   path: string;

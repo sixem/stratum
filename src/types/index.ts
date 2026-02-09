@@ -11,6 +11,7 @@ export type {
   ListDirWithParentResult,
   Place,
   RestoreReport,
+  RestorePathsReport,
   TrashReport,
   TransferMode,
   TransferReport,

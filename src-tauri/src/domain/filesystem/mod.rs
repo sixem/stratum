@@ -18,7 +18,7 @@ pub use fs_list::{
     stat_entries,
 };
 pub use fs_transfer::{copy_entries, transfer_entries};
-pub use fs_trash::{restore_recycle_entries, trash_entries};
+pub use fs_trash::{restore_recycle_entries, restore_recycle_paths, trash_entries};
 
 // Listing and metadata types shared with the UI.
 #[derive(Clone, Serialize)]
@@ -197,6 +197,15 @@ pub struct RestoreReport {
     pub skipped: usize,
     pub failures: Vec<String>,
     pub remaining: Vec<RecycleEntry>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestorePathsReport {
+    pub restored: usize,
+    pub skipped: usize,
+    pub failures: Vec<String>,
+    pub remaining_paths: Vec<String>,
 }
 
 // Convert filesystem timestamps into epoch milliseconds for the UI.

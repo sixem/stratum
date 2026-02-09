@@ -11,6 +11,7 @@ import type {
   Place,
   RecycleEntry,
   RestoreReport,
+  RestorePathsReport,
   TransferMode,
   TransferReport,
   TrashReport,
@@ -68,6 +69,15 @@ export const trashEntries = (paths: string[]) =>
 
 export const restoreRecycleEntries = (entries: RecycleEntry[]) =>
   invoke<RestoreReport>("restore_recycle_entries", { entries });
+
+export const restoreRecyclePaths = (
+  paths: string[],
+  minDeletedAt?: number,
+) =>
+  invoke<RestorePathsReport>("restore_recycle_paths", {
+    paths,
+    minDeletedAt,
+  });
 
 export const renameEntry = (path: string, newName: string) =>
   invoke<string>("rename_entry", { path, newName });

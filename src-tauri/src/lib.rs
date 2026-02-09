@@ -69,6 +69,7 @@ pub fn run() {
             app::commands::delete_entries,
             app::commands::trash_entries,
             app::commands::restore_recycle_entries,
+            app::commands::restore_recycle_paths,
             app::commands::rename_entry,
             app::commands::start_dir_watch,
             app::commands::stop_dir_watch,

@@ -188,6 +188,16 @@ pub async fn restore_recycle_entries(
 }
 
 #[tauri::command]
+pub async fn restore_recycle_paths(
+    paths: Vec<String>,
+    min_deleted_at: Option<u64>,
+) -> Result<fs::RestorePathsReport, String> {
+    tauri::async_runtime::spawn_blocking(move || fs::restore_recycle_paths(paths, min_deleted_at))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
 pub async fn rename_entry(path: String, new_name: String) -> Result<String, String> {
   tauri::async_runtime::spawn_blocking(move || fs::rename_entry(path, new_name))
     .await

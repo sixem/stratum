@@ -1,10 +1,12 @@
 // Trash/recycle helpers with Windows-specific recycle bin support.
-use super::{RecycleEntry, RestoreReport, TrashReport};
+use super::{RecycleEntry, RestorePathsReport, RestoreReport, TrashReport};
 
 #[cfg(target_os = "windows")]
 use super::fs_recycle_windows::{
-    can_use_recycle_bin, delete_to_recycle_bin, find_recycle_entries_for_paths,
+    can_use_recycle_bin, delete_to_recycle_bin, find_recycle_entries_for_paths, normalize_path_ci,
 };
+#[cfg(target_os = "windows")]
+use std::collections::HashSet;
 #[cfg(target_os = "windows")]
 use std::fs;
 #[cfg(target_os = "windows")]
@@ -117,7 +119,104 @@ pub fn restore_recycle_entries(entries: Vec<RecycleEntry>) -> Result<RestoreRepo
     Ok(report)
 }
 
+#[cfg(target_os = "windows")]
+pub fn restore_recycle_paths(
+    paths: Vec<String>,
+    min_deleted_at: Option<u64>,
+) -> Result<RestorePathsReport, String> {
+    let mut report = RestorePathsReport {
+        restored: 0,
+        skipped: 0,
+        failures: Vec::new(),
+        remaining_paths: Vec::new(),
+    };
+
+    // Keep requested order stable so undo restores remain deterministic.
+    let mut requested_paths = Vec::new();
+    let mut requested_keys = HashSet::new();
+    for path in paths {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            report.skipped += 1;
+            continue;
+        }
+        let normalized = normalize_path_ci(trimmed);
+        if requested_keys.insert(normalized) {
+            requested_paths.push(trimmed.to_string());
+        }
+    }
+    if requested_paths.is_empty() {
+        return Ok(report);
+    }
+
+    let mut recycle_entries = find_recycle_entries_for_paths(&requested_paths, min_deleted_at);
+    let mut matched_keys = HashSet::new();
+    for entry in &recycle_entries {
+        matched_keys.insert(normalize_path_ci(&entry.original_path));
+    }
+
+    // If strict delete-time filtering misses entries (timing skew/metadata lag),
+    // retry unresolved paths without the time floor.
+    if min_deleted_at.is_some() {
+        let unresolved: Vec<String> = requested_paths
+            .iter()
+            .filter(|path| !matched_keys.contains(&normalize_path_ci(path)))
+            .cloned()
+            .collect();
+        if !unresolved.is_empty() {
+            for entry in find_recycle_entries_for_paths(&unresolved, None) {
+                let key = normalize_path_ci(&entry.original_path);
+                if matched_keys.insert(key) {
+                    recycle_entries.push(entry);
+                }
+            }
+        }
+    }
+
+    let restore_report = restore_recycle_entries(recycle_entries)?;
+    report.restored = restore_report.restored;
+    report.skipped += restore_report.skipped;
+    report.failures.extend(restore_report.failures);
+
+    let mut unresolved_keys = HashSet::new();
+    for path in &requested_paths {
+        let key = normalize_path_ci(path);
+        if !matched_keys.contains(&key) {
+            unresolved_keys.insert(key);
+            report
+                .failures
+                .push(format!("{}: recycle entry missing", path));
+        }
+    }
+    report.skipped += unresolved_keys.len();
+
+    let mut remaining_keys = HashSet::new();
+    for entry in restore_report.remaining {
+        let key = normalize_path_ci(&entry.original_path);
+        if !key.is_empty() {
+            remaining_keys.insert(key);
+        }
+    }
+
+    for path in &requested_paths {
+        let key = normalize_path_ci(path);
+        if unresolved_keys.contains(&key) || remaining_keys.contains(&key) {
+            report.remaining_paths.push(path.clone());
+        }
+    }
+
+    Ok(report)
+}
+
 #[cfg(not(target_os = "windows"))]
 pub fn restore_recycle_entries(_entries: Vec<RecycleEntry>) -> Result<RestoreReport, String> {
+    Err("Recycle restore is only supported on Windows.".to_string())
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn restore_recycle_paths(
+    _paths: Vec<String>,
+    _min_deleted_at: Option<u64>,
+) -> Result<RestorePathsReport, String> {
     Err("Recycle restore is only supported on Windows.".to_string())
 }

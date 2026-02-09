@@ -17,6 +17,7 @@ export {
   listDriveInfo,
   parentDir,
   restoreRecycleEntries,
+  restoreRecyclePaths,
   transferEntries,
   renameEntry,
   startDirWatch,
