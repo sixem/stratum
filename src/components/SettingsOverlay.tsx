@@ -78,6 +78,7 @@ export const SettingsOverlay = ({
   const keybindSectionId = "settings-keybinds";
   const cacheSectionId = "settings-cache";
   const [captureActive, setCaptureActive] = useState(false);
+  const shouldCloseRef = useRef(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -132,7 +133,15 @@ export const SettingsOverlay = ({
       className="settings-overlay"
       data-open={open ? "true" : "false"}
       aria-hidden={open ? "false" : "true"}
-      onClick={onClose}
+      onMouseDown={(event) => {
+        shouldCloseRef.current = event.target === event.currentTarget;
+      }}
+      onClick={() => {
+        if (shouldCloseRef.current) {
+          onClose();
+        }
+        shouldCloseRef.current = false;
+      }}
     >
       <div
         className="settings-panel"

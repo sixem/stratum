@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ChangeEvent as ReactChangeEvent,
+  CSSProperties,
   PointerEvent as ReactPointerEvent,
   SyntheticEvent as ReactSyntheticEvent,
   WheelEvent as ReactWheelEvent,
@@ -21,6 +22,7 @@ import type { EntryMeta, FileEntry, ThumbnailRequest } from "@/types";
 import { LoadingIndicator } from "./LoadingIndicator";
 import { PressButton } from "./PressButton";
 import { QuickPreviewStrip } from "./QuickPreviewStrip";
+import { QuickPreviewTimeline } from "./QuickPreviewTimeline";
 
 type QuickPreviewOverlayProps = {
   open: boolean;
@@ -50,8 +52,8 @@ type DragState = {
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 8;
 const ZOOM_SPEED = 0.0014;
-const SEEK_COMMIT_DELAY_MS = 120;
 const VOLUME_AUTO_CLOSE_DELAY_MS = 2000;
+const VOLUME_HOVER_OPEN_DELAY_MS = 250;
 const TAB_DOUBLE_TAP_MS = 280;
 const PREVIEW_VOLUME_KEY = "stratum.preview.volume";
 
@@ -87,20 +89,6 @@ const readPreviewVolume = () => {
   }
 };
 
-const formatMediaTime = (seconds: number) => {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "00:00";
-  const total = Math.floor(seconds);
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const remaining = total % 60;
-  const padded = remaining.toString().padStart(2, "0");
-  const paddedMinutes = minutes.toString().padStart(2, "0");
-  if (hours > 0) {
-    return `${hours}:${paddedMinutes}:${padded}`;
-  }
-  return `${paddedMinutes}:${padded}`;
-};
-
 export const QuickPreviewOverlay = ({
   open,
   path,
@@ -120,12 +108,12 @@ export const QuickPreviewOverlay = ({
   const stageRef = useRef<HTMLDivElement | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const seekCommitTimerRef = useRef<number | null>(null);
-  const pendingSeekRef = useRef<number | null>(null);
   const volumeButtonRef = useRef<HTMLButtonElement | null>(null);
   const volumeRangeRef = useRef<HTMLInputElement | null>(null);
   const volumeCloseTimerRef = useRef<number | null>(null);
+  const volumeHoverTimerRef = useRef<number | null>(null);
   const volumeAdjustingRef = useRef(false);
+  const volumePinnedOpenRef = useRef(false);
   const dragRef = useRef<DragState>({
     active: false,
     pointerId: null,
@@ -146,11 +134,8 @@ export const QuickPreviewOverlay = ({
   const [mediaSize, setMediaSize] = useState<{ width: number; height: number } | null>(
     null,
   );
-  const [videoTime, setVideoTime] = useState({ current: 0, duration: 0 });
   const [videoPaused, setVideoPaused] = useState(true);
   const [videoVolume, setVideoVolume] = useState(readPreviewVolume);
-  const [seekPreviewTime, setSeekPreviewTime] = useState<number | null>(null);
-  const [seeking, setSeeking] = useState(false);
   const [volumePickerOpen, setVolumePickerOpen] = useState(false);
   const lastTabTapRef = useRef(0);
   const [externalActionError, setExternalActionError] = useState<string | null>(null);
@@ -188,20 +173,12 @@ export const QuickPreviewOverlay = ({
   }, [previewItems]);
 
   useEffect(() => {
-    // Ensure we do not carry seek state across files (or after closing the overlay).
-    if (seekCommitTimerRef.current != null) {
-      window.clearTimeout(seekCommitTimerRef.current);
-      seekCommitTimerRef.current = null;
-    }
-    pendingSeekRef.current = null;
-    setSeekPreviewTime(null);
-    setSeeking(false);
-
     if (volumeCloseTimerRef.current != null) {
       window.clearTimeout(volumeCloseTimerRef.current);
       volumeCloseTimerRef.current = null;
     }
     volumeAdjustingRef.current = false;
+    volumePinnedOpenRef.current = false;
     setVolumePickerOpen(false);
 
     if (!open) return;
@@ -210,7 +187,6 @@ export const QuickPreviewOverlay = ({
     offsetRef.current = { x: 0, y: 0 };
     setLoadState("loading");
     setMediaSize(null);
-    setVideoTime({ current: 0, duration: 0 });
     setVideoPaused(true);
     loadedPathRef.current = null;
     setExternalActionError(null);
@@ -221,13 +197,13 @@ export const QuickPreviewOverlay = ({
       if (frameRef.current != null) {
         window.cancelAnimationFrame(frameRef.current);
       }
-      if (seekCommitTimerRef.current != null) {
-        window.clearTimeout(seekCommitTimerRef.current);
-        seekCommitTimerRef.current = null;
-      }
       if (volumeCloseTimerRef.current != null) {
         window.clearTimeout(volumeCloseTimerRef.current);
         volumeCloseTimerRef.current = null;
+      }
+      if (volumeHoverTimerRef.current != null) {
+        window.clearTimeout(volumeHoverTimerRef.current);
+        volumeHoverTimerRef.current = null;
       }
     };
   }, []);
@@ -240,7 +216,14 @@ export const QuickPreviewOverlay = ({
     volumeCloseTimerRef.current = null;
   };
 
+  const clearVolumeHoverOpenTimer = () => {
+    if (volumeHoverTimerRef.current == null) return;
+    window.clearTimeout(volumeHoverTimerRef.current);
+    volumeHoverTimerRef.current = null;
+  };
+
   const scheduleVolumePickerClose = (delayMs: number = VOLUME_AUTO_CLOSE_DELAY_MS) => {
+    if (volumePinnedOpenRef.current) return;
     clearVolumePickerCloseTimer();
     volumeCloseTimerRef.current = window.setTimeout(() => {
       volumeCloseTimerRef.current = null;
@@ -253,17 +236,52 @@ export const QuickPreviewOverlay = ({
   };
 
   const handleToggleVolumePicker = () => {
-    setVolumePickerOpen((current) => !current);
+    clearVolumePickerCloseTimer();
+    clearVolumeHoverOpenTimer();
+    setVolumePickerOpen((current) => {
+      if (!current) {
+        // Explicit click-open should feel intentional and stay open.
+        volumePinnedOpenRef.current = true;
+        return true;
+      }
+      if (!volumePinnedOpenRef.current) {
+        // If hover already opened it, a click should pin it open, not close it.
+        volumePinnedOpenRef.current = true;
+        return true;
+      }
+      volumePinnedOpenRef.current = false;
+      return false;
+    });
+  };
+
+  const handleVolumeHoverStart = () => {
+    clearVolumePickerCloseTimer();
+    clearVolumeHoverOpenTimer();
+    volumeHoverTimerRef.current = window.setTimeout(() => {
+      volumeHoverTimerRef.current = null;
+      if (volumePinnedOpenRef.current) return;
+      setVolumePickerOpen(true);
+    }, VOLUME_HOVER_OPEN_DELAY_MS);
+  };
+
+  const handleVolumeHoverEnd = () => {
+    clearVolumeHoverOpenTimer();
+    if (volumePinnedOpenRef.current) return;
+    if (volumeAdjustingRef.current) return;
+    scheduleVolumePickerClose(260);
   };
 
   useEffect(() => {
     if (!volumePickerOpen) {
       volumeAdjustingRef.current = false;
+      volumePinnedOpenRef.current = false;
       clearVolumePickerCloseTimer();
       return;
     }
 
-    scheduleVolumePickerClose();
+    if (!volumePinnedOpenRef.current) {
+      scheduleVolumePickerClose();
+    }
     const frame = window.requestAnimationFrame(() => volumeRangeRef.current?.focus());
     return () => window.cancelAnimationFrame(frame);
   }, [volumePickerOpen]);
@@ -285,20 +303,6 @@ export const QuickPreviewOverlay = ({
     } catch {
       // Ignore persistence failures (private windows, disabled storage).
     }
-  };
-
-  // Sync slider state with the native video element.
-  const updateVideoTiming = (video: HTMLVideoElement) => {
-    const duration = Number.isFinite(video.duration) ? video.duration : 0;
-    const current = Number.isFinite(video.currentTime) ? video.currentTime : 0;
-    // `timeupdate` can fire frequently while a video plays. Avoid forcing a React render for
-    // tiny changes that would not be visible in the timeline label.
-    setVideoTime((previous) => {
-      const durationChanged = Math.abs(previous.duration - duration) > 0.01;
-      const currentChanged = Math.abs(previous.current - current) > 0.05;
-      if (!durationChanged && !currentChanged) return previous;
-      return { current, duration };
-    });
   };
 
   useEffect(() => {
@@ -428,78 +432,12 @@ export const QuickPreviewOverlay = ({
     return () => window.removeEventListener("keydown", handleTabJump);
   }, [open, smartTabJump]);
 
-  const handleVideoTimeUpdate = (event: ReactSyntheticEvent<HTMLVideoElement>) => {
-    updateVideoTiming(event.currentTarget);
-  };
-
-  const handleVideoDurationChange = (event: ReactSyntheticEvent<HTMLVideoElement>) => {
-    updateVideoTiming(event.currentTarget);
-  };
-
   const handleVideoPlay = () => {
     setVideoPaused(false);
   };
 
   const handleVideoPause = () => {
     setVideoPaused(true);
-  };
-
-  // Seeking a long video can trigger many range requests. To keep things snappy we:
-  // - update the UI immediately while the user drags the slider
-  // - only commit the actual `video.currentTime` seek on release (or after a short delay
-  //   for keyboard interactions)
-  const commitSeek = (next: number) => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.currentTime = next;
-    updateVideoTiming(video);
-  };
-
-  const scheduleSeekCommit = () => {
-    if (seekCommitTimerRef.current != null) {
-      window.clearTimeout(seekCommitTimerRef.current);
-      seekCommitTimerRef.current = null;
-    }
-    seekCommitTimerRef.current = window.setTimeout(() => {
-      seekCommitTimerRef.current = null;
-      const next = pendingSeekRef.current;
-      if (next == null) return;
-      commitSeek(next);
-      pendingSeekRef.current = null;
-      setSeekPreviewTime(null);
-    }, SEEK_COMMIT_DELAY_MS);
-  };
-
-  const handleSeekChange = (event: ReactChangeEvent<HTMLInputElement>) => {
-    const value = Number(event.currentTarget.value);
-    const next = Number.isFinite(value) ? value : 0;
-    pendingSeekRef.current = next;
-    setSeekPreviewTime(next);
-
-    // Keyboard changes (arrows / home / end) won't generate pointer up events.
-    if (!seeking) {
-      scheduleSeekCommit();
-    }
-  };
-
-  const handleSeekPointerDown = () => {
-    setSeeking(true);
-  };
-
-  const handleSeekPointerUp = () => {
-    setSeeking(false);
-    if (seekCommitTimerRef.current != null) {
-      window.clearTimeout(seekCommitTimerRef.current);
-      seekCommitTimerRef.current = null;
-    }
-    const next = pendingSeekRef.current;
-    if (next == null) {
-      setSeekPreviewTime(null);
-      return;
-    }
-    commitSeek(next);
-    pendingSeekRef.current = null;
-    setSeekPreviewTime(null);
   };
 
   const handleVolumeChange = (event: ReactChangeEvent<HTMLInputElement>) => {
@@ -516,7 +454,9 @@ export const QuickPreviewOverlay = ({
 
   const handleVolumePointerUp = () => {
     volumeAdjustingRef.current = false;
-    scheduleVolumePickerClose();
+    if (!volumePinnedOpenRef.current) {
+      scheduleVolumePickerClose();
+    }
   };
 
   const handleTogglePlayback = () => {
@@ -632,7 +572,6 @@ export const QuickPreviewOverlay = ({
       setMediaSize({ width: naturalWidth, height: naturalHeight });
     }
     target.volume = videoVolume;
-    updateVideoTiming(target);
     setVideoPaused(target.paused);
     loadedPathRef.current = path ?? null;
     setLoadState("ready");
@@ -659,21 +598,12 @@ export const QuickPreviewOverlay = ({
     : "...";
   const zoomLabel = `${Math.round(zoom * 100)}%`;
   const videoPoster = isVideo ? thumbnails.get(path) : undefined;
-  const safeDuration = Number.isFinite(videoTime.duration) ? videoTime.duration : 0;
-  const safeCurrentTime = Number.isFinite(videoTime.current) ? videoTime.current : 0;
-  const clampedPlaybackTime = safeDuration > 0 ? clamp(safeCurrentTime, 0, safeDuration) : 0;
-  const clampedSeekTime =
-    seekPreviewTime == null
-      ? null
-      : safeDuration > 0
-        ? clamp(seekPreviewTime, 0, safeDuration)
-        : 0;
-  const displayTime = clampedSeekTime ?? clampedPlaybackTime;
-  const currentTimeLabel = formatMediaTime(displayTime);
-  const durationTimeLabel = formatMediaTime(safeDuration);
-  const timeLabel = `${currentTimeLabel}/${durationTimeLabel}`;
   const volumeLabel = `${Math.round(videoVolume * 100)}%`;
   const titleText = name || (isVideo ? "Video" : "Image");
+  const volumeProgress = clamp(videoVolume * 100, 0, 100);
+  const volumeStyle = {
+    "--preview-volume-progress": `${volumeProgress}%`,
+  } as CSSProperties;
   // Use intrinsic dimensions so videos don't fall back to the default 300x150 box.
   const mediaStyle = mediaSize
     ? {
@@ -749,8 +679,6 @@ export const QuickPreviewOverlay = ({
               loop
               draggable={false}
               onLoadedMetadata={handleVideoMetadata}
-              onTimeUpdate={handleVideoTimeUpdate}
-              onDurationChange={handleVideoDurationChange}
               onPlay={handleVideoPlay}
               onPause={handleVideoPause}
               ref={videoRef}
@@ -843,18 +771,20 @@ export const QuickPreviewOverlay = ({
       </div>
       {isVideo ? (
         <div className="quick-preview-controls">
-          <button
+          <PressButton
             type="button"
             className="quick-preview-control-button quick-preview-control-button--playback"
             onClick={handleTogglePlayback}
           >
             {videoPaused ? "Play" : "Pause"}
-          </button>
+          </PressButton>
           <div
             className="quick-preview-control-volume"
             data-open={volumePickerOpen ? "true" : "false"}
+            onMouseEnter={handleVolumeHoverStart}
+            onMouseLeave={handleVolumeHoverEnd}
           >
-            <button
+            <PressButton
               type="button"
               className="quick-preview-control-button quick-preview-control-volume-button"
               onClick={handleToggleVolumePicker}
@@ -864,8 +794,8 @@ export const QuickPreviewOverlay = ({
               aria-label={`Preview volume ${volumeLabel}`}
             >
               {volumeLabel}
-            </button>
-            <div className="quick-preview-control-volume-slider">
+            </PressButton>
+            <div className="quick-preview-control-volume-slider" style={volumeStyle}>
               <input
                 ref={volumeRangeRef}
                 id="quick-preview-volume-range"
@@ -885,23 +815,7 @@ export const QuickPreviewOverlay = ({
               />
             </div>
           </div>
-          <div className="quick-preview-control-seek">
-            <input
-              className="quick-preview-control-range"
-              type="range"
-              min={0}
-              max={safeDuration || 1}
-              step={0.1}
-              value={displayTime}
-              onChange={handleSeekChange}
-              onPointerDown={handleSeekPointerDown}
-              onPointerUp={handleSeekPointerUp}
-              onPointerCancel={handleSeekPointerUp}
-              aria-label="Video timeline"
-              disabled={safeDuration === 0}
-            />
-            <div className="quick-preview-control-time">{timeLabel}</div>
-          </div>
+          <QuickPreviewTimeline videoRef={videoRef} open={open} disabled={loadState === "error"} />
         </div>
       ) : null}
       <div className="quick-preview-info" aria-live="polite">

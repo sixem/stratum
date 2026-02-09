@@ -13,13 +13,13 @@ export const StatusBar = ({
   selectionLabel,
 }: StatusBarProps) => {
   return (
-    <footer className="statusbar">
+    <footer className="statusbar tnum">
       <div className="status-left">
-        <span className="status-count">{countLabel}</span>
-        {selectionLabel ? <span className="status-selection">{selectionLabel}</span> : null}
+        <span className="status-count tnum">{countLabel}</span>
+        {selectionLabel ? <span className="status-selection tnum">{selectionLabel}</span> : null}
       </div>
       <span
-        className={`status-text ${level}`}
+        className={`status-text ${level} tnum`}
         role={level === "error" ? "alert" : "status"}
         aria-live={level === "error" ? "assertive" : "polite"}
         aria-atomic="true"
