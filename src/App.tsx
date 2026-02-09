@@ -386,7 +386,10 @@ const App = () => {
     onScrollToIndex: requestScrollToIndexForView,
   });
 
-  const suppressPresence = suppressInternalPresence || suppressExternalPresence;
+  const suppressPresence =
+    suppressInternalPresence ||
+    suppressExternalPresence ||
+    fileManager.suppressUndoPresence;
 
   // Centralize app-wide side effects so they are easy to audit.
   useAppEffects({

@@ -122,6 +122,8 @@ export function useFileManager() {
   const [driveInfo, setDriveInfo] = useState<DriveInfo[]>([]);
   const [entryMeta, setEntryMeta] = useState<Map<string, EntryMeta>>(new Map());
   const [loading, setLoading] = useState(false);
+  // Suppress add/remove presence animation while undoing rename so entries stay in-place.
+  const [suppressUndoPresence, setSuppressUndoPresence] = useState(false);
   const [status, setStatus] = useState<StatusState>({
     level: "idle",
     message: "Ready",
@@ -638,6 +640,7 @@ export function useFileManager() {
     renameInFlightRef,
     deleteInFlightRef,
     copyInFlightRef,
+    onRenameUndoPresence: setSuppressUndoPresence,
     performRenameRequests,
     refreshAfterChange,
   });
@@ -695,6 +698,7 @@ export function useFileManager() {
     driveInfo,
     entryMeta,
     loading,
+    suppressUndoPresence,
     status,
     loadDir,
     clearDir,
