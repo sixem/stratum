@@ -413,6 +413,17 @@
   --thumb-icon-color: rgba(var(--accent-rgb), 0.85);
 }
 
+// When category tinting is active, keep selection/drop states visually dominant.
+:where(.thumb-shell)[data-category-tint="true"] .thumb-card.is-selected {
+  border-color: rgba(var(--accent-rgb), 0.7);
+  background: rgba(var(--accent-rgb), 0.18);
+}
+
+:where(.thumb-shell)[data-category-tint="true"] .thumb-card[data-drop-target="true"] {
+  border-color: rgba(var(--accent-rgb), 0.9);
+  background: rgba(var(--accent-rgb), 0.24);
+}
+
 :root[data-grid-corners="straight"] :where(.thumb-shell) .thumb-card,
 :root[data-grid-corners="straight"] :where(.thumb-shell) .thumb-icon {
   border-radius: 0;
