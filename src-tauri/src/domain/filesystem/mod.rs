@@ -14,8 +14,8 @@ mod fs_recycle_windows;
 
 pub use fs_delete::delete_entries;
 pub use fs_list::{
-    get_home, get_places, list_dir, list_dir_with_parent, list_drive_info, list_drives, parent_dir,
-    stat_entries,
+    get_home, get_places, list_dir, list_dir_with_parent, list_drive_info, list_drives,
+    list_folder_thumb_samples_batch, parent_dir, stat_entries,
 };
 pub use fs_transfer::{copy_entries, transfer_entries};
 pub use fs_trash::{restore_recycle_entries, restore_recycle_paths, trash_entries};
@@ -91,6 +91,29 @@ pub struct EntryMeta {
     pub path: String,
     pub size: Option<u64>,
     pub modified: Option<u64>,
+}
+
+#[derive(Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderThumbSampleBatchOptions {
+    pub allow_videos: bool,
+    pub allow_svgs: bool,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FolderThumbSampleStatus {
+    Ok,
+    Empty,
+    Error,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderThumbSampleBatchResult {
+    pub folder_path: String,
+    pub sample_path: Option<String>,
+    pub status: FolderThumbSampleStatus,
 }
 
 #[derive(Clone, Serialize)]

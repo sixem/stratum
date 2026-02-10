@@ -61,6 +61,7 @@ pub fn run() {
             app::commands::list_dir,
             app::commands::list_dir_with_parent,
             app::commands::stat_entries,
+            app::commands::list_folder_thumb_samples_batch,
             app::commands::parent_dir,
             app::commands::copy_entries,
             app::commands::transfer_entries,
