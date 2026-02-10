@@ -140,7 +140,7 @@ export const EntryCard = memo(({
     <TooltipWrapper
       text={tooltipText}
       delayMs={FILE_TOOLTIP_DELAY_MS}
-      disabled={isRenaming}
+      disabled={isRenaming || entry.isDir}
     >
       <div
         className={cardClass}

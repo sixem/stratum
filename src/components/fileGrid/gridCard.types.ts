@@ -18,7 +18,6 @@ export type ThumbnailIconProps = {
 
 export type ThumbnailPreviewProps = {
   src: string;
-  onReadyChange?: (ready: boolean) => void;
 };
 
 export type ParentCardProps = {

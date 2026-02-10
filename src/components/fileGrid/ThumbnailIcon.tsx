@@ -1,5 +1,4 @@
 // Thumbnail icon selection with optional preview/app icon fallbacks.
-import { useEffect, useState } from "react";
 import { isPdfLikeExtension, isSvgLikeExtension } from "@/lib";
 import type { FileKind } from "@/lib";
 import {
@@ -50,31 +49,17 @@ export const ThumbnailIcon = ({
   appIconUrl,
   appIconsEnabled = false,
 }: ThumbnailIconProps) => {
-  const [previewReady, setPreviewReady] = useState(false);
-  const [appIconReady, setAppIconReady] = useState(false);
-
-  useEffect(() => {
-    if (!thumbUrl) {
-      setPreviewReady(false);
-    }
-  }, [thumbUrl]);
-
-  useEffect(() => {
-    if (!appIconUrl) {
-      setAppIconReady(false);
-    }
-  }, [appIconUrl]);
-
   if (isDir) {
+    if (thumbUrl) {
+      return <ThumbnailPreview src={thumbUrl} />;
+    }
     return <FolderIcon className="thumb-svg is-dir" />;
   }
 
   const Icon = resolveFallbackIcon(fileKind, extension);
   const showThumbnail = Boolean(thumbUrl);
-  const showAppIcon = Boolean(appIconUrl) && (!showThumbnail || !previewReady);
-  const allowFallback =
-    !appIconsEnabled || (!showThumbnail && !showAppIcon && !appIconUrl);
-  const showFallback = allowFallback && !previewReady && (!showAppIcon || !appIconReady);
+  const showAppIcon = Boolean(appIconUrl) && appIconsEnabled && !showThumbnail;
+  const showFallback = !showThumbnail && !showAppIcon;
 
   return (
     <>
@@ -86,14 +71,16 @@ export const ThumbnailIcon = ({
           alt=""
           aria-hidden="true"
           draggable={false}
-          data-ready={appIconReady ? "true" : "false"}
-          onLoad={() => setAppIconReady(true)}
-          onError={() => setAppIconReady(false)}
+          data-ready="false"
+          onLoad={(event) => {
+            event.currentTarget.dataset.ready = "true";
+          }}
+          onError={(event) => {
+            event.currentTarget.dataset.ready = "false";
+          }}
         />
       ) : null}
-      {thumbUrl ? (
-        <ThumbnailPreview src={thumbUrl} onReadyChange={setPreviewReady} />
-      ) : null}
+      {thumbUrl ? <ThumbnailPreview src={thumbUrl} /> : null}
     </>
   );
 };

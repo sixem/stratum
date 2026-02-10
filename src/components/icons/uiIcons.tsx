@@ -151,6 +151,15 @@ export const NavArrowIcon = ({ className }: IconProps) => {
   );
 };
 
+// Parent-folder "up/back" icon adapted from references/back-left-svgrepo-com.svg.
+export const ParentUpIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 17 17" aria-hidden="true" className={className} fill="currentColor">
+      <path d="M15 7.5c0 3.033-2.467 5.5-5.5 5.5h-2.912l2.646 2.646-0.707 0.707-3.853-3.853 3.854-3.854 0.707 0.707-2.647 2.647h2.912c2.481 0 4.5-2.019 4.5-4.5s-2.019-4.5-4.5-4.5h-7.083v-1h7.083c3.033 0 5.5 2.467 5.5 5.5z" />
+    </svg>
+  );
+};
+
 export const RefreshIcon = ({ className }: IconProps) => {
   return (
     <svg viewBox="0 0 32 32" aria-hidden="true" className={className} fill="currentColor">

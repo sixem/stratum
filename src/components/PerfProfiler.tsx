@@ -9,7 +9,7 @@ type PerfProfilerProps = PropsWithChildren<{
 
 const log = makeDebug("perf:react");
 // Avoid spamming tiny commits in perf logs.
-const MIN_DURATION_MS = 8;
+const MIN_DURATION_MS = 24;
 
 export const PerfProfiler = ({ id, children }: PerfProfilerProps) => {
   const onRender: ProfilerOnRenderCallback = (

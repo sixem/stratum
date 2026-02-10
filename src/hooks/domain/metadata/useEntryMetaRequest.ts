@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 
 const META_REQUEST_DELAY = 70;
 
+const buildMetaRequestSignature = (paths: string[]) => paths.join("||");
+
 export const useEntryMetaRequest = (
   loading: boolean,
   paths: string[],
@@ -9,14 +11,23 @@ export const useEntryMetaRequest = (
 ) => {
   const timerRef = useRef<number | null>(null);
   const latestPaths = useRef<string[]>([]);
+  const pendingSignatureRef = useRef("");
+  const lastDispatchedSignatureRef = useRef("");
 
   useEffect(() => {
     if (loading || paths.length === 0) return;
 
+    const signature = buildMetaRequestSignature(paths);
+    if (lastDispatchedSignatureRef.current === signature && timerRef.current == null) {
+      return;
+    }
+
     latestPaths.current = paths;
+    pendingSignatureRef.current = signature;
     if (timerRef.current != null) return;
     timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
+      lastDispatchedSignatureRef.current = pendingSignatureRef.current;
       void onRequestMeta(latestPaths.current).catch(() => {
         // Ignore metadata request errors; the view can still render base entries.
       });
@@ -29,6 +40,7 @@ export const useEntryMetaRequest = (
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
       }
+      pendingSignatureRef.current = "";
     }
   }, [loading, paths.length]);
 
@@ -37,6 +49,8 @@ export const useEntryMetaRequest = (
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    pendingSignatureRef.current = "";
+    lastDispatchedSignatureRef.current = "";
   }, [onRequestMeta]);
 
   useEffect(() => {
@@ -45,6 +59,7 @@ export const useEntryMetaRequest = (
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
       }
+      pendingSignatureRef.current = "";
     };
   }, []);
 };
