@@ -70,6 +70,8 @@ type FileViewProps = {
   onRequestThumbs: (requests: ThumbnailRequest[]) => void;
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;
+  thumbnailVideos: boolean;
+  thumbnailSvgs: boolean;
   categoryTinting: boolean;
   gridSize: GridSize;
   gridAutoColumns: number;
@@ -118,6 +120,8 @@ export const FileView = ({
   onRequestThumbs,
   thumbnailFit,
   thumbnailAppIcons,
+  thumbnailVideos,
+  thumbnailSvgs,
   categoryTinting,
   gridSize,
   gridAutoColumns,
@@ -191,6 +195,8 @@ export const FileView = ({
             onRequestThumbs={onRequestThumbs}
             thumbnailFit={thumbnailFit}
             thumbnailAppIcons={thumbnailAppIcons}
+            thumbnailVideos={thumbnailVideos}
+            thumbnailSvgs={thumbnailSvgs}
             categoryTinting={categoryTinting}
             gridSize={gridSize}
             gridAutoColumns={gridAutoColumns}

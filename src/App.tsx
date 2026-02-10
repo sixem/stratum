@@ -698,6 +698,8 @@ const App = () => {
       onRequestThumbs: requestThumbnails,
       thumbnailFit: settings.thumbnailFit,
       thumbnailAppIcons: settings.thumbnailAppIcons,
+      thumbnailVideos: settings.thumbnailVideos,
+      thumbnailSvgs: settings.thumbnailSvgs,
       categoryTinting: settings.categoryTinting,
       thumbResetKey: thumbnailResetKey,
       presenceEnabled: !suppressPresence,

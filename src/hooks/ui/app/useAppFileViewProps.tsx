@@ -59,6 +59,8 @@ type UseAppFileViewPropsOptions = {
     | "onRequestThumbs"
     | "thumbnailFit"
     | "thumbnailAppIcons"
+    | "thumbnailVideos"
+    | "thumbnailSvgs"
     | "categoryTinting"
     | "thumbResetKey"
     | "presenceEnabled"

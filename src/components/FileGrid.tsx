@@ -54,6 +54,8 @@ type FileGridProps = {
   onRequestThumbs: (requests: ThumbnailRequest[]) => void;
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;
+  thumbnailVideos: boolean;
+  thumbnailSvgs: boolean;
   categoryTinting: boolean;
   gridSize: GridSize;
   gridAutoColumns: number;
@@ -123,6 +125,8 @@ const FileGrid = ({
   onRequestThumbs,
   thumbnailFit,
   thumbnailAppIcons,
+  thumbnailVideos,
+  thumbnailSvgs,
   categoryTinting,
   gridSize,
   gridAutoColumns,
@@ -223,7 +227,7 @@ const FileGrid = ({
     scrollKey: viewKey,
   });
 
-  const { gridMetaByPath, thumbSource, fileIcons } = useGridThumbRequests({
+  const { gridMetaByPath, thumbSource, folderThumbSource, fileIcons } = useGridThumbRequests({
     viewportRef,
     viewKey,
     visibleItems,
@@ -234,6 +238,8 @@ const FileGrid = ({
     onRequestThumbs,
     thumbResetKey,
     thumbnailAppIcons,
+    thumbnailVideos,
+    thumbnailSvgs,
     loading,
   });
 
@@ -381,7 +387,9 @@ const FileGrid = ({
             const itemMeta = gridMetaByPath.get(item.entry.path);
             const baseIndex = resolvedIndexMap.get(item.entry.path) ?? index;
             const thumbUrl = thumbnailsEnabled
-              ? thumbSource.get(item.entry.path)
+              ? item.entry.isDir
+                ? folderThumbSource.get(item.entry.path)
+                : thumbSource.get(item.entry.path)
               : undefined;
             const appIconUrl =
               thumbnailAppIcons && itemMeta?.extension
