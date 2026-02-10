@@ -6,6 +6,8 @@ export type {
   RecycleEntry,
   EntryMeta,
   FileEntry,
+  FolderThumbSampleBatchOptions,
+  FolderThumbSampleBatchResult,
   ListDirOptions,
   ListDirResult,
   ListDirWithParentResult,

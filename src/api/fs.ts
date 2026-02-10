@@ -5,6 +5,8 @@ import type {
   DeleteReport,
   DriveInfo,
   EntryMeta,
+  FolderThumbSampleBatchOptions,
+  FolderThumbSampleBatchResult,
   ListDirOptions,
   ListDirResult,
   ListDirWithParentResult,
@@ -39,6 +41,15 @@ export const listDirWithParent = (path: string, options?: ListDirOptions) =>
 
 export const statEntries = (paths: string[]) =>
   invoke<EntryMeta[]>("stat_entries", { paths });
+
+export const listFolderThumbSamplesBatch = (
+  folderPaths: string[],
+  options: FolderThumbSampleBatchOptions,
+) =>
+  invoke<FolderThumbSampleBatchResult[]>("list_folder_thumb_samples_batch", {
+    folderPaths,
+    options,
+  });
 
 export const parentDir = (path: string) => invoke<string | null>("parent_dir", { path });
 

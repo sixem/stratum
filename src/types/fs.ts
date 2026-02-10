@@ -38,6 +38,17 @@ export type EntryMeta = {
   modified: number | null;
 };
 
+export type FolderThumbSampleBatchOptions = {
+  allowVideos: boolean;
+  allowSvgs: boolean;
+};
+
+export type FolderThumbSampleBatchResult = {
+  folderPath: string;
+  samplePath: string | null;
+  status: "ok" | "empty" | "error";
+};
+
 export type DriveInfo = {
   path: string;
   free: number | null;

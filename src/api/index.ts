@@ -15,6 +15,7 @@ export {
   listDir,
   listDirWithParent,
   listDriveInfo,
+  listFolderThumbSamplesBatch,
   parentDir,
   restoreRecycleEntries,
   restoreRecyclePaths,
