@@ -60,17 +60,31 @@ export const TooltipDisplay = () => {
       hideTooltip();
       blockTooltips();
     };
+    const handleWindowBlur = () => {
+      hideTooltip();
+      blockTooltips();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        hideTooltip();
+        blockTooltips();
+      }
+    };
     const handleResize = () => hideTooltip();
     const handlePointer = () => hideTooltip();
 
     window.addEventListener("keydown", handleKey);
     window.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("blur", handleWindowBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("resize", handleResize);
     window.addEventListener("pointerdown", handlePointer, true);
 
     return () => {
       window.removeEventListener("keydown", handleKey);
       window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("blur", handleWindowBlur);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("pointerdown", handlePointer, true);
     };
@@ -166,6 +180,10 @@ export const TooltipWrapper = ({
 
     delayRef.current = window.setTimeout(() => {
       delayRef.current = null;
+      const latest = useTooltipStore.getState();
+      if (trigger === "mouse" && latest.blockUntilPointerMove) return;
+      if (document.visibilityState !== "visible") return;
+      if (trigger === "mouse" && !document.hasFocus()) return;
       showTooltip(anchorX, anchorY, requestId);
     }, delayValue);
   };
