@@ -9,6 +9,7 @@ lerna-debug.log*
 
 /AGENTS.md
 /TODO.md
+/references/
 
 node_modules
 dist
