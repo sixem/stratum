@@ -84,23 +84,35 @@ fn filetime_to_epoch_ms(filetime: u64) -> Option<u64> {
     Some((filetime - FILETIME_EPOCH) / 10_000)
 }
 
-fn normalize_path_ci(value: &str) -> String {
-    value.trim().replace('/', "\\").to_lowercase()
+pub(super) fn normalize_path_ci(value: &str) -> String {
+    let mut normalized = value.trim().replace('/', "\\");
+    // Recycle metadata may use extended path prefixes while UI paths do not.
+    if normalized.starts_with("\\\\?\\UNC\\") && normalized.len() > 8 {
+        normalized = format!("\\\\{}", &normalized[8..]);
+    } else if (normalized.starts_with("\\\\?\\") || normalized.starts_with("\\??\\"))
+        && normalized.len() > 4
+    {
+        normalized = normalized[4..].to_string();
+    }
+    // Trim trailing separators for non-root paths.
+    while normalized.ends_with('\\')
+        && !normalized.ends_with(":\\")
+        && normalized != "\\"
+        && !normalized.starts_with("\\\\")
+    {
+        normalized.pop();
+    }
+    normalized.to_lowercase()
 }
 
-fn parse_recycle_info(info_path: &Path) -> Option<(String, Option<u64>)> {
-    let mut file = fs::File::open(info_path).ok()?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer).ok()?;
-    if buffer.len() < 24 {
+fn parse_utf16_until_nul(bytes: &[u8]) -> Option<String> {
+    if bytes.len() < 2 {
         return None;
     }
-    let deleted_raw = u64::from_le_bytes(buffer[16..24].try_into().ok()?);
-    let deleted_at = filetime_to_epoch_ms(deleted_raw);
-    let mut utf16 = Vec::new();
-    let mut index = 24;
-    while index + 1 < buffer.len() {
-        let value = u16::from_le_bytes([buffer[index], buffer[index + 1]]);
+    let mut utf16 = Vec::with_capacity(bytes.len() / 2);
+    let mut index = 0;
+    while index + 1 < bytes.len() {
+        let value = u16::from_le_bytes([bytes[index], bytes[index + 1]]);
         if value == 0 {
             break;
         }
@@ -110,7 +122,32 @@ fn parse_recycle_info(info_path: &Path) -> Option<(String, Option<u64>)> {
     if utf16.is_empty() {
         return None;
     }
-    let original_path = String::from_utf16_lossy(&utf16);
+    Some(String::from_utf16_lossy(&utf16))
+}
+
+fn parse_recycle_info(info_path: &Path) -> Option<(String, Option<u64>)> {
+    let mut file = fs::File::open(info_path).ok()?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer).ok()?;
+    if buffer.len() < 24 {
+        return None;
+    }
+    let header = u64::from_le_bytes(buffer[0..8].try_into().ok()?);
+    let deleted_raw = u64::from_le_bytes(buffer[16..24].try_into().ok()?);
+    let deleted_at = filetime_to_epoch_ms(deleted_raw);
+    // Windows uses at least two known formats:
+    // v1: path starts at byte 24 (fixed-width record)
+    // v2: u32 UTF-16 char length at byte 24, path starts at byte 28
+    let original_path = if header == 2 && buffer.len() >= 28 {
+        let char_len = u32::from_le_bytes(buffer[24..28].try_into().ok()?) as usize;
+        let byte_len = char_len.saturating_mul(2);
+        let available = buffer.len().saturating_sub(28);
+        let take = available.min(byte_len);
+        parse_utf16_until_nul(&buffer[28..28 + take])
+            .or_else(|| parse_utf16_until_nul(&buffer[28..]))
+    } else {
+        parse_utf16_until_nul(&buffer[24..])
+    }?;
     if original_path.trim().is_empty() {
         return None;
     }
@@ -171,6 +208,7 @@ pub(super) fn find_recycle_entries_for_paths(
     paths: &[String],
     min_deleted_at: Option<u64>,
 ) -> Vec<RecycleEntry> {
+    let mut ordered_targets: Vec<String> = Vec::new();
     let mut targets = HashSet::new();
     let mut drive_roots = HashSet::new();
     for path in paths {
@@ -178,7 +216,10 @@ pub(super) fn find_recycle_entries_for_paths(
         if trimmed.is_empty() {
             continue;
         }
-        targets.insert(normalize_path_ci(trimmed));
+        let key = normalize_path_ci(trimmed);
+        if targets.insert(key.clone()) {
+            ordered_targets.push(key);
+        }
         if let Some(root) = drive_root(trimmed) {
             drive_roots.insert(root);
         }
@@ -209,5 +250,11 @@ pub(super) fn find_recycle_entries_for_paths(
             }
         }
     }
-    matched.into_values().collect()
+    let mut ordered = Vec::new();
+    for key in ordered_targets {
+        if let Some(entry) = matched.remove(&key) {
+            ordered.push(entry);
+        }
+    }
+    ordered
 }

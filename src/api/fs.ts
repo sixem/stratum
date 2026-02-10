@@ -5,12 +5,15 @@ import type {
   DeleteReport,
   DriveInfo,
   EntryMeta,
+  FolderThumbSampleBatchOptions,
+  FolderThumbSampleBatchResult,
   ListDirOptions,
   ListDirResult,
   ListDirWithParentResult,
   Place,
   RecycleEntry,
   RestoreReport,
+  RestorePathsReport,
   TransferMode,
   TransferReport,
   TrashReport,
@@ -38,6 +41,15 @@ export const listDirWithParent = (path: string, options?: ListDirOptions) =>
 
 export const statEntries = (paths: string[]) =>
   invoke<EntryMeta[]>("stat_entries", { paths });
+
+export const listFolderThumbSamplesBatch = (
+  folderPaths: string[],
+  options: FolderThumbSampleBatchOptions,
+) =>
+  invoke<FolderThumbSampleBatchResult[]>("list_folder_thumb_samples_batch", {
+    folderPaths,
+    options,
+  });
 
 export const parentDir = (path: string) => invoke<string | null>("parent_dir", { path });
 
@@ -68,6 +80,15 @@ export const trashEntries = (paths: string[]) =>
 
 export const restoreRecycleEntries = (entries: RecycleEntry[]) =>
   invoke<RestoreReport>("restore_recycle_entries", { entries });
+
+export const restoreRecyclePaths = (
+  paths: string[],
+  minDeletedAt?: number,
+) =>
+  invoke<RestorePathsReport>("restore_recycle_paths", {
+    paths,
+    minDeletedAt,
+  });
 
 export const renameEntry = (path: string, newName: string) =>
   invoke<string>("rename_entry", { path, newName });

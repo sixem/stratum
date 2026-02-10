@@ -386,7 +386,10 @@ const App = () => {
     onScrollToIndex: requestScrollToIndexForView,
   });
 
-  const suppressPresence = suppressInternalPresence || suppressExternalPresence;
+  const suppressPresence =
+    suppressInternalPresence ||
+    suppressExternalPresence ||
+    fileManager.suppressUndoPresence;
 
   // Centralize app-wide side effects so they are easy to audit.
   useAppEffects({
@@ -695,6 +698,8 @@ const App = () => {
       onRequestThumbs: requestThumbnails,
       thumbnailFit: settings.thumbnailFit,
       thumbnailAppIcons: settings.thumbnailAppIcons,
+      thumbnailVideos: settings.thumbnailVideos,
+      thumbnailSvgs: settings.thumbnailSvgs,
       categoryTinting: settings.categoryTinting,
       thumbResetKey: thumbnailResetKey,
       presenceEnabled: !suppressPresence,

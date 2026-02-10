@@ -29,7 +29,6 @@
   .list-content {
     opacity: 0;
     transition: opacity 0.14s ease;
-    will-change: opacity;
   }
 
   .list-content[data-ready="true"] {
@@ -69,47 +68,6 @@
     overflow-anchor: none;
   }
 
-  .thumb-viewport::before,
-  .thumb-viewport::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 28px;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.18s ease;
-    z-index: 3;
-  }
-
-  .thumb-viewport::before {
-    top: 0;
-    background: linear-gradient(
-      to bottom,
-      rgba(var(--accent-rgb), 0.18),
-      rgba(var(--accent-rgb), 0)
-    );
-  }
-
-  .thumb-viewport::after {
-    bottom: 0;
-    background: linear-gradient(
-      to top,
-      rgba(var(--accent-rgb), 0.18),
-      rgba(var(--accent-rgb), 0)
-    );
-  }
-
-  .thumb-viewport[data-drag-scroll="up"]::before,
-  .thumb-viewport[data-drag-scroll="both"]::before {
-    opacity: 1;
-  }
-
-  .thumb-viewport[data-drag-scroll="down"]::after,
-  .thumb-viewport[data-drag-scroll="both"]::after {
-    opacity: 1;
-  }
-
   .thumb-spacer {
     height: 0;
   }
@@ -117,7 +75,6 @@
   .thumb-content {
     opacity: 0;
     transition: opacity 0.14s ease;
-    will-change: opacity;
   }
 
   .thumb-content[data-ready="true"] {
@@ -235,6 +192,12 @@
     cursor: default;
   }
 
+  // Give folders a subtle neutral tint so they are easier to distinguish from files.
+  .thumb-card.is-dir {
+    background: rgba(170, 182, 203, 0.08);
+    border-color: rgba(170, 182, 203, 0.2);
+  }
+
 
   .thumb-card:hover {
     border-color: rgba(255, 255, 255, 0.16);
@@ -249,7 +212,6 @@
   .thumb-card[data-drop-target="true"] {
     border-color: rgba(var(--accent-rgb), 0.9);
     background: rgba(var(--accent-rgb), 0.18);
-    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.35);
   }
 
   .thumb-card[aria-disabled="true"] {
@@ -285,7 +247,6 @@
     z-index: 1;
     opacity: 0;
     transition: opacity 0.32s ease;
-    will-change: opacity;
   }
 
   .thumb-preview[data-ready="true"] {
@@ -323,11 +284,16 @@
     color: var(--accent);
   }
 
-  .thumb-parent {
-    font-size: 18px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    color: var(--text);
+  // Keep parent navigation icon neutral so it works with all accent themes.
+  .thumb-parent-icon {
+    width: 40px;
+    height: 40px;
+    color: rgba(210, 218, 232, 0.86);
+    opacity: 0.95;
+  }
+
+  .thumb-card.is-parent .thumb-icon {
+    color: rgba(210, 218, 232, 0.86);
   }
 
   .thumb-meta {
@@ -407,6 +373,10 @@
   border-color: rgba(255, 255, 255, 0.040);
 }
 
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-parent-icon {
+  color: rgba(220, 227, 238, 0.82);
+}
+
 :root[data-ambient="true"][data-compact="true"] :where(.thumb-shell) .thumb-card.is-selected {
   border-color: rgba(var(--accent-rgb), 0.7);
   background: rgba(var(--accent-rgb), 0.12);
@@ -417,26 +387,29 @@
   .thumb-card[data-drop-target="true"] {
   border-color: rgba(var(--accent-rgb), 0.9);
   background: rgba(var(--accent-rgb), 0.18);
-  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.35);
 }
 
 :where(.thumb-shell)[data-category-tint="true"] .thumb-card[data-kind="document"] {
-  box-shadow: inset 0 0 0 999px rgba(82, 132, 255, 0.08);
+  background: rgba(82, 132, 255, 0.08);
+  border-color: rgba(82, 132, 255, 0.22);
   --thumb-icon-color: rgba(82, 132, 255, 0.85);
 }
 
 :where(.thumb-shell)[data-category-tint="true"] .thumb-card[data-kind="image"] {
-  box-shadow: inset 0 0 0 999px rgba(56, 201, 198, 0.08);
+  background: rgba(56, 201, 198, 0.08);
+  border-color: rgba(56, 201, 198, 0.22);
   --thumb-icon-color: rgba(56, 201, 198, 0.85);
 }
 
 :where(.thumb-shell)[data-category-tint="true"] .thumb-card[data-kind="video"] {
-  box-shadow: inset 0 0 0 999px rgba(255, 140, 61, 0.08);
+  background: rgba(255, 140, 61, 0.08);
+  border-color: rgba(255, 140, 61, 0.22);
   --thumb-icon-color: rgba(255, 140, 61, 0.85);
 }
 
 :where(.thumb-shell)[data-category-tint="true"] .thumb-card[data-kind="executable"] {
-  box-shadow: inset 0 0 0 999px rgba(var(--accent-rgb), 0.08);
+  background: rgba(var(--accent-rgb), 0.08);
+  border-color: rgba(var(--accent-rgb), 0.22);
   --thumb-icon-color: rgba(var(--accent-rgb), 0.85);
 }
 

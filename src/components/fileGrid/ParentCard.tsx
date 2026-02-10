@@ -4,6 +4,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import { memo } from "react";
+import { ParentUpIcon } from "../icons";
 import type { ParentCardProps } from "./gridCard.types";
 
 export const ParentCard = memo(({
@@ -64,7 +65,7 @@ export const ParentCard = memo(({
       onContextMenu={(event) => event.preventDefault()}
     >
       <div className="thumb-icon">
-        <span className="thumb-parent">..</span>
+        <ParentUpIcon className="thumb-parent-icon" />
       </div>
       <div className="thumb-meta">
         <span className="thumb-name">Parent</span>

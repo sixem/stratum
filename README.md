@@ -12,10 +12,11 @@
 ## Features
 
 - List and grid views with fast search, tabs, and breadcrumb navigation.
+- A gallery mode to view the media files of the current directory.
 - Thumbnails, drag + drop, and inline rename.
 - Ambience mode and flair settings (themes, accents, icon tints).
 - Customisable layout, keybinds, and view behavior.
-- Built-in image/video conversion and SVG previews.
+- Built-in image/video conversion (via ffmpeg) and rasterized SVG previews.
 - ... and much more.
 
 ## Why Stratum?

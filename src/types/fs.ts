@@ -38,6 +38,17 @@ export type EntryMeta = {
   modified: number | null;
 };
 
+export type FolderThumbSampleBatchOptions = {
+  allowVideos: boolean;
+  allowSvgs: boolean;
+};
+
+export type FolderThumbSampleBatchResult = {
+  folderPath: string;
+  samplePath: string | null;
+  status: "ok" | "empty" | "error";
+};
+
 export type DriveInfo = {
   path: string;
   free: number | null;
@@ -96,6 +107,13 @@ export type RestoreReport = {
   skipped: number;
   failures: string[];
   remaining: RecycleEntry[];
+};
+
+export type RestorePathsReport = {
+  restored: number;
+  skipped: number;
+  failures: string[];
+  remainingPaths: string[];
 };
 
 // Emitted when the native watcher detects a change in a watched directory.

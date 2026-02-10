@@ -3,7 +3,6 @@ import createDebug from "debug";
 import type { Debugger } from "debug";
 
 const BASE_NAMESPACE = "stratum";
-const DEFAULT_NAMESPACE = `${BASE_NAMESPACE}:*`;
 
 const TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
@@ -55,13 +54,14 @@ export const initDebug = () => {
   createDebug.log = console.debug.bind(console);
   patchFormatArgs();
 
-  // Always enable a namespace set in development.
+  // Only apply an explicit namespace set in development.
   if (import.meta.env.MODE === "development") {
     const stored = loadStoredNamespaces();
-    const namespaces = stored && stored.length > 0 ? stored : DEFAULT_NAMESPACE;
-    createDebug.enable(namespaces);
-    const initLog = createDebug(`${BASE_NAMESPACE}:init`);
-    initLog("debug enabled: %s", namespaces);
+    if (stored && stored.trim().length > 0) {
+      createDebug.enable(stored);
+      const initLog = createDebug(`${BASE_NAMESPACE}:init`);
+      initLog("debug enabled: %s", stored);
+    }
   }
 };
 

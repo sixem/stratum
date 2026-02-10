@@ -15,6 +15,7 @@ import {
   getDriveKey,
   getPathName,
   joinPath,
+  normalizePath,
   tabLabel,
   toMessage,
 } from "@/lib";
@@ -113,6 +114,9 @@ export const useFileManagerDelete = ({
       try {
         const useNativeTrash = isWindowsEnv() && isTauriEnv();
         if (useNativeTrash) {
+          // Capture delete time so undo can resolve recycle metadata even if the
+          // shell writes recycle info slightly after delete returns.
+          const deleteStartedAtMs = Math.max(0, Date.now() - 5_000);
           let report = null;
           try {
             report = await trashEntries(unique);
@@ -125,8 +129,19 @@ export const useFileManagerDelete = ({
             });
             return null;
           }
-          if (report.recycled.length > 0) {
-            pushUndo({ type: "recycle", entries: report.recycled });
+          // Record undo by original paths, not immediate recycle metadata.
+          const failedPathSet = new Set(
+            report.failedPaths.map((path) => normalizePath(path)),
+          );
+          const recycledPaths = unique.filter(
+            (path) => !failedPathSet.has(normalizePath(path)),
+          );
+          if (recycledPaths.length > 0) {
+            pushUndo({
+              type: "recyclePaths",
+              paths: recycledPaths,
+              deletedAfterMs: deleteStartedAtMs,
+            });
           }
           if (report.deleted > 0) {
             await refreshAfterChange();

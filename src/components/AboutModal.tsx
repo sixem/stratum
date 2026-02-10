@@ -163,7 +163,7 @@ export const AboutModal = ({
           </div>
         </div>
 
-        <div className="about-footer">Built with Tauri + React.</div>
+        <div className="about-footer">Made with Tauri + React 🌟</div>
 
         <div className="about-actions">
           <PressButton

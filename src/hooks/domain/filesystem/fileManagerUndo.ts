@@ -1,10 +1,9 @@
 // Handles undo stack operations for delete/rename actions.
 import { useCallback } from "react";
 import type { RefObject } from "react";
-import { restoreRecycleEntries, statEntries, transferEntries } from "@/api";
+import { restoreRecyclePaths, statEntries, transferEntries } from "@/api";
 import { entryExists, formatFailures, getParentPath, getPathName, toMessage } from "@/lib";
 import { usePromptStore } from "@/modules";
-import type { RecycleEntry } from "@/types";
 
 export type UndoRenameEntry = {
   from: string;
@@ -19,7 +18,7 @@ export type UndoTrashEntry = {
 export type UndoAction =
   | { type: "rename"; entries: UndoRenameEntry[] }
   | { type: "trash"; entries: UndoTrashEntry[] }
-  | { type: "recycle"; entries: RecycleEntry[] };
+  | { type: "recyclePaths"; paths: string[]; deletedAfterMs: number };
 
 type RenameRequest = {
   path: string;
@@ -35,6 +34,7 @@ type UseFileManagerUndoOptions = {
   renameInFlightRef: RefObject<boolean>;
   deleteInFlightRef: RefObject<boolean>;
   copyInFlightRef: RefObject<boolean>;
+  onRenameUndoPresence?: (suppress: boolean) => void;
   performRenameRequests: (
     renames: RenameRequest[],
     options?: { recordUndo?: boolean; failureTitle?: string },
@@ -47,6 +47,7 @@ export const useFileManagerUndo = ({
   renameInFlightRef,
   deleteInFlightRef,
   copyInFlightRef,
+  onRenameUndoPresence,
   performRenameRequests,
   refreshAfterChange,
 }: UseFileManagerUndoOptions) => {
@@ -122,14 +123,14 @@ export const useFileManagerUndo = ({
     [refreshAfterChange],
   );
 
-  const restoreRecycledEntries = useCallback(
-    async (entries: RecycleEntry[]) => {
-      if (entries.length === 0) {
-        return { restored: 0, remaining: [] as RecycleEntry[] };
+  const restoreRecycledPaths = useCallback(
+    async (paths: string[], deletedAfterMs?: number) => {
+      if (paths.length === 0) {
+        return { restored: 0, remaining: [] as string[] };
       }
       let report = null;
       try {
-        report = await restoreRecycleEntries(entries);
+        report = await restoreRecyclePaths(paths, deletedAfterMs);
       } catch (error) {
         usePromptStore.getState().showPrompt({
           title: "Undo failed",
@@ -137,7 +138,7 @@ export const useFileManagerUndo = ({
           confirmLabel: "OK",
           cancelLabel: null,
         });
-        return { restored: 0, remaining: entries };
+        return { restored: 0, remaining: paths };
       }
       if (report.failures.length > 0) {
         usePromptStore.getState().showPrompt({
@@ -150,7 +151,7 @@ export const useFileManagerUndo = ({
       if (report.restored > 0) {
         await refreshAfterChange();
       }
-      return { restored: report.restored, remaining: report.remaining };
+      return { restored: report.restored, remaining: report.remainingPaths };
     },
     [refreshAfterChange],
   );
@@ -174,25 +175,32 @@ export const useFileManagerUndo = ({
           nextName: getPathName(entry.from),
         }))
         .filter((item) => item.path && item.nextName);
-      const result = await performRenameRequests(requests, {
-        recordUndo: false,
-        failureTitle: "Undo completed with issues",
-      });
-      if (!result) {
-        undoStackRef.current.push(action);
-        return false;
+      // Keep rename undo visually in-place by temporarily disabling
+      // add/remove presence animations during the refresh cycle.
+      onRenameUndoPresence?.(true);
+      try {
+        const result = await performRenameRequests(requests, {
+          recordUndo: false,
+          failureTitle: "Undo completed with issues",
+        });
+        if (!result) {
+          undoStackRef.current.push(action);
+          return false;
+        }
+        if (result.renamed.size === 0) {
+          undoStackRef.current.push(action);
+          return false;
+        }
+        const remaining = action.entries.filter(
+          (entry) => !result.renamed.has(entry.to),
+        );
+        if (remaining.length > 0) {
+          undoStackRef.current.push({ type: "rename", entries: remaining });
+        }
+        return true;
+      } finally {
+        onRenameUndoPresence?.(false);
       }
-      if (result.renamed.size === 0) {
-        undoStackRef.current.push(action);
-        return false;
-      }
-      const remaining = action.entries.filter(
-        (entry) => !result.renamed.has(entry.to),
-      );
-      if (remaining.length > 0) {
-        undoStackRef.current.push({ type: "rename", entries: remaining });
-      }
-      return true;
     }
 
     if (action.type === "trash") {
@@ -203,10 +211,17 @@ export const useFileManagerUndo = ({
       return restored > 0;
     }
 
-    if (action.type === "recycle") {
-      const { restored, remaining } = await restoreRecycledEntries(action.entries);
+    if (action.type === "recyclePaths") {
+      const { restored, remaining } = await restoreRecycledPaths(
+        action.paths,
+        action.deletedAfterMs,
+      );
       if (remaining.length > 0) {
-        undoStackRef.current.push({ type: "recycle", entries: remaining });
+        undoStackRef.current.push({
+          type: "recyclePaths",
+          paths: remaining,
+          deletedAfterMs: action.deletedAfterMs,
+        });
       }
       return restored > 0;
     }
@@ -215,9 +230,10 @@ export const useFileManagerUndo = ({
   }, [
     copyInFlightRef,
     deleteInFlightRef,
+    onRenameUndoPresence,
     performRenameRequests,
     renameInFlightRef,
-    restoreRecycledEntries,
+    restoreRecycledPaths,
     restoreTrashedEntries,
     undoStackRef,
   ]);

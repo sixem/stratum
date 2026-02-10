@@ -80,6 +80,18 @@ pub async fn stat_entries(paths: Vec<String>) -> Vec<fs::EntryMeta> {
 }
 
 #[tauri::command]
+pub async fn list_folder_thumb_samples_batch(
+    folder_paths: Vec<String>,
+    options: Option<fs::FolderThumbSampleBatchOptions>,
+) -> Vec<fs::FolderThumbSampleBatchResult> {
+    tauri::async_runtime::spawn_blocking(move || {
+        fs::list_folder_thumb_samples_batch(folder_paths, options)
+    })
+    .await
+    .unwrap_or_default()
+}
+
+#[tauri::command]
 pub async fn parent_dir(path: String) -> Option<String> {
     tauri::async_runtime::spawn_blocking(move || fs::parent_dir(path))
         .await
@@ -183,6 +195,16 @@ pub async fn restore_recycle_entries(
     entries: Vec<fs::RecycleEntry>,
 ) -> Result<fs::RestoreReport, String> {
     tauri::async_runtime::spawn_blocking(move || fs::restore_recycle_entries(entries))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn restore_recycle_paths(
+    paths: Vec<String>,
+    min_deleted_at: Option<u64>,
+) -> Result<fs::RestorePathsReport, String> {
+    tauri::async_runtime::spawn_blocking(move || fs::restore_recycle_paths(paths, min_deleted_at))
         .await
         .map_err(|err| err.to_string())?
 }
