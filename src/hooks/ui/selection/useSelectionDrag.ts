@@ -133,6 +133,24 @@ const getGridCentered = () => {
   return root?.dataset.gridCenter !== "false";
 };
 
+// Native scrollbar interactions should scroll only, not start selection drag.
+const isPointerOnNativeScrollbar = (element: HTMLElement, event: PointerEvent) => {
+  const bounds = element.getBoundingClientRect();
+  const contentLeft = bounds.left + element.clientLeft;
+  const contentTop = bounds.top + element.clientTop;
+  const contentRight = contentLeft + element.clientWidth;
+  const contentBottom = contentTop + element.clientHeight;
+  const onVerticalScrollbar =
+    element.scrollHeight > element.clientHeight &&
+    event.clientX >= contentRight &&
+    event.clientX <= bounds.right;
+  const onHorizontalScrollbar =
+    element.scrollWidth > element.clientWidth &&
+    event.clientY >= contentBottom &&
+    event.clientY <= bounds.bottom;
+  return onVerticalScrollbar || onHorizontalScrollbar;
+};
+
 const buildLayoutSnapshot = (
   element: HTMLElement,
   layout: SelectionLayout,
@@ -476,6 +494,12 @@ export const useSelectionDrag = (
       if (event.button !== 0) return;
       const target = event.target as HTMLElement | null;
       if (!target) return;
+      if (isPointerOnNativeScrollbar(element, event)) {
+        if (log.enabled) {
+          log("pointerdown ignored: native-scrollbar");
+        }
+        return;
+      }
       if (target?.closest(itemSelector)) {
         if (log.enabled) {
           log("pointerdown ignored: on-item");
