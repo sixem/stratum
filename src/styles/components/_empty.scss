@@ -55,32 +55,38 @@
 }
 
 .view-lander {
+  // Keep new-tab scrollbars darker than the global compact-mode scrollbar.
+  --scrollbar-thumb: #162033;
+  --scrollbar-track: #0d1422;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   width: 100%;
   height: 100%;
-  padding: clamp(16px, 4vw, 32px);
+  padding: 12px 14px;
 }
 
 .view-lander .empty-state {
-  max-width: min(520px, 100%);
+  max-width: none;
 }
 
 .lander-panel {
-  width: min(100%, 1100px);
-  max-height: min(100%, 640px);
+  width: min(100%, 1280px);
+  height: 100%;
+  max-height: 100%;
   display: grid;
-  gap: 14px;
-  margin: 20px 22px;
-  overflow: auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
+  gap: 10px;
+  margin: 2px;
+  overflow: hidden;
 }
 
 .lander-panel .empty-state {
-  max-width: none;
   padding: 0;
   border: none;
   background: transparent;
+  text-align: left;
 }
 
 :where(.thumb-shell) .thumb-empty .empty-state,
@@ -95,7 +101,7 @@
 }
 
 :root[data-ambient="true"] .view-lander {
-  padding: clamp(16px, 4vw, 32px);
+  padding: 12px 14px;
   background: var(--panel-2);
 }
 
@@ -114,91 +120,157 @@
 :where(.lander-panel) {
   .lander-columns {
     display: grid;
-    gap: 14px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
+    gap: 12px 14px;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: stretch;
+    min-height: 0;
   }
 
-  @media (max-width: 860px) {
+  .lander-drives {
+    grid-column: 1 / -1;
+  }
+
+  .lander-recents {
+    grid-column: 1 / 8;
+  }
+
+  .lander-places {
+    grid-column: 8 / -1;
+  }
+
+  @media (max-width: 1120px) {
+    .lander-columns {
+      grid-template-columns: repeat(10, minmax(0, 1fr));
+    }
+
+    .lander-recents {
+      grid-column: 1 / 6;
+    }
+
+    .lander-places {
+      grid-column: 6 / -1;
+    }
+  }
+
+  @media (max-width: 900px) {
     .lander-columns {
       grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: none;
+      align-items: start;
+    }
+
+    .lander-recents,
+    .lander-places,
+    .lander-drives {
+      grid-column: 1 / -1;
     }
   }
 
   .lander-section {
     min-width: 0;
-  }
-
-  .lander-recents {
-    border: 1px solid var(--stroke);
-    border-radius: 10px;
-    padding: 12px;
-    background: var(--surface-control-muted);
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
     display: grid;
-    gap: 8px;
+    gap: 6px;
     align-content: start;
   }
 
+  .lander-recents,
+  .lander-places {
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  @media (max-width: 900px) {
+    .lander-recents,
+    .lander-places {
+      grid-template-rows: auto auto;
+    }
+  }
+
+  .lander-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 2px 2px 8px;
+  }
+
+  .lander-section-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 18px;
+    padding: 0 7px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
   .lander-section-title {
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.16em;
     color: var(--muted);
+    line-height: 1;
   }
 
-  .lander-recents-empty {
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  .lander-drives {
-    border: 1px solid var(--stroke);
-    border-radius: 10px;
-    padding: 12px;
-    background: var(--surface-control-muted);
-    display: grid;
-    gap: 8px;
-  }
-
+  .lander-recents-empty,
   .lander-drives-empty {
     font-size: 12px;
     color: var(--muted);
+    padding: 8px 2px 6px;
   }
 
   .lander-drives-list {
     display: grid;
-    gap: 8px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    max-height: min(44vh, 360px);
+    gap: 6px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     overflow: auto;
-    padding-right: 4px;
+    align-content: start;
+    max-height: clamp(140px, 35vh, 290px);
+    padding-right: 2px;
+  }
+
+  @media (max-width: 560px) {
+    .lander-drives-list {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
   .lander-drive {
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 8px;
-    background: linear-gradient(
-      145deg,
-      rgba(255, 255, 255, 0.06),
-      rgba(255, 255, 255, 0.02)
-    );
-    padding: 8px 10px;
+    border: 1px solid transparent;
+    border-bottom-color: var(--stroke);
+    border-radius: 6px;
+    background: transparent;
+    padding: 8px;
     display: grid;
     gap: 4px;
     text-align: left;
     cursor: pointer;
+    transition: none;
   }
 
   .lander-drive:hover {
-    border-color: rgba(var(--accent-rgb), 0.45);
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+    border-color: rgba(var(--accent-rgb), 0.36);
+    background: rgba(var(--accent-rgb), 0.08);
   }
 
   .lander-storage-summary {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
     align-items: baseline;
-    gap: 10px;
-    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
   }
 
   .lander-storage-title {
@@ -209,20 +281,25 @@
   }
 
   .lander-storage-value {
-    font-size: 0.9rem;
+    font-size: 0.84rem;
     font-weight: 600;
     color: var(--text);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .lander-storage-percent {
     font-size: 0.72rem;
-    color: rgba(var(--accent-rgb), 0.9);
+    color: var(--muted);
+    white-space: nowrap;
   }
 
   .lander-storage-bar {
-    height: 4px;
+    height: 3px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.1);
     overflow: hidden;
   }
 
@@ -236,19 +313,20 @@
   .lander-drive-head {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     font-weight: 500;
+    min-width: 0;
   }
 
   .lander-drive-label {
     font-weight: 600;
     color: var(--accent);
-    font-size: 0.9rem;
+    font-size: 0.84rem;
   }
 
   .lander-drive-name {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.72rem;
+    color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -278,7 +356,7 @@
   .lander-drive-bar {
     height: 3px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.1);
     overflow: hidden;
   }
 
@@ -295,18 +373,28 @@
 
   .lander-recents-list {
     display: grid;
-    gap: 10px;
-    max-height: min(44vh, 360px);
+    gap: 4px;
     overflow: auto;
-    padding-right: 4px;
+    align-content: start;
+    min-height: 0;
+    max-height: none;
+    padding-right: 2px;
   }
 
   .lander-place {
-    border-style: solid;
-    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-bottom-color: var(--stroke);
+    border-radius: 6px;
+    padding: 8px;
+    background: transparent;
     display: grid;
-    gap: 6px;
+    gap: 4px;
     align-items: start;
+  }
+
+  .lander-place:hover {
+    border-color: rgba(var(--accent-rgb), 0.34);
+    background: rgba(var(--accent-rgb), 0.08);
   }
 
   .lander-place-head {
@@ -318,7 +406,7 @@
   }
 
   .lander-place-name {
-    font-size: 0.95rem;
+    font-size: 0.84rem;
     font-weight: 600;
     color: var(--text);
     overflow: hidden;
@@ -327,20 +415,60 @@
   }
 
   .lander-place-drive {
-    font-size: 0.7rem;
-    color: rgba(var(--accent-rgb), 0.9);
+    font-size: 0.68rem;
+    color: var(--muted);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     flex: 0 0 auto;
   }
 
   .lander-place-path {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 500;
     color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
+  // Scoped scrollbar styling for the new-tab page.
+  .lander-panel,
+  .lander-drives-list,
+  .lander-recents-list {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  .lander-panel::-webkit-scrollbar,
+  .lander-drives-list::-webkit-scrollbar,
+  .lander-recents-list::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+
+  .lander-panel::-webkit-scrollbar-track,
+  .lander-drives-list::-webkit-scrollbar-track,
+  .lander-recents-list::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  .lander-panel::-webkit-scrollbar-thumb,
+  .lander-drives-list::-webkit-scrollbar-thumb,
+  .lander-recents-list::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 999px;
+  }
+
+  .lander-panel::-webkit-scrollbar-thumb:hover,
+  .lander-drives-list::-webkit-scrollbar-thumb:hover,
+  .lander-recents-list::-webkit-scrollbar-thumb:hover {
+    background: #1f2b43;
+  }
 }
 
+@media (max-width: 900px) {
+  .lander-panel {
+    height: auto;
+    overflow: auto;
+  }
+}

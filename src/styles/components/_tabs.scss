@@ -43,6 +43,12 @@
     box-sizing: border-box;
   }
 
+  .tab[data-tab-kind="untitled"] {
+    border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.04);
+  }
+
   .tab:first-child {
     margin-left: 2px;
   }
@@ -59,6 +65,13 @@
     background: #212631;
     border-color: rgba(var(--accent-rgb), 0.6);
     box-shadow: 0 0 8px #00000036;
+  }
+
+  .tab.is-active[data-tab-kind="untitled"] {
+    border-style: dashed;
+    border-color: rgba(var(--accent-rgb), 0.65);
+    background: rgba(var(--accent-rgb), 0.12);
+    box-shadow: none;
   }
 
   .tab.is-dragging {
@@ -109,6 +122,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .tab[data-tab-kind="untitled"] .tab-title {
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .tab.is-active[data-tab-kind="untitled"] .tab-title {
+    color: var(--text);
   }
 
   .tab-close {
@@ -187,4 +209,3 @@
     pointer-events: none;
   }
 }
-
