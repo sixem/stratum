@@ -3,5 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export const openPath = (path: string) => invoke<void>("open_path", { path });
 
-export const openPathProperties = (path: string) =>
-  invoke<void>("open_path_properties", { path });
+export const openPathProperties = (paths: string[] | string) => {
+  const normalized = Array.isArray(paths) ? paths : [paths];
+  return invoke<void>("open_path_properties", { paths: normalized });
+};

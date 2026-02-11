@@ -49,8 +49,8 @@ pub async fn open_path(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn open_path_properties(path: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || opener::open_path_properties(path))
+pub async fn open_path_properties(paths: Vec<String>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || opener::open_path_properties(paths))
         .await
         .map_err(|err| err.to_string())?
 }
