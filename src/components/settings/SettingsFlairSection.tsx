@@ -1,6 +1,6 @@
 // Visual flair toggles (accent + ambient effects).
 import type { AccentTheme } from "@/modules";
-import { PressButton } from "../PressButton";
+import { PressButton } from "@/components/primitives/PressButton";
 import type { SettingsUpdateHandler } from "./types";
 
 type SettingsFlairSectionProps = {

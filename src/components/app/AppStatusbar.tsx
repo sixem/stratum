@@ -1,6 +1,6 @@
 // Hosts the status bar shell so layout remains stable.
 import type { ComponentProps, RefObject } from "react";
-import { StatusBar } from "@/components/StatusBar";
+import { StatusBar } from "@/components/navigation/StatusBar";
 
 type AppStatusbarProps = {
   statusbarRef: RefObject<HTMLDivElement | null>;

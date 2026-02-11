@@ -1,29 +1,10 @@
-// Barrel exports for shared UI components.
+// Barrel exports for domain-organized UI components.
 export * from "./app";
-export { AboutModal } from "./AboutModal";
-export { ContextMenu } from "./ContextMenu";
-export { DrivePicker } from "./DrivePicker";
-export { EmptyState } from "./EmptyState";
-export { default as FileGrid } from "./FileGrid";
-export { default as FileList } from "./FileList";
-export { FileView } from "./FileView";
+export * from "./diagnostics";
+export * from "./explorer";
 export * from "./icons";
-export { LoadingIndicator } from "./LoadingIndicator";
-export { LoadingState } from "./LoadingState";
-export { PathBar } from "./PathBar";
-export { PathInputsBar } from "./PathInputsBar";
-export { PathBarActions } from "./PathBarActions";
-export { PathCrumbsBar } from "./PathCrumbsBar";
-export { PerfProfiler } from "./PerfProfiler";
-export { PressButton } from "./PressButton";
-export { PromptModal } from "./PromptModal";
-export { QuickPreviewOverlay } from "./QuickPreviewOverlay";
-export { SelectionRect } from "./SelectionRect";
-export { SettingsOverlay } from "./SettingsOverlay";
-export { Sidebar } from "./Sidebar";
-export { SidebarSection } from "./SidebarSection";
-export { StartLander } from "./StartLander";
-export { StatusBar } from "./StatusBar";
-export { TabsBar } from "./TabsBar";
-export { ToolbarIconButton } from "./ToolbarIconButton";
-export { TooltipDisplay, TooltipWrapper } from "./Tooltip";
+export * from "./navigation";
+export * from "./overlay";
+export * from "./preview";
+export * from "./primitives";
+export * from "./transfer";

@@ -205,11 +205,11 @@ const App = () => {
       searchValue: deferredSearchValue,
       totalCount: viewTotalCount,
     });
-  const metaPrefetchKey = `${currentPath}:${sortState.key}:${sortState.dir}:${deferredSearchValue}`;
+  const metaPrefetchKey = `${viewPathKey}:${sortState.key}:${sortState.dir}:${deferredSearchValue}`;
   const shouldPrefetchMeta = sortState.key !== "name";
   useMetaPrefetch({
     enabled: shouldPrefetchMeta,
-    loading,
+    loading: viewLoading,
     resetKey: metaPrefetchKey,
     entries: sortedEntries,
     entryMeta,
@@ -665,6 +665,9 @@ const App = () => {
       driveInfo: fileManager.driveInfo,
       onOpenDrive: handleSelectDrive,
       onOpenDriveNewTab: handleOpenInNewTab,
+      places: fileManager.places,
+      onOpenPlace: handleSelectPlace,
+      onOpenPlaceNewTab: handleOpenInNewTab,
       onGoUp: handleUp,
       onOpenDir: browseFromView,
       onOpenDirNewTab: handleOpenInNewTab,

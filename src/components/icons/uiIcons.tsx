@@ -198,6 +198,36 @@ export const ChevronDownIcon = ({ className }: IconProps) => {
   );
 };
 
+// Sidebar section icon adapted from references/collapse-svgrepo-com.svg.
+export const SidebarCollapseIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
+      <path
+        d="M7.56994 5.00001L6.50928 6.06067L11.9999 11.5536L17.4906 6.06067L16.43 5.00001L11.9999 9.43186L7.56994 5.00001Z"
+        fill="currentColor"
+      />
+      <path
+        d="M16.4298 19L17.4905 17.9394L11.9999 12.4465L6.5094 17.9394L7.57006 19L11.9999 14.5683L16.4298 19Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+};
+
+// Sidebar section icon adapted from references/expand-svgrepo-com.svg.
+export const SidebarExpandIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M12 4L17.2711 9.27333L16.2102 10.3338L12 6.12178L7.7899 10.3338L6.729 9.27333L12 4ZM12 17.8782L7.7899 13.6662L6.729 14.7267L12 20L17.2711 14.7267L16.2102 13.6662L12 17.8782Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+};
+
 export const TabCloseIcon = ({ className }: IconProps) => {
   // Rounded close mark used for tab close buttons.
   return (

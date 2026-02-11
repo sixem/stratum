@@ -1,11 +1,11 @@
 // Groups overlay layers to keep App render structure small and explicit.
 import type { ComponentProps } from "react";
-import { AboutModal } from "@/components/AboutModal";
-import { ContextMenu } from "@/components/ContextMenu";
-import { PromptModal } from "@/components/PromptModal";
-import { QuickPreviewOverlay } from "@/components/QuickPreviewOverlay";
-import { SettingsOverlay } from "@/components/SettingsOverlay";
-import { TooltipDisplay } from "@/components/Tooltip";
+import { AboutModal } from "@/components/overlay/AboutModal";
+import { ContextMenu } from "@/components/overlay/ContextMenu";
+import { PromptModal } from "@/components/overlay/PromptModal";
+import { QuickPreviewOverlay } from "@/components/preview/QuickPreviewOverlay";
+import { SettingsOverlay } from "@/components/overlay/SettingsOverlay";
+import { TooltipDisplay } from "@/components/overlay/Tooltip";
 
 type AppOverlaysProps = {
   about: ComponentProps<typeof AboutModal>;

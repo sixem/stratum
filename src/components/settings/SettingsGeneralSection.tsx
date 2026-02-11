@@ -1,6 +1,6 @@
 // General settings and view defaults that shape navigation and layout.
 import type { ViewMode } from "@/types";
-import { PressButton } from "../PressButton";
+import { PressButton } from "@/components/primitives/PressButton";
 import type { SettingsUpdateHandler } from "./types";
 
 type SettingsGeneralSectionProps = {

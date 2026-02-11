@@ -1,7 +1,7 @@
 // Deprecated view settings section; superseded by SettingsGeneralSection.
 import type { ViewMode } from "@/types";
 import type { SettingsUpdateHandler } from "./types";
-import { PressButton } from "../PressButton";
+import { PressButton } from "@/components/primitives/PressButton";
 
 type SettingsViewSectionProps = {
   sectionId: string;

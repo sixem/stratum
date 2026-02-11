@@ -1,9 +1,9 @@
 // Renders the fixed header stack (controls, inputs, tabs, crumbs).
 import type { ComponentProps, RefObject } from "react";
-import { PathBar } from "@/components/PathBar";
-import { PathInputsBar } from "@/components/PathInputsBar";
-import { PathCrumbsBar } from "@/components/PathCrumbsBar";
-import { TabsBar } from "@/components/TabsBar";
+import { PathBar } from "@/components/explorer/PathBar";
+import { PathInputsBar } from "@/components/explorer/PathInputsBar";
+import { PathCrumbsBar } from "@/components/explorer/PathCrumbsBar";
+import { TabsBar } from "@/components/navigation/TabsBar";
 
 type AppTopstackProps = {
   topstackRef: RefObject<HTMLDivElement | null>;

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getThumbCacheSize } from "@/api";
 import { formatBytes } from "@/lib";
-import { PressButton } from "../PressButton";
+import { PressButton } from "@/components/primitives/PressButton";
 import { useDeferredRange } from "./useDeferredRange";
 import type { SettingsUpdateHandler } from "./types";
 

@@ -8,7 +8,7 @@ import {
   normalizeSidebarSectionOrder,
 } from "@/modules";
 import { EyeIcon, EyeOffIcon } from "@/components";
-import { PressButton } from "../PressButton";
+import { PressButton } from "@/components/primitives/PressButton";
 import { useDeferredRange } from "./useDeferredRange";
 import type { SettingsUpdateHandler } from "./types";
 

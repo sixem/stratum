@@ -1,6 +1,6 @@
 // Thumbnail generation and preview tuning.
 import type { ThumbnailFit } from "@/modules";
-import { PressButton } from "../PressButton";
+import { PressButton } from "@/components/primitives/PressButton";
 import { useDeferredRange } from "./useDeferredRange";
 import type { SettingsUpdateHandler } from "./types";
 
