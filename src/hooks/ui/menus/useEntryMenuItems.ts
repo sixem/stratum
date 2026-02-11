@@ -1,14 +1,15 @@
 // Builds file/folder context menu items for a targeted entry.
 import { useMemo } from "react";
 import { copyPathsToClipboard, openPathProperties } from "@/api";
+import { IMAGE_CONVERT_EXTENSIONS, VIDEO_CONVERT_EXTENSIONS } from "@/constants";
 import { getExtension, getFileKind, tabLabel } from "@/lib";
 import { useClipboardStore, usePromptStore } from "@/modules";
-import type { ContextMenuItem, EntryContextTarget } from "@/types";
-import { useCreateEntryPrompt } from "../app/useCreateEntryPrompt";
+import type { ContextMenuItem, EntryContextTarget, FileEntry } from "@/types";
 
 type UseEntryMenuItemsOptions = {
   target: EntryContextTarget | null;
   selected: Set<string>;
+  entryByPath: Map<string, FileEntry>;
   parentPath: string | null;
   currentPath: string;
   onOpenEntry: (path: string) => void;
@@ -18,14 +19,10 @@ type UseEntryMenuItemsOptions = {
   onClearSelection: () => void;
   onRenameEntry: (target: EntryContextTarget) => void;
   onPasteEntries: (paths: string[], destination: string) => Promise<unknown> | void;
-  onCreateFolder?: (parentPath: string, name: string) => Promise<unknown> | void;
-  onCreateFolderAndGo?: (parentPath: string, name: string) => Promise<unknown> | void;
-  onCreateFile?: (parentPath: string, name: string) => Promise<unknown> | void;
   ffmpegAvailable: boolean;
 };
 
-const IMAGE_CONVERT_EXTENSIONS = ["jpg", "png", "webp", "gif", "bmp"];
-const VIDEO_CONVERT_EXTENSIONS = ["mp4", "webm", "mkv", "mov", "avi"];
+type ConvertibleSelectionKind = "image" | "video";
 
 const buildConvertItems = (
   extensions: string[],
@@ -53,9 +50,92 @@ const resolveContextTargets = (
   return filtered.length > 0 ? filtered : [target.path];
 };
 
+const resolveMenuEntry = (
+  path: string,
+  target: EntryContextTarget,
+  entryByPath: Map<string, FileEntry>,
+) => {
+  if (path === target.path) return target;
+  return entryByPath.get(path) ?? null;
+};
+
+type SelectionSummary = {
+  canConvertKind: ConvertibleSelectionKind | null;
+  sharedExtension: string | null;
+  hasMultiplePropertyTypes: boolean;
+};
+
+const summarizeSelection = (
+  actionTargets: string[],
+  target: EntryContextTarget,
+  entryByPath: Map<string, FileEntry>,
+): SelectionSummary => {
+  let firstPropertyType: string | null = null;
+  let hasMultiplePropertyTypes = false;
+  let canConvertAll = actionTargets.length > 0;
+  let convertKind: ConvertibleSelectionKind | null = null;
+  let sharedExtension: string | null = null;
+  let hasSharedExtension = false;
+
+  // Single-pass scan keeps menu gating cheap even for large multi-selections.
+  for (const path of actionTargets) {
+    const entry = resolveMenuEntry(path, target, entryByPath);
+    if (!entry) {
+      canConvertAll = false;
+      continue;
+    }
+
+    const extension = entry.isDir ? null : getExtension(entry.name);
+    const propertyType = entry.isDir ? "directory" : `file:${extension ?? "<none>"}`;
+    if (!firstPropertyType) {
+      firstPropertyType = propertyType;
+    } else if (firstPropertyType !== propertyType) {
+      hasMultiplePropertyTypes = true;
+    }
+
+    if (entry.isDir) {
+      canConvertAll = false;
+      continue;
+    }
+
+    const kind = getFileKind(entry.name);
+    if (kind !== "image" && kind !== "video") {
+      canConvertAll = false;
+      continue;
+    }
+    if (!convertKind) {
+      convertKind = kind;
+    } else if (convertKind !== kind) {
+      canConvertAll = false;
+    }
+
+    if (!hasSharedExtension) {
+      sharedExtension = extension;
+      hasSharedExtension = true;
+    } else if (sharedExtension !== extension) {
+      sharedExtension = null;
+    }
+  }
+
+  if (!canConvertAll || !convertKind) {
+    return {
+      canConvertKind: null,
+      sharedExtension: null,
+      hasMultiplePropertyTypes,
+    };
+  }
+
+  return {
+    canConvertKind: convertKind,
+    sharedExtension,
+    hasMultiplePropertyTypes,
+  };
+};
+
 export const useEntryMenuItems = ({
   target,
   selected,
+  entryByPath,
   parentPath,
   currentPath,
   onOpenEntry,
@@ -65,28 +145,24 @@ export const useEntryMenuItems = ({
   onClearSelection,
   onRenameEntry,
   onPasteEntries,
-  onCreateFolder,
-  onCreateFolderAndGo,
-  onCreateFile,
   ffmpegAvailable,
 }: UseEntryMenuItemsOptions) => {
   const clipboard = useClipboardStore((state) => state.clipboard);
-  const openCreatePrompt = useCreateEntryPrompt();
 
   return useMemo<ContextMenuItem[]>(() => {
     if (!target) return [];
     const actionTargets = resolveContextTargets(target, selected, parentPath);
+    const selectionSummary = summarizeSelection(actionTargets, target, entryByPath);
     const hasTargets = actionTargets.length > 0;
     const pasteTarget = (target.isDir ? target.path : currentPath).trim();
     const canPaste = Boolean(clipboard && clipboard.paths.length > 0 && pasteTarget);
-    const fileKind = getFileKind(target.name);
-    const extension = getExtension(target.name);
-    const canConvert =
-      ffmpegAvailable && !target.isDir && (fileKind === "image" || fileKind === "video");
+    const canConvert = ffmpegAvailable && selectionSummary.canConvertKind !== null;
     const convertItems = canConvert
       ? buildConvertItems(
-          fileKind === "video" ? VIDEO_CONVERT_EXTENSIONS : IMAGE_CONVERT_EXTENSIONS,
-          extension,
+          selectionSummary.canConvertKind === "video"
+            ? VIDEO_CONVERT_EXTENSIONS
+            : IMAGE_CONVERT_EXTENSIONS,
+          selectionSummary.sharedExtension,
         )
       : [];
     const convertMenu =
@@ -114,38 +190,6 @@ export const useEntryMenuItems = ({
         disabled: !hasTargets,
       },
       ...(convertMenu ? [convertMenu] : []),
-      ...(target.isDir && (onCreateFolder || onCreateFile)
-        ? ([
-            {
-              id: "entry-new-folder",
-              label: "New folder",
-              onSelect: () => {
-                if (!onCreateFolder) return;
-                openCreatePrompt({
-                  kind: "folder",
-                  parentPath: target.path,
-                  onCreate: onCreateFolder,
-                  onCreateAndGo: onCreateFolderAndGo,
-                });
-              },
-              disabled: !target.isDir || !onCreateFolder,
-            },
-            {
-              id: "entry-new-file",
-              label: "New file",
-              onSelect: () => {
-                if (!onCreateFile) return;
-                openCreatePrompt({
-                  kind: "file",
-                  parentPath: target.path,
-                  onCreate: onCreateFile,
-                });
-              },
-              disabled: !target.isDir || !onCreateFile,
-            },
-            { kind: "divider", id: "entry-divider-create" } as ContextMenuItem,
-          ] as ContextMenuItem[])
-        : []),
       {
         id: "entry-copy",
         label: "Copy",
@@ -207,9 +251,10 @@ export const useEntryMenuItems = ({
       {
         id: "entry-properties",
         label: "Properties",
+        hint: selectionSummary.hasMultiplePropertyTypes ? "Multiple types" : undefined,
         onSelect: () => {
           if (!hasTargets) return;
-          void openPathProperties(target.path).catch((error) => {
+          void openPathProperties(actionTargets).catch((error) => {
             const message =
               error instanceof Error && error.message
                 ? error.message
@@ -228,10 +273,6 @@ export const useEntryMenuItems = ({
   }, [
     clipboard,
     currentPath,
-    openCreatePrompt,
-    onCreateFile,
-    onCreateFolder,
-    onCreateFolderAndGo,
     onClearSelection,
     onDeleteEntries,
     confirmDelete,
@@ -243,5 +284,6 @@ export const useEntryMenuItems = ({
     parentPath,
     selected,
     target,
+    entryByPath,
   ]);
 };

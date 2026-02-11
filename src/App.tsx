@@ -489,6 +489,7 @@ const App = () => {
     openEntryMenu,
     closeContextMenu,
     selected,
+    entryByPath: viewModel.entryByPath,
     onSelectionChange: handleSelectionChange,
     currentPath,
     viewParentPath,

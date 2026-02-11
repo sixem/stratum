@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import { isEditableElement } from "@/lib";
 import type {
   EntryContextTarget,
+  FileEntry,
   ShellAvailability,
   ShellKind,
   SortState,
@@ -21,6 +22,7 @@ type UseAppContextMenusOptions = {
   openEntryMenu: (event: ReactPointerEvent, target: EntryContextTarget) => void;
   closeContextMenu: () => void;
   selected: Set<string>;
+  entryByPath: Map<string, FileEntry>;
   onSelectionChange: (paths: string[], anchor?: string) => void;
   currentPath: string;
   viewParentPath: string | null;
@@ -49,6 +51,7 @@ export const useAppContextMenus = ({
   openEntryMenu,
   closeContextMenu,
   selected,
+  entryByPath,
   onSelectionChange,
   currentPath,
   viewParentPath,
@@ -130,6 +133,7 @@ export const useAppContextMenus = ({
   const entryMenuItems = useEntryMenuItems({
     target: contextMenu?.kind === "entry" ? contextMenu.entry : null,
     selected,
+    entryByPath,
     parentPath: viewParentPath,
     currentPath,
     onOpenEntry,
@@ -139,9 +143,6 @@ export const useAppContextMenus = ({
     onClearSelection,
     onRenameEntry,
     onPasteEntries,
-    onCreateFolder,
-    onCreateFolderAndGo,
-    onCreateFile,
     ffmpegAvailable: Boolean(shellAvailability?.ffmpeg),
   });
   const contextMenuItems =
