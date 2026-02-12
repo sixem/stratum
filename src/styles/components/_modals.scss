@@ -74,11 +74,24 @@
     background: var(--surface-card);
     color: var(--text);
     font-size: 12px;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
   }
 
   .prompt-input:focus {
     border-color: rgba(var(--accent-rgb), 0.6);
     box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+  }
+
+  .prompt-input::selection {
+    background: #fff;
+    color: #000;
+  }
+
+  .prompt-input::-moz-selection {
+    background: #fff;
+    color: #000;
   }
 
   .prompt-actions {

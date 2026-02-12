@@ -630,6 +630,12 @@
   object-fit: cover;
   display: block;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.quick-preview-strip-thumb[data-ready="true"] {
+  opacity: 1;
 }
 
 .quick-preview-strip-fallback {
