@@ -1,5 +1,5 @@
 // Global prompt modal driven by the prompt store.
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { isEditableElement } from "@/lib";
 import { PressButton } from "@/components/primitives/PressButton";
 import { usePromptStore, type PromptConfig } from "@/modules";
@@ -17,6 +17,32 @@ export const PromptModal = () => {
     open: Boolean(prompt),
     containerRef: panelRef,
   });
+
+  useLayoutEffect(() => {
+    if (!prompt) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const input = panel.querySelector<HTMLInputElement>(".prompt-input:not([disabled])");
+    if (!input) return;
+    const focusAndSelect = () => {
+      if (!panel.isConnected) return;
+      if (document.activeElement !== input) {
+        input.focus({ preventScroll: true });
+      }
+      input.setSelectionRange(0, input.value.length);
+    };
+
+    // Keyboard-opened prompts should be ready immediately.
+    focusAndSelect();
+
+    // Re-apply on the next frame once to handle mount-time focus races.
+    const frame = window.requestAnimationFrame(() => {
+      focusAndSelect();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [prompt]);
 
   useEffect(() => {
     if (!prompt) return;

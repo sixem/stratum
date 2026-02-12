@@ -7,7 +7,7 @@ import type {
 } from "react";
 import { FILE_TOOLTIP_DELAY_MS } from "@/constants";
 import type { EntryMeta, FileEntry, ThumbnailRequest } from "@/types";
-import { formatBytes, formatDate, getFileKind, splitNameExtension } from "@/lib";
+import { formatBytes, formatDate, getFileKind, normalizePath, splitNameExtension } from "@/lib";
 import { useEntryMetaRequest, useThumbnailRequest, useVirtualRange } from "@/hooks";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 
@@ -30,6 +30,20 @@ const STRIP_ITEM_HEIGHT = 72;
 const IDLE_FADE_DELAY_MS = 1400;
 const DRAG_THRESHOLD_PX = 4;
 const STRIP_SCROLL_RETRY_FRAMES = 12;
+const STRIP_THUMB_READY_CACHE_LIMIT = 4000;
+
+// Keep recently loaded strip thumbnails ready to prevent fade resets on remounts.
+const stripThumbReadyCache = new Set<string>();
+
+const markStripThumbReady = (key: string) => {
+  if (!key) return;
+  if (stripThumbReadyCache.has(key)) return;
+  stripThumbReadyCache.add(key);
+  if (stripThumbReadyCache.size <= STRIP_THUMB_READY_CACHE_LIMIT) return;
+  const oldest = stripThumbReadyCache.values().next().value as string | undefined;
+  if (!oldest) return;
+  stripThumbReadyCache.delete(oldest);
+};
 
 const clamp = (value: number, min: number, max: number) => {
   if (value < min) return min;
@@ -73,9 +87,19 @@ export const QuickPreviewStrip = ({
     () => items.slice(virtual.startIndex, virtual.endIndex),
     [items, virtual.endIndex, virtual.startIndex],
   );
+  const activePathKey = useMemo(
+    () => (activePath ? normalizePath(activePath) : ""),
+    [activePath],
+  );
   const activeIndex = useMemo(
-    () => (activePath ? items.findIndex((entry) => entry.path === activePath) : -1),
-    [activePath, items],
+    () => {
+      if (!activePath) return -1;
+      const strictIndex = items.findIndex((entry) => entry.path === activePath);
+      if (strictIndex >= 0) return strictIndex;
+      if (!activePathKey) return -1;
+      return items.findIndex((entry) => normalizePath(entry.path) === activePathKey);
+    },
+    [activePath, activePathKey, items],
   );
 
   const markStripActive = useCallback(() => {
@@ -153,7 +177,7 @@ export const QuickPreviewStrip = ({
     };
 
     tryScroll();
-  }, [activeIndex, clearScrollRetry, ensureActiveInView, items.length, open]);
+  }, [activeIndex, clearScrollRetry, ensureActiveInView, items.length, open, virtual.totalHeight]);
 
   useEffect(() => {
     return () => {
@@ -284,11 +308,17 @@ export const QuickPreviewStrip = ({
       >
         {visibleItems.map((entry, index) => {
           const absoluteIndex = virtual.startIndex + index;
-          const isActive = entry.path === activePath;
+          const isActive =
+            entry.path === activePath ||
+            (activePathKey !== "" && normalizePath(entry.path) === activePathKey);
           const distance = activeIndex >= 0 ? Math.abs(absoluteIndex - activeIndex) : 0;
           const opacity =
             isActive || activeIndex < 0 ? 1 : clamp(1 - distance * 0.08, 0.25, 0.9);
           const thumbUrl = thumbnails.get(entry.path);
+          const thumbReadyKey = thumbUrl ? `${entry.path}|${thumbUrl}` : "";
+          const thumbKnownReady = thumbReadyKey
+            ? stripThumbReadyCache.has(thumbReadyKey)
+            : false;
           const extension = splitNameExtension(entry.name).extension;
           const kind = getFileKind(entry.name);
           const fallbackLabel =
@@ -319,6 +349,16 @@ export const QuickPreviewStrip = ({
                     src={thumbUrl}
                     alt={entry.name}
                     draggable={false}
+                    loading="lazy"
+                    decoding="async"
+                    data-ready={thumbKnownReady ? "true" : "false"}
+                    onLoad={(event) => {
+                      markStripThumbReady(thumbReadyKey);
+                      event.currentTarget.dataset.ready = "true";
+                    }}
+                    onError={(event) => {
+                      event.currentTarget.dataset.ready = "false";
+                    }}
                   />
                 ) : (
                   <div className="quick-preview-strip-fallback">{fallbackLabel}</div>

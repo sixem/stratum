@@ -1,8 +1,12 @@
 // Breadcrumb navigation for the current filesystem path.
 import { Fragment, useMemo } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import { handleMiddleClick, resolvePathCrumbs } from "@/lib";
 import { PressButton } from "@/components/primitives/PressButton";
+import type { PlaceContextTarget } from "@/types";
 
 type PathCrumbsBarProps = {
   path: string;
@@ -11,6 +15,8 @@ type PathCrumbsBarProps = {
   dropTargetPath?: string | null;
   onNavigate: (path: string) => void;
   onNavigateNewTab?: (path: string) => void;
+  onCrumbContextMenu?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
+  onCrumbContextMenuDown?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
 };
 
 export const PathCrumbsBar = ({
@@ -19,6 +25,8 @@ export const PathCrumbsBar = ({
   dropTargetPath,
   onNavigate,
   onNavigateNewTab,
+  onCrumbContextMenu,
+  onCrumbContextMenuDown,
 }: PathCrumbsBarProps) => {
   const { crumbs, activeIndex } = useMemo(
     () => resolvePathCrumbs(path, trailPath),
@@ -60,6 +68,23 @@ export const PathCrumbsBar = ({
               }
               onClick={() => onNavigate(crumb.path)}
               onMouseDown={(event) => handleCrumbMouseDown(event, crumb.path)}
+              onPointerDown={(event) => {
+                if (event.button !== 2) return;
+                onCrumbContextMenuDown?.(event, {
+                  name: crumb.label,
+                  path: crumb.path,
+                  source: "crumb",
+                });
+              }}
+              onPointerUp={(event) => {
+                if (event.button !== 2) return;
+                onCrumbContextMenu?.(event, {
+                  name: crumb.label,
+                  path: crumb.path,
+                  source: "crumb",
+                });
+              }}
+              onContextMenu={(event) => event.preventDefault()}
               aria-current={index === activeIndex ? "page" : undefined}
             >
               {crumb.label}

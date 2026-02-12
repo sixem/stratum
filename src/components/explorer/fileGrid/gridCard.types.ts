@@ -36,13 +36,13 @@ export type ParentCardProps = {
 export type EntryCardProps = {
   entry: FileEntry;
   index: number;
-  tooltipText: string;
   fileKind: FileKind;
   extension: string | null;
   sizeLabel: string;
   thumbUrl?: string;
   appIconUrl?: string;
   appIconsEnabled: boolean;
+  disableTooltip?: boolean;
   showSize: boolean;
   showExtension: boolean;
   nameEllipsis: GridNameEllipsis;

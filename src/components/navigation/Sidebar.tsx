@@ -1,5 +1,6 @@
 // Sidebar for ordered sections like places, recent jumps, and tips.
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { Fragment, useState } from "react";
 import { handleMiddleClick, normalizePath, tabLabel } from "@/lib";
 import type { SidebarSectionId } from "@/modules";
@@ -9,9 +10,10 @@ import {
   normalizeSidebarSectionOrder,
   refreshSessionHint,
 } from "@/modules";
+import { PinIcon } from "@/components/icons";
 import { PressButton } from "@/components/primitives/PressButton";
 import { SidebarSection } from "./SidebarSection";
-import type { Place } from "@/types";
+import type { Place, PlaceContextTarget } from "@/types";
 
 type SidebarProps = {
   places: Place[];
@@ -23,6 +25,10 @@ type SidebarProps = {
   onSelect: (path: string) => void;
   onSelectRecent: (path: string) => void;
   onSelectNewTab?: (path: string) => void;
+  onPlaceContextMenu?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
+  onPlaceContextMenuDown?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
+  onRecentContextMenu?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
+  onRecentContextMenuDown?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
 };
 
 type SidebarItemProps = {
@@ -32,8 +38,11 @@ type SidebarItemProps = {
   isActive: boolean;
   isDropTarget: boolean;
   isRecent?: boolean;
+  isPinned?: boolean;
   onSelect: (path: string) => void;
   onSelectNewTab?: (path: string) => void;
+  onContextMenu?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
+  onContextMenuDown?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
 };
 
 const SidebarItem = ({
@@ -43,8 +52,11 @@ const SidebarItem = ({
   isActive,
   isDropTarget,
   isRecent = false,
+  isPinned = false,
   onSelect,
   onSelectNewTab,
+  onContextMenu,
+  onContextMenuDown,
 }: SidebarItemProps) => {
   const handleMiddle = (event: ReactMouseEvent) => {
     if (!onSelectNewTab) return;
@@ -54,19 +66,37 @@ const SidebarItem = ({
     event.preventDefault();
     event.stopPropagation();
   };
+  const source: PlaceContextTarget["source"] = isRecent ? "sidebar-recent" : "sidebar-place";
+  const menuTarget: PlaceContextTarget = { name: title, path, source };
 
   return (
     <PressButton
       type="button"
       className={`place${isRecent ? " is-recent" : ""}${isActive ? " is-active" : ""}`}
+      data-pinned={isPinned ? "true" : "false"}
       data-is-dir="true"
       data-path={path}
       data-drop-target={isDropTarget ? "true" : "false"}
       onClick={() => onSelect(path)}
       onMouseDown={handleMiddle}
+      onPointerDown={(event) => {
+        if (event.button !== 2) return;
+        onContextMenuDown?.(event, menuTarget);
+      }}
+      onPointerUp={(event) => {
+        if (event.button !== 2) return;
+        onContextMenu?.(event, menuTarget);
+      }}
       onContextMenu={handleContextMenu}
     >
-      <span className="place-name">{title}</span>
+      <span className="place-head">
+        <span className="place-name">{title}</span>
+        {isPinned ? (
+          <span className="place-pin" aria-label="Pinned place" title="Pinned place">
+            <PinIcon className="place-pin-icon" />
+          </span>
+        ) : null}
+      </span>
       <span className="place-path">{subtitle}</span>
     </PressButton>
   );
@@ -82,6 +112,10 @@ export const Sidebar = ({
   onSelect,
   onSelectRecent,
   onSelectNewTab,
+  onPlaceContextMenu,
+  onPlaceContextMenuDown,
+  onRecentContextMenu,
+  onRecentContextMenuDown,
 }: SidebarProps) => {
   const [placesOpen, setPlacesOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
@@ -112,8 +146,11 @@ export const Sidebar = ({
                   subtitle={place.path}
                   isActive={activeKey === normalizePath(place.path)}
                   isDropTarget={dropTargetKey === normalizePath(place.path)}
+                  isPinned={place.pinned === true}
                   onSelect={onSelect}
                   onSelectNewTab={onSelectNewTab}
+                  onContextMenu={onPlaceContextMenu}
+                  onContextMenuDown={onPlaceContextMenuDown}
                 />
               ))
             )}
@@ -140,6 +177,8 @@ export const Sidebar = ({
                   isRecent
                   onSelect={onSelectRecent}
                   onSelectNewTab={onSelectNewTab}
+                  onContextMenu={onRecentContextMenu}
+                  onContextMenuDown={onRecentContextMenuDown}
                 />
               ))
             )}

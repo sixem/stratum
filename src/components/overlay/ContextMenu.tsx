@@ -220,6 +220,7 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
           key={item.id}
           type="button"
           className={`context-item${item.active ? " is-active" : ""}`}
+          pressOnPointerDown={false}
           onClick={() => {
             item.onSelect();
             onClose();

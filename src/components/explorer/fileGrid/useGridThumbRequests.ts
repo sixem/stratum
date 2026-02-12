@@ -11,7 +11,6 @@ import {
   useTypingActivity,
 } from "@/hooks";
 import {
-  buildEntryTooltip,
   formatBytes,
   getExtension,
   getFileKind,
@@ -23,7 +22,6 @@ import { THUMB_INTERACTION_COOLDOWN_MS, THUMB_TYPING_PAUSE_MS } from "@/constant
 import type { EntryMeta, ThumbnailRequest } from "@/types";
 
 export type GridDisplayMeta = {
-  tooltipText: string;
   fileKind: FileKind;
   extension: string | null;
   sizeLabel: string;
@@ -54,6 +52,7 @@ type GridThumbRequestsState = {
   thumbSource: Map<string, string>;
   folderThumbSource: Map<string, string>;
   fileIcons: Map<string, string>;
+  scrolling: boolean;
 };
 
 const FOLDER_SAMPLE_CACHE_LIMIT = 3000;
@@ -200,7 +199,6 @@ export const useGridThumbRequests = ({
       if (!resolved || resolved.signature !== signature) {
         const extension = entry.isDir ? null : getExtension(entry.name);
         resolved = {
-          tooltipText: buildEntryTooltip(entry, resolvedMeta),
           fileKind: entry.isDir ? "generic" : getFileKind(entry.name),
           extension,
           sizeLabel: entry.isDir ? "Folder" : formatBytes(resolvedSize),
@@ -297,30 +295,20 @@ export const useGridThumbRequests = ({
     thumbnailsEnabled,
   ]);
 
-  const normalizedThumbSource = useMemo(() => {
-    const next = new Map<string, string>();
-    thumbSource.forEach((url, path) => {
-      const key = normalizePath(path);
-      if (!key) return;
-      next.set(key, url);
-    });
-    return next;
-  }, [thumbSource]);
-
   const folderThumbRequests = useMemo(() => {
     if (!thumbnailsEnabled || loading || interactionActive) return [];
     const requests: ThumbnailRequest[] = [];
     folderSampleByPath.forEach((samplePath) => {
       if (!samplePath) return;
-      const sampleKey = normalizePath(samplePath);
-      if (!sampleKey) return;
-      if (normalizedThumbSource.has(sampleKey)) return;
-      if (requestedFolderSampleThumbsRef.current.has(sampleKey)) return;
-      requestedFolderSampleThumbsRef.current.add(sampleKey);
+      // Sample paths are requested verbatim, so direct map lookup avoids
+      // rebuilding a normalized index of the full thumbnail cache.
+      if (thumbSource.has(samplePath)) return;
+      if (requestedFolderSampleThumbsRef.current.has(samplePath)) return;
+      requestedFolderSampleThumbsRef.current.add(samplePath);
       requests.push({ path: samplePath, size: null, modified: null });
     });
     return requests;
-  }, [folderSampleByPath, interactionActive, loading, normalizedThumbSource, thumbnailsEnabled]);
+  }, [folderSampleByPath, interactionActive, loading, thumbSource, thumbnailsEnabled]);
 
   useEffect(() => {
     if (folderThumbRequests.length === 0) return;
@@ -335,12 +323,12 @@ export const useGridThumbRequests = ({
       if (!folderKey) return;
       const samplePath = folderSampleByPath.get(folderKey);
       if (!samplePath) return;
-      const sampleThumb = normalizedThumbSource.get(normalizePath(samplePath));
+      const sampleThumb = thumbSource.get(samplePath);
       if (!sampleThumb) return;
       next.set(folderPath, sampleThumb);
     });
     return next;
-  }, [folderPaths, folderSampleByPath, normalizedThumbSource, thumbSource, thumbnailsEnabled]);
+  }, [folderPaths, folderSampleByPath, thumbSource, thumbnailsEnabled]);
 
   const iconRequests = useMemo(() => {
     if (!thumbnailAppIcons || visibleItems.length === 0) {
@@ -370,5 +358,6 @@ export const useGridThumbRequests = ({
     thumbSource,
     folderThumbSource,
     fileIcons,
+    scrolling,
   };
 };

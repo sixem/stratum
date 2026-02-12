@@ -1,4 +1,5 @@
 // Thumbnail icon selection with optional preview/app icon fallbacks.
+import { useEffect, useState } from "react";
 import { isPdfLikeExtension, isSvgLikeExtension } from "@/lib";
 import type { FileKind } from "@/lib";
 import {
@@ -66,18 +67,31 @@ export const ThumbnailIcon = ({
   appIconsEnabled = false,
 }: ThumbnailIconProps) => {
   if (isDir) {
-    if (thumbUrl) {
-      return <ThumbnailPreview src={thumbUrl} />;
-    }
-    return <FolderIcon className="thumb-svg is-dir" />;
+    // Keep the folder glyph mounted while the preview image decodes.
+    return (
+      <>
+        <FolderIcon className="thumb-svg is-dir" />
+        {thumbUrl ? <ThumbnailPreview src={thumbUrl} /> : null}
+      </>
+    );
   }
 
   const Icon = resolveFallbackIcon(fileKind, extension);
-  const showThumbnail = Boolean(thumbUrl);
-  const showAppIcon = Boolean(appIconUrl) && appIconsEnabled && !showThumbnail;
-  // Do not render fallback glyph once a thumbnail exists to avoid visual swaps.
-  const showFallback = !showThumbnail && !showAppIcon;
-  const appIconReady = Boolean(appIconUrl && readyAppIconUrls.has(appIconUrl));
+  const showAppIcon = Boolean(appIconUrl) && appIconsEnabled;
+  const [appIconReady, setAppIconReady] = useState(
+    () => Boolean(appIconUrl && readyAppIconUrls.has(appIconUrl)),
+  );
+
+  useEffect(() => {
+    if (!appIconUrl) {
+      setAppIconReady(false);
+      return;
+    }
+    setAppIconReady(readyAppIconUrls.has(appIconUrl));
+  }, [appIconUrl]);
+
+  // Keep fallback visible until the app icon has decoded for this card.
+  const showFallback = !showAppIcon || !appIconReady;
 
   return (
     <>
@@ -94,9 +108,11 @@ export const ThumbnailIcon = ({
             if (appIconUrl) {
               markAppIconReady(appIconUrl);
             }
+            setAppIconReady(true);
             event.currentTarget.dataset.ready = "true";
           }}
           onError={(event) => {
+            setAppIconReady(false);
             event.currentTarget.dataset.ready = "false";
           }}
         />

@@ -20,6 +20,7 @@ import { ThumbViewport } from "./fileGrid/ThumbViewport";
 import { useGridSelection } from "./fileGrid/useGridSelection";
 import { useGridSizing } from "./fileGrid/useGridSizing";
 import { useGridThumbRequests } from "./fileGrid/useGridThumbRequests";
+import { useGridTooltip } from "./fileGrid/useGridTooltip";
 import { useGridVirtual } from "./fileGrid/useGridVirtual";
 
 type FileGridProps = {
@@ -180,6 +181,13 @@ const FileGrid = ({
     });
     return map;
   }, [indexMap, items]);
+  const entryByPath = useMemo(() => {
+    const map = new Map<string, FileEntry>();
+    entries.forEach((entry) => {
+      map.set(entry.path, entry);
+    });
+    return map;
+  }, [entries]);
 
   const {
     viewportRef,
@@ -227,20 +235,27 @@ const FileGrid = ({
     scrollKey: viewKey,
   });
 
-  const { gridMetaByPath, thumbSource, folderThumbSource, fileIcons } = useGridThumbRequests({
+  const { gridMetaByPath, thumbSource, folderThumbSource, fileIcons, scrolling } =
+    useGridThumbRequests({
+      viewportRef,
+      viewKey,
+      visibleItems,
+      entryMeta,
+      onRequestMeta,
+      thumbnailsEnabled,
+      thumbnails,
+      onRequestThumbs,
+      thumbResetKey,
+      thumbnailAppIcons,
+      thumbnailVideos,
+      thumbnailSvgs,
+      loading,
+    });
+  useGridTooltip({
     viewportRef,
-    viewKey,
-    visibleItems,
+    entryByPath,
     entryMeta,
-    onRequestMeta,
-    thumbnailsEnabled,
-    thumbnails,
-    onRequestThumbs,
-    thumbResetKey,
-    thumbnailAppIcons,
-    thumbnailVideos,
-    thumbnailSvgs,
-    loading,
+    disabled: scrolling,
   });
 
   const { selectionBox } = useGridSelection({
@@ -400,13 +415,13 @@ const FileGrid = ({
                 key={item.key}
                 entry={item.entry}
                 index={baseIndex}
-                tooltipText={itemMeta?.tooltipText ?? ""}
                 fileKind={itemMeta?.fileKind ?? "generic"}
                 extension={itemMeta?.extension ?? null}
                 sizeLabel={itemMeta?.sizeLabel ?? ""}
                 thumbUrl={thumbUrl}
                 appIconUrl={appIconUrl}
                 appIconsEnabled={thumbnailAppIcons}
+                disableTooltip={scrolling}
                 showSize={gridShowSize}
                 showExtension={gridShowExtension}
                 nameEllipsis={gridNameEllipsis}

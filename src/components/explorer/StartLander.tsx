@@ -1,6 +1,7 @@
 // Landing content shown when no folder is selected in the active tab.
 import { formatBytes, handleMiddleClick, normalizePath } from "@/lib";
 import type { DriveInfo, Place } from "@/types";
+import { PinIcon } from "@/components/icons";
 import { EmptyState } from "@/components/primitives/EmptyState";
 import { PressButton } from "@/components/primitives/PressButton";
 
@@ -265,6 +266,7 @@ export const StartLander = ({
                     key={place.path}
                     type="button"
                     className="place lander-place"
+                    data-pinned={place.pinned ? "true" : "false"}
                     onClick={() => onOpenPlace(place.path)}
                     onMouseDown={(event) => {
                       if (!onOpenPlaceNewTab) return;
@@ -277,6 +279,11 @@ export const StartLander = ({
                       <span className="place-name lander-place-name">
                         {place.name}
                       </span>
+                      {place.pinned ? (
+                        <span className="place-pin" aria-label="Pinned place" title="Pinned place">
+                          <PinIcon className="place-pin-icon" />
+                        </span>
+                      ) : null}
                     </div>
                     <span className="place-path lander-place-path">{place.path}</span>
                   </PressButton>

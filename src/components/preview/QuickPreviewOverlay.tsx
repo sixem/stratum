@@ -38,6 +38,7 @@ type QuickPreviewOverlayProps = {
   loading: boolean;
   onSelectPreview: (path: string) => void;
   smartTabJump: boolean;
+  smartTabBlocked: boolean;
 };
 
 type DragState = {
@@ -104,6 +105,7 @@ export const QuickPreviewOverlay = ({
   loading,
   onSelectPreview,
   smartTabJump,
+  smartTabBlocked,
 }: QuickPreviewOverlayProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -400,6 +402,7 @@ export const QuickPreviewOverlay = ({
       if (event.key !== "Tab") return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.isComposing || event.repeat) return;
+      if (smartTabBlocked) return;
 
       const active = document.activeElement;
       if (isEditableElement(active)) return;
@@ -423,7 +426,7 @@ export const QuickPreviewOverlay = ({
 
     window.addEventListener("keydown", handleTabJump);
     return () => window.removeEventListener("keydown", handleTabJump);
-  }, [open, smartTabJump]);
+  }, [open, smartTabBlocked, smartTabJump]);
 
   const handleVideoPlay = () => {
     setVideoPaused(false);
