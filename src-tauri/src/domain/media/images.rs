@@ -47,7 +47,9 @@ pub fn get_image_info(path: String) -> Result<ImageInfo, String> {
     }
 
     let reader = image::io::Reader::open(source).map_err(|err| err.to_string())?;
-    let reader = reader.with_guessed_format().map_err(|err| err.to_string())?;
+    let reader = reader
+        .with_guessed_format()
+        .map_err(|err| err.to_string())?;
     let format = reader.format().map(format_label);
     let (width, height) = reader.into_dimensions().map_err(|err| err.to_string())?;
 

@@ -12,7 +12,7 @@ use std::time::Duration;
 #[cfg(target_os = "windows")]
 use windows::core::{BOOL, PCWSTR};
 #[cfg(target_os = "windows")]
-use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, FALSE, TRUE};
+use windows::Win32::Foundation::{CloseHandle, FALSE, HWND, LPARAM, TRUE};
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Com::IDataObject;
 #[cfg(target_os = "windows")]
@@ -42,8 +42,7 @@ pub fn open_path(path: String) -> Result<(), String> {
 
     #[cfg(not(target_os = "windows"))]
     {
-        tauri_plugin_opener::open_path(trimmed, None::<&str>)
-            .map_err(|err| err.to_string())
+        tauri_plugin_opener::open_path(trimmed, None::<&str>).map_err(|err| err.to_string())
     }
 }
 
@@ -124,7 +123,10 @@ fn open_properties_windows(paths: &[String]) -> Result<(), String> {
 #[cfg(target_os = "windows")]
 fn open_properties_windows_single(path: &str) -> Result<(), String> {
     let wide_path: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
-    let verb: Vec<u16> = OsStr::new("properties").encode_wide().chain(once(0)).collect();
+    let verb: Vec<u16> = OsStr::new("properties")
+        .encode_wide()
+        .chain(once(0))
+        .collect();
     let mut info = SHELLEXECUTEINFOW::default();
     info.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
     info.fMask = SEE_MASK_FLAG_NO_UI | SEE_MASK_INVOKEIDLIST;

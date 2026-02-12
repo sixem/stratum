@@ -37,18 +37,14 @@ mod windows_clipboard {
     use windows::core::{BOOL, PCWSTR};
     use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL, POINT};
     use windows::Win32::System::DataExchange::{
-        CloseClipboard,
-        EmptyClipboard,
-        GetClipboardData,
-        OpenClipboard,
-        RegisterClipboardFormatW,
+        CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, RegisterClipboardFormatW,
         SetClipboardData,
     };
     use windows::Win32::System::Memory::{
         GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE, GMEM_ZEROINIT,
     };
     use windows::Win32::System::Ole::{CF_HDROP, CF_UNICODETEXT, DROPEFFECT_COPY};
-    use windows::Win32::UI::Shell::{DragQueryFileW, HDROP, DROPFILES};
+    use windows::Win32::UI::Shell::{DragQueryFileW, DROPFILES, HDROP};
 
     struct ClipboardGuard;
 
@@ -92,9 +88,7 @@ mod windows_clipboard {
 
         if let Some(text_handle) = write_unicode_text(&filtered) {
             unsafe {
-                if SetClipboardData(CF_UNICODETEXT.0 as u32, Some(HANDLE(text_handle.0)))
-                    .is_err()
-                {
+                if SetClipboardData(CF_UNICODETEXT.0 as u32, Some(HANDLE(text_handle.0))).is_err() {
                     let _ = GlobalFree(Some(text_handle));
                 }
             }
@@ -189,8 +183,7 @@ mod windows_clipboard {
         let total_bytes = wide.len() * std::mem::size_of::<u16>();
 
         unsafe {
-            let handle =
-                GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, total_bytes).ok()?;
+            let handle = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, total_bytes).ok()?;
 
             let ptr = GlobalLock(handle) as *mut u8;
             if ptr.is_null() {
@@ -221,8 +214,7 @@ mod windows_clipboard {
     fn write_drop_effect(effect: u32) -> Option<HGLOBAL> {
         let total_bytes = std::mem::size_of::<u32>();
         unsafe {
-            let handle =
-                GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, total_bytes).ok()?;
+            let handle = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, total_bytes).ok()?;
             let ptr = GlobalLock(handle) as *mut u8;
             if ptr.is_null() {
                 let _ = GlobalFree(Some(handle));

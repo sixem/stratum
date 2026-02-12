@@ -107,10 +107,7 @@ pub(super) fn sanitize_relative_path(name: &str, index: usize) -> PathBuf {
     }
 }
 
-pub(super) fn ensure_unique_relative_path(
-    path: PathBuf,
-    used: &mut HashSet<PathBuf>,
-) -> PathBuf {
+pub(super) fn ensure_unique_relative_path(path: PathBuf, used: &mut HashSet<PathBuf>) -> PathBuf {
     if used.insert(path.clone()) {
         return path;
     }

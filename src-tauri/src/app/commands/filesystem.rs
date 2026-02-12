@@ -211,23 +211,21 @@ pub async fn restore_recycle_paths(
 
 #[tauri::command]
 pub async fn rename_entry(path: String, new_name: String) -> Result<String, String> {
-  tauri::async_runtime::spawn_blocking(move || fs::rename_entry(path, new_name))
-    .await
-    .map_err(|err| err.to_string())?
+    tauri::async_runtime::spawn_blocking(move || fs::rename_entry(path, new_name))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
 pub fn start_dir_watch(
-  app: tauri::AppHandle,
-  path: String,
-  state: tauri::State<'_, watch::DirWatchHandle>,
+    app: tauri::AppHandle,
+    path: String,
+    state: tauri::State<'_, watch::DirWatchHandle>,
 ) -> Result<(), String> {
-  watch::start_dir_watch(app, path, state)
+    watch::start_dir_watch(app, path, state)
 }
 
 #[tauri::command]
-pub fn stop_dir_watch(
-  state: tauri::State<'_, watch::DirWatchHandle>,
-) -> Result<(), String> {
-  watch::stop_dir_watch(state)
+pub fn stop_dir_watch(state: tauri::State<'_, watch::DirWatchHandle>) -> Result<(), String> {
+    watch::stop_dir_watch(state)
 }

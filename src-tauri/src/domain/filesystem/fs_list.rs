@@ -1,8 +1,8 @@
 // Read-only filesystem queries for directory listings, metadata, and drive info.
 use super::{
     DriveInfo, EntryMeta, FileEntry, FolderThumbSampleBatchOptions, FolderThumbSampleBatchResult,
-    FolderThumbSampleStatus, ListDirOptions, ListDirResult, ListDirWithParentResult, Place, SortDir,
-    SortKey, SortState,
+    FolderThumbSampleStatus, ListDirOptions, ListDirResult, ListDirWithParentResult, Place,
+    SortDir, SortKey, SortState,
 };
 use std::cmp::Ordering;
 use std::env;
@@ -11,13 +11,13 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::Storage::FileSystem::{
-    GetDiskFreeSpaceExW, GetLogicalDrives, GetVolumeInformationW,
-};
-#[cfg(target_os = "windows")]
 use std::ffi::OsStr;
 #[cfg(target_os = "windows")]
 use std::os::windows::ffi::OsStrExt;
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::Storage::FileSystem::{
+    GetDiskFreeSpaceExW, GetLogicalDrives, GetVolumeInformationW,
+};
 
 const LIST_DIR_CANCEL_CHECK_INTERVAL: usize = 32;
 const LIST_DIR_CANCEL_MESSAGE: &str = "Directory listing canceled";
@@ -90,7 +90,11 @@ fn compare_numbers(a: Option<u64>, b: Option<u64>) -> Ordering {
 
 #[derive(Clone, Copy)]
 enum Segment<'a> {
-    Digits { value: Option<u64>, len: usize, raw: &'a str },
+    Digits {
+        value: Option<u64>,
+        len: usize,
+        raw: &'a str,
+    },
     Text(&'a str),
 }
 
@@ -416,7 +420,8 @@ fn list_folder_thumb_sample(
         }
     };
 
-    let mut candidates: Vec<(String, String)> = Vec::new();
+    // Keep only the current best sample candidate so we avoid sorting.
+    let mut best_candidate: Option<(String, String)> = None;
     for entry in entries {
         let entry = match entry {
             Ok(value) => value,
@@ -435,19 +440,19 @@ fn list_folder_thumb_sample(
         }
         let name = entry.file_name().to_string_lossy().to_string();
         let sample_path = path.to_string_lossy().to_string();
-        candidates.push((name, sample_path));
+        match best_candidate.as_ref() {
+            Some((best_name, _)) if compare_names(&name, best_name) != Ordering::Less => {}
+            _ => best_candidate = Some((name, sample_path)),
+        }
     }
 
-    if candidates.is_empty() {
+    let Some((_, sample_path)) = best_candidate else {
         return FolderThumbSampleBatchResult {
             folder_path,
             sample_path: None,
             status: FolderThumbSampleStatus::Empty,
         };
-    }
-
-    candidates.sort_by(|left, right| compare_names(&left.0, &right.0));
-    let sample_path = candidates[0].1.clone();
+    };
     FolderThumbSampleBatchResult {
         folder_path,
         sample_path: Some(sample_path),

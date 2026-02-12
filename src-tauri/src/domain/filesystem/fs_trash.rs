@@ -49,8 +49,8 @@ pub fn trash_entries(paths: Vec<String>) -> Result<TrashReport, String> {
             }
         }
     }
-    let min_deleted_at = super::to_epoch_ms(SystemTime::now())
-        .map(|value| value.saturating_sub(300_000));
+    let min_deleted_at =
+        super::to_epoch_ms(SystemTime::now()).map(|value| value.saturating_sub(300_000));
     report.recycled = find_recycle_entries_for_paths(&recycled_paths, min_deleted_at);
     Ok(report)
 }

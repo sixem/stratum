@@ -27,9 +27,7 @@ pub fn set_thumb_paused(
 
 #[tauri::command]
 pub async fn get_thumb_cache_dir(app: tauri::AppHandle) -> String {
-    thumbs::get_cache_dir(&app)
-        .to_string_lossy()
-        .to_string()
+    thumbs::get_cache_dir(&app).to_string_lossy().to_string()
 }
 
 #[tauri::command]
