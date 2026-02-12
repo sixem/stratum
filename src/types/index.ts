@@ -21,7 +21,12 @@ export type {
   DirChangedEvent,
   DirRenameEvent,
 } from "./fs";
-export type { ContextMenuItem, EntryContextTarget } from "./contextMenu";
+export type {
+  ContextMenuItem,
+  EntryContextTarget,
+  PlaceContextSource,
+  PlaceContextTarget,
+} from "./contextMenu";
 export type { FileIconHit } from "./fileIcons";
 export type { ImageConvertOptions, ImageInfo, ImageTargetFormat } from "./images";
 export type { ShellAvailability, ShellKind } from "./shells";

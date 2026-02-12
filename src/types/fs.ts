@@ -30,6 +30,8 @@ export type ListDirWithParentResult = {
 export type Place = {
   name: string;
   path: string;
+  // Pinned places are shown before normal places in sidebar lists.
+  pinned?: boolean;
 };
 
 export type EntryMeta = {

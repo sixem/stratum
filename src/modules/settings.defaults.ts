@@ -48,7 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
   menuOpenPwsh: true,
   menuOpenWsl: false,
   thumbnailsEnabled: true,
-  thumbnailSize: 256,
+  thumbnailSize: 224,
   thumbnailQuality: 80,
   thumbnailFormat: "webp",
   thumbnailVideos: true,
