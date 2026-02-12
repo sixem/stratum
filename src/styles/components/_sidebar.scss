@@ -3,9 +3,9 @@
   // Tighten the sidebar density without affecting global layout tokens.
   --sidebar-padding: 12px;
   --sidebar-scrollbar-gap: 4px;
-  --scrollbar-thumb: #171e2c;
-  background: var(--panel);
-  border: 1px solid var(--stroke);
+  --scrollbar-thumb: #1f2736;
+  background: #0d0f14;
+  border: 1px solid #1a2233;
   border-radius: var(--panel-radius);
   padding: var(--sidebar-padding);
   display: flex;
@@ -72,8 +72,8 @@
     cursor: pointer;
     width: 100%;
     border-radius: 6px;
-    border: 1px solid var(--stroke);
-    background: var(--surface-control-muted);
+    border: 1px solid #232d40;
+    background: #111723;
     transition: none;
   }
 
@@ -83,25 +83,32 @@
 
   .section-toggle:hover {
     color: var(--text);
-    border-color: rgba(255, 255, 255, 0.2);
-    background: var(--surface-control);
+    border-color: #30405d;
+    background: #151d2c;
   }
 
   .toggle-mark {
-    border: 1px solid var(--stroke);
-    border-radius: 999px;
-    padding: 1px 6px;
-    font-size: 11px;
-    min-width: 22px;
-    text-align: center;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    min-width: 0;
     color: var(--muted);
-    background: var(--panel-2);
+  }
+
+  .section-toggle.is-open .toggle-mark {
+    color: rgba(var(--accent-rgb), 0.95);
+  }
+
+  .toggle-mark-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
   }
 
   .sidebar-tips {
     margin-top: 6px;
     padding-top: 8px;
-    border-top: 1px solid var(--stroke);
+    border-top: 1px solid #1c2537;
   }
 
   .tips {
@@ -116,7 +123,7 @@
   .tip {
     appearance: none;
     border: none;
-    background: var(--surface-control-muted);
+    background: #121a29;
     padding: 6px 8px;
     margin: 0;
     text-align: left;
@@ -129,8 +136,8 @@
 
   .tip:hover {
     color: var(--text);
-    border-color: rgba(255, 255, 255, 0.2);
-    background: var(--surface-control);
+    border-color: #31415f;
+    background: #162132;
   }
 }
 
@@ -175,6 +182,28 @@
     font-weight: 600;
   }
 
+  .place-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .place-pin {
+    flex: 0 0 auto;
+    display: inline-grid;
+    place-items: center;
+    color: rgba(var(--accent-rgb), 0.58);
+    opacity: 0.88;
+  }
+
+  .place-pin-icon {
+    width: 11px;
+    height: 11px;
+    display: block;
+  }
+
   .place-path {
     font-size: 11px;
     color: var(--muted);
@@ -189,12 +218,13 @@
   padding: 8px 10px;
   border-radius: 6px;
   gap: 2px;
-  background: var(--surface-control);
+  border-color: #1f293b;
+  background: #111825;
 }
 
 :where(.sidebar) .place:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: var(--surface-control-strong);
+  border-color: #2c3a54;
+  background: #172031;
 }
 
 :where(.sidebar) .place.is-active {
@@ -209,21 +239,17 @@
 
 :where(.sidebar) .place-path {
   line-height: 1.2;
+  color: #8590a6;
 }
 
-// Make the +/- badges readable over the ambient transparency.
+// Keep the collapse/expand icon readable over ambient transparency.
 :root[data-ambient="true"] :where(.sidebar) .toggle-mark {
-  background: rgba(8, 10, 16, 0.7);
-  border-color: rgba(255, 255, 255, 0.18);
   color: var(--text);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.35),
-    0 6px 14px rgba(0, 0, 0, 0.28);
+  box-shadow: none;
 }
 
 :root[data-ambient="true"] :where(.sidebar) .section-toggle.is-open .toggle-mark {
-  background: rgba(var(--accent-rgb), 0.22);
-  border-color: rgba(var(--accent-rgb), 0.68);
+  color: rgba(var(--accent-rgb), 0.95);
 }
 
 // Compact mode removes the outer container frame while keeping the content intact.

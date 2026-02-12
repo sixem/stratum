@@ -8,10 +8,10 @@ import {
   ToolbarIconButton,
 } from "@/components";
 import type { AppTopstackContainerProps } from "@/components/app/AppTopstackContainer";
-import { PathBar } from "@/components/PathBar";
-import { PathCrumbsBar } from "@/components/PathCrumbsBar";
-import { PathInputsBar } from "@/components/PathInputsBar";
-import { TabsBar } from "@/components/TabsBar";
+import { PathBar } from "@/components/explorer/PathBar";
+import { PathCrumbsBar } from "@/components/explorer/PathCrumbsBar";
+import { PathInputsBar } from "@/components/explorer/PathInputsBar";
+import { TabsBar } from "@/components/navigation/TabsBar";
 
 type UseAppTopstackPropsOptions = {
   appName: string;

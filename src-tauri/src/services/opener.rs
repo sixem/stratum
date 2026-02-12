@@ -1,4 +1,5 @@
 // OS-level helpers for opening paths and properties.
+use std::collections::HashSet;
 #[cfg(target_os = "windows")]
 use std::ffi::OsStr;
 #[cfg(target_os = "windows")]
@@ -11,13 +12,16 @@ use std::time::Duration;
 #[cfg(target_os = "windows")]
 use windows::core::{BOOL, PCWSTR};
 #[cfg(target_os = "windows")]
-use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, FALSE, TRUE};
+use windows::Win32::Foundation::{CloseHandle, FALSE, HWND, LPARAM, TRUE};
+#[cfg(target_os = "windows")]
+use windows::Win32::System::Com::IDataObject;
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::{GetProcessId, WaitForInputIdle};
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::Shell::{
-    ShellExecuteExW, SEE_MASK_FLAG_DDEWAIT, SEE_MASK_FLAG_NO_UI, SEE_MASK_INVOKEIDLIST,
-    SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+    BHID_DataObject, ILCreateFromPathW, ILFree, SHCreateShellItemArrayFromIDLists,
+    SHMultiFileProperties, ShellExecuteExW, SEE_MASK_FLAG_DDEWAIT, SEE_MASK_FLAG_NO_UI,
+    SEE_MASK_INVOKEIDLIST, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
 };
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -26,10 +30,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 pub fn open_path(path: String) -> Result<(), String> {
-  let trimmed = path.trim();
-  if trimmed.is_empty() {
-    return Err("Empty path".to_string());
-  }
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Empty path".to_string());
+    }
 
     #[cfg(target_os = "windows")]
     {
@@ -38,20 +42,19 @@ pub fn open_path(path: String) -> Result<(), String> {
 
     #[cfg(not(target_os = "windows"))]
     {
-        tauri_plugin_opener::open_path(trimmed, None::<&str>)
-            .map_err(|err| err.to_string())
+        tauri_plugin_opener::open_path(trimmed, None::<&str>).map_err(|err| err.to_string())
     }
 }
 
-pub fn open_path_properties(path: String) -> Result<(), String> {
-    let trimmed = path.trim();
-    if trimmed.is_empty() {
-        return Err("Empty path".to_string());
+pub fn open_path_properties(paths: Vec<String>) -> Result<(), String> {
+    let normalized = normalize_property_paths(paths);
+    if normalized.is_empty() {
+        return Err("No paths provided".to_string());
     }
 
     #[cfg(target_os = "windows")]
     {
-        return open_properties_windows(trimmed);
+        return open_properties_windows(&normalized);
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -91,10 +94,39 @@ fn open_path_windows(path: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn normalize_property_paths(paths: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut normalized = Vec::new();
+
+    // Trim and de-duplicate to avoid redundant work when callers pass repeated entries.
+    for path in paths {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if seen.insert(trimmed.to_string()) {
+            normalized.push(trimmed.to_string());
+        }
+    }
+
+    normalized
+}
+
 #[cfg(target_os = "windows")]
-fn open_properties_windows(path: &str) -> Result<(), String> {
+fn open_properties_windows(paths: &[String]) -> Result<(), String> {
+    if paths.len() == 1 {
+        return open_properties_windows_single(paths[0].as_str());
+    }
+    open_properties_windows_multi(paths)
+}
+
+#[cfg(target_os = "windows")]
+fn open_properties_windows_single(path: &str) -> Result<(), String> {
     let wide_path: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
-    let verb: Vec<u16> = OsStr::new("properties").encode_wide().chain(once(0)).collect();
+    let verb: Vec<u16> = OsStr::new("properties")
+        .encode_wide()
+        .chain(once(0))
+        .collect();
     let mut info = SHELLEXECUTEINFOW::default();
     info.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
     info.fMask = SEE_MASK_FLAG_NO_UI | SEE_MASK_INVOKEIDLIST;
@@ -104,6 +136,43 @@ fn open_properties_windows(path: &str) -> Result<(), String> {
 
     unsafe { ShellExecuteExW(&mut info).map_err(|err| err.to_string())? };
     Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn open_properties_windows_multi(paths: &[String]) -> Result<(), String> {
+    let wide_paths: Vec<Vec<u16>> = paths
+        .iter()
+        .map(|path| OsStr::new(path).encode_wide().chain(once(0)).collect())
+        .collect();
+    let mut pidls: Vec<*const windows::Win32::UI::Shell::Common::ITEMIDLIST> =
+        Vec::with_capacity(wide_paths.len());
+
+    let result = (|| -> Result<(), String> {
+        for wide_path in &wide_paths {
+            let pidl = unsafe { ILCreateFromPathW(PCWSTR(wide_path.as_ptr())) };
+            if pidl.is_null() {
+                return Err("Unable to resolve one or more selected paths.".to_string());
+            }
+            pidls.push(pidl as *const _);
+        }
+
+        let shell_items = unsafe {
+            SHCreateShellItemArrayFromIDLists(pidls.as_slice()).map_err(|err| err.to_string())?
+        };
+        let data_object: IDataObject = unsafe {
+            shell_items
+                .BindToHandler(None, &BHID_DataObject)
+                .map_err(|err| err.to_string())?
+        };
+        unsafe { SHMultiFileProperties(&data_object, 0).map_err(|err| err.to_string())? };
+        Ok(())
+    })();
+
+    for pidl in pidls {
+        unsafe { ILFree(Some(pidl)) };
+    }
+
+    result
 }
 
 #[cfg(target_os = "windows")]

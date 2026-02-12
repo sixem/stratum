@@ -28,14 +28,13 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::Shell::{
-    IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF_BIGGERSIZEOK,
-    SIIGBF_THUMBNAILONLY,
+    IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF_BIGGERSIZEOK, SIIGBF_THUMBNAILONLY,
 };
 
-use tauri::{AppHandle, Emitter, Manager};
+use image::io::Reader as ImageReader;
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg::{self, TreeParsing};
-use image::io::Reader as ImageReader;
+use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -117,13 +116,27 @@ pub struct ThumbnailState {
     cache_dir: PathBuf,
     queue: Mutex<ThumbQueue>,
     condvar: Condvar,
-    last_trim: Mutex<Option<SystemTime>>,
+    trim_state: Mutex<CacheTrimState>,
 }
 
 pub type ThumbnailHandle = Arc<ThumbnailState>;
 
 const MAX_THUMB_WORKERS: usize = 3;
 const MAX_THUMB_SIZE: u32 = 320;
+const TRIM_SCAN_INTERVAL_SECS: u64 = 30;
+const TRIM_SCAN_THRESHOLD_PERCENT: u64 = 85;
+const TRIM_UNKNOWN_SCAN_GROWTH_BYTES: u64 = 32 * 1024 * 1024;
+
+struct CacheTrimState {
+    last_trim: Option<SystemTime>,
+    approx_total_bytes: Option<u64>,
+    pending_growth_bytes: u64,
+}
+
+struct ThumbRenderOutput {
+    path: PathBuf,
+    added_bytes: u64,
+}
 
 pub fn init(app_handle: AppHandle) -> ThumbnailHandle {
     let cache_dir = resolve_cache_dir(&app_handle);
@@ -139,7 +152,11 @@ pub fn init(app_handle: AppHandle) -> ThumbnailHandle {
             paused: false,
         }),
         condvar: Condvar::new(),
-        last_trim: Mutex::new(None),
+        trim_state: Mutex::new(CacheTrimState {
+            last_trim: None,
+            approx_total_bytes: None,
+            pending_growth_bytes: 0,
+        }),
     });
 
     // Leave room for UI threads by keeping the worker pool intentionally small.
@@ -224,6 +241,16 @@ pub fn set_paused(state: &ThumbnailState, paused: bool) {
 }
 
 fn worker_loop(state: ThumbnailHandle) {
+    #[cfg(target_os = "windows")]
+    // Initialize COM once per worker thread so video thumbnail jobs avoid per-item setup.
+    let _com_guard = match ComGuard::new() {
+        Ok(guard) => Some(guard),
+        Err(error) => {
+            eprintln!("thumb worker COM init failed: {error}");
+            None
+        }
+    };
+
     loop {
         let job = {
             let mut queue = state.queue.lock().expect("thumb queue lock");
@@ -241,11 +268,16 @@ fn worker_loop(state: ThumbnailHandle) {
             queue.in_flight.remove(&job.id);
         }
 
-        if let Ok(path) = result {
-            maybe_trim_cache(&state.cache_dir, job.options.cache_mb, &state.last_trim);
+        if let Ok(output) = result {
+            maybe_trim_cache(
+                &state.cache_dir,
+                job.options.cache_mb,
+                &state.trim_state,
+                output.added_bytes,
+            );
             let payload = ThumbReady {
                 path: job.path.to_string_lossy().to_string(),
-                thumb_path: path.to_string_lossy().to_string(),
+                thumb_path: output.path.to_string_lossy().to_string(),
                 key: job.key,
                 signature: job.signature,
             };
@@ -254,9 +286,12 @@ fn worker_loop(state: ThumbnailHandle) {
     }
 }
 
-fn render_thumbnail(job: &ThumbJob) -> Result<PathBuf, String> {
+fn render_thumbnail(job: &ThumbJob) -> Result<ThumbRenderOutput, String> {
     if job.thumb_path.exists() {
-        return Ok(job.thumb_path.clone());
+        return Ok(ThumbRenderOutput {
+            path: job.thumb_path.clone(),
+            added_bytes: 0,
+        });
     }
     let parent = job
         .thumb_path
@@ -279,7 +314,11 @@ fn render_thumbnail(job: &ThumbJob) -> Result<PathBuf, String> {
             )
             .map_err(|err| err.to_string())?,
     }
-    Ok(job.thumb_path.clone())
+    let added_bytes = file.metadata().map(|metadata| metadata.len()).unwrap_or(0);
+    Ok(ThumbRenderOutput {
+        path: job.thumb_path.clone(),
+        added_bytes,
+    })
 }
 
 fn clamp_thumb_size(size: u32) -> u32 {
@@ -304,7 +343,6 @@ fn load_source_image(job: &ThumbJob, target_size: u32) -> Result<image::DynamicI
 #[cfg(target_os = "windows")]
 // Use the shell thumbnail provider to keep video previews lightweight.
 fn render_video_thumbnail(path: &Path, size: u32) -> Result<image::DynamicImage, String> {
-    let _com = ComGuard::new()?;
     let wide: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
     let factory: IShellItemImageFactory =
         unsafe { SHCreateItemFromParsingName(PCWSTR(wide.as_ptr()), None) }
@@ -476,24 +514,76 @@ struct CacheEntry {
     size: u64,
 }
 
-fn maybe_trim_cache(cache_dir: &Path, limit_mb: u32, last_trim: &Mutex<Option<SystemTime>>) {
+fn maybe_trim_cache(
+    cache_dir: &Path,
+    limit_mb: u32,
+    trim_state: &Mutex<CacheTrimState>,
+    added_bytes: u64,
+) {
     if limit_mb == 0 {
         return;
     }
-    let now = SystemTime::now();
-    {
-        let mut last = last_trim.lock().expect("thumb trim lock");
-        if let Some(previous) = *last {
-            if now.duration_since(previous).unwrap_or_default() < Duration::from_secs(30) {
-                return;
-            }
-        }
-        *last = Some(now);
+    let limit_bytes = limit_mb as u64 * 1024 * 1024;
+    if limit_bytes == 0 {
+        return;
     }
 
-    let limit_bytes = limit_mb as u64 * 1024 * 1024;
+    let now = SystemTime::now();
+    let mut should_scan = false;
+    let mut force_scan = false;
+    let pending_for_scan: u64;
+    {
+        let mut state = trim_state.lock().expect("thumb trim lock");
+
+        if added_bytes > 0 {
+            state.pending_growth_bytes = state.pending_growth_bytes.saturating_add(added_bytes);
+        }
+
+        let pending_growth = state.pending_growth_bytes;
+        if pending_growth == 0 {
+            return;
+        }
+        pending_for_scan = pending_growth;
+
+        match state.approx_total_bytes {
+            Some(approx_total) => {
+                let projected_total = approx_total.saturating_add(pending_growth);
+                let threshold = limit_bytes.saturating_mul(TRIM_SCAN_THRESHOLD_PERCENT) / 100;
+                if projected_total >= threshold {
+                    should_scan = true;
+                    force_scan = projected_total >= limit_bytes;
+                }
+            }
+            None => {
+                let unknown_threshold = TRIM_UNKNOWN_SCAN_GROWTH_BYTES.min(limit_bytes);
+                if pending_growth >= unknown_threshold {
+                    should_scan = true;
+                }
+            }
+        }
+
+        if !should_scan {
+            return;
+        }
+
+        if !force_scan {
+            if let Some(previous) = state.last_trim {
+                if now.duration_since(previous).unwrap_or_default()
+                    < Duration::from_secs(TRIM_SCAN_INTERVAL_SECS)
+                {
+                    return;
+                }
+            }
+        }
+
+        state.last_trim = Some(now);
+    }
+
     let (mut entries, mut total) = collect_cache_entries(cache_dir);
     if total <= limit_bytes {
+        let mut state = trim_state.lock().expect("thumb trim lock");
+        state.approx_total_bytes = Some(total);
+        state.pending_growth_bytes = state.pending_growth_bytes.saturating_sub(pending_for_scan);
         return;
     }
 
@@ -506,6 +596,10 @@ fn maybe_trim_cache(cache_dir: &Path, limit_mb: u32, last_trim: &Mutex<Option<Sy
             total = total.saturating_sub(entry.size);
         }
     }
+
+    let mut state = trim_state.lock().expect("thumb trim lock");
+    state.approx_total_bytes = Some(total);
+    state.pending_growth_bytes = state.pending_growth_bytes.saturating_sub(pending_for_scan);
 }
 
 fn collect_cache_entries(cache_dir: &Path) -> (Vec<CacheEntry>, u64) {
@@ -640,7 +734,10 @@ fn to_epoch_ms(time: SystemTime) -> Option<u64> {
 }
 
 fn select_thumbnail_kind(path: &Path, options: &ThumbOptions) -> Option<ThumbKind> {
-    let ext = path.extension().and_then(|value| value.to_str()).unwrap_or("");
+    let ext = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("");
     let lower = ext.to_lowercase();
     if options.allow_svgs && is_supported_svg(&lower) {
         return Some(ThumbKind::Svg);
@@ -675,7 +772,17 @@ fn is_supported_svg(extension: &str) -> bool {
 fn is_supported_video(extension: &str) -> bool {
     matches!(
         extension,
-        "mp4" | "mov" | "mkv" | "avi" | "webm" | "wmv" | "m4v" | "mpg" | "mpeg" | "flv"
-            | "3gp" | "ogv"
+        "mp4"
+            | "mov"
+            | "mkv"
+            | "avi"
+            | "webm"
+            | "wmv"
+            | "m4v"
+            | "mpg"
+            | "mpeg"
+            | "flv"
+            | "3gp"
+            | "ogv"
     )
 }

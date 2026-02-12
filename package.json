@@ -1,11 +1,12 @@
 {
   "name": "stratum",
   "private": true,
-  "version": "0.1.3",
+  "version": "0.1.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:exe": "tauri build --no-bundle",
     "preview": "vite preview",
     "tauri": "tauri"
   },

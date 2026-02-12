@@ -1,14 +1,15 @@
 // App shell wiring: composes state hooks, layout blocks, and overlays.
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppOverlays, AppShellLayout } from "@/components";
 import {
   useAppCommands,
   useAppContextMenus,
   useAppEffects,
+  useAppFileViewController,
   useAppKeybinds,
-  useAppHandlers,
-  useAppFileViewProps,
+  useAppNavigationController,
   useAppMenuState,
+  useAppOverlayController,
   useAppRenameFlow,
   useAppSelectionHandlers,
   useAppTopstackProps,
@@ -33,8 +34,8 @@ import {
   useThumbnails,
   useWindowSize,
 } from "@/hooks";
-import { getNextTrailPath, getPlatformLabel, makeDebug, normalizePath } from "@/lib";
-import { usePromptStore } from "@/modules";
+import { makeDebug, normalizePath } from "@/lib";
+import { usePlacesStore, usePromptStore } from "@/modules";
 import { APP_DESCRIPTION, APP_NAME, APP_VERSION } from "@/constants";
 import "@/styles/app.scss";
 
@@ -68,16 +69,31 @@ const App = () => {
     settingsOpen,
     openSortMenu,
     openEntryMenu,
+    openPlaceTargetMenu,
     closeContextMenu,
     toggleSettings,
     closeSettings,
   } = useAppMenuState();
+  const tauriEnv = isTauriEnv();
   const promptOpen = usePromptStore((state) => Boolean(state.prompt));
-  const [suppressExternalPresence, setSuppressExternalPresence] = useState(false);
+  const [, setSuppressExternalPresence] = useState(false);
   const [thumbResetNonce, setThumbResetNonce] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const places = usePlacesStore((state) => state.places);
+  const placesInitialized = usePlacesStore((state) => state.initialized);
+  const seedDefaultPlaces = usePlacesStore((state) => state.seedDefaults);
+  const addPlace = usePlacesStore((state) => state.addPlace);
+  const pinPlace = usePlacesStore((state) => state.pinPlace);
+  const unpinPlace = usePlacesStore((state) => state.unpinPlace);
+  const removePlace = usePlacesStore((state) => state.removePlace);
   const { currentPath, parentPath, entries, entryMeta, totalCount, loading, status } =
     fileManager;
+
+  useEffect(() => {
+    if (placesInitialized) return;
+    if (!fileManager.placesLoaded) return;
+    seedDefaultPlaces(fileManager.places);
+  }, [fileManager.places, fileManager.placesLoaded, placesInitialized, seedDefaultPlaces]);
   const {
     activeTabId,
     activeTab,
@@ -92,6 +108,8 @@ const App = () => {
   const activeSearch = activeTab?.search ?? "";
   const activeTabPath = activeTab?.path ?? "";
   const viewPath = activeTabPath || currentPath;
+  // Keep a per-tab trail so breadcrumb crumbs can show the deepest path visited.
+  const crumbTrailPath = activeTab?.crumbTrailPath ?? viewPath;
   const viewPathKey = normalizePath(viewPath ?? "");
   const currentPathKey = normalizePath(currentPath);
   // When a tab switch happens before the new directory load finishes,
@@ -130,7 +148,7 @@ const App = () => {
   });
   const { flushPersist: flushWindowSize } = useWindowSize();
   // Check available shells once so future actions can choose a supported target.
-  const shellAvailability = useShellAvailability({ enabled: isTauriEnv() });
+  const shellAvailability = useShellAvailability({ enabled: tauriEnv });
 
   // Bundle navigation + layout handlers so wiring stays focused on data flow.
   const {
@@ -148,7 +166,9 @@ const App = () => {
     handleBack,
     handleForward,
     handleSortChange,
-  } = useAppHandlers({
+    canGoDown,
+    handleDown,
+  } = useAppNavigationController({
     activeTabId,
     activeTabPath,
     currentPath,
@@ -169,6 +189,9 @@ const App = () => {
     sidebarOpen,
     updateSettings: settings.updateSettings,
     setAboutOpen,
+    browseFromView,
+    viewPath,
+    crumbTrailPath,
   });
 
   // Thumbnail pipeline input config.
@@ -205,11 +228,11 @@ const App = () => {
       searchValue: deferredSearchValue,
       totalCount: viewTotalCount,
     });
-  const metaPrefetchKey = `${currentPath}:${sortState.key}:${sortState.dir}:${deferredSearchValue}`;
+  const metaPrefetchKey = `${viewPathKey}:${sortState.key}:${sortState.dir}:${deferredSearchValue}`;
   const shouldPrefetchMeta = sortState.key !== "name";
   useMetaPrefetch({
     enabled: shouldPrefetchMeta,
-    loading,
+    loading: viewLoading,
     resetKey: metaPrefetchKey,
     entries: sortedEntries,
     entryMeta,
@@ -241,18 +264,6 @@ const App = () => {
     !showEmptyFolder
       ? viewParentPathBase
       : null;
-  // Keep a per-tab trail so breadcrumb crumbs can show the deepest path visited.
-  const crumbTrailPath = activeTab?.crumbTrailPath ?? viewPath;
-  // Step into the next "ghost" crumb when a deeper trail exists.
-  const nextTrailPath = useMemo(
-    () => getNextTrailPath(viewPath, crumbTrailPath),
-    [crumbTrailPath, viewPath],
-  );
-  const canGoDown = Boolean(nextTrailPath);
-  const handleDown = useCallback(() => {
-    if (!nextTrailPath) return;
-    browseFromView(nextTrailPath);
-  }, [browseFromView, nextTrailPath]);
   const viewKey = `${activeTabId ?? "none"}:${viewPathKey}`;
   const lastView = lastViewRef.current;
   const shouldResetScroll =
@@ -265,9 +276,10 @@ const App = () => {
       : 0;
 
   const contextMenuActive = Boolean(contextMenu);
+  const smartTabBlocked = promptOpen || settingsOpen || aboutOpen || contextMenuActive;
   // Keep clipboard state synced with OS file copy/cut payloads.
   const { refreshFromOs: refreshClipboardFromOs } = useClipboardSync({
-    enabled: isTauriEnv(),
+    enabled: tauriEnv,
     contextMenuOpen: contextMenuActive,
   });
   const viewModel = useFileViewModel(sortedEntries, viewParentPath);
@@ -299,6 +311,7 @@ const App = () => {
     blockReveal,
     loading: viewLoading,
     settingsOpen,
+    promptOpen,
     contextMenuOpen: contextMenuActive,
     mainRef,
     requestScrollToIndex: requestScrollToIndexForView,
@@ -342,7 +355,6 @@ const App = () => {
     setRenameValue,
     handleRenameCommit,
     handleRenameCancel,
-    suppressInternalPresence,
   } = useAppRenameFlow({
     entries,
     entryByPath: viewModel.entryByPath,
@@ -386,14 +398,12 @@ const App = () => {
     onScrollToIndex: requestScrollToIndexForView,
   });
 
-  const suppressPresence =
-    suppressInternalPresence ||
-    suppressExternalPresence ||
-    fileManager.suppressUndoPresence;
+  // Disable entry presence transitions so list/grid updates paint immediately.
+  const presenceEnabled = false;
 
   // Centralize app-wide side effects so they are easy to audit.
   useAppEffects({
-    isTauriEnv: isTauriEnv(),
+    isTauriEnv: tauriEnv,
     appName: APP_NAME,
     appVersion: APP_VERSION,
     refs: {
@@ -444,14 +454,6 @@ const App = () => {
     viewLog,
   });
 
-  const aboutMeta = useMemo(() => {
-    return {
-      runtime: isTauriEnv() ? "Tauri" : "Web",
-      platform: getPlatformLabel(),
-      buildMode: import.meta.env.MODE ?? "unknown",
-    };
-  }, []);
-
   // Bundle filesystem + shell commands so view wiring stays readable.
   const {
     handleCreateFile,
@@ -479,6 +481,8 @@ const App = () => {
   const {
     contextMenuItems,
     contextMenuOpen,
+    handlePlaceTargetContextMenu,
+    handlePlaceTargetContextMenuDown,
     handleLayoutContextMenu,
     handleLayoutContextMenuDown,
     handleEntryContextMenu,
@@ -487,8 +491,10 @@ const App = () => {
     contextMenu,
     openSortMenu,
     openEntryMenu,
+    openPlaceTargetMenu,
     closeContextMenu,
     selected,
+    entryByPath: viewModel.entryByPath,
     onSelectionChange: handleSelectionChange,
     currentPath,
     viewParentPath,
@@ -513,6 +519,12 @@ const App = () => {
     onPasteEntries: (paths, destination) => {
       void fileManager.pasteEntries(paths, destination);
     },
+    places,
+    onAddPlace: addPlace,
+    onPinPlace: pinPlace,
+    onUnpinPlace: unpinPlace,
+    onRemovePlace: removePlace,
+    onRemoveRecentJump: tabSession.removeRecentJump,
   });
 
   useSelectionShortcuts({
@@ -521,6 +533,7 @@ const App = () => {
     contextMenuOpen: contextMenuActive,
     loading: viewLoading,
     settingsOpen,
+    smartTabBlocked,
     viewMode,
     smartTabJump: settings.smartTabJump,
     mainRef,
@@ -570,13 +583,6 @@ const App = () => {
     entryMeta,
   });
 
-  // Layout class toggles full-width mode when the sidebar is closed.
-  const layoutClass = `layout${sidebarOpen ? "" : " is-full"}`;
-  // Gate the shared context menu handlers when the lander/empty state is showing.
-  const layoutContextMenu =
-    showLander || showEmptyFolder ? undefined : handleLayoutContextMenu;
-  const layoutContextMenuDown =
-    showLander || showEmptyFolder ? undefined : handleLayoutContextMenuDown;
   // Package topstack wiring so the layout block stays readable.
   const topstackProps = useAppTopstackProps({
     appName: APP_NAME,
@@ -612,6 +618,8 @@ const App = () => {
       onReorder: tabSession.reorderTabs,
       showTabNumbers: settings.showTabNumbers,
       fixedWidthTabs: settings.fixedWidthTabs,
+      onTabContextMenu: handlePlaceTargetContextMenu,
+      onTabContextMenuDown: handlePlaceTargetContextMenuDown,
     },
     crumbsBar: {
       path: viewPath,
@@ -619,6 +627,8 @@ const App = () => {
       dropTargetPath,
       onNavigate: browseFromView,
       onNavigateNewTab: handleOpenInNewTab,
+      onCrumbContextMenu: handlePlaceTargetContextMenu,
+      onCrumbContextMenuDown: handlePlaceTargetContextMenuDown,
     },
     sidebarOpen,
     onToggleSidebar: handleToggleSidebar,
@@ -637,101 +647,149 @@ const App = () => {
       onToggleSettings: toggleSettings,
     },
   });
-  // Collect file view wiring so the layout block stays readable.
-  const fileViewProps = useAppFileViewProps({
-    view: {
-      currentPath: viewPath ?? "",
-      viewMode,
-      entries: sortedEntries,
-      items: viewModel.items,
-      indexMap: viewModel.indexMap,
-      loading: viewLoading,
+  const { fileViewProps, layoutClass, layoutContextMenu, layoutContextMenuDown } =
+    useAppFileViewController({
+      sidebarOpen,
       showLander,
-      searchQuery: deferredSearchValue,
-      viewKey,
-      scrollRestoreKey,
-      scrollRestoreTop,
-      scrollRequest,
-      smoothScroll: settings.smoothScroll,
-      compactMode: settings.compactMode,
-      sortState,
-      canGoUp,
-    },
-    navigation: {
-      recentJumps: tabSession.recentJumps,
-      onOpenRecent: browseFromView,
-      onOpenRecentNewTab: handleOpenInNewTab,
-      drives: fileManager.drives,
-      driveInfo: fileManager.driveInfo,
-      onOpenDrive: handleSelectDrive,
-      onOpenDriveNewTab: handleOpenInNewTab,
-      onGoUp: handleUp,
-      onOpenDir: browseFromView,
-      onOpenDirNewTab: handleOpenInNewTab,
-      onOpenEntry: fileManager.openEntry,
-    },
-    selection: {
-      selectedPaths: selected,
-      onSetSelection: handleSelectionChange,
-      onSelectItem: handleSelectItemWithRename,
-      onClearSelection: handleClearSelection,
-    },
-    creation: {
-      onCreateFolder: handleCreateFolder,
-      onCreateFolderAndGo: handleCreateFolderAndGo,
-      onCreateFile: handleCreateFile,
-    },
-    rename: {
-      renameTargetPath: renameTarget?.path ?? null,
-      renameValue,
-      onRenameChange: setRenameValue,
-      onRenameCommit: handleRenameCommit,
-      onRenameCancel: handleRenameCancel,
-    },
-    metadata: {
-      entryMeta,
-      onRequestMeta: fileManager.requestEntryMeta,
-    },
-    thumbnails: {
-      thumbnailsEnabled: settings.thumbnailsEnabled,
-      thumbnails,
-      onRequestThumbs: requestThumbnails,
-      thumbnailFit: settings.thumbnailFit,
-      thumbnailAppIcons: settings.thumbnailAppIcons,
-      thumbnailVideos: settings.thumbnailVideos,
-      thumbnailSvgs: settings.thumbnailSvgs,
-      categoryTinting: settings.categoryTinting,
-      thumbResetKey: thumbnailResetKey,
-      presenceEnabled: !suppressPresence,
-    },
-    grid: {
-      gridSize: settings.gridSize,
-      gridAutoColumns: settings.gridAutoColumns,
-      gridGap: settings.gridGap,
-      gridShowSize: settings.gridShowSize,
-      gridShowExtension: settings.gridShowExtension,
-      gridNameEllipsis: settings.gridNameEllipsis,
-      gridNameHideExtension: settings.gridNameHideExtension,
-      onGridColumnsChange: handleGridColumnsChange,
-    },
+      showEmptyFolder,
+      onLayoutContextMenu: handleLayoutContextMenu,
+      onLayoutContextMenuDown: handleLayoutContextMenuDown,
+      fileViewOptions: {
+        view: {
+          currentPath: viewPath ?? "",
+          viewMode,
+          entries: sortedEntries,
+          items: viewModel.items,
+          indexMap: viewModel.indexMap,
+          loading: viewLoading,
+          showLander,
+          searchQuery: deferredSearchValue,
+          viewKey,
+          scrollRestoreKey,
+          scrollRestoreTop,
+          scrollRequest,
+          smoothScroll: settings.smoothScroll,
+          compactMode: settings.compactMode,
+          sortState,
+          canGoUp,
+        },
+        navigation: {
+          recentJumps: tabSession.recentJumps,
+          onOpenRecent: browseFromView,
+          onOpenRecentNewTab: handleOpenInNewTab,
+          drives: fileManager.drives,
+          driveInfo: fileManager.driveInfo,
+          onOpenDrive: handleSelectDrive,
+          onOpenDriveNewTab: handleOpenInNewTab,
+          places,
+          onOpenPlace: handleSelectPlace,
+          onOpenPlaceNewTab: handleOpenInNewTab,
+          onGoUp: handleUp,
+          onOpenDir: browseFromView,
+          onOpenDirNewTab: handleOpenInNewTab,
+          onOpenEntry: fileManager.openEntry,
+        },
+        selection: {
+          selectedPaths: selected,
+          onSetSelection: handleSelectionChange,
+          onSelectItem: handleSelectItemWithRename,
+          onClearSelection: handleClearSelection,
+        },
+        creation: {
+          onCreateFolder: handleCreateFolder,
+          onCreateFolderAndGo: handleCreateFolderAndGo,
+          onCreateFile: handleCreateFile,
+        },
+        rename: {
+          renameTargetPath: renameTarget?.path ?? null,
+          renameValue,
+          onRenameChange: setRenameValue,
+          onRenameCommit: handleRenameCommit,
+          onRenameCancel: handleRenameCancel,
+        },
+        metadata: {
+          entryMeta,
+          onRequestMeta: fileManager.requestEntryMeta,
+        },
+        thumbnails: {
+          thumbnailsEnabled: settings.thumbnailsEnabled,
+          thumbnails,
+          onRequestThumbs: requestThumbnails,
+          thumbnailFit: settings.thumbnailFit,
+          thumbnailAppIcons: settings.thumbnailAppIcons,
+          thumbnailVideos: settings.thumbnailVideos,
+          thumbnailSvgs: settings.thumbnailSvgs,
+          categoryTinting: settings.categoryTinting,
+          thumbResetKey: thumbnailResetKey,
+          presenceEnabled,
+        },
+        grid: {
+          gridSize: settings.gridSize,
+          gridAutoColumns: settings.gridAutoColumns,
+          gridGap: settings.gridGap,
+          gridShowSize: settings.gridShowSize,
+          gridShowExtension: settings.gridShowExtension,
+          gridNameEllipsis: settings.gridNameEllipsis,
+          gridNameHideExtension: settings.gridNameHideExtension,
+          onGridColumnsChange: handleGridColumnsChange,
+        },
+        contextMenu: {
+          onContextMenu: handleLayoutContextMenu,
+          onContextMenuDown: handleLayoutContextMenuDown,
+          onEntryContextMenu: handleEntryContextMenu,
+          onEntryContextMenuDown: handleEntryContextMenuDown,
+        },
+        dragDrop: {
+          dropTargetPath,
+          onStartDragOut: handleStartDragOut,
+          onInternalDrop: handleInternalDrop,
+          onInternalHover: handleInternalHover,
+        },
+        preview: {
+          onEntryPreviewPress: handlePreviewPress,
+          onEntryPreviewRelease: handlePreviewRelease,
+        },
+        sort: {
+          onSortChange: handleSortChange,
+        },
+      },
+    });
+
+  const overlayProps = useAppOverlayController({
+    isTauriEnv: tauriEnv,
+    appName: APP_NAME,
+    description: APP_DESCRIPTION,
+    version: APP_VERSION,
+    aboutOpen,
+    onCloseAbout: handleCloseAbout,
     contextMenu: {
-      onContextMenu: layoutContextMenu,
-      onContextMenuDown: layoutContextMenuDown,
-      onEntryContextMenu: handleEntryContextMenu,
-      onEntryContextMenuDown: handleEntryContextMenuDown,
+      open: contextMenuOpen,
+      x: contextMenu?.x ?? 0,
+      y: contextMenu?.y ?? 0,
+      items: contextMenuItems,
+      onClose: closeContextMenu,
     },
-    dragDrop: {
-      dropTargetPath,
-      onStartDragOut: handleStartDragOut,
-      onInternalDrop: handleInternalDrop,
-      onInternalHover: handleInternalHover,
+    quickPreview: {
+      open: previewOpen,
+      path: previewPath,
+      meta: previewMeta,
+      items: sortedEntries,
+      entryMeta,
+      thumbnails,
+      thumbnailsEnabled: settings.thumbnailsEnabled,
+      onRequestMeta: fileManager.requestEntryMeta,
+      onRequestThumbs: requestThumbnails,
+      thumbResetKey: thumbnailResetKey,
+      loading: viewLoading,
+      onSelectPreview: handlePreviewSelect,
+      smartTabJump: settings.smartTabJump,
+      smartTabBlocked,
     },
-    preview: {
-      onEntryPreviewPress: handlePreviewPress,
-      onEntryPreviewRelease: handlePreviewRelease,
-    },
-    sort: {
-      onSortChange: handleSortChange,
+    settings: {
+      open: settingsOpen,
+      onClose: closeSettings,
+      onOpenCacheLocation: handleOpenThumbCache,
+      onClearCache: handleClearThumbCache,
     },
   });
 
@@ -744,7 +802,7 @@ const App = () => {
           layoutClass,
           sidebarOpen,
           sidebarProps: {
-            places: fileManager.places,
+            places,
             recentJumps: tabSession.recentJumps,
             activePath: currentPath,
             dropTargetPath,
@@ -753,6 +811,10 @@ const App = () => {
             onSelect: handleSelectPlace,
             onSelectRecent: tabSession.jumpTo,
             onSelectNewTab: handleOpenInNewTab,
+            onPlaceContextMenu: handlePlaceTargetContextMenu,
+            onPlaceContextMenuDown: handlePlaceTargetContextMenuDown,
+            onRecentContextMenu: handlePlaceTargetContextMenu,
+            onRecentContextMenuDown: handlePlaceTargetContextMenuDown,
           },
           mainRef,
           onContextMenu: layoutContextMenu,
@@ -770,46 +832,7 @@ const App = () => {
           hidden: showLander,
         }}
       />
-      <AppOverlays
-        about={{
-          open: aboutOpen,
-          appName: APP_NAME,
-          description: APP_DESCRIPTION,
-          version: APP_VERSION,
-          buildMode: aboutMeta.buildMode,
-          runtime: aboutMeta.runtime,
-          platform: aboutMeta.platform,
-          onClose: handleCloseAbout,
-        }}
-        contextMenu={{
-          open: contextMenuOpen,
-          x: contextMenu?.x ?? 0,
-          y: contextMenu?.y ?? 0,
-          items: contextMenuItems,
-          onClose: closeContextMenu,
-        }}
-        quickPreview={{
-          open: previewOpen,
-          path: previewPath,
-          meta: previewMeta,
-          items: sortedEntries,
-          entryMeta,
-          thumbnails,
-          thumbnailsEnabled: settings.thumbnailsEnabled,
-          onRequestMeta: fileManager.requestEntryMeta,
-          onRequestThumbs: requestThumbnails,
-          thumbResetKey: thumbnailResetKey,
-          loading: viewLoading,
-          onSelectPreview: handlePreviewSelect,
-          smartTabJump: settings.smartTabJump,
-        }}
-        settings={{
-          open: settingsOpen,
-          onClose: closeSettings,
-          onOpenCacheLocation: handleOpenThumbCache,
-          onClearCache: handleClearThumbCache,
-        }}
-      />
+      <AppOverlays {...overlayProps} />
     </div>
   );
 };

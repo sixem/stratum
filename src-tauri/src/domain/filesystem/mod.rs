@@ -7,10 +7,10 @@ use std::time::SystemTime;
 
 mod fs_delete;
 mod fs_list;
-mod fs_transfer;
-mod fs_trash;
 #[cfg(target_os = "windows")]
 mod fs_recycle_windows;
+mod fs_transfer;
+mod fs_trash;
 
 pub use fs_delete::delete_entries;
 pub use fs_list::{

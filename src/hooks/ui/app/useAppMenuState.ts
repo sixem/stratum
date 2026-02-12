@@ -4,7 +4,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import type { EntryContextTarget } from "@/types";
+import type { EntryContextTarget, PlaceContextTarget } from "@/types";
 
 type ContextMenuPoint = { x: number; y: number };
 type ContextMenuEvent = ReactMouseEvent | ReactPointerEvent;
@@ -12,6 +12,7 @@ type ContextMenuEvent = ReactMouseEvent | ReactPointerEvent;
 type ContextMenuState =
   | ({ kind: "sort" } & ContextMenuPoint)
   | ({ kind: "entry"; entry: EntryContextTarget } & ContextMenuPoint)
+  | ({ kind: "place-target"; target: PlaceContextTarget } & ContextMenuPoint)
   | null;
 
 export const useAppMenuState = () => {
@@ -33,6 +34,19 @@ export const useAppMenuState = () => {
     });
   }, []);
 
+  const openPlaceTargetMenu = useCallback(
+    (event: ContextMenuEvent, target: PlaceContextTarget) => {
+      event.preventDefault();
+      setContextMenu({
+        kind: "place-target",
+        x: event.clientX,
+        y: event.clientY,
+        target,
+      });
+    },
+    [],
+  );
+
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
   }, []);
@@ -50,6 +64,7 @@ export const useAppMenuState = () => {
     settingsOpen,
     openSortMenu,
     openEntryMenu,
+    openPlaceTargetMenu,
     closeContextMenu,
     toggleSettings,
     closeSettings,

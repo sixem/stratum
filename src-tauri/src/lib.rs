@@ -9,8 +9,9 @@ mod services;
 pub fn run() {
     let builder = tauri::Builder::default().on_window_event({
         #[cfg(target_os = "windows")]
-        let registered: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>> =
-            std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
+        let registered: std::sync::Arc<
+            std::sync::Mutex<std::collections::HashSet<String>>,
+        > = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
         #[cfg(target_os = "windows")]
         let registered = registered.clone();
         move |window, _event| {

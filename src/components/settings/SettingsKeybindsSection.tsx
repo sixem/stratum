@@ -10,7 +10,7 @@ import {
   isBareCharacterKeybind,
   normalizeKeybind,
 } from "@/modules";
-import { PressButton } from "../PressButton";
+import { PressButton } from "@/components/primitives/PressButton";
 import type { SettingsUpdateHandler } from "./types";
 
 type SettingsKeybindsSectionProps = {

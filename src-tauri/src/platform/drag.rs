@@ -219,13 +219,12 @@ mod windows_drag {
             use_folder = false;
             pidl_ptrs = pidls.as_ptrs();
         }
-        let data_object: IDataObject =
-            SHCreateDataObject(
-                if use_folder { pidls.folder_ptr() } else { None },
-                Some(&pidl_ptrs),
-                None::<&IDataObject>,
-            )
-            .map_err(|err| err.to_string())?;
+        let data_object: IDataObject = SHCreateDataObject(
+            if use_folder { pidls.folder_ptr() } else { None },
+            Some(&pidl_ptrs),
+            None::<&IDataObject>,
+        )
+        .map_err(|err| err.to_string())?;
         let drop_source: IDropSource = DropSource.into();
 
         let allowed = DROPEFFECT_COPY | DROPEFFECT_MOVE;

@@ -1,5 +1,5 @@
 // Orchestrates tab state, view settings, and navigation flows.
-import { startTransition, useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { shallow } from "zustand/shallow";
 import type { ListDirOptions, SortState, Tab, ViewMode } from "@/types";
 import { createTab, DEFAULT_TAB_STATE, makeDebug, normalizePath } from "@/lib";
@@ -295,9 +295,8 @@ export const useTabSession = ({
       if (!shouldLoadPath(selected.path)) {
         return;
       }
-      startTransition(() => {
-        navigateTo(selected.path, { sort: selected.sort, search: selected.search }, "switch");
-      });
+      // Run tab-switch navigation immediately so cache hits paint without transition lag.
+      navigateTo(selected.path, { sort: selected.sort, search: selected.search }, "switch");
     },
     [clearDir, navigateTo, setActiveTabId, setTabs, shouldLoadPath, tabs],
   );
@@ -359,6 +358,16 @@ export const useTabSession = ({
     [setTabs],
   );
 
+  const removeRecentJump = useCallback(
+    (path: string) => {
+      const key = normalizePath(path);
+      if (!key) return;
+      // Recent entries are keyed by normalized path so duplicates collapse consistently.
+      setRecentJumps((prev) => prev.filter((item) => normalizePath(item) !== key));
+    },
+    [setRecentJumps],
+  );
+
   return {
     tabs,
     activeTabId,
@@ -382,5 +391,6 @@ export const useTabSession = ({
     closeTab,
     reorderTabs,
     setTabScrollTop,
+    removeRecentJump,
   };
 };

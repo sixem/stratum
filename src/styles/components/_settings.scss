@@ -529,12 +529,6 @@
   }
 }
 
-@media (max-width: 1080px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (max-width: 720px) {
   :where(.path-inputbar) {
     grid-template-columns: 1fr;

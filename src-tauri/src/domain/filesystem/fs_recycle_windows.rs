@@ -10,7 +10,7 @@ use windows::core::PCWSTR;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::Storage::FileSystem::GetDriveTypeW;
 use windows::Win32::UI::Shell::{
-    SHFileOperationW, FO_DELETE, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT,
+    SHFileOperationW, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FO_DELETE,
     SHFILEOPSTRUCTW,
 };
 use windows_core::BOOL;
@@ -189,10 +189,7 @@ fn list_recycle_entries_for_drive(root: &Path) -> Vec<RecycleEntry> {
                 None => continue,
             };
             let data_name = format!("$R{}", &name[2..]);
-            let data_path = info_path
-                .parent()
-                .unwrap_or(&sid_path)
-                .join(data_name);
+            let data_path = info_path.parent().unwrap_or(&sid_path).join(data_name);
             entries.push(RecycleEntry {
                 original_path,
                 info_path: info_path.to_string_lossy().to_string(),

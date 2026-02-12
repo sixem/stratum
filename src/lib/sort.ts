@@ -2,6 +2,7 @@
 import type { EntryMeta, FileEntry, SortDir, SortKey, SortState } from "@/types";
 
 const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+const strictCollator = new Intl.Collator(undefined, { sensitivity: "variant", numeric: true });
 
 export const DEFAULT_SORT: SortState = {
   key: "name",
@@ -20,7 +21,13 @@ export const nextSortState = (current: SortState, key: SortKey): SortState => {
 };
 
 const compareNames = (a: FileEntry, b: FileEntry) => {
-  return collator.compare(a.name, b.name);
+  const folded = collator.compare(a.name, b.name);
+  if (folded !== 0) return folded;
+  // Keep ordering deterministic for case/glyph variants that compare equal in base mode.
+  const exact = strictCollator.compare(a.name, b.name);
+  if (exact !== 0) return exact;
+  if (a.path === b.path) return 0;
+  return a.path < b.path ? -1 : 1;
 };
 
 const compareNumbers = (a: number | null | undefined, b: number | null | undefined) => {

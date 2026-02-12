@@ -6,7 +6,7 @@ import {
   GRID_GAP_MIN,
 } from "@/modules";
 import type { GridNameEllipsis, GridSize } from "@/modules";
-import { PressButton } from "../PressButton";
+import { PressButton } from "@/components/primitives/PressButton";
 import { useDeferredRange } from "./useDeferredRange";
 import type { SettingsUpdateHandler } from "./types";
 

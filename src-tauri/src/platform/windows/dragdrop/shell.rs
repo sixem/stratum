@@ -12,8 +12,8 @@ use std::os::windows::ffi::OsStrExt;
 
 use windows::core::PCWSTR;
 use windows::Win32::System::Com::{CoCreateInstance, IDataObject, CLSCTX_ALL};
+use windows::Win32::System::Com::{DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL, TYMED_ISTREAM};
 use windows::Win32::System::DataExchange::RegisterClipboardFormatW;
-use windows::Win32::System::Com::{FORMATETC, DVASPECT_CONTENT, TYMED_HGLOBAL, TYMED_ISTREAM};
 use windows::Win32::UI::Shell::{
     FileOperation, IFileOperation, IShellItem, IShellItemArray, SHCreateItemFromParsingName,
     SHCreateShellItemArrayFromDataObject, FOF_NOCONFIRMATION, FOF_NOCONFIRMMKDIR, FOF_NOERRORUI,

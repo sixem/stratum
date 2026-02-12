@@ -13,6 +13,7 @@ import {
   DEFAULT_SORT,
   makeDebug,
   normalizePath,
+  sortEntries,
   tabLabel,
   toMessage,
 } from "@/lib";
@@ -112,12 +113,27 @@ const toEntryMeta = (entry: FileEntry): EntryMeta | null => {
   };
 };
 
+// Canonicalize entry ordering in the UI layer so cached and refreshed snapshots
+// follow the same deterministic order across tab switches.
+const normalizeEntriesOrder = (items: FileEntry[], sort: SortState): FileEntry[] => {
+  if (sort.key === "name") return items;
+  if (items.length <= 1) return items;
+  const metaMap = new Map<string, EntryMeta>();
+  items.forEach((entry) => {
+    const meta = toEntryMeta(entry);
+    if (!meta) return;
+    metaMap.set(entry.path, meta);
+  });
+  return sortEntries(items, metaMap, sort);
+};
+
 export function useFileManager() {
   const [currentPath, setCurrentPath] = useState("");
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [places, setPlaces] = useState<Place[]>([]);
+  const [placesLoaded, setPlacesLoaded] = useState(false);
   const [drives, setDrives] = useState<string[]>([]);
   const [driveInfo, setDriveInfo] = useState<DriveInfo[]>([]);
   const [entryMeta, setEntryMeta] = useState<Map<string, EntryMeta>>(new Map());
@@ -305,12 +321,13 @@ export function useFileManager() {
       const showLoading = !options?.silent && !cacheHit;
       const currentForegroundLoad = showLoading ? foregroundLoadId.current + 1 : 0;
       const cachedCount = cachedEntry?.totalCount ?? null;
-      // Avoid fast + full reloads for small folders where a full sort is cheap.
+      // Use fast mode only for name sorting. Non-name sorts (size/modified) run
+      // as a single full pass to avoid split-order transitions between passes.
       const preferFast =
         cachedCount == null ? true : cachedCount > FAST_SORT_THRESHOLD;
       const useFast =
         options?.fast ??
-        (query.sort.key !== "name" &&
+        (query.sort.key === "name" &&
           !options?.silent &&
           !cacheHit &&
           preferFast);
@@ -319,8 +336,14 @@ export function useFileManager() {
         setLoading(true);
         setStatus({ level: "loading", message: `Loading ${target}` });
       } else if (cacheHit) {
-        primeEntryMeta(cacheHit.entries);
-        setEntries(cacheHit.entries);
+        const cacheItems = normalizeEntriesOrder(cacheHit.entries, query.sort);
+        touchDirCache(dirCacheRef.current, queryKey, {
+          entries: cacheItems,
+          totalCount: cacheHit.totalCount,
+          parentPath: cacheHit.parentPath,
+        });
+        primeEntryMeta(cacheItems);
+        setEntries(cacheItems);
         setTotalCount(cacheHit.totalCount);
         setCurrentPath(target);
         setParentPath(cacheHit.parentPath);
@@ -335,7 +358,7 @@ export function useFileManager() {
           generation: listGeneration,
         });
         if (loadId.current !== currentLoad) return;
-        const items = result.entries;
+        const items = normalizeEntriesOrder(result.entries, query.sort);
         if (perf.enabled) {
           perf(
             "list_dir_with_parent: %s (%d of %d entries) in %dms",
@@ -367,15 +390,6 @@ export function useFileManager() {
           parentPath: result.parentPath,
         });
         log("loadDir done: %s (%d entries)", target, items.length);
-        if (useFast && query.sort.key !== "name" && loadId.current === currentLoad) {
-          void loadDir(target, {
-            sort: query.sort,
-            search: query.search,
-            silent: true,
-            force: true,
-            fast: false,
-          });
-        }
       } catch (error) {
         if (loadId.current !== currentLoad) return;
         lastQueryRef.current = previousQuery;
@@ -672,6 +686,7 @@ export function useFileManager() {
         if (!active) return;
         setStatus({ level: "idle", message: "Ready" });
         setLoading(false);
+        setPlacesLoaded(true);
       } catch (error) {
         if (!active) return;
         reportError(
@@ -679,6 +694,7 @@ export function useFileManager() {
           `Failed to load places: ${toMessage(error, "unknown error")}`,
         );
         setLoading(false);
+        setPlacesLoaded(true);
       }
     };
 
@@ -694,6 +710,7 @@ export function useFileManager() {
     entries,
     totalCount,
     places,
+    placesLoaded,
     drives,
     driveInfo,
     entryMeta,

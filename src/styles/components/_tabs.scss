@@ -1,9 +1,9 @@
 // Tab strip styling.
 .tabsbar {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: space-between;
-  gap: 0;
+  gap: 6px;
   padding: 5px 10px;
   background: transparent;
   border-bottom: none;
@@ -11,11 +11,56 @@
   width: 100%;
 }
 
+.tabs-scroll-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tab-scroll-button {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(224, 230, 241, 0.75);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  padding: 0;
+  transition: none;
+}
+
+.tabs-scroll-wrap[data-overflowed="false"] .tab-scroll-button {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tabs-scroll-wrap[data-overflowed="true"] .tab-scroll-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
+.tab-scroll-button:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.tab-scroll-chevron {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
 .tabs {
   display: flex;
   align-items: stretch;
   gap: 5px;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
   min-width: 0;
   flex: 1;
@@ -43,6 +88,12 @@
     box-sizing: border-box;
   }
 
+  .tab[data-tab-kind="untitled"] {
+    border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.04);
+  }
+
   .tab:first-child {
     margin-left: 2px;
   }
@@ -59,6 +110,13 @@
     background: #212631;
     border-color: rgba(var(--accent-rgb), 0.6);
     box-shadow: 0 0 8px #00000036;
+  }
+
+  .tab.is-active[data-tab-kind="untitled"] {
+    border-style: dashed;
+    border-color: rgba(var(--accent-rgb), 0.65);
+    background: rgba(var(--accent-rgb), 0.12);
+    box-shadow: none;
   }
 
   .tab.is-dragging {
@@ -111,6 +169,15 @@
     white-space: nowrap;
   }
 
+  .tab[data-tab-kind="untitled"] .tab-title {
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .tab.is-active[data-tab-kind="untitled"] .tab-title {
+    color: var(--text);
+  }
+
   .tab-close {
     padding: 0;
     border-radius: 6px;
@@ -148,35 +215,6 @@
     color: var(--muted);
   }
 
-  .tab-new {
-    width: 26px;
-    height: 26px;
-    margin-left: 6px;
-    align-self: center;
-    border-radius: 999px;
-    border: 2px solid #212631;
-    background: transparent;
-    display: grid;
-    place-items: center;
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1;
-    padding: 0;
-    cursor: pointer;
-    transition: none;
-    flex: 0 0 auto;
-  }
-
-  .tab-new:hover {
-    background-color: #212631;
-  }
-
-  .tab-new-icon {
-    width: 12px;
-    height: 12px;
-    display: block;
-  }
-
   .tab-drop-indicator {
     position: absolute;
     top: 2px;
@@ -188,3 +226,30 @@
   }
 }
 
+.tab-new {
+  width: 26px;
+  height: 26px;
+  align-self: center;
+  border-radius: 999px;
+  border: 2px solid #212631;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  transition: none;
+  flex: 0 0 auto;
+}
+
+.tab-new:hover {
+  background-color: #212631;
+}
+
+.tab-new-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
+}

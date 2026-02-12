@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { formatBytes, getPlatformLabel } from "@/lib";
-import { PressButton } from "../PressButton";
+import { PressButton } from "@/components/primitives/PressButton";
 import { usePromptStore, useSettingsStore, useShellStore } from "@/modules";
 
 type SettingsVitalsProps = {

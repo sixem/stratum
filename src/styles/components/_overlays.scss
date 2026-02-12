@@ -47,7 +47,7 @@
   min-width: 190px;
   max-width: min(280px, calc(100vw - 24px));
   padding: 6px;
-  border-radius: 6px;
+  border-radius: 0;
   border: 1px solid var(--stroke);
   background: #0f121a;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
@@ -64,6 +64,10 @@
   background: transparent;
   border-color: rgba(255, 255, 255, 0.08);
   isolation: isolate;
+}
+
+:root[data-blur-overlays="true"] :where(.context-menu, .context-submenu) .context-divider {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 :root[data-blur-overlays="true"] .tooltip {
@@ -89,7 +93,7 @@
   min-width: 180px;
   max-width: min(260px, calc(100vw - 24px));
   padding: 6px;
-  border-radius: 6px;
+  border-radius: 0;
   border: 1px solid var(--stroke);
   background: #0f121a;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);

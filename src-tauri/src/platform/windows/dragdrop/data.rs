@@ -8,13 +8,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use windows::Win32::Foundation::HGLOBAL;
 use windows::Win32::System::Com::{
-    IDataObject, FORMATETC, STGMEDIUM, DVASPECT_CONTENT, IStream, TYMED_HGLOBAL, TYMED_ISTREAM,
+    IDataObject, IStream, DVASPECT_CONTENT, FORMATETC, STGMEDIUM, TYMED_HGLOBAL, TYMED_ISTREAM,
 };
 use windows::Win32::System::DataExchange::RegisterClipboardFormatW;
 use windows::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
 use windows::Win32::System::Ole::{ReleaseStgMedium, CF_HDROP};
 use windows::Win32::UI::Shell::{
-    DragQueryFileW, FILEGROUPDESCRIPTORW, HDROP, CFSTR_FILECONTENTS, CFSTR_FILEDESCRIPTORW,
+    DragQueryFileW, CFSTR_FILECONTENTS, CFSTR_FILEDESCRIPTORW, FILEGROUPDESCRIPTORW, HDROP,
 };
 
 const STREAM_BUFFER_SIZE: usize = 64 * 1024;

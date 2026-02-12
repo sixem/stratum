@@ -1,5 +1,6 @@
 // Barrel exports for app state stores.
 export { useClipboardStore } from "./clipboardStore";
+export { usePlacesStore } from "./placesStore";
 export { usePromptStore } from "./promptStore";
 export { useSessionStore } from "./sessionStore";
 export { useShellStore } from "./shellStore";

@@ -214,7 +214,9 @@ pub fn copy_entries(
         let metadata = match fs::metadata(&src) {
             Ok(value) => value,
             Err(err) => {
-                report.failures.push(format!("{}: {}", trimmed, err.to_string()));
+                report
+                    .failures
+                    .push(format!("{}: {}", trimmed, err.to_string()));
                 emit_transfer_progress(
                     &mut on_progress,
                     TransferProgressUpdate {
@@ -416,7 +418,9 @@ pub fn transfer_entries(
         let metadata = match fs::metadata(&src) {
             Ok(value) => value,
             Err(err) => {
-                report.failures.push(format!("{}: {}", trimmed, err.to_string()));
+                report
+                    .failures
+                    .push(format!("{}: {}", trimmed, err.to_string()));
                 emit_transfer_progress(
                     &mut on_progress,
                     TransferProgressUpdate {

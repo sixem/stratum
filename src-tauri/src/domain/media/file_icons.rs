@@ -14,7 +14,10 @@ pub struct FileIconHit {
     pub icon_path: String,
 }
 
-pub fn get_file_icons(app_handle: &AppHandle, extensions: Vec<String>) -> Result<Vec<FileIconHit>, String> {
+pub fn get_file_icons(
+    app_handle: &AppHandle,
+    extensions: Vec<String>,
+) -> Result<Vec<FileIconHit>, String> {
     let cache_dir = resolve_cache_dir(app_handle);
     if let Err(err) = fs::create_dir_all(&cache_dir) {
         eprintln!("icon cache init failed: {err}");

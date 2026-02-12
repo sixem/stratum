@@ -55,6 +55,10 @@ export const useCreateEntryPrompt = () => {
               type="text"
               defaultValue={defaultName}
               autoFocus
+              onFocus={(event) => {
+                const input = event.currentTarget;
+                input.setSelectionRange(0, input.value.length);
+              }}
               onChange={(event) => {
                 nameRef.current = event.currentTarget.value;
               }}

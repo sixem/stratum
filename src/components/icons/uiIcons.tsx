@@ -105,6 +105,20 @@ export const SidebarIcon = ({ className }: IconProps) => {
   );
 };
 
+// Place pin icon.
+export const PinIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M6.5 5C6.5 4.44772 6.94772 4 7.5 4H9H15H16.5C17.0523 4 17.5 4.44772 17.5 5C17.5 5.55228 17.0523 6 16.5 6H16.095L16.9132 15H19C19.5523 15 20 15.4477 20 16C20 16.5523 19.5523 17 19 17H16H13V22C13 22.5523 12.5523 23 12 23C11.4477 23 11 22.5523 11 22V17H8H5C4.44772 17 4 16.5523 4 16C4 15.4477 4.44772 15 5 15H7.08679L7.90497 6H7.5C6.94772 6 6.5 5.55228 6.5 5ZM9.91321 6L9.09503 15H12H14.905L14.0868 6H9.91321Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+};
+
 export const EyeIcon = ({ className }: IconProps) => {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor">
@@ -151,7 +165,7 @@ export const NavArrowIcon = ({ className }: IconProps) => {
   );
 };
 
-// Parent-folder "up/back" icon adapted from references/back-left-svgrepo-com.svg.
+// Parent-folder "up/back" icon.
 export const ParentUpIcon = ({ className }: IconProps) => {
   return (
     <svg viewBox="0 0 17 17" aria-hidden="true" className={className} fill="currentColor">
@@ -193,6 +207,36 @@ export const ChevronDownIcon = ({ className }: IconProps) => {
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
+
+// Sidebar section collapse icon.
+export const SidebarCollapseIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
+      <path
+        d="M7.56994 5.00001L6.50928 6.06067L11.9999 11.5536L17.4906 6.06067L16.43 5.00001L11.9999 9.43186L7.56994 5.00001Z"
+        fill="currentColor"
+      />
+      <path
+        d="M16.4298 19L17.4905 17.9394L11.9999 12.4465L6.5094 17.9394L7.57006 19L11.9999 14.5683L16.4298 19Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+};
+
+// Sidebar section expand icon.
+export const SidebarExpandIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M12 4L17.2711 9.27333L16.2102 10.3338L12 6.12178L7.7899 10.3338L6.729 9.27333L12 4ZM12 17.8782L7.7899 13.6662L6.729 14.7267L12 20L17.2711 14.7267L16.2102 13.6662L12 17.8782Z"
+        fill="currentColor"
       />
     </svg>
   );
