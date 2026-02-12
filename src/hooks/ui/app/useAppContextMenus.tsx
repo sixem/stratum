@@ -6,12 +6,15 @@ import { isEditableElement } from "@/lib";
 import type {
   EntryContextTarget,
   FileEntry,
+  Place,
+  PlaceContextTarget,
   ShellAvailability,
   ShellKind,
   SortState,
 } from "@/types";
 import { useEntryMenuItems } from "../menus/useEntryMenuItems";
 import { useLayoutMenuItems } from "../menus/useLayoutMenuItems";
+import { buildPlaceTargetMenuItems } from "../menus/placeTargetMenuItems";
 import type { useAppMenuState } from "./useAppMenuState";
 
 type ContextMenuState = ReturnType<typeof useAppMenuState>["contextMenu"];
@@ -20,6 +23,7 @@ type UseAppContextMenusOptions = {
   contextMenu: ContextMenuState;
   openSortMenu: (event: ReactPointerEvent) => void;
   openEntryMenu: (event: ReactPointerEvent, target: EntryContextTarget) => void;
+  openPlaceTargetMenu: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
   closeContextMenu: () => void;
   selected: Set<string>;
   entryByPath: Map<string, FileEntry>;
@@ -43,12 +47,19 @@ type UseAppContextMenusOptions = {
   onClearSelection: () => void;
   onRenameEntry: (target: EntryContextTarget) => void;
   onPasteEntries: (paths: string[], destination?: string) => void;
+  places: Place[];
+  onAddPlace: (path: string, name?: string, options?: { pinned?: boolean }) => void;
+  onPinPlace: (path: string) => void;
+  onUnpinPlace: (path: string) => void;
+  onRemovePlace: (path: string) => void;
+  onRemoveRecentJump?: (path: string) => void;
 };
 
 export const useAppContextMenus = ({
   contextMenu,
   openSortMenu,
   openEntryMenu,
+  openPlaceTargetMenu,
   closeContextMenu,
   selected,
   entryByPath,
@@ -72,7 +83,40 @@ export const useAppContextMenus = ({
   onClearSelection,
   onRenameEntry,
   onPasteEntries,
+  places,
+  onAddPlace,
+  onPinPlace,
+  onUnpinPlace,
+  onRemovePlace,
+  onRemoveRecentJump,
 }: UseAppContextMenusOptions) => {
+  const openPlaceMenu = useCallback(
+    (event: ReactPointerEvent, target: PlaceContextTarget) => {
+      openPlaceTargetMenu(event, target);
+    },
+    [openPlaceTargetMenu],
+  );
+
+  const handlePlaceTargetContextMenuDown = useCallback(
+    (event: ReactPointerEvent, _target: PlaceContextTarget) => {
+      if (event.button !== 2) return;
+      event.preventDefault();
+      event.stopPropagation();
+      flushSync(() => closeContextMenu());
+    },
+    [closeContextMenu],
+  );
+
+  const handlePlaceTargetContextMenu = useCallback(
+    (event: ReactPointerEvent, target: PlaceContextTarget) => {
+      if (event.button !== 2) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openPlaceMenu(event, target);
+    },
+    [openPlaceMenu],
+  );
+
   // Close on right-button press; open on release to avoid flicker.
   const handleLayoutContextMenuDown = useCallback(
     (event: ReactPointerEvent) => {
@@ -88,6 +132,7 @@ export const useAppContextMenus = ({
       if (event.button !== 2) return;
       if (event.defaultPrevented) return;
       const target = event.target as Element | null;
+      if (target?.closest(".sidebar")) return;
       if (isEditableElement(target)) return;
       openSortMenu(event);
     },
@@ -108,12 +153,20 @@ export const useAppContextMenus = ({
   const handleEntryContextMenu = useCallback(
     (event: ReactPointerEvent, target: EntryContextTarget) => {
       if (event.button !== 2) return;
+      if (target.isDir) {
+        openPlaceMenu(event, {
+          name: target.name,
+          path: target.path,
+          source: "entry",
+        });
+        return;
+      }
       if (!selected.has(target.path)) {
         onSelectionChange([target.path], target.path);
       }
       openEntryMenu(event, target);
     },
-    [onSelectionChange, openEntryMenu, selected],
+    [onSelectionChange, openEntryMenu, openPlaceMenu, selected],
   );
 
   // Context menu content is derived from the current target + sort state.
@@ -145,13 +198,28 @@ export const useAppContextMenus = ({
     onPasteEntries,
     ffmpegAvailable: Boolean(shellAvailability?.ffmpeg),
   });
+  const placeTargetMenuItems = buildPlaceTargetMenuItems({
+    target: contextMenu?.kind === "place-target" ? contextMenu.target : null,
+    places,
+    onAddPlace,
+    onPinPlace,
+    onUnpinPlace,
+    onRemovePlace,
+    onRemoveRecentJump,
+  });
   const contextMenuItems =
-    contextMenu?.kind === "entry" ? entryMenuItems : layoutMenuItems;
+    contextMenu?.kind === "entry"
+      ? entryMenuItems
+      : contextMenu?.kind === "place-target"
+        ? placeTargetMenuItems
+        : layoutMenuItems;
   const contextMenuOpen = Boolean(contextMenu && contextMenuItems.length > 0);
 
   return {
     contextMenuItems,
     contextMenuOpen,
+    handlePlaceTargetContextMenu,
+    handlePlaceTargetContextMenuDown,
     handleLayoutContextMenu,
     handleLayoutContextMenuDown,
     handleEntryContextMenu,

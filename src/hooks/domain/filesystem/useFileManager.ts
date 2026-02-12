@@ -133,6 +133,7 @@ export function useFileManager() {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [places, setPlaces] = useState<Place[]>([]);
+  const [placesLoaded, setPlacesLoaded] = useState(false);
   const [drives, setDrives] = useState<string[]>([]);
   const [driveInfo, setDriveInfo] = useState<DriveInfo[]>([]);
   const [entryMeta, setEntryMeta] = useState<Map<string, EntryMeta>>(new Map());
@@ -685,6 +686,7 @@ export function useFileManager() {
         if (!active) return;
         setStatus({ level: "idle", message: "Ready" });
         setLoading(false);
+        setPlacesLoaded(true);
       } catch (error) {
         if (!active) return;
         reportError(
@@ -692,6 +694,7 @@ export function useFileManager() {
           `Failed to load places: ${toMessage(error, "unknown error")}`,
         );
         setLoading(false);
+        setPlacesLoaded(true);
       }
     };
 
@@ -707,6 +710,7 @@ export function useFileManager() {
     entries,
     totalCount,
     places,
+    placesLoaded,
     drives,
     driveInfo,
     entryMeta,

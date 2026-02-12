@@ -1,5 +1,5 @@
 // Manages modal focus trapping and background hiding for accessible overlays.
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import type { RefObject } from "react";
 
 type UseModalFocusTrapOptions = {
@@ -143,10 +143,11 @@ export const useModalFocusTrap = ({
   initialFocusRef,
 }: UseModalFocusTrapOptions) => {
   const previousFocusRef = useRef<HTMLElement | null>(null);
-  const container = containerRef.current;
 
-  useEffect(() => {
-    if (!open || !container) return;
+  useLayoutEffect(() => {
+    if (!open) return;
+    const container = containerRef.current;
+    if (!container) return;
 
     const overlayRoot = findOverlayRoot(container);
     modalStack.push(overlayRoot);
@@ -217,15 +218,13 @@ export const useModalFocusTrap = ({
       focusFirst();
     };
 
-    const focusTimer = window.setTimeout(() => {
-      focusInitial();
-    }, 0);
+    // Focus immediately so text inputs are ready before the first keystroke.
+    focusInitial();
 
     window.addEventListener("keydown", handleKeydown, { capture: true });
     document.addEventListener("focusin", handleFocusIn);
 
     return () => {
-      window.clearTimeout(focusTimer);
       window.removeEventListener("keydown", handleKeydown, { capture: true });
       document.removeEventListener("focusin", handleFocusIn);
 
@@ -245,5 +244,5 @@ export const useModalFocusTrap = ({
       }
       previousFocusRef.current = null;
     };
-  }, [container, initialFocusRef, open]);
+  }, [containerRef, initialFocusRef, open]);
 };

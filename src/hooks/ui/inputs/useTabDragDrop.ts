@@ -46,20 +46,21 @@ export const useTabDragDrop = ({ onReorder, containerRef }: UseTabDragDropOption
     const container = containerRef.current;
     if (!container) return null;
     const containerRect = container.getBoundingClientRect();
+    const scrollLeft = container.scrollLeft;
     const tabs = Array.from(
       container.querySelectorAll<HTMLElement>(".tab[data-tab-id]"),
     );
     if (tabs.length === 0) return 0;
     if (nextIndex <= 0) {
       const firstRect = tabs[0]?.getBoundingClientRect();
-      return firstRect ? firstRect.left - containerRect.left : 0;
+      return firstRect ? firstRect.left - containerRect.left + scrollLeft : 0;
     }
     if (nextIndex >= tabs.length) {
       const lastRect = tabs[tabs.length - 1]?.getBoundingClientRect();
-      return lastRect ? lastRect.right - containerRect.left : 0;
+      return lastRect ? lastRect.right - containerRect.left + scrollLeft : 0;
     }
     const targetRect = tabs[nextIndex]?.getBoundingClientRect();
-    return targetRect ? targetRect.left - containerRect.left : null;
+    return targetRect ? targetRect.left - containerRect.left + scrollLeft : null;
   };
 
   const setDropIndexValue = (nextIndex: number | null) => {

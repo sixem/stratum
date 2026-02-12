@@ -25,15 +25,11 @@ export const useElementSize = (ref: RefObject<HTMLElement | null>) => {
   };
 
   useLayoutEffect(() => {
-    // Measure after every render so layout-driven changes (like sidebar toggles)
-    // can update sizes before paint without waiting on ResizeObserver timing.
-    measure();
-  });
-
-  useLayoutEffect(() => {
     const element = ref.current;
     if (!element) return;
 
+    // Run one initial measurement when we attach to the element.
+    measure();
     const observer = new ResizeObserver(() => {
       measure();
     });

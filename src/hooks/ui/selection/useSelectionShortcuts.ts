@@ -16,6 +16,7 @@ type UseSelectionShortcutsOptions = {
   contextMenuOpen: boolean;
   loading: boolean;
   settingsOpen: boolean;
+  smartTabBlocked: boolean;
   viewMode: ViewMode;
   smartTabJump: boolean;
   mainRef: RefObject<HTMLElement | null>;
@@ -39,6 +40,7 @@ export const useSelectionShortcuts = ({
   contextMenuOpen,
   loading,
   settingsOpen,
+  smartTabBlocked,
   viewMode,
   smartTabJump,
   mainRef,
@@ -147,7 +149,7 @@ export const useSelectionShortcuts = ({
       if (event.key !== "Tab") return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.isComposing || event.repeat) return;
-      if (settingsOpen || contextMenuOpen) return;
+      if (settingsOpen || contextMenuOpen || smartTabBlocked) return;
       if (previewOpen) return;
       if (loading || blockReveal) return;
 
@@ -194,6 +196,7 @@ export const useSelectionShortcuts = ({
     mainRef,
     previewOpen,
     settingsOpen,
+    smartTabBlocked,
     smartTabJump,
   ]);
 

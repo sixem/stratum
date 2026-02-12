@@ -134,6 +134,13 @@ export const useAppEffects = ({
   const searchSyncRef = useRef(false);
   const lastSearchTabIdRef = useRef<string | null>(null);
   const lastActiveTabIdRef = useRef<string | null>(null);
+  const searchLoadTimerRef = useRef<number | null>(null);
+
+  const clearSearchLoadTimer = () => {
+    if (searchLoadTimerRef.current == null) return;
+    window.clearTimeout(searchLoadTimerRef.current);
+    searchLoadTimerRef.current = null;
+  };
 
   useSearchHotkey(searchInputRef, clearSearchAndFocusView);
   useCssVarHeight(topstackRef, "--topstack-height");
@@ -223,11 +230,30 @@ export const useAppEffects = ({
     // Only refresh when the active tab path matches the current view.
     if (!currentKey || currentKey !== activeKey) return;
     if (deferredSearchValue !== activeSearch) return;
-    void loadDir(currentPath, {
-      sort: sortState,
-      search: deferredSearchValue,
-      silent: true,
-    });
+    const runSearchLoad = () => {
+      void loadDir(currentPath, {
+        sort: sortState,
+        search: deferredSearchValue,
+        silent: true,
+      });
+    };
+
+    // Slightly debounce active filtering to reduce list churn while typing.
+    const hasFilter = deferredSearchValue.trim().length > 0;
+    clearSearchLoadTimer();
+    if (!hasFilter) {
+      runSearchLoad();
+      return;
+    }
+
+    searchLoadTimerRef.current = window.setTimeout(() => {
+      searchLoadTimerRef.current = null;
+      runSearchLoad();
+    }, 110);
+
+    return () => {
+      clearSearchLoadTimer();
+    };
   }, [
     activeSearch,
     activeTabPath,
@@ -237,6 +263,12 @@ export const useAppEffects = ({
     loading,
     sortState,
   ]);
+
+  useEffect(() => {
+    return () => {
+      clearSearchLoadTimer();
+    };
+  }, []);
 
   useEffect(() => {
     if (!shouldResetScroll || !activeTabId) return;

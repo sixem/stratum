@@ -16,6 +16,7 @@ type UseFileViewInteractionsOptions = {
   blockReveal: boolean;
   loading: boolean;
   settingsOpen: boolean;
+  promptOpen: boolean;
   contextMenuOpen: boolean;
   mainRef: RefObject<HTMLElement | null>;
   requestScrollToIndex: (index: number) => void;
@@ -31,6 +32,7 @@ export const useFileViewInteractions = ({
   blockReveal,
   loading,
   settingsOpen,
+  promptOpen,
   contextMenuOpen,
   mainRef,
   requestScrollToIndex,
@@ -65,7 +67,7 @@ export const useFileViewInteractions = ({
 
   const shouldHandleTypeahead = useCallback(
     (activeElement: Element | null) => {
-      if (settingsOpen || contextMenuOpen) return false;
+      if (settingsOpen || contextMenuOpen || promptOpen) return false;
       // Block typeahead while quick preview is active to avoid stealing focus.
       if (previewOpenRef.current) return false;
       if (loading || blockReveal) return false;
@@ -82,7 +84,7 @@ export const useFileViewInteractions = ({
       }
       return true;
     },
-    [blockReveal, contextMenuOpen, loading, mainRef, previewOpenRef, settingsOpen],
+    [blockReveal, contextMenuOpen, loading, mainRef, previewOpenRef, promptOpen, settingsOpen],
   );
 
   useTypeaheadSelection({

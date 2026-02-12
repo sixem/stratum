@@ -32,12 +32,11 @@ export const useScrollSettled = (
       timerRef.current = window.setTimeout(stop, settleMs);
     };
 
+    // Rely on scroll events so interaction state follows real viewport movement.
     element.addEventListener("scroll", handle, { passive: true });
-    element.addEventListener("wheel", handle, { passive: true });
 
     return () => {
       element.removeEventListener("scroll", handle);
-      element.removeEventListener("wheel", handle);
       if (timerRef.current != null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;

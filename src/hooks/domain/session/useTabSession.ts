@@ -358,6 +358,16 @@ export const useTabSession = ({
     [setTabs],
   );
 
+  const removeRecentJump = useCallback(
+    (path: string) => {
+      const key = normalizePath(path);
+      if (!key) return;
+      // Recent entries are keyed by normalized path so duplicates collapse consistently.
+      setRecentJumps((prev) => prev.filter((item) => normalizePath(item) !== key));
+    },
+    [setRecentJumps],
+  );
+
   return {
     tabs,
     activeTabId,
@@ -381,5 +391,6 @@ export const useTabSession = ({
     closeTab,
     reorderTabs,
     setTabScrollTop,
+    removeRecentJump,
   };
 };
