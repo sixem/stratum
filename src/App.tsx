@@ -4,6 +4,7 @@ import { AppOverlays, AppShellLayout } from "@/components";
 import {
   useAppCommands,
   useAppContextMenus,
+  useConversionController,
   useAppEffects,
   useAppFileViewController,
   useAppKeybinds,
@@ -149,6 +150,21 @@ const App = () => {
   const { flushPersist: flushWindowSize } = useWindowSize();
   // Check available shells once so future actions can choose a supported target.
   const shellAvailability = useShellAvailability({ enabled: tauriEnv });
+  const ffmpegDetected =
+    Boolean(shellAvailability?.ffmpeg) || settings.ffmpegPath.trim().length > 0;
+  const {
+    conversionModalOpen,
+    conversionModalState,
+    openConversionModal,
+    closeConversionModal,
+    handleConversionDraftChange,
+    handleStartConversion,
+    handleQuickConvertImages,
+  } = useConversionController({
+    deleteEntries: fileManager.deleteEntries,
+    refreshEntries: fileManager.refresh,
+    ffmpegPath: settings.ffmpegPath,
+  });
 
   // Bundle navigation + layout handlers so wiring stays focused on data flow.
   const {
@@ -276,7 +292,8 @@ const App = () => {
       : 0;
 
   const contextMenuActive = Boolean(contextMenu);
-  const smartTabBlocked = promptOpen || settingsOpen || aboutOpen || contextMenuActive;
+  const smartTabBlocked =
+    promptOpen || settingsOpen || aboutOpen || conversionModalOpen || contextMenuActive;
   // Keep clipboard state synced with OS file copy/cut payloads.
   const { refreshFromOs: refreshClipboardFromOs } = useClipboardSync({
     enabled: tauriEnv,
@@ -509,6 +526,7 @@ const App = () => {
     shellAvailability,
     menuOpenPwsh: settings.menuOpenPwsh,
     menuOpenWsl: settings.menuOpenWsl,
+    menuShowConvert: settings.menuShowConvert,
     onOpenShell: handleOpenShell,
     onOpenEntry: fileManager.openEntry,
     onOpenDir: browseFromView,
@@ -519,6 +537,9 @@ const App = () => {
     onPasteEntries: (paths, destination) => {
       void fileManager.pasteEntries(paths, destination);
     },
+    onOpenConvertModal: openConversionModal,
+    onQuickConvertImages: handleQuickConvertImages,
+    ffmpegDetected,
     places,
     onAddPlace: addPlace,
     onPinPlace: pinPlace,
@@ -551,6 +572,7 @@ const App = () => {
     keybinds: settings.keybinds,
     confirmDelete: settings.confirmDelete,
     settingsOpen,
+    conversionModalOpen,
     contextMenuOpen: contextMenuActive,
     promptOpen,
     previewOpen,
@@ -717,6 +739,7 @@ const App = () => {
           onRequestThumbs: requestThumbnails,
           thumbnailFit: settings.thumbnailFit,
           thumbnailAppIcons: settings.thumbnailAppIcons,
+          thumbnailFolders: settings.thumbnailFolders,
           thumbnailVideos: settings.thumbnailVideos,
           thumbnailSvgs: settings.thumbnailSvgs,
           categoryTinting: settings.categoryTinting,
@@ -790,6 +813,15 @@ const App = () => {
       onClose: closeSettings,
       onOpenCacheLocation: handleOpenThumbCache,
       onClearCache: handleClearThumbCache,
+    },
+    conversion: {
+      open: conversionModalState.open,
+      request: conversionModalState.request,
+      draft: conversionModalState.uiDraft,
+      runState: conversionModalState.run,
+      onDraftChange: handleConversionDraftChange,
+      onConvert: handleStartConversion,
+      onClose: closeConversionModal,
     },
   });
 

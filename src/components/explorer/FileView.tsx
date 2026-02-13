@@ -76,6 +76,7 @@ type FileViewProps = {
   onRequestThumbs: (requests: ThumbnailRequest[]) => void;
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;
+  thumbnailFolders: boolean;
   thumbnailVideos: boolean;
   thumbnailSvgs: boolean;
   categoryTinting: boolean;
@@ -129,6 +130,7 @@ export const FileView = ({
   onRequestThumbs,
   thumbnailFit,
   thumbnailAppIcons,
+  thumbnailFolders,
   thumbnailVideos,
   thumbnailSvgs,
   categoryTinting,
@@ -212,6 +214,7 @@ export const FileView = ({
             onRequestThumbs={onRequestThumbs}
             thumbnailFit={thumbnailFit}
             thumbnailAppIcons={thumbnailAppIcons}
+            thumbnailFolders={thumbnailFolders}
             thumbnailVideos={thumbnailVideos}
             thumbnailSvgs={thumbnailSvgs}
             categoryTinting={categoryTinting}

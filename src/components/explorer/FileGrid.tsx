@@ -55,6 +55,7 @@ type FileGridProps = {
   onRequestThumbs: (requests: ThumbnailRequest[]) => void;
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;
+  thumbnailFolders: boolean;
   thumbnailVideos: boolean;
   thumbnailSvgs: boolean;
   categoryTinting: boolean;
@@ -126,6 +127,7 @@ const FileGrid = ({
   onRequestThumbs,
   thumbnailFit,
   thumbnailAppIcons,
+  thumbnailFolders,
   thumbnailVideos,
   thumbnailSvgs,
   categoryTinting,
@@ -247,6 +249,7 @@ const FileGrid = ({
       onRequestThumbs,
       thumbResetKey,
       thumbnailAppIcons,
+      thumbnailFolders,
       thumbnailVideos,
       thumbnailSvgs,
       loading,

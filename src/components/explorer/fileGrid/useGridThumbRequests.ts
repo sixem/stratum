@@ -42,6 +42,7 @@ type UseGridThumbRequestsOptions = {
   onRequestThumbs: (requests: ThumbnailRequest[]) => void;
   thumbResetKey?: string;
   thumbnailAppIcons: boolean;
+  thumbnailFolders: boolean;
   thumbnailVideos: boolean;
   thumbnailSvgs: boolean;
   loading: boolean;
@@ -101,6 +102,7 @@ export const useGridThumbRequests = ({
   onRequestThumbs,
   thumbResetKey,
   thumbnailAppIcons,
+  thumbnailFolders,
   thumbnailVideos,
   thumbnailSvgs,
   loading,
@@ -237,10 +239,10 @@ export const useGridThumbRequests = ({
     pendingFolderFetchesRef.current.clear();
     requestedFolderSampleThumbsRef.current.clear();
     setFolderSampleByPath(new Map());
-  }, [thumbResetKey, thumbnailSvgs, thumbnailVideos]);
+  }, [thumbResetKey, thumbnailFolders, thumbnailSvgs, thumbnailVideos]);
 
   useEffect(() => {
-    if (!thumbnailsEnabled || loading || interactionActive) return;
+    if (!thumbnailsEnabled || !thumbnailFolders || loading || interactionActive) return;
     if (folderPaths.length === 0) return;
     const pendingPaths = folderPaths.filter((folderPath) => {
       const key = normalizePath(folderPath);
@@ -290,13 +292,14 @@ export const useGridThumbRequests = ({
     folderSampleByPath,
     interactionActive,
     loading,
+    thumbnailFolders,
     thumbnailSvgs,
     thumbnailVideos,
     thumbnailsEnabled,
   ]);
 
   const folderThumbRequests = useMemo(() => {
-    if (!thumbnailsEnabled || loading || interactionActive) return [];
+    if (!thumbnailsEnabled || !thumbnailFolders || loading || interactionActive) return [];
     const requests: ThumbnailRequest[] = [];
     folderSampleByPath.forEach((samplePath) => {
       if (!samplePath) return;
@@ -308,7 +311,14 @@ export const useGridThumbRequests = ({
       requests.push({ path: samplePath, size: null, modified: null });
     });
     return requests;
-  }, [folderSampleByPath, interactionActive, loading, thumbSource, thumbnailsEnabled]);
+  }, [
+    folderSampleByPath,
+    interactionActive,
+    loading,
+    thumbnailFolders,
+    thumbSource,
+    thumbnailsEnabled,
+  ]);
 
   useEffect(() => {
     if (folderThumbRequests.length === 0) return;
@@ -316,7 +326,7 @@ export const useGridThumbRequests = ({
   }, [folderThumbRequests, onRequestThumbs]);
 
   const folderThumbSource = useMemo(() => {
-    if (!thumbnailsEnabled) return new Map<string, string>();
+    if (!thumbnailsEnabled || !thumbnailFolders) return new Map<string, string>();
     const next = new Map<string, string>();
     folderPaths.forEach((folderPath) => {
       const folderKey = normalizePath(folderPath);
@@ -328,7 +338,7 @@ export const useGridThumbRequests = ({
       next.set(folderPath, sampleThumb);
     });
     return next;
-  }, [folderPaths, folderSampleByPath, thumbSource, thumbnailsEnabled]);
+  }, [folderPaths, folderSampleByPath, thumbnailFolders, thumbSource, thumbnailsEnabled]);
 
   const iconRequests = useMemo(() => {
     if (!thumbnailAppIcons || visibleItems.length === 0) {

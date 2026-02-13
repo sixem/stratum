@@ -10,6 +10,7 @@ type SettingsThumbsSectionProps = {
   thumbnailSize: number;
   thumbnailQuality: number;
   thumbnailFormat: "webp" | "jpeg";
+  thumbnailFolders: boolean;
   thumbnailVideos: boolean;
   thumbnailSvgs: boolean;
   thumbnailFit: ThumbnailFit;
@@ -30,6 +31,7 @@ export const SettingsThumbsSection = ({
   thumbnailSize,
   thumbnailQuality,
   thumbnailFormat,
+  thumbnailFolders,
   thumbnailVideos,
   thumbnailSvgs,
   thumbnailFit,
@@ -99,6 +101,23 @@ export const SettingsThumbsSection = ({
           />
           <span className="settings-value">{qualityLabel}</span>
         </div>
+      </div>
+      <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
+        <div>
+          <div className="settings-label">Folder previews</div>
+          <div className="settings-desc">
+            Generate thumbnails for folders using a sampled file from each folder.
+          </div>
+        </div>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={thumbnailFolders}
+            disabled={isThumbsDisabled}
+            onChange={(event) => onUpdate({ thumbnailFolders: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
       </div>
       <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
         <div>
