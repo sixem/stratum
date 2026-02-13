@@ -127,6 +127,7 @@
     border: 1px solid var(--stroke);
     background: var(--surface-control);
     font-size: 11px;
+    font-weight: 600;
     letter-spacing: 0.02em;
     color: var(--muted);
     cursor: pointer;
@@ -145,6 +146,7 @@
 
   .transfer-count {
     font-size: 10px;
+    font-weight: 700;
     color: var(--muted);
   }
 
@@ -214,12 +216,15 @@
   .transfer-item-count {
     color: var(--muted);
     font-size: 11px;
+    font-weight: 600;
   }
 
   .transfer-item-file {
     display: flex;
     gap: 6px;
     font-size: 11px;
+    font-weight: 500;
+    line-height: 1.25;
     color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
@@ -268,7 +273,8 @@
     justify-content: space-between;
     gap: 8px;
     font-size: 10px;
-    color: var(--muted);
+    font-weight: 500;
+    color: #97a3b9;
   }
 
   .transfer-item-failed {
@@ -282,7 +288,9 @@
   .transfer-popover-note {
     margin-top: 8px;
     font-size: 10px;
-    color: var(--muted);
+    font-weight: 500;
+    line-height: 1.35;
+    color: #97a3b9;
   }
 
   .transfer-popover-actions {

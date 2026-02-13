@@ -79,8 +79,10 @@
 
 :root[data-blur-overlays="true"] .prompt-modal,
 :root[data-blur-overlays="true"] .about-modal,
+:root[data-blur-overlays="true"] .conversion-modal,
 :root[data-blur-overlays="true"] .settings-overlay {
   backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .context-menu[data-open="true"] {

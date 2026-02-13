@@ -1,0 +1,127 @@
+// Shared primitive controls used across overlays and settings.
+:where(.ui-select) {
+  position: relative;
+  width: 100%;
+
+  .ui-select-trigger {
+    width: 100%;
+    min-height: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--stroke);
+    background: var(--surface-control);
+    color: var(--text);
+    padding: 6px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .ui-select-trigger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .ui-select-trigger:focus-visible {
+    border-color: rgba(var(--accent-rgb), 0.55);
+    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+  }
+
+  .ui-select-value {
+    font-size: 12px;
+    line-height: 1.35;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ui-select-value.is-placeholder {
+    color: var(--muted);
+  }
+
+  .ui-select-caret {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    color: var(--muted);
+    transition: transform 0.14s ease;
+  }
+
+  &.is-open .ui-select-caret {
+    transform: rotate(180deg);
+  }
+
+  &.is-open .ui-select-trigger {
+    border-color: rgba(var(--accent-rgb), 0.55);
+    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+  }
+}
+
+.ui-select-menu {
+  position: fixed;
+  max-height: min(300px, 40vh);
+  overflow: auto;
+  border-radius: 8px;
+  border: 1px solid var(--stroke);
+  background: var(--panel);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  padding: 4px;
+  display: grid;
+  gap: 3px;
+  z-index: 2800;
+}
+
+.ui-select-group {
+  display: grid;
+  gap: 3px;
+}
+
+.ui-select-group:not(:first-child) {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ui-select-group-label {
+  padding: 2px 7px;
+  font-size: 10px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.ui-select-option {
+  width: 100%;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  padding: 6px 7px;
+  cursor: pointer;
+}
+
+.ui-select-option.is-active,
+.ui-select-option:hover {
+  background: var(--surface-control-strong);
+}
+
+.ui-select-option:focus-visible {
+  background: var(--surface-control-strong);
+}
+
+.ui-select-option.is-selected {
+  background: rgba(var(--accent-rgb), 0.18);
+  color: var(--text);
+}
+
+.ui-select-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
