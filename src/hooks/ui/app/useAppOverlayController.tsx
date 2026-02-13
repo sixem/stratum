@@ -14,6 +14,7 @@ type UseAppOverlayControllerOptions = {
   aboutOpen: boolean;
   onCloseAbout: () => void;
   contextMenu: AppOverlaysProps["contextMenu"];
+  conversion: AppOverlaysProps["conversion"];
   quickPreview: AppOverlaysProps["quickPreview"];
   settings: AppOverlaysProps["settings"];
 };
@@ -26,6 +27,7 @@ export const useAppOverlayController = ({
   aboutOpen,
   onCloseAbout,
   contextMenu,
+  conversion,
   quickPreview,
   settings,
 }: UseAppOverlayControllerOptions): AppOverlaysProps => {
@@ -51,6 +53,7 @@ export const useAppOverlayController = ({
         onClose: onCloseAbout,
       },
       contextMenu,
+      conversion,
       quickPreview,
       settings,
     }),
@@ -61,6 +64,7 @@ export const useAppOverlayController = ({
       aboutOpen,
       appName,
       contextMenu,
+      conversion,
       description,
       onCloseAbout,
       quickPreview,
@@ -69,4 +73,3 @@ export const useAppOverlayController = ({
     ],
   );
 };
-

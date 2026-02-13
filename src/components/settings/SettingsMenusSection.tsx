@@ -5,6 +5,7 @@ type SettingsMenusSectionProps = {
   sectionId: string;
   menuOpenPwsh: boolean;
   menuOpenWsl: boolean;
+  menuShowConvert: boolean;
   onUpdate: SettingsUpdateHandler;
 };
 
@@ -12,11 +13,28 @@ export const SettingsMenusSection = ({
   sectionId,
   menuOpenPwsh,
   menuOpenWsl,
+  menuShowConvert,
   onUpdate,
 }: SettingsMenusSectionProps) => {
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Menus</div>
+      <div className="settings-item">
+        <div>
+          <div className="settings-label">Conversion actions</div>
+          <div className="settings-desc">
+            Show convert and quick-convert actions in file context menus.
+          </div>
+        </div>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={menuShowConvert}
+            onChange={(event) => onUpdate({ menuShowConvert: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
+      </div>
       <div className="settings-item">
         <div>
           <div className="settings-label">Background actions</div>

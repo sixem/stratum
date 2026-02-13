@@ -1,10 +1,21 @@
 // Builds file/folder context menu items for a targeted entry.
 import { useMemo } from "react";
 import { copyPathsToClipboard, openPathProperties } from "@/api";
-import { IMAGE_CONVERT_EXTENSIONS, VIDEO_CONVERT_EXTENSIONS } from "@/constants";
+import {
+  CONVERT_FORMAT_LABELS,
+  IMAGE_CONVERT_EXTENSIONS,
+  VIDEO_CONVERT_EXTENSIONS,
+} from "@/constants";
 import { getExtension, getFileKind, tabLabel } from "@/lib";
 import { useClipboardStore, usePromptStore } from "@/modules";
-import type { ContextMenuItem, EntryContextTarget, FileEntry } from "@/types";
+import type {
+  ContextMenuItem,
+  ConversionItemDraft,
+  ConversionMediaKind,
+  ConversionModalRequest,
+  EntryContextTarget,
+  FileEntry,
+} from "@/types";
 
 type UseEntryMenuItemsOptions = {
   target: EntryContextTarget | null;
@@ -19,22 +30,38 @@ type UseEntryMenuItemsOptions = {
   onClearSelection: () => void;
   onRenameEntry: (target: EntryContextTarget) => void;
   onPasteEntries: (paths: string[], destination: string) => Promise<unknown> | void;
-  ffmpegAvailable: boolean;
+  onOpenConvertModal: (request: ConversionModalRequest) => void;
+  onQuickConvertImages: (request: ConversionModalRequest, targetFormat: string) => void;
+  ffmpegDetected: boolean;
+  menuShowConvert: boolean;
 };
 
-type ConvertibleSelectionKind = "image" | "video";
+type ConvertibleSelectionKind = ConversionMediaKind;
 
 const buildConvertItems = (
-  extensions: string[],
+  quickKind: ConvertibleSelectionKind,
+  extensions: readonly string[],
   currentExtension: string | null,
+  requestBase: ConversionModalRequest,
+  onOpenConvertModal: (request: ConversionModalRequest) => void,
+  onQuickConvertImages: (request: ConversionModalRequest, targetFormat: string) => void,
 ): ContextMenuItem[] =>
   extensions
     .filter((extension) => extension !== currentExtension)
     .map((extension) => ({
       id: `entry-convert-${extension}`,
-      label: extension.toUpperCase(),
+      label: CONVERT_FORMAT_LABELS[extension] ?? extension.toUpperCase(),
       onSelect: () => {
-        // Conversion is wired later; keep this as a UI-only placeholder for now.
+        const request = {
+          ...requestBase,
+          quickTargetFormat: extension,
+          quickTargetKind: quickKind,
+        };
+        if (quickKind === "image") {
+          onQuickConvertImages(request, extension);
+          return;
+        }
+        onOpenConvertModal(request);
       },
     }));
 
@@ -60,8 +87,11 @@ const resolveMenuEntry = (
 };
 
 type SelectionSummary = {
-  canConvertKind: ConvertibleSelectionKind | null;
+  quickConvertKind: ConvertibleSelectionKind | null;
+  canOpenConvertModal: boolean;
   sharedExtension: string | null;
+  conversionRequest: ConversionModalRequest | null;
+  hasVideo: boolean;
   hasMultiplePropertyTypes: boolean;
 };
 
@@ -72,16 +102,20 @@ const summarizeSelection = (
 ): SelectionSummary => {
   let firstPropertyType: string | null = null;
   let hasMultiplePropertyTypes = false;
-  let canConvertAll = actionTargets.length > 0;
-  let convertKind: ConvertibleSelectionKind | null = null;
+  let allConvertible = actionTargets.length > 0;
+  let firstConvertKind: ConvertibleSelectionKind | null = null;
+  let sameKindSelection = true;
   let sharedExtension: string | null = null;
   let hasSharedExtension = false;
+  let hasVideo = false;
+  const conversionItems: ConversionItemDraft[] = [];
+  const sourceKindsSet = new Set<ConversionMediaKind>();
 
   // Single-pass scan keeps menu gating cheap even for large multi-selections.
   for (const path of actionTargets) {
     const entry = resolveMenuEntry(path, target, entryByPath);
     if (!entry) {
-      canConvertAll = false;
+      allConvertible = false;
       continue;
     }
 
@@ -94,20 +128,23 @@ const summarizeSelection = (
     }
 
     if (entry.isDir) {
-      canConvertAll = false;
+      allConvertible = false;
       continue;
     }
 
-    const kind = getFileKind(entry.name);
-    if (kind !== "image" && kind !== "video") {
-      canConvertAll = false;
+    const fileKind = getFileKind(entry.name);
+    if (fileKind !== "image" && fileKind !== "video") {
+      allConvertible = false;
       continue;
     }
-    if (!convertKind) {
-      convertKind = kind;
-    } else if (convertKind !== kind) {
-      canConvertAll = false;
+    const kind: ConversionMediaKind = fileKind;
+    if (!firstConvertKind) {
+      firstConvertKind = kind;
+    } else if (firstConvertKind !== kind) {
+      sameKindSelection = false;
     }
+    if (kind === "video") hasVideo = true;
+    sourceKindsSet.add(kind);
 
     if (!hasSharedExtension) {
       sharedExtension = extension;
@@ -115,19 +152,36 @@ const summarizeSelection = (
     } else if (sharedExtension !== extension) {
       sharedExtension = null;
     }
+
+    conversionItems.push({
+      path: entry.path,
+      name: entry.name,
+      kind,
+      sourceExt: extension,
+      override: null,
+    });
   }
 
-  if (!canConvertAll || !convertKind) {
-    return {
-      canConvertKind: null,
-      sharedExtension: null,
-      hasMultiplePropertyTypes,
-    };
-  }
+  const sourceKinds = Array.from(sourceKindsSet);
+  const canOpenConvertModal = allConvertible && sourceKinds.length > 0;
+  const quickConvertKind =
+    allConvertible && sameKindSelection ? firstConvertKind : null;
+  const conversionRequest: ConversionModalRequest | null = canOpenConvertModal
+    ? {
+        paths: conversionItems.map((item) => item.path),
+        items: conversionItems,
+        sourceKinds,
+        quickTargetFormat: null,
+        quickTargetKind: null,
+      }
+    : null;
 
   return {
-    canConvertKind: convertKind,
-    sharedExtension,
+    quickConvertKind,
+    canOpenConvertModal,
+    sharedExtension: canOpenConvertModal ? sharedExtension : null,
+    conversionRequest,
+    hasVideo,
     hasMultiplePropertyTypes,
   };
 };
@@ -145,7 +199,10 @@ export const useEntryMenuItems = ({
   onClearSelection,
   onRenameEntry,
   onPasteEntries,
-  ffmpegAvailable,
+  onOpenConvertModal,
+  onQuickConvertImages,
+  ffmpegDetected,
+  menuShowConvert,
 }: UseEntryMenuItemsOptions) => {
   const clipboard = useClipboardStore((state) => state.clipboard);
 
@@ -156,24 +213,55 @@ export const useEntryMenuItems = ({
     const hasTargets = actionTargets.length > 0;
     const pasteTarget = (target.isDir ? target.path : currentPath).trim();
     const canPaste = Boolean(clipboard && clipboard.paths.length > 0 && pasteTarget);
-    const canConvert = ffmpegAvailable && selectionSummary.canConvertKind !== null;
-    const convertItems = canConvert
+    const quickConvertKind = selectionSummary.quickConvertKind;
+    const conversionRequest = selectionSummary.conversionRequest;
+    const canOpenConvertModal =
+      menuShowConvert &&
+      selectionSummary.canOpenConvertModal &&
+      (!selectionSummary.hasVideo || ffmpegDetected);
+    const canQuickConvert =
+      menuShowConvert &&
+      quickConvertKind !== null &&
+      conversionRequest !== null &&
+      (quickConvertKind === "image" || ffmpegDetected);
+    const quickConvertItems =
+      canQuickConvert && quickConvertKind && conversionRequest
       ? buildConvertItems(
-          selectionSummary.canConvertKind === "video"
+          quickConvertKind,
+          quickConvertKind === "video"
             ? VIDEO_CONVERT_EXTENSIONS
             : IMAGE_CONVERT_EXTENSIONS,
           selectionSummary.sharedExtension,
+          conversionRequest,
+          onOpenConvertModal,
+          onQuickConvertImages,
         )
       : [];
-    const convertMenu =
-      canConvert && convertItems.length > 0
+    const quickConvertMenu =
+      canQuickConvert && quickConvertItems.length > 0
         ? ({
             kind: "submenu",
-            id: "entry-convert",
-            label: "Convert",
-            items: convertItems,
+            id: "entry-quick-convert",
+            label: "Quick Convert",
+            items: quickConvertItems,
           } as ContextMenuItem)
         : null;
+    const openConvertItem =
+      canOpenConvertModal && conversionRequest
+        ? ({
+            id: "entry-convert-open",
+            label: "Convert...",
+            onSelect: () => {
+              onOpenConvertModal(conversionRequest);
+            },
+          } as ContextMenuItem)
+        : null;
+    const convertItems: ContextMenuItem[] = [];
+    if (openConvertItem) convertItems.push(openConvertItem);
+    if (quickConvertMenu) convertItems.push(quickConvertMenu);
+    if (convertItems.length > 0) {
+      convertItems.push({ kind: "divider", id: "entry-divider-convert" });
+    }
 
     return [
       {
@@ -189,7 +277,7 @@ export const useEntryMenuItems = ({
         },
         disabled: !hasTargets,
       },
-      ...(convertMenu ? [convertMenu] : []),
+      ...convertItems,
       {
         id: "entry-copy",
         label: "Copy",
@@ -276,7 +364,10 @@ export const useEntryMenuItems = ({
     onClearSelection,
     onDeleteEntries,
     confirmDelete,
-    ffmpegAvailable,
+    ffmpegDetected,
+    menuShowConvert,
+    onOpenConvertModal,
+    onQuickConvertImages,
     onOpenDir,
     onOpenEntry,
     onPasteEntries,
