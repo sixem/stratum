@@ -62,6 +62,7 @@ type UseAppFileViewPropsOptions = {
     | "onRequestThumbs"
     | "thumbnailFit"
     | "thumbnailAppIcons"
+    | "thumbnailFolders"
     | "thumbnailVideos"
     | "thumbnailSvgs"
     | "categoryTinting"

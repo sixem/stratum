@@ -1,0 +1,98 @@
+name: Draft Windows Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-draft-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Read app version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Build Tauri bundles
+        run: pnpm tauri build
+
+      - name: Collect release files
+        id: collect
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $releaseDir = "dist/release"
+          New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
+
+          $targetRoot = "src-tauri/target/release"
+          $portablePath = Join-Path $targetRoot "stratum.exe"
+          if (-not (Test-Path $portablePath)) {
+            $portablePath = Join-Path $targetRoot "Stratum.exe"
+          }
+          if (-not (Test-Path $portablePath)) {
+            throw "Portable executable not found in $targetRoot."
+          }
+
+          $nsis = Get-ChildItem -Path (Join-Path $targetRoot "bundle/nsis") -Filter "*.exe" |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if (-not $nsis) {
+            throw "NSIS installer not found."
+          }
+
+          $msi = Get-ChildItem -Path (Join-Path $targetRoot "bundle/msi") -Filter "*.msi" |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if (-not $msi) {
+            throw "MSI installer not found."
+          }
+
+          $portableOut = Join-Path $releaseDir ("Stratum_{0}_portable.exe" -f $version)
+          $nsisOut = Join-Path $releaseDir $nsis.Name
+          $msiOut = Join-Path $releaseDir $msi.Name
+
+          Copy-Item -Path $portablePath -Destination $portableOut -Force
+          Copy-Item -Path $nsis.FullName -Destination $nsisOut -Force
+          Copy-Item -Path $msi.FullName -Destination $msiOut -Force
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stratum-windows-${{ steps.version.outputs.version }}
+          path: dist/release/*
+          if-no-files-found: error
+
+      - name: Draft GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Stratum v${{ steps.version.outputs.version }}
+          body: ""
+          draft: true
+          files: dist/release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}

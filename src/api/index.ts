@@ -28,6 +28,7 @@ export {
 } from "./fs";
 export { openPath, openPathProperties } from "./opener";
 export { convertImage, getImageInfo } from "./images";
+export { convertVideo } from "./videos";
 export { getFileIcons, toFileIconUrl } from "./fileIcons";
 export {
   clearThumbCache,

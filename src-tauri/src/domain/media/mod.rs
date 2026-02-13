@@ -2,3 +2,4 @@
 pub mod file_icons;
 pub mod images;
 pub mod thumbs;
+pub mod videos;

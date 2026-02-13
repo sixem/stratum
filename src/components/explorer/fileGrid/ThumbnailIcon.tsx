@@ -16,7 +16,7 @@ import {
   VideoIcon,
 } from "@/components/icons";
 import type { ThumbnailIconProps } from "./gridCard.types";
-import { ThumbnailPreview } from "./ThumbnailPreview";
+import { isThumbPreviewReadyCached, ThumbnailPreview } from "./ThumbnailPreview";
 
 const APP_ICON_READY_CACHE_LIMIT = 3000;
 const readyAppIconUrls = new Set<string>();
@@ -66,18 +66,32 @@ export const ThumbnailIcon = ({
   appIconUrl,
   appIconsEnabled = false,
 }: ThumbnailIconProps) => {
+  const [thumbReady, setThumbReady] = useState(
+    () => Boolean(thumbUrl && isThumbPreviewReadyCached(thumbUrl)),
+  );
+
+  useEffect(() => {
+    if (!thumbUrl) {
+      setThumbReady(false);
+      return;
+    }
+    setThumbReady(isThumbPreviewReadyCached(thumbUrl));
+  }, [thumbUrl]);
+
   if (isDir) {
-    // Keep the folder glyph mounted while the preview image decodes.
+    // Keep the folder glyph visible until the folder preview is confirmed ready.
     return (
       <>
-        <FolderIcon className="thumb-svg is-dir" />
-        {thumbUrl ? <ThumbnailPreview src={thumbUrl} /> : null}
+        {!thumbReady ? <FolderIcon className="thumb-svg is-dir" /> : null}
+        {thumbUrl ? (
+          <ThumbnailPreview src={thumbUrl} onReadyChange={setThumbReady} />
+        ) : null}
       </>
     );
   }
 
   const Icon = resolveFallbackIcon(fileKind, extension);
-  const showAppIcon = Boolean(appIconUrl) && appIconsEnabled;
+  const showAppIcon = Boolean(appIconUrl) && appIconsEnabled && !thumbReady;
   const [appIconReady, setAppIconReady] = useState(
     () => Boolean(appIconUrl && readyAppIconUrls.has(appIconUrl)),
   );
@@ -90,8 +104,8 @@ export const ThumbnailIcon = ({
     setAppIconReady(readyAppIconUrls.has(appIconUrl));
   }, [appIconUrl]);
 
-  // Keep fallback visible until the app icon has decoded for this card.
-  const showFallback = !showAppIcon || !appIconReady;
+  // Keep fallback visible until either app icon or thumbnail has decoded for this card.
+  const showFallback = !thumbReady && (!showAppIcon || !appIconReady);
 
   return (
     <>
@@ -117,7 +131,9 @@ export const ThumbnailIcon = ({
           }}
         />
       ) : null}
-      {thumbUrl ? <ThumbnailPreview src={thumbUrl} /> : null}
+      {thumbUrl ? (
+        <ThumbnailPreview src={thumbUrl} onReadyChange={setThumbReady} />
+      ) : null}
     </>
   );
 };

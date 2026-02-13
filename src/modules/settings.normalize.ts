@@ -212,6 +212,10 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.menuOpenWsl === "boolean"
         ? value.menuOpenWsl
         : DEFAULT_SETTINGS.menuOpenWsl,
+    menuShowConvert:
+      typeof value?.menuShowConvert === "boolean"
+        ? value.menuShowConvert
+        : DEFAULT_SETTINGS.menuShowConvert,
     thumbnailsEnabled:
       typeof value?.thumbnailsEnabled === "boolean"
         ? value.thumbnailsEnabled
@@ -224,6 +228,10 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       95,
     ),
     thumbnailFormat: coerceFormat(value?.thumbnailFormat),
+    thumbnailFolders:
+      typeof value?.thumbnailFolders === "boolean"
+        ? value.thumbnailFolders
+        : DEFAULT_SETTINGS.thumbnailFolders,
     thumbnailVideos:
       typeof value?.thumbnailVideos === "boolean"
         ? value.thumbnailVideos

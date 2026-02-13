@@ -65,7 +65,12 @@ export const useCreateEntryPrompt = () => {
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
                 event.preventDefault();
-                runCreate();
+                // Keep Enter as regular create; Ctrl+Enter uses the optional create-and-open flow.
+                if (event.ctrlKey && onCreateAndGo) {
+                  runCreateAndGo();
+                } else {
+                  runCreate();
+                }
                 usePromptStore.getState().hidePrompt();
               }}
             />

@@ -11,6 +11,7 @@ type UseAppKeybindsOptions = {
   keybinds: KeybindMap;
   confirmDelete: boolean;
   settingsOpen: boolean;
+  conversionModalOpen: boolean;
   contextMenuOpen: boolean;
   promptOpen: boolean;
   previewOpen: boolean;
@@ -37,6 +38,7 @@ export const useAppKeybinds = ({
   keybinds,
   confirmDelete,
   settingsOpen,
+  conversionModalOpen,
   contextMenuOpen,
   promptOpen,
   previewOpen,
@@ -65,8 +67,8 @@ export const useAppKeybinds = ({
 
   // Keybind gating helpers: protect interactions during modal states.
   const canHandleGlobalKeybind = useCallback(() => {
-    return !settingsOpen && !contextMenuOpen && !promptOpen && !previewOpen;
-  }, [contextMenuOpen, previewOpen, promptOpen, settingsOpen]);
+    return !settingsOpen && !conversionModalOpen && !contextMenuOpen && !promptOpen && !previewOpen;
+  }, [contextMenuOpen, conversionModalOpen, previewOpen, promptOpen, settingsOpen]);
 
   const canHandleViewKeybind = useCallback(() => {
     if (!canHandleGlobalKeybind()) return false;

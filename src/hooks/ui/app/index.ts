@@ -15,6 +15,7 @@ export { useAppSelectionHandlers } from "./useAppSelectionHandlers";
 export { useAppTopstackProps } from "./useAppTopstackProps";
 export { useAppViewState } from "./useAppViewState";
 export { useCloseConfirm } from "./useCloseConfirm";
+export { useConversionController } from "./useConversionController";
 export { useCreateEntryPrompt } from "./useCreateEntryPrompt";
 export { useModalFocusTrap } from "./useModalFocusTrap";
 export { usePendingCreateSelection } from "./usePendingCreateSelection";

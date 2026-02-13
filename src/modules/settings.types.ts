@@ -46,10 +46,12 @@ export type Settings = {
   gridNameHideExtension: boolean;
   menuOpenPwsh: boolean;
   menuOpenWsl: boolean;
+  menuShowConvert: boolean;
   thumbnailsEnabled: boolean;
   thumbnailSize: number;
   thumbnailQuality: number;
   thumbnailFormat: ThumbnailFormat;
+  thumbnailFolders: boolean;
   thumbnailVideos: boolean;
   thumbnailSvgs: boolean;
   thumbnailCacheMb: number;

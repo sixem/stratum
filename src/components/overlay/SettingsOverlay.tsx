@@ -32,6 +32,7 @@ export const SettingsOverlay = ({
     thumbnailSize,
     thumbnailQuality,
     thumbnailFormat,
+    thumbnailFolders,
     thumbnailVideos,
     thumbnailSvgs,
     thumbnailCacheMb,
@@ -62,6 +63,7 @@ export const SettingsOverlay = ({
     gridNameHideExtension,
     menuOpenPwsh,
     menuOpenWsl,
+    menuShowConvert,
     sidebarRecentLimit,
     sidebarSectionOrder,
     sidebarHiddenSections,
@@ -282,6 +284,7 @@ export const SettingsOverlay = ({
               sectionId={menuSectionId}
               menuOpenPwsh={menuOpenPwsh}
               menuOpenWsl={menuOpenWsl}
+              menuShowConvert={menuShowConvert}
               onUpdate={updateSettings}
             />
             <SettingsFlairSection
@@ -298,6 +301,7 @@ export const SettingsOverlay = ({
               thumbnailSize={thumbnailSize}
               thumbnailQuality={thumbnailQuality}
               thumbnailFormat={thumbnailFormat}
+              thumbnailFolders={thumbnailFolders}
               thumbnailVideos={thumbnailVideos}
               thumbnailSvgs={thumbnailSvgs}
               thumbnailFit={thumbnailFit}

@@ -4,6 +4,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { flushSync } from "react-dom";
 import { isEditableElement } from "@/lib";
 import type {
+  ConversionModalRequest,
   EntryContextTarget,
   FileEntry,
   Place,
@@ -39,6 +40,7 @@ type UseAppContextMenusOptions = {
   shellAvailability: ShellAvailability | null;
   menuOpenPwsh: boolean;
   menuOpenWsl: boolean;
+  menuShowConvert: boolean;
   onOpenShell: (kind: ShellKind, path: string) => void;
   onOpenEntry: (path: string) => void;
   onOpenDir: (path: string) => void;
@@ -47,6 +49,9 @@ type UseAppContextMenusOptions = {
   onClearSelection: () => void;
   onRenameEntry: (target: EntryContextTarget) => void;
   onPasteEntries: (paths: string[], destination?: string) => void;
+  onOpenConvertModal: (request: ConversionModalRequest) => void;
+  onQuickConvertImages: (request: ConversionModalRequest, targetFormat: string) => void;
+  ffmpegDetected: boolean;
   places: Place[];
   onAddPlace: (path: string, name?: string, options?: { pinned?: boolean }) => void;
   onPinPlace: (path: string) => void;
@@ -75,6 +80,7 @@ export const useAppContextMenus = ({
   shellAvailability,
   menuOpenPwsh,
   menuOpenWsl,
+  menuShowConvert,
   onOpenShell,
   onOpenEntry,
   onOpenDir,
@@ -83,6 +89,9 @@ export const useAppContextMenus = ({
   onClearSelection,
   onRenameEntry,
   onPasteEntries,
+  onOpenConvertModal,
+  onQuickConvertImages,
+  ffmpegDetected,
   places,
   onAddPlace,
   onPinPlace,
@@ -196,7 +205,10 @@ export const useAppContextMenus = ({
     onClearSelection,
     onRenameEntry,
     onPasteEntries,
-    ffmpegAvailable: Boolean(shellAvailability?.ffmpeg),
+    onOpenConvertModal,
+    onQuickConvertImages,
+    ffmpegDetected,
+    menuShowConvert,
   });
   const placeTargetMenuItems = buildPlaceTargetMenuItems({
     target: contextMenu?.kind === "place-target" ? contextMenu.target : null,

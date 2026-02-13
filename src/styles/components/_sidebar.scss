@@ -46,9 +46,9 @@
 
   .section-title {
     font-size: 10px;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.11em;
     color: var(--muted);
   }
 
@@ -206,6 +206,8 @@
 
   .place-path {
     font-size: 11px;
+    font-weight: 500;
+    line-height: 1.25;
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -238,8 +240,8 @@
 }
 
 :where(.sidebar) .place-path {
-  line-height: 1.2;
-  color: #8590a6;
+  line-height: 1.25;
+  color: #96a3ba;
 }
 
 // Keep the collapse/expand icon readable over ambient transparency.
