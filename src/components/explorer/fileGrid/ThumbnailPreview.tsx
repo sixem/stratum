@@ -1,4 +1,5 @@
 // Renders a thumbnail image with DOM-driven ready state to avoid React churn.
+import { useEffect } from "react";
 import type { ThumbnailPreviewProps } from "./gridCard.types";
 
 const THUMB_READY_CACHE_LIMIT = 4000;
@@ -15,9 +16,20 @@ const markThumbReady = (src: string) => {
   readyThumbSrcCache.delete(oldest);
 };
 
-export const ThumbnailPreview = ({ src }: ThumbnailPreviewProps) => {
+export const isThumbPreviewReadyCached = (src: string) => {
+  if (!src) return false;
+  return readyThumbSrcCache.has(src);
+};
+
+export const ThumbnailPreview = ({ src, onReadyChange }: ThumbnailPreviewProps) => {
+  const isKnownReady = isThumbPreviewReadyCached(src);
+
+  useEffect(() => {
+    if (!src) return;
+    onReadyChange?.(isKnownReady);
+  }, [isKnownReady, onReadyChange, src]);
+
   if (!src) return null;
-  const isKnownReady = readyThumbSrcCache.has(src);
 
   return (
     <img
@@ -31,9 +43,11 @@ export const ThumbnailPreview = ({ src }: ThumbnailPreviewProps) => {
       data-ready={isKnownReady ? "true" : "false"}
       onLoad={(event) => {
         markThumbReady(src);
+        onReadyChange?.(true);
         event.currentTarget.dataset.ready = "true";
       }}
       onError={(event) => {
+        onReadyChange?.(false);
         event.currentTarget.dataset.ready = "false";
       }}
     />
