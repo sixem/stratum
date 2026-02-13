@@ -28,7 +28,24 @@ export type {
   PlaceContextTarget,
 } from "./contextMenu";
 export type { FileIconHit } from "./fileIcons";
+export type {
+  ConversionItemDraft,
+  ConversionMediaKind,
+  ConversionModalDraft,
+  ConversionModalRequest,
+  ConversionOutputMode,
+  ConversionVideoEncoder,
+  ConversionVideoFormat,
+  ConversionVideoPresetId,
+  ConversionVideoSpeed,
+  ConversionRunPhase,
+  ConversionRunState,
+  ConversionRuleDraft,
+  ConversionRuleOverrideDraft,
+  ConversionItemRunStatus,
+} from "./conversion";
 export type { ImageConvertOptions, ImageInfo, ImageTargetFormat } from "./images";
+export type { VideoConvertOptions } from "./videos";
 export type { ShellAvailability, ShellKind } from "./shells";
 export type { SortDir, SortKey, SortState } from "./sort";
 export type { Tab } from "./tabs";

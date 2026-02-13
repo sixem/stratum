@@ -15,7 +15,23 @@ export {
   APP_VERSION,
 } from "./app";
 export { FILE_SHEET_PATH } from "./assets";
-export { IMAGE_CONVERT_EXTENSIONS, VIDEO_CONVERT_EXTENSIONS } from "./convert";
+export {
+  CONVERT_FORMAT_LABELS,
+  CONVERT_TARGET_GROUPS,
+  DEFAULT_VIDEO_CONVERT_PRESET_ID,
+  IMAGE_CONVERT_EXTENSIONS,
+  QUICK_CONVERT_PRESET_LABELS,
+  VIDEO_CONVERT_PRESETS,
+  VIDEO_ENCODER_LABELS,
+  VIDEO_ENCODERS_BY_FORMAT,
+  VIDEO_QUALITY_RANGES,
+  VIDEO_SPEED_LABELS,
+  VIDEO_CONVERT_EXTENSIONS,
+  clampVideoQuality,
+  getAllowedVideoEncoders,
+  getVideoConvertPreset,
+  resolveVideoEncoderForFormat,
+} from "./convert";
 export {
   ARCHIVE_EXTENSIONS,
   AUDIO_EXTENSIONS,

@@ -38,7 +38,7 @@ type TransferStore = {
   updateProgress: (id: string, update: TransferProgressUpdate) => void;
   updateLabel: (id: string, label: string) => void;
   completeJob: (id: string, patch?: Partial<TransferJob>) => void;
-  failJob: (id: string) => void;
+  failJob: (id: string, patch?: Partial<TransferJob>) => void;
   clearAll: () => void;
 };
 
@@ -145,11 +145,11 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
         };
       }),
     })),
-  failJob: (id) =>
+  failJob: (id, patch) =>
     set((state) => ({
       jobs: state.jobs.map((job) =>
         job.id === id
-          ? { ...job, status: "failed", finishedAt: Date.now() }
+          ? { ...job, ...patch, status: "failed", finishedAt: Date.now() }
           : job,
       ),
     })),
