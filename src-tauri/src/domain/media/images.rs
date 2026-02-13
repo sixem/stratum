@@ -1,4 +1,6 @@
 // Image metadata + conversion helpers for future UI features.
+use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+use image::{ColorType, ImageEncoder};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::BufWriter;
@@ -95,18 +97,7 @@ pub fn convert_image(
     }
 
     let image = image::open(source).map_err(|err| err.to_string())?;
-    let output = match options.format {
-        ImageTargetFormat::Jpeg => {
-            let quality = options.quality.unwrap_or(82).min(100);
-            image::ImageOutputFormat::Jpeg(quality)
-        }
-        ImageTargetFormat::Png => image::ImageOutputFormat::Png,
-        ImageTargetFormat::Webp => image::ImageOutputFormat::WebP,
-        ImageTargetFormat::Bmp => image::ImageOutputFormat::Bmp,
-        ImageTargetFormat::Gif => image::ImageOutputFormat::Gif,
-        ImageTargetFormat::Tiff => image::ImageOutputFormat::Tiff,
-        ImageTargetFormat::Ico => image::ImageOutputFormat::Ico,
-    };
+    let quality = options.quality.unwrap_or(82).clamp(1, 100);
 
     let file = if overwrite {
         fs::File::create(target).map_err(|err| err.to_string())?
@@ -118,10 +109,50 @@ pub fn convert_image(
             .map_err(|err| err.to_string())?
     };
     let mut writer = BufWriter::new(file);
-    image
-        .write_to(&mut writer, output)
-        .map_err(|err| err.to_string())?;
+    match options.format {
+        ImageTargetFormat::Png => {
+            // PNG is lossless, so this "quality" value is mapped to compression level:
+            // lower quality => stronger compression (smaller files, slower encode),
+            // higher quality => lighter compression (larger files, faster encode).
+            let rgba = image.to_rgba8();
+            let (compression, filter) = map_png_quality(quality);
+            let encoder = PngEncoder::new_with_quality(&mut writer, compression, filter);
+            encoder
+                .write_image(
+                    rgba.as_raw(),
+                    rgba.width(),
+                    rgba.height(),
+                    ColorType::Rgba8,
+                )
+                .map_err(|err| err.to_string())?;
+        }
+        _ => {
+            let output = match options.format {
+                ImageTargetFormat::Jpeg => image::ImageOutputFormat::Jpeg(quality),
+                ImageTargetFormat::Webp => image::ImageOutputFormat::WebP,
+                ImageTargetFormat::Bmp => image::ImageOutputFormat::Bmp,
+                ImageTargetFormat::Gif => image::ImageOutputFormat::Gif,
+                ImageTargetFormat::Tiff => image::ImageOutputFormat::Tiff,
+                ImageTargetFormat::Ico => image::ImageOutputFormat::Ico,
+                ImageTargetFormat::Png => unreachable!(),
+            };
+            image
+                .write_to(&mut writer, output)
+                .map_err(|err| err.to_string())?;
+        }
+    }
     Ok(())
+}
+
+fn map_png_quality(quality: u8) -> (CompressionType, FilterType) {
+    // Keep one simple, predictable ladder that matches the UI slider semantics.
+    if quality <= 35 {
+        (CompressionType::Best, FilterType::Adaptive)
+    } else if quality <= 70 {
+        (CompressionType::Default, FilterType::Adaptive)
+    } else {
+        (CompressionType::Fast, FilterType::Adaptive)
+    }
 }
 
 fn format_label(format: image::ImageFormat) -> String {

@@ -1,5 +1,5 @@
 // Media-oriented command handlers (thumbnails, icons, conversion).
-use crate::domain::media::{file_icons, images, thumbs};
+use crate::domain::media::{file_icons, images, thumbs, videos};
 
 #[tauri::command]
 pub async fn request_thumbnails(
@@ -70,6 +70,17 @@ pub async fn convert_image(
     options: images::ImageConvertOptions,
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || images::convert_image(path, destination, options))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn convert_video(
+    path: String,
+    destination: String,
+    options: videos::VideoConvertOptions,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || videos::convert_video(path, destination, options))
         .await
         .map_err(|err| err.to_string())?
 }
