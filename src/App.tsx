@@ -405,6 +405,10 @@ const App = () => {
     handleClearSelection();
     handleRefresh();
   }, [handleClearSelection, handleRefresh]);
+  const handleOpenRecycleBin = useCallback(() => {
+    // Windows shell namespace target for the system Recycle Bin.
+    void fileManager.openEntry("shell:RecycleBinFolder");
+  }, [fileManager.openEntry]);
 
   const { queueCreateSelection } = usePendingCreateSelection({
     viewKey,
@@ -667,6 +671,7 @@ const App = () => {
       settingsOpen,
       onViewChange: tabSession.setViewMode,
       onToggleSettings: toggleSettings,
+      onOpenRecycleBin: handleOpenRecycleBin,
     },
   });
   const { fileViewProps, layoutClass, layoutContextMenu, layoutContextMenuDown } =

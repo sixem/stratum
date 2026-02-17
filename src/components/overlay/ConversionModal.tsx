@@ -31,7 +31,7 @@ import type {
   ConversionRunState,
 } from "@/types";
 
-type ConversionModalProps = {
+export type ConversionModalProps = {
   open: boolean;
   request: ConversionModalRequest | null;
   draft: ConversionModalDraft | null;

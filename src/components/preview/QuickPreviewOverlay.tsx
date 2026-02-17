@@ -24,7 +24,7 @@ import { PressButton } from "@/components/primitives/PressButton";
 import { QuickPreviewStrip } from "./QuickPreviewStrip";
 import { QuickPreviewTimeline } from "./QuickPreviewTimeline";
 
-type QuickPreviewOverlayProps = {
+export type QuickPreviewOverlayProps = {
   open: boolean;
   path: string | null;
   meta?: EntryMeta | null;

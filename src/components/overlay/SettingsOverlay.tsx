@@ -14,7 +14,7 @@ import { PressButton } from "@/components/primitives/PressButton";
 import { useModalFocusTrap, useSettings } from "@/hooks";
 import { usePromptStore } from "@/modules";
 
-type SettingsOverlayProps = {
+export type SettingsOverlayProps = {
   open: boolean;
   onClose: () => void;
   onOpenCacheLocation?: () => Promise<void>;
