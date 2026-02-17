@@ -121,6 +121,7 @@ export const TooltipWrapper = ({
   const delayRef = useRef<number | null>(null);
   // Only show hover tooltips after a real pointer move inside the element.
   const hoveredRef = useRef(false);
+  const hoveredElementRef = useRef<Element | null>(null);
   const hoverMovedRef = useRef(false);
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -151,6 +152,15 @@ export const TooltipWrapper = ({
       if (useTooltipStore.getState().nonce !== requestId) return;
       tooltipApi.showTooltip({ text, x: left, y: top });
     });
+  };
+
+  const isPointerStillInsideHovered = (x: number, y: number) => {
+    if (!hoveredRef.current) return false;
+    const hovered = hoveredElementRef.current;
+    if (!hovered || !hovered.isConnected) return false;
+    const pointerTarget = document.elementFromPoint(x, y);
+    if (!pointerTarget) return false;
+    return hovered.contains(pointerTarget);
   };
 
   const scheduleTooltip = (
@@ -186,6 +196,9 @@ export const TooltipWrapper = ({
 
     if (!delayValue) {
       const nextAnchor = resolveAnchor();
+      if (trigger === "mouse" && !isPointerStillInsideHovered(nextAnchor.x, nextAnchor.y)) {
+        return;
+      }
       showTooltip(nextAnchor.x, nextAnchor.y, requestId);
       return;
     }
@@ -197,6 +210,9 @@ export const TooltipWrapper = ({
       if (document.visibilityState !== "visible") return;
       if (trigger === "mouse" && !document.hasFocus()) return;
       const nextAnchor = resolveAnchor();
+      if (trigger === "mouse" && !isPointerStillInsideHovered(nextAnchor.x, nextAnchor.y)) {
+        return;
+      }
       showTooltip(nextAnchor.x, nextAnchor.y, requestId);
     }, delayValue);
   };
@@ -217,6 +233,7 @@ export const TooltipWrapper = ({
     onMouseEnter: (event: MouseEvent) => {
       child.props.onMouseEnter?.(event);
       hoveredRef.current = true;
+      hoveredElementRef.current = event.currentTarget as Element;
       hoverMovedRef.current = false;
       lastPointerRef.current = { x: event.clientX, y: event.clientY };
     },
@@ -240,6 +257,7 @@ export const TooltipWrapper = ({
     onMouseLeave: (event: MouseEvent) => {
       child.props.onMouseLeave?.(event);
       hoveredRef.current = false;
+      hoveredElementRef.current = null;
       hoverMovedRef.current = false;
       lastPointerRef.current = null;
       hideTooltip();
