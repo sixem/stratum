@@ -1,6 +1,11 @@
 // Builds file/folder context menu items for a targeted entry.
 import { useMemo } from "react";
-import { copyPathsToClipboard, openPathProperties } from "@/api";
+import {
+  copyPathsToClipboard,
+  openPathProperties,
+  openPathWithDialog,
+  openPathWithHandler,
+} from "@/api";
 import {
   CONVERT_FORMAT_LABELS,
   IMAGE_CONVERT_EXTENSIONS,
@@ -16,6 +21,7 @@ import type {
   EntryContextTarget,
   FileEntry,
 } from "@/types";
+import { useOpenWithMenuState } from "./useOpenWithMenuState";
 
 type UseEntryMenuItemsOptions = {
   target: EntryContextTarget | null;
@@ -205,6 +211,7 @@ export const useEntryMenuItems = ({
   menuShowConvert,
 }: UseEntryMenuItemsOptions) => {
   const clipboard = useClipboardStore((state) => state.clipboard);
+  const openWithMenuState = useOpenWithMenuState(target);
 
   return useMemo<ContextMenuItem[]>(() => {
     if (!target) return [];
@@ -243,6 +250,7 @@ export const useEntryMenuItems = ({
             kind: "submenu",
             id: "entry-quick-convert",
             label: "Quick Convert",
+            icon: "quick-convert",
             items: quickConvertItems,
           } as ContextMenuItem)
         : null;
@@ -251,6 +259,7 @@ export const useEntryMenuItems = ({
         ? ({
             id: "entry-convert-open",
             label: "Convert...",
+            icon: "convert",
             onSelect: () => {
               onOpenConvertModal(conversionRequest);
             },
@@ -261,6 +270,77 @@ export const useEntryMenuItems = ({
     if (quickConvertMenu) convertItems.push(quickConvertMenu);
     if (convertItems.length > 0) {
       convertItems.push({ kind: "divider", id: "entry-divider-convert" });
+    }
+    const showOpenWith = !target.isDir && Boolean(openWithMenuState.targetPath);
+    const openWithMenuItems: ContextMenuItem[] = [];
+    if (showOpenWith) {
+      if (openWithMenuState.status === "loading") {
+        openWithMenuItems.push({
+          id: "entry-open-with-loading",
+          label: "Loading apps...",
+          onSelect: () => undefined,
+          disabled: true,
+        });
+      } else if (openWithMenuState.status === "error") {
+        openWithMenuItems.push({
+          id: "entry-open-with-error",
+          label: "Couldn't load apps",
+          onSelect: () => undefined,
+          disabled: true,
+        });
+      } else if (openWithMenuState.handlers.length === 0) {
+        openWithMenuItems.push({
+          id: "entry-open-with-empty",
+          label: "No apps found",
+          onSelect: () => undefined,
+          disabled: true,
+        });
+      } else {
+        openWithMenuItems.push(
+          ...openWithMenuState.handlers.map((handler) => ({
+            id: `entry-open-with-${handler.id}`,
+            label: handler.label,
+            onSelect: () => {
+              if (!openWithMenuState.targetPath) return;
+              void openPathWithHandler(openWithMenuState.targetPath, handler.id).catch(
+                (error) => {
+                  const message =
+                    error instanceof Error && error.message
+                      ? error.message
+                      : "Unable to open this file with the selected app.";
+                  usePromptStore.getState().showPrompt({
+                    title: "Couldn't open with this app",
+                    content: message,
+                    confirmLabel: "OK",
+                    cancelLabel: null,
+                  });
+                },
+              );
+            },
+          })),
+        );
+      }
+      openWithMenuItems.push({ kind: "divider", id: "entry-open-with-divider-choose" });
+      openWithMenuItems.push({
+        id: "entry-open-with-choose",
+        label: "Choose...",
+        icon: "open-external",
+        onSelect: () => {
+          if (!openWithMenuState.targetPath) return;
+          void openPathWithDialog(openWithMenuState.targetPath).catch((error) => {
+            const message =
+              error instanceof Error && error.message
+                ? error.message
+                : "Unable to open the system Open With dialog.";
+            usePromptStore.getState().showPrompt({
+              title: "Couldn't open Open With",
+              content: message,
+              confirmLabel: "OK",
+              cancelLabel: null,
+            });
+          });
+        },
+      });
     }
 
     return [
@@ -277,10 +357,21 @@ export const useEntryMenuItems = ({
         },
         disabled: !hasTargets,
       },
+      ...(showOpenWith
+        ? ([
+            {
+              kind: "submenu",
+              id: "entry-open-with",
+              label: "Open with",
+              items: openWithMenuItems,
+            },
+          ] as ContextMenuItem[])
+        : []),
       ...convertItems,
       {
         id: "entry-copy",
         label: "Copy",
+        icon: "copy",
         onSelect: () => {
           if (!hasTargets) return;
           useClipboardStore.getState().setClipboard(actionTargets);
@@ -297,19 +388,24 @@ export const useEntryMenuItems = ({
         },
         disabled: !hasTargets,
       },
-      {
-        id: "entry-paste",
-        label: target.isDir ? "Paste into folder" : "Paste",
-        onSelect: () => {
-          if (!clipboard || clipboard.paths.length === 0) return;
-          if (!pasteTarget) return;
-          void onPasteEntries(clipboard.paths, pasteTarget);
-        },
-        disabled: !canPaste,
-      },
+      ...(target.isDir || canPaste
+        ? ([
+            {
+              id: "entry-paste",
+              label: target.isDir ? "Paste into folder" : "Paste",
+              onSelect: () => {
+                if (!clipboard || clipboard.paths.length === 0) return;
+                if (!pasteTarget) return;
+                void onPasteEntries(clipboard.paths, pasteTarget);
+              },
+              disabled: !canPaste,
+            },
+          ] as ContextMenuItem[])
+        : []),
       {
         id: "entry-delete",
         label: "Delete",
+        icon: "delete",
         onSelect: () => {
           if (!hasTargets) return;
           const count = actionTargets.length;
@@ -372,6 +468,9 @@ export const useEntryMenuItems = ({
     onOpenEntry,
     onPasteEntries,
     onRenameEntry,
+    openWithMenuState.handlers,
+    openWithMenuState.status,
+    openWithMenuState.targetPath,
     parentPath,
     selected,
     target,

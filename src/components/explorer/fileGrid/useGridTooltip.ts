@@ -125,6 +125,24 @@ export const useGridTooltip = ({
       });
     };
 
+    const resolveTooltipTarget = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return null;
+      const card = target.closest<HTMLElement>("[data-grid-tooltip=\"true\"]");
+      if (!card || !viewport.contains(card)) return null;
+      if (card.dataset.tooltipDisabled === "true") return null;
+      const path = card.dataset.path ?? "";
+      if (!path) return null;
+      return { card, path };
+    };
+
+    const isPointerStillOnPath = (path: string, x: number, y: number) => {
+      if (hoveredPathRef.current !== path) return false;
+      const pointerTarget = document.elementFromPoint(x, y);
+      const resolved = resolveTooltipTarget(pointerTarget);
+      if (!resolved) return false;
+      return resolved.path === path;
+    };
+
     const scheduleTooltip = (
       path: string,
       anchorX: number,
@@ -145,6 +163,7 @@ export const useGridTooltip = ({
         const nextAnchor = trigger === "mouse" ? lastPointerRef.current : null;
         const x = nextAnchor?.x ?? anchorX;
         const y = nextAnchor?.y ?? anchorY;
+        if (trigger === "mouse" && !isPointerStillOnPath(path, x, y)) return;
         showTooltip(path, x, y, requestId);
       };
 
@@ -156,16 +175,6 @@ export const useGridTooltip = ({
         delayRef.current = null;
         run();
       }, delayMs);
-    };
-
-    const resolveTooltipTarget = (target: EventTarget | null) => {
-      if (!(target instanceof Element)) return null;
-      const card = target.closest<HTMLElement>("[data-grid-tooltip=\"true\"]");
-      if (!card || !viewport.contains(card)) return null;
-      if (card.dataset.tooltipDisabled === "true") return null;
-      const path = card.dataset.path ?? "";
-      if (!path) return null;
-      return { card, path };
     };
 
     const handleMouseMove = (event: MouseEvent) => {

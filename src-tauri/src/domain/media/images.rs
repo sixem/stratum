@@ -1,6 +1,6 @@
 // Image metadata + conversion helpers for future UI features.
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
-use image::{ColorType, ImageEncoder};
+use image::{ColorType, ImageEncoder, ImageFormat};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::BufWriter;
@@ -48,10 +48,7 @@ pub fn get_image_info(path: String) -> Result<ImageInfo, String> {
         return Err("Path is a folder".to_string());
     }
 
-    let reader = image::io::Reader::open(source).map_err(|err| err.to_string())?;
-    let reader = reader
-        .with_guessed_format()
-        .map_err(|err| err.to_string())?;
+    let reader = open_image_reader(source)?;
     let format = reader.format().map(format_label);
     let (width, height) = reader.into_dimensions().map_err(|err| err.to_string())?;
 
@@ -96,7 +93,9 @@ pub fn convert_image(
         }
     }
 
-    let image = image::open(source).map_err(|err| err.to_string())?;
+    // Decode by sniffing file bytes instead of trusting the extension table.
+    // This keeps JPEG variants like `.jfif` working the same as `.jpg`/`.jpeg`.
+    let image = open_decoded_image(source)?;
     let quality = options.quality.unwrap_or(82).clamp(1, 100);
 
     let file = if overwrite {
@@ -118,12 +117,7 @@ pub fn convert_image(
             let (compression, filter) = map_png_quality(quality);
             let encoder = PngEncoder::new_with_quality(&mut writer, compression, filter);
             encoder
-                .write_image(
-                    rgba.as_raw(),
-                    rgba.width(),
-                    rgba.height(),
-                    ColorType::Rgba8,
-                )
+                .write_image(rgba.as_raw(), rgba.width(), rgba.height(), ColorType::Rgba8)
                 .map_err(|err| err.to_string())?;
         }
         _ => {
@@ -155,7 +149,22 @@ fn map_png_quality(quality: u8) -> (CompressionType, FilterType) {
     }
 }
 
-fn format_label(format: image::ImageFormat) -> String {
+fn open_image_reader(
+    source: &Path,
+) -> Result<image::io::Reader<std::io::BufReader<fs::File>>, String> {
+    image::io::Reader::open(source)
+        .map_err(|err| err.to_string())?
+        .with_guessed_format()
+        .map_err(|err| err.to_string())
+}
+
+fn open_decoded_image(source: &Path) -> Result<image::DynamicImage, String> {
+    open_image_reader(source)?
+        .decode()
+        .map_err(|err| err.to_string())
+}
+
+fn format_label(format: ImageFormat) -> String {
     match format {
         image::ImageFormat::Png => "png",
         image::ImageFormat::Jpeg => "jpeg",

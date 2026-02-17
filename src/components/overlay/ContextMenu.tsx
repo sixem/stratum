@@ -1,7 +1,15 @@
 // Context menu overlay with viewport-aware positioning.
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ContextMenuItem } from "@/types";
+import {
+  CopyActionIcon,
+  ContextChevronRightIcon,
+  ConvertIcon,
+  DeleteActionIcon,
+  OpenExternalIcon,
+  QuickConvertIcon,
+} from "@/components/icons";
+import type { ContextMenuIcon, ContextMenuItem } from "@/types";
 import { CONTEXT_MENU_EDGE, CONTEXT_MENU_GAP, CONTEXT_SUBMENU_GAP } from "@/constants";
 import { PressButton } from "@/components/primitives/PressButton";
 
@@ -47,6 +55,25 @@ const getViewportSize = () => {
     width: root.clientWidth,
     height: root.clientHeight,
   };
+};
+
+const renderContextIcon = (icon: ContextMenuIcon) => {
+  if (icon === "copy") {
+    return <CopyActionIcon className="context-check-icon" />;
+  }
+  if (icon === "delete") {
+    return <DeleteActionIcon className="context-check-icon" />;
+  }
+  if (icon === "convert") {
+    return <ConvertIcon className="context-check-icon" />;
+  }
+  if (icon === "quick-convert") {
+    return <QuickConvertIcon className="context-check-icon" />;
+  }
+  if (icon === "open-external") {
+    return <OpenExternalIcon className="context-check-icon" />;
+  }
+  return null;
 };
 
 export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) => {
@@ -190,12 +217,12 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
               aria-expanded={isOpen}
               disabled={item.disabled}
             >
-              <span className="context-check" />
+              <span className="context-check">{item.icon ? renderContextIcon(item.icon) : null}</span>
               <span className="context-label">{item.label}</span>
               <span className="context-right">
                 {item.hint ? <span className="context-hint">{item.hint}</span> : null}
                 <span className="context-caret" aria-hidden="true">
-                  &gt;
+                  <ContextChevronRightIcon />
                 </span>
               </span>
             </PressButton>
@@ -237,7 +264,9 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
           aria-checked={isRadio ? (item.active ? true : false) : undefined}
           disabled={item.disabled}
         >
-          <span className="context-check">{item.active ? "x" : ""}</span>
+          <span className="context-check">
+            {item.icon ? renderContextIcon(item.icon) : item.active ? "x" : ""}
+          </span>
           <span className="context-label">{item.label}</span>
           {item.hint ? <span className="context-hint">{item.hint}</span> : null}
         </PressButton>
