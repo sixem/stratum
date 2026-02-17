@@ -24,10 +24,8 @@ export type ThumbnailPreviewProps = {
 export type ParentCardProps = {
   path: string;
   index: number;
-  selected: boolean;
   dropTarget: boolean;
   showMeta: boolean;
-  onSelect: (event: ReactMouseEvent) => void;
   onOpen: (event: ReactMouseEvent) => void;
   onOpenNewTab?: (event: ReactMouseEvent) => void;
   onContextMenu?: (event: ReactPointerEvent) => void;

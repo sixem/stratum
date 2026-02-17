@@ -162,20 +162,13 @@ export const useAppContextMenus = ({
   const handleEntryContextMenu = useCallback(
     (event: ReactPointerEvent, target: EntryContextTarget) => {
       if (event.button !== 2) return;
-      if (target.isDir) {
-        openPlaceMenu(event, {
-          name: target.name,
-          path: target.path,
-          source: "entry",
-        });
-        return;
-      }
+      // Right-click should align selection with the clicked entry for both files and folders.
       if (!selected.has(target.path)) {
         onSelectionChange([target.path], target.path);
       }
       openEntryMenu(event, target);
     },
-    [onSelectionChange, openEntryMenu, openPlaceMenu, selected],
+    [onSelectionChange, openEntryMenu, selected],
   );
 
   // Context menu content is derived from the current target + sort state.

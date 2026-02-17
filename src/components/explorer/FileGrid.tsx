@@ -170,7 +170,7 @@ const FileGrid = ({
     () =>
       viewItems.map((item) => ({
         path: item.type === "parent" ? item.path : item.entry.path,
-        selectable: item.presence !== "removed",
+        selectable: item.type !== "parent" && item.presence !== "removed",
       })),
     [viewItems],
   );
@@ -390,10 +390,8 @@ const FileGrid = ({
                   key={item.key}
                   path={item.path}
                   index={baseIndex}
-                  selected={selectedPaths.has(item.path)}
                   dropTarget={isDropTarget}
                   showMeta={gridMetaEnabled}
-                  onSelect={handleCardSelect}
                   onOpen={handleCardOpen}
                   onOpenNewTab={handleCardOpenNewTab}
                   onContextMenu={handleParentContextMenu}
