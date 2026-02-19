@@ -3,14 +3,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppOverlays, AppShellLayout } from "@/components";
 import {
   useAppCommands,
-  useAppContextMenus,
+  useAppContextMenuSection,
   useConversionController,
   useAppEffects,
   useAppFileViewController,
   useAppKeybinds,
   useAppNavigationController,
   useAppMenuState,
-  useAppOverlayController,
+  useAppOverlaySection,
+  useAppPreviewSection,
   useAppRenameFlow,
   useAppSelectionHandlers,
   useAppTopstackProps,
@@ -25,7 +26,6 @@ import {
   useFilteredEntries,
   useMetaPrefetch,
   usePendingCreateSelection,
-  useQuickPreview,
   useScrollRequest,
   useSelectionShortcuts,
   useShellAvailability,
@@ -304,8 +304,25 @@ const App = () => {
     (index: number) => requestScrollToIndex(index, viewKey),
     [requestScrollToIndex, viewKey],
   );
-  // Share preview state with typeahead handlers without re-ordering hooks.
-  const previewOpenRef = useRef(false);
+  // Preview section keeps media-preview wiring isolated from layout composition.
+  const {
+    previewOpenRef,
+    previewOpen,
+    previewPath,
+    previewMeta,
+    openPreview,
+    handlePreviewPress,
+    handlePreviewRelease,
+  } = useAppPreviewSection({
+    entryByPath: viewModel.entryByPath,
+    mainRef,
+    previewKeybind: settings.keybinds.previewItem,
+    settingsOpen,
+    contextMenuOpen: contextMenuActive,
+    promptOpen,
+    loading: viewLoading,
+    entryMeta,
+  });
 
   const {
     gridColumnsRef,
@@ -334,23 +351,6 @@ const App = () => {
     requestScrollToIndex: requestScrollToIndexForView,
   });
 
-  const {
-    previewOpen,
-    previewPath,
-    openPreview,
-    handlePreviewPress,
-    handlePreviewRelease,
-  } = useQuickPreview({
-    entryByPath: viewModel.entryByPath,
-    mainRef,
-    previewKeybind: settings.keybinds.previewItem,
-    settingsOpen,
-    contextMenuOpen: contextMenuActive,
-    promptOpen,
-    loading: viewLoading,
-  });
-  previewOpenRef.current = previewOpen;
-  const previewMeta = previewPath ? entryMeta.get(previewPath) ?? null : null;
   const handlePreviewSelect = useCallback(
     (path: string) => {
       if (!path) return;
@@ -508,7 +508,7 @@ const App = () => {
     handleLayoutContextMenuDown,
     handleEntryContextMenu,
     handleEntryContextMenuDown,
-  } = useAppContextMenus({
+  } = useAppContextMenuSection({
     contextMenu,
     openSortMenu,
     openEntryMenu,
@@ -783,17 +783,20 @@ const App = () => {
       },
     });
 
-  const overlayProps = useAppOverlayController({
-    isTauriEnv: tauriEnv,
-    appName: APP_NAME,
-    description: APP_DESCRIPTION,
-    version: APP_VERSION,
-    aboutOpen,
-    onCloseAbout: handleCloseAbout,
+  const overlayProps = useAppOverlaySection({
+    appMeta: {
+      isTauriEnv: tauriEnv,
+      appName: APP_NAME,
+      description: APP_DESCRIPTION,
+      version: APP_VERSION,
+    },
+    about: {
+      open: aboutOpen,
+      onClose: handleCloseAbout,
+    },
     contextMenu: {
+      state: contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null,
       open: contextMenuOpen,
-      x: contextMenu?.x ?? 0,
-      y: contextMenu?.y ?? 0,
       items: contextMenuItems,
       onClose: closeContextMenu,
     },
@@ -829,7 +832,6 @@ const App = () => {
       onClose: closeConversionModal,
     },
   });
-
 
   return (
     <div className="app-shell" data-preview={previewOpen ? "true" : "false"}>
