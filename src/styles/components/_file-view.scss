@@ -304,11 +304,23 @@
   }
 
   .thumb-name {
+    position: relative;
+    display: block;
+    min-width: 0;
     font-size: 12px;
     font-weight: 600;
     line-height: 14px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .thumb-name .thumb-name-measure {
+    position: absolute;
+    left: 0;
+    top: 0;
+    visibility: hidden;
+    pointer-events: none;
     white-space: nowrap;
   }
 
@@ -324,14 +336,14 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: pre;
     flex: 0 1 auto;
   }
 
   .thumb-name[data-ellipsis="middle"] .thumb-name-end {
     line-height: inherit;
     flex: 0 0 auto;
-    white-space: nowrap;
+    white-space: pre;
   }
 
   .thumb-info {
