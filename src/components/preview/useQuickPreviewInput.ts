@@ -1,7 +1,8 @@
 // Handles preview-stage interaction: zoom, pan, pointer drag, and keyboard shortcuts.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
-import { isEditableElement } from "@/lib";
+import type { FileEntry } from "@/types";
+import { getFileKind, isEditableElement, normalizePath } from "@/lib";
 
 type DragState = {
   active: boolean;
@@ -15,6 +16,9 @@ type DragState = {
 type UseQuickPreviewInputOptions = {
   open: boolean;
   isVideo: boolean;
+  items: FileEntry[];
+  activePath: string;
+  onSelectPreview: (path: string) => void;
   smartTabJump: boolean;
   smartTabBlocked: boolean;
 };
@@ -34,6 +38,9 @@ const clamp = (value: number, min: number, max: number) => {
 export const useQuickPreviewInput = ({
   open,
   isVideo,
+  items,
+  activePath,
+  onSelectPreview,
   smartTabJump,
   smartTabBlocked,
 }: UseQuickPreviewInputOptions) => {
@@ -55,6 +62,15 @@ export const useQuickPreviewInput = ({
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
+  const previewItems = useMemo(
+    () =>
+      items.filter((entry) => {
+        if (entry.isDir) return false;
+        const kind = getFileKind(entry.name);
+        return kind === "image" || kind === "video";
+      }),
+    [items],
+  );
 
   const scheduleOffset = (next: { x: number; y: number }) => {
     offsetRef.current = next;
@@ -130,6 +146,44 @@ export const useQuickPreviewInput = ({
     window.addEventListener("keydown", handleVideoSeekKey);
     return () => window.removeEventListener("keydown", handleVideoSeekKey);
   }, [isVideo, open]);
+
+  // Non-shift arrows navigate adjacent media items in the right strip.
+  useEffect(() => {
+    if (!open) return;
+    const handleStripArrowNav = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.shiftKey) return;
+      if (event.isComposing) return;
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+
+      const active = document.activeElement;
+      if (isEditableElement(active)) return;
+      if (!document.hasFocus()) return;
+
+      if (!activePath || previewItems.length === 0) return;
+      const activePathKey = normalizePath(activePath);
+      const activeIndex = previewItems.findIndex(
+        (entry) =>
+          entry.path === activePath ||
+          (activePathKey !== "" && normalizePath(entry.path) === activePathKey),
+      );
+      if (activeIndex < 0) return;
+
+      const delta = event.key === "ArrowRight" ? 1 : -1;
+      const nextIndex = activeIndex + delta;
+      if (nextIndex < 0 || nextIndex >= previewItems.length) return;
+      const nextPath = previewItems[nextIndex]?.path;
+      if (!nextPath || nextPath === activePath) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      onSelectPreview(nextPath);
+    };
+
+    window.addEventListener("keydown", handleStripArrowNav);
+    return () => window.removeEventListener("keydown", handleStripArrowNav);
+  }, [activePath, onSelectPreview, open, previewItems]);
 
   // Space is reserved for video playback in preview mode.
   useEffect(() => {

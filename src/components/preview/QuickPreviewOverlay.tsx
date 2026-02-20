@@ -69,6 +69,9 @@ const QuickPreviewOverlayContent = ({
   } = useQuickPreviewInput({
     open,
     isVideo: previewPathIsVideo,
+    items,
+    activePath: path,
+    onSelectPreview,
     smartTabJump,
     smartTabBlocked,
   });
