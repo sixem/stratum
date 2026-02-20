@@ -10,6 +10,7 @@ type BuildPlaceTargetMenuItemsOptions = {
   onUnpinPlace: (path: string) => void;
   onRemovePlace: (path: string) => void;
   onRemoveRecentJump?: (path: string) => void;
+  onOpenProperties?: (path: string) => void | Promise<unknown>;
 };
 
 const placeKey = (path: string) => normalizePath(path.trim()) ?? path.trim().toLowerCase();
@@ -43,6 +44,7 @@ export const buildPlaceTargetMenuItems = ({
   onUnpinPlace,
   onRemovePlace,
   onRemoveRecentJump,
+  onOpenProperties,
 }: BuildPlaceTargetMenuItemsOptions): ContextMenuItem[] => {
   if (!target) return [];
   const path = target.path.trim();
@@ -94,6 +96,17 @@ export const buildPlaceTargetMenuItems = ({
       id: "place-target-remove-recent",
       label: "Remove from recent jumps",
       onSelect: () => onRemoveRecentJump(path),
+    });
+  }
+
+  if (onOpenProperties) {
+    items.push({ kind: "divider", id: "place-target-divider-properties" });
+    items.push({
+      id: "place-target-properties",
+      label: "Properties",
+      onSelect: () => {
+        void onOpenProperties(path);
+      },
     });
   }
 

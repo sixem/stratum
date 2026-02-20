@@ -2,7 +2,9 @@
 import { useCallback } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { flushSync } from "react-dom";
-import { isEditableElement } from "@/lib";
+import { openPathProperties } from "@/api";
+import { isEditableElement, toMessage } from "@/lib";
+import { usePromptStore } from "@/modules";
 import type {
   ConversionModalRequest,
   EntryContextTarget,
@@ -211,6 +213,16 @@ export const useAppContextMenus = ({
     onUnpinPlace,
     onRemovePlace,
     onRemoveRecentJump,
+    onOpenProperties: (path) => {
+      void openPathProperties(path).catch((error) => {
+        usePromptStore.getState().showPrompt({
+          title: "Couldn't open properties",
+          content: toMessage(error, "Unable to open the properties dialog."),
+          confirmLabel: "OK",
+          cancelLabel: null,
+        });
+      });
+    },
   });
   const contextMenuItems =
     contextMenu?.kind === "entry"
