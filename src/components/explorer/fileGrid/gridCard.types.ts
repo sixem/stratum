@@ -26,6 +26,7 @@ export type ParentCardProps = {
   index: number;
   dropTarget: boolean;
   showMeta: boolean;
+  onSelect?: (event: ReactMouseEvent) => void;
   onOpen: (event: ReactMouseEvent) => void;
   onOpenNewTab?: (event: ReactMouseEvent) => void;
   onContextMenu?: (event: ReactPointerEvent) => void;

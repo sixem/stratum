@@ -32,8 +32,11 @@ export const ParentRow = memo(({
 }: ParentRowProps) => {
   const handleMouseDown = (event: ReactMouseEvent) => {
     if (event.button === 1) {
-      event.preventDefault();
-      event.stopPropagation();
+      onOpenNewTab?.(event);
+      if (!event.defaultPrevented) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
       return;
     }
     if (event.button === 0) {

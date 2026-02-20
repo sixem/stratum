@@ -62,15 +62,18 @@ export const EntryRow = memo(({
   const isSelectable = !isRemoved;
   const handleMouseDown = (event: ReactMouseEvent) => {
     if (!isInteractive) return;
-    if (event.button === 1 && onPreviewPress) {
-      onPreviewPress(entry.path);
-      event.preventDefault();
-      event.stopPropagation();
-      return;
-    }
     if (event.button === 1) {
-      event.preventDefault();
-      event.stopPropagation();
+      const previewHandled = !entry.isDir && Boolean(onPreviewPress?.(entry.path));
+      if (previewHandled) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      onOpenNewTab?.(event);
+      if (!event.defaultPrevented) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
       return;
     }
     if (event.button === 0) {
@@ -87,7 +90,9 @@ export const EntryRow = memo(({
   const handleMouseUp = (event: ReactMouseEvent) => {
     if (!isInteractive) return;
     if (event.button !== 1) return;
-    onPreviewRelease?.(entry.path);
+    if (!entry.isDir) {
+      onPreviewRelease?.(entry.path);
+    }
     event.preventDefault();
     event.stopPropagation();
   };

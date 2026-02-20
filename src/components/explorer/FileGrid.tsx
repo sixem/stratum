@@ -356,6 +356,13 @@ const FileGrid = ({
     event.preventDefault();
     event.stopPropagation();
   }, []);
+  const handleParentSelect = useCallback(
+    (event: ReactMouseEvent) => {
+      if (event.button !== 0) return;
+      onClearSelection();
+    },
+    [onClearSelection],
+  );
 
   const showCreatePrompt = useCreateEntryPrompt();
   const hasContent = viewItems.length > 0;
@@ -392,6 +399,7 @@ const FileGrid = ({
                   index={baseIndex}
                   dropTarget={isDropTarget}
                   showMeta={gridMetaEnabled}
+                  onSelect={handleParentSelect}
                   onOpen={handleCardOpen}
                   onOpenNewTab={handleCardOpenNewTab}
                   onContextMenu={handleParentContextMenu}
