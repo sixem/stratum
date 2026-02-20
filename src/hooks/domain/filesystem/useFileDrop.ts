@@ -6,6 +6,7 @@ import { statEntries, transferEntries } from "@/api";
 import {
   buildDropCandidate,
   formatFailures,
+  getDriveKey,
   getDropTargetFromPoint,
   getParentPath,
   joinPath,
@@ -21,6 +22,8 @@ type UseFileDropOptions = {
   onRefresh?: () => void;
   enabled?: boolean;
 };
+
+type MoveConflictDecision = "overwrite" | "skip" | "skip-all" | "cancel";
 
 const log = makeDebug("drop");
 
@@ -104,36 +107,54 @@ export const useFileDrop = ({
         );
       }
 
-      // Build the destination paths so we can warn about overwrites before transfer.
-      const destinationPaths = meaningful
-        .map((candidate) => ({
-          name: candidate.name,
-          destination: joinPath(destination, candidate.name),
-        }))
-        .filter((candidate) => candidate.name && candidate.destination);
+      const destinationDriveKey = getDriveKey(destination);
+      const destinationItems = meaningful
+        .map((candidate) => {
+          const sourceDriveKey = getDriveKey(candidate.path);
+          const shouldMove =
+            destinationDriveKey != null &&
+            sourceDriveKey != null &&
+            destinationDriveKey.toLowerCase() === sourceDriveKey.toLowerCase();
+          return {
+            candidate,
+            pathKey: normalizePath(candidate.path),
+            name: candidate.name,
+            destination: joinPath(destination, candidate.name),
+            shouldMove,
+          };
+        })
+        .filter((item) => item.name && item.destination);
 
-      const existingNames: string[] = [];
-      if (destinationPaths.length > 0) {
-        const metas = await statEntries(destinationPaths.map((item) => item.destination));
+      const conflictingItems = new Map<string, (typeof destinationItems)[number]>();
+      if (destinationItems.length > 0) {
+        const metas = await statEntries(destinationItems.map((item) => item.destination));
         metas.forEach((meta, index) => {
           const exists = meta.size != null || meta.modified != null;
-          if (exists) {
-            existingNames.push(destinationPaths[index]?.name ?? "");
-          }
+          if (!exists) return;
+          const item = destinationItems[index];
+          if (!item) return;
+          conflictingItems.set(item.pathKey, item);
         });
       }
 
-      let overwrite = false;
-      if (existingNames.length > 0) {
-        const samples = existingNames.slice(0, 4);
-        const suffix =
-          existingNames.length > samples.length
-            ? `\n...and ${existingNames.length - samples.length} more`
-            : "";
-        const message = `Overwrite ${existingNames.length} item${
-          existingNames.length === 1 ? "" : "s"
-        } in ${destination}?\n\n${samples.join("\n")}${suffix}`;
+      const copyConflicts = destinationItems.filter(
+        (item) => !item.shouldMove && conflictingItems.has(item.pathKey),
+      );
+      const moveConflicts = destinationItems.filter(
+        (item) => item.shouldMove && conflictingItems.has(item.pathKey),
+      );
+      const overwriteKeys = new Set<string>();
+      const skippedKeys = new Set<string>();
 
+      if (copyConflicts.length > 0) {
+        const samples = copyConflicts.slice(0, 4).map((item) => item.name);
+        const suffix =
+          copyConflicts.length > samples.length
+            ? `\n...and ${copyConflicts.length - samples.length} more`
+            : "";
+        const message = `Overwrite ${copyConflicts.length} item${
+          copyConflicts.length === 1 ? "" : "s"
+        } in ${destination}?\n\n${samples.join("\n")}${suffix}`;
         const confirmed = await new Promise<boolean>((resolve) => {
           promptStore.showPrompt({
             title: "Overwrite items?",
@@ -145,19 +166,83 @@ export const useFileDrop = ({
           });
         });
         if (!confirmed) return;
-        overwrite = true;
+        copyConflicts.forEach((item) => overwriteKeys.add(item.pathKey));
       }
+
+      for (let index = 0; index < moveConflicts.length; index += 1) {
+        const item = moveConflicts[index];
+        if (!item) continue;
+        if (skippedKeys.has(item.pathKey)) continue;
+        const remaining = moveConflicts.length - index;
+        const decision = await new Promise<MoveConflictDecision>((resolve) => {
+          const actions: {
+            label: string;
+            onClick: () => void;
+            variant: "ghost";
+          }[] = [
+            {
+              label: "Skip",
+              onClick: () => resolve("skip"),
+              variant: "ghost",
+            },
+          ];
+          if (remaining > 1) {
+            actions.push({
+              label: "Skip all",
+              onClick: () => resolve("skip-all"),
+              variant: "ghost",
+            });
+          }
+          promptStore.showPrompt({
+            title: "Item already exists",
+            content: `A file or folder named "${item.name}" already exists in ${destination}.`,
+            confirmLabel: "Overwrite",
+            cancelLabel: "Cancel",
+            actions,
+            onConfirm: () => resolve("overwrite"),
+            onCancel: () => resolve("cancel"),
+          });
+        });
+        if (decision === "cancel") return;
+        if (decision === "overwrite") {
+          overwriteKeys.add(item.pathKey);
+          continue;
+        }
+        if (decision === "skip") {
+          skippedKeys.add(item.pathKey);
+          continue;
+        }
+        if (decision === "skip-all") {
+          for (let rest = index; rest < moveConflicts.length; rest += 1) {
+            const conflict = moveConflicts[rest];
+            if (!conflict) continue;
+            skippedKeys.add(conflict.pathKey);
+          }
+          break;
+        }
+      }
+
+      const transferCandidates = meaningful.filter(
+        (candidate) => !skippedKeys.has(normalizePath(candidate.path)),
+      );
+      if (transferCandidates.length === 0) {
+        return;
+      }
+      const skippedByPrompt = meaningful.length - transferCandidates.length;
+      const overwrite = transferCandidates.some((candidate) =>
+        overwriteKeys.has(normalizePath(candidate.path)),
+      );
 
       const job = startTransferJob({
         label: "Transfer",
-        total: meaningful.length,
-        items: meaningful.map((candidate) => candidate.path),
+        total: transferCandidates.length,
+        items: transferCandidates.map((candidate) => candidate.path),
       });
       inFlightRef.current = true;
       try {
         // Use auto mode so same-drive drops move and cross-drive drops copy.
         const report = await transferEntries(
-          meaningful.map((candidate) => candidate.path),
+          transferCandidates.map((candidate) => candidate.path),
           destination,
           { mode: "auto", overwrite },
           job.id,
@@ -172,7 +257,7 @@ export const useFileDrop = ({
         completeTransferJob(job.id, {
           copied: report.copied,
           moved: report.moved,
-          skipped: report.skipped,
+          skipped: report.skipped + skippedByPrompt,
           failures: report.failures.length,
         });
         if (report.failures.length > 0) {
@@ -189,7 +274,7 @@ export const useFileDrop = ({
           destinationKey === currentPathKeyRef.current && (movedCount > 0 || copiedCount > 0);
         const touchedCurrentSource =
           movedCount > 0 &&
-          meaningful.some((candidate) => {
+          transferCandidates.some((candidate) => {
             const parent = getParentPath(candidate.path) ?? "";
             return normalizePath(parent) === currentPathKeyRef.current;
           });
