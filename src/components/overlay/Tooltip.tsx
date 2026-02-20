@@ -25,6 +25,9 @@ const alignAxis = (anchor: number, size: number, viewport: number) => {
   return clamp(anchor - size / 2, minStart, maxStart);
 };
 
+const isContextMenuOpen = () =>
+  Boolean(document.querySelector(".context-menu[data-open=\"true\"]"));
+
 export const TooltipDisplay = () => {
   const tooltipState = useTooltipStore(
     (state) => ({
@@ -125,11 +128,24 @@ export const TooltipWrapper = ({
   const hoverMovedRef = useRef(false);
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
 
-  const showTooltip = (anchorX: number, anchorY: number, requestId: number) => {
+  const canRenderTooltip = () => {
+    if (isContextMenuOpen()) return false;
+    if (document.visibilityState !== "visible") return false;
+    return document.hasFocus();
+  };
+
+  const showTooltip = (
+    anchorX: number,
+    anchorY: number,
+    requestId: number,
+    trigger: "mouse" | "focus",
+  ) => {
     if (disabled || !text) return;
+    if (!canRenderTooltip()) return;
 
     const tooltipApi = useTooltipStore.getState();
     if (tooltipApi.nonce !== requestId) return;
+    if (trigger === "mouse" && tooltipApi.blockUntilPointerMove) return;
     tooltipApi.setTooltipText(text);
 
     if (rafRef.current) {
@@ -137,7 +153,10 @@ export const TooltipWrapper = ({
     }
 
     rafRef.current = window.requestAnimationFrame(() => {
-      if (useTooltipStore.getState().nonce !== requestId) return;
+      const latest = useTooltipStore.getState();
+      if (latest.nonce !== requestId) return;
+      if (trigger === "mouse" && latest.blockUntilPointerMove) return;
+      if (!canRenderTooltip()) return;
       const tooltipEl = tooltipApi.tooltipElement;
       const tooltipRect = tooltipEl
         ? tooltipEl.getBoundingClientRect()
@@ -193,27 +212,26 @@ export const TooltipWrapper = ({
       }
       return { x: latest.x, y: latest.y };
     };
-
-    if (!delayValue) {
+    const run = () => {
+      const latest = useTooltipStore.getState();
+      if (latest.nonce !== requestId) return;
+      if (trigger === "mouse" && latest.blockUntilPointerMove) return;
+      if (!canRenderTooltip()) return;
       const nextAnchor = resolveAnchor();
       if (trigger === "mouse" && !isPointerStillInsideHovered(nextAnchor.x, nextAnchor.y)) {
         return;
       }
-      showTooltip(nextAnchor.x, nextAnchor.y, requestId);
+      showTooltip(nextAnchor.x, nextAnchor.y, requestId, trigger);
+    };
+
+    if (!delayValue) {
+      run();
       return;
     }
 
     delayRef.current = window.setTimeout(() => {
       delayRef.current = null;
-      const latest = useTooltipStore.getState();
-      if (trigger === "mouse" && latest.blockUntilPointerMove) return;
-      if (document.visibilityState !== "visible") return;
-      if (trigger === "mouse" && !document.hasFocus()) return;
-      const nextAnchor = resolveAnchor();
-      if (trigger === "mouse" && !isPointerStillInsideHovered(nextAnchor.x, nextAnchor.y)) {
-        return;
-      }
-      showTooltip(nextAnchor.x, nextAnchor.y, requestId);
+      run();
     }, delayValue);
   };
 
@@ -239,6 +257,7 @@ export const TooltipWrapper = ({
     },
     onMouseMove: (event: MouseEvent) => {
       child.props.onMouseMove?.(event);
+      if (isContextMenuOpen()) return;
       if (!hoveredRef.current) return;
       const last = lastPointerRef.current;
       lastPointerRef.current = { x: event.clientX, y: event.clientY };

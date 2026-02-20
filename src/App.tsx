@@ -456,6 +456,7 @@ const App = () => {
       deferredSearchValue,
       sortState,
       tabs,
+      contextMenuOpen: contextMenuActive,
     },
     actions: {
       clearSearchAndFocusView,

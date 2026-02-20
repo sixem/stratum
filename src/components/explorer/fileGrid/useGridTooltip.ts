@@ -34,6 +34,9 @@ const alignAxis = (anchor: number, size: number, viewport: number) => {
   return clamp(anchor - size / 2, minStart, maxStart);
 };
 
+const isContextMenuOpen = () =>
+  Boolean(document.querySelector(".context-menu[data-open=\"true\"]"));
+
 export const useGridTooltip = ({
   viewportRef,
   entryByPath,
@@ -103,11 +106,16 @@ export const useGridTooltip = ({
       anchorX: number,
       anchorY: number,
       requestId: number,
+      trigger: "mouse" | "focus",
     ) => {
+      if (isContextMenuOpen()) return;
+      if (document.visibilityState !== "visible") return;
+      if (!document.hasFocus()) return;
       const text = resolveTooltipText(path);
       if (!text) return;
       const tooltipApi = useTooltipStore.getState();
       if (tooltipApi.nonce !== requestId) return;
+      if (trigger === "mouse" && tooltipApi.blockUntilPointerMove) return;
       tooltipApi.setTooltipText(text);
       if (rafRef.current != null) {
         window.cancelAnimationFrame(rafRef.current);
@@ -115,6 +123,9 @@ export const useGridTooltip = ({
       rafRef.current = window.requestAnimationFrame(() => {
         const latest = useTooltipStore.getState();
         if (latest.nonce !== requestId) return;
+        if (trigger === "mouse" && latest.blockUntilPointerMove) return;
+        if (document.visibilityState !== "visible") return;
+        if (!document.hasFocus()) return;
         const tooltipRect = tooltipApi.tooltipElement
           ? tooltipApi.tooltipElement.getBoundingClientRect()
           : ({ width: 0, height: 0 } as DOMRect);
@@ -158,13 +169,14 @@ export const useGridTooltip = ({
         const latest = useTooltipStore.getState();
         if (latest.nonce !== requestId) return;
         if (trigger === "mouse" && latest.blockUntilPointerMove) return;
+        if (isContextMenuOpen()) return;
         if (document.visibilityState !== "visible") return;
-        if (trigger === "mouse" && !document.hasFocus()) return;
+        if (!document.hasFocus()) return;
         const nextAnchor = trigger === "mouse" ? lastPointerRef.current : null;
         const x = nextAnchor?.x ?? anchorX;
         const y = nextAnchor?.y ?? anchorY;
         if (trigger === "mouse" && !isPointerStillOnPath(path, x, y)) return;
-        showTooltip(path, x, y, requestId);
+        showTooltip(path, x, y, requestId, trigger);
       };
 
       if (!delayMs) {
@@ -178,6 +190,10 @@ export const useGridTooltip = ({
     };
 
     const handleMouseMove = (event: MouseEvent) => {
+      if (isContextMenuOpen()) {
+        hideTooltip();
+        return;
+      }
       const resolved = resolveTooltipTarget(event.target);
       const previous = lastPointerRef.current;
       lastPointerRef.current = { x: event.clientX, y: event.clientY };
