@@ -13,6 +13,7 @@ export const HINTS: Hint[] = [
   { id: "reorder-tabs", text: "Drag tabs to reorder them across the top bar." },
   { id: "refresh", text: "Hit F5 or CTRL + R to rescan the current folder." },
   { id: "hide-tips", text: "You can hide these tips in the settings." },
+  { id: "create-and-open", text: "When creating a new folder, press CTRL + Enter to open and enter it automatically" },
 ];
 
 const FALLBACK_HINT: Hint = {
