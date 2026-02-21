@@ -31,6 +31,7 @@ type UseEntryMenuItemsOptions = {
   currentPath: string;
   onOpenEntry: (path: string) => void;
   onOpenDir: (path: string) => void;
+  onOpenDirNewTab: (path: string) => void;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   confirmDelete: boolean;
   onClearSelection: () => void;
@@ -49,6 +50,7 @@ type OpenWithMenuState = ReturnType<typeof useOpenWithMenuState>;
 type EntryMenuActions = {
   onOpenEntry: (path: string) => void;
   onOpenDir: (path: string) => void;
+  onOpenDirNewTab: (path: string) => void;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   onClearSelection: () => void;
   onRenameEntry: (target: EntryContextTarget) => void;
@@ -225,23 +227,41 @@ const summarizeSelection = (
   };
 };
 
-const buildOpenItem = ({
+const buildOpenItems = ({
   target,
   hasTargets,
   actions,
-}: EntryMenuBuilderContext): ContextMenuItem => ({
-  id: "entry-open",
-  label: "Open",
-  onSelect: () => {
-    if (!hasTargets) return;
-    if (target.isDir) {
-      actions.onOpenDir(target.path);
-      return;
-    }
-    actions.onOpenEntry(target.path);
-  },
-  disabled: !hasTargets,
-});
+}: EntryMenuBuilderContext): ContextMenuItem[] => {
+  const items: ContextMenuItem[] = [
+    {
+      id: "entry-open",
+      label: "Open",
+      onSelect: () => {
+        if (!hasTargets) return;
+        if (target.isDir) {
+          actions.onOpenDir(target.path);
+          return;
+        }
+        actions.onOpenEntry(target.path);
+      },
+      disabled: !hasTargets,
+    },
+  ];
+
+  if (target.isDir) {
+    items.push({
+      id: "entry-open-new-tab",
+      label: "Open in new tab",
+      onSelect: () => {
+        if (!hasTargets) return;
+        actions.onOpenDirNewTab(target.path);
+      },
+      disabled: !hasTargets,
+    });
+  }
+
+  return items;
+};
 
 const buildOpenWithItems = ({
   target,
@@ -504,6 +524,7 @@ export const useEntryMenuItems = ({
   currentPath,
   onOpenEntry,
   onOpenDir,
+  onOpenDirNewTab,
   onDeleteEntries,
   confirmDelete,
   onClearSelection,
@@ -528,6 +549,7 @@ export const useEntryMenuItems = ({
     const actions: EntryMenuActions = {
       onOpenEntry,
       onOpenDir,
+      onOpenDirNewTab,
       onDeleteEntries,
       onClearSelection,
       onRenameEntry,
@@ -552,7 +574,7 @@ export const useEntryMenuItems = ({
     };
 
     return [
-      buildOpenItem(builderContext),
+      ...buildOpenItems(builderContext),
       ...buildOpenWithItems(builderContext),
       ...buildConvertItems(builderContext),
       ...buildEditItems(builderContext),
@@ -569,6 +591,7 @@ export const useEntryMenuItems = ({
     onOpenConvertModal,
     onQuickConvertImages,
     onOpenDir,
+    onOpenDirNewTab,
     onOpenEntry,
     onPasteEntries,
     onRenameEntry,

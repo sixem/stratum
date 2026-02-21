@@ -535,6 +535,7 @@ const App = () => {
     onOpenShell: handleOpenShell,
     onOpenEntry: fileManager.openEntry,
     onOpenDir: browseFromView,
+    onOpenDirNewTab: handleOpenInNewTab,
     onDeleteEntries: fileManager.deleteEntries,
     confirmDelete: settings.confirmDelete,
     onClearSelection: handleClearSelection,

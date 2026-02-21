@@ -46,6 +46,7 @@ type UseAppContextMenusOptions = {
   onOpenShell: (kind: ShellKind, path: string) => void;
   onOpenEntry: (path: string) => void;
   onOpenDir: (path: string) => void;
+  onOpenDirNewTab: (path: string) => void;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   confirmDelete: boolean;
   onClearSelection: () => void;
@@ -86,6 +87,7 @@ export const useAppContextMenus = ({
   onOpenShell,
   onOpenEntry,
   onOpenDir,
+  onOpenDirNewTab,
   onDeleteEntries,
   confirmDelete,
   onClearSelection,
@@ -195,6 +197,7 @@ export const useAppContextMenus = ({
     currentPath,
     onOpenEntry,
     onOpenDir,
+    onOpenDirNewTab,
     onDeleteEntries,
     confirmDelete,
     onClearSelection,
@@ -208,6 +211,8 @@ export const useAppContextMenus = ({
   const placeTargetMenuItems = buildPlaceTargetMenuItems({
     target: contextMenu?.kind === "place-target" ? contextMenu.target : null,
     places,
+    onOpenPath: onOpenDir,
+    onOpenPathNewTab: onOpenDirNewTab,
     onAddPlace,
     onPinPlace,
     onUnpinPlace,
