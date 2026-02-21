@@ -42,6 +42,7 @@ export const TooltipDisplay = () => {
   const setTooltipElement = useTooltipStore((state) => state.setTooltipElement);
   const hideTooltip = useTooltipStore((state) => state.hideTooltip);
   const blockTooltips = useTooltipStore((state) => state.blockTooltips);
+  const bumpHoverSession = useTooltipStore((state) => state.bumpHoverSession);
   const tooltipText = tooltipState.text ?? "";
   const isMultiline = tooltipText.includes("\n");
 
@@ -66,11 +67,18 @@ export const TooltipDisplay = () => {
     const handleWindowBlur = () => {
       hideTooltip();
       blockTooltips();
+      bumpHoverSession();
+    };
+    const handleWindowFocus = () => {
+      hideTooltip();
+      blockTooltips();
+      bumpHoverSession();
     };
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "visible") {
         hideTooltip();
         blockTooltips();
+        bumpHoverSession();
       }
     };
     const handleResize = () => hideTooltip();
@@ -79,6 +87,7 @@ export const TooltipDisplay = () => {
     window.addEventListener("keydown", handleKey);
     window.addEventListener("scroll", handleScroll, true);
     window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("focus", handleWindowFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("resize", handleResize);
     window.addEventListener("pointerdown", handlePointer, true);
@@ -87,11 +96,12 @@ export const TooltipDisplay = () => {
       window.removeEventListener("keydown", handleKey);
       window.removeEventListener("scroll", handleScroll, true);
       window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("focus", handleWindowFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("pointerdown", handlePointer, true);
     };
-  }, [blockTooltips, hideTooltip]);
+  }, [blockTooltips, bumpHoverSession, hideTooltip]);
 
   return (
     <div
@@ -127,6 +137,15 @@ export const TooltipWrapper = ({
   const hoveredElementRef = useRef<Element | null>(null);
   const hoverMovedRef = useRef(false);
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const hoverSessionRef = useRef(useTooltipStore.getState().hoverSession);
+
+  const resetHoverState = () => {
+    hoveredRef.current = false;
+    hoveredElementRef.current = null;
+    hoverMovedRef.current = false;
+    lastPointerRef.current = null;
+    hoverSessionRef.current = useTooltipStore.getState().hoverSession;
+  };
 
   const canRenderTooltip = () => {
     if (isContextMenuOpen()) return false;
@@ -250,6 +269,7 @@ export const TooltipWrapper = ({
   const props = {
     onMouseEnter: (event: MouseEvent) => {
       child.props.onMouseEnter?.(event);
+      hoverSessionRef.current = useTooltipStore.getState().hoverSession;
       hoveredRef.current = true;
       hoveredElementRef.current = event.currentTarget as Element;
       hoverMovedRef.current = false;
@@ -258,6 +278,14 @@ export const TooltipWrapper = ({
     onMouseMove: (event: MouseEvent) => {
       child.props.onMouseMove?.(event);
       if (isContextMenuOpen()) return;
+      const store = useTooltipStore.getState();
+      if (hoverSessionRef.current !== store.hoverSession) {
+        resetHoverState();
+        hoveredRef.current = true;
+        hoveredElementRef.current = event.currentTarget as Element;
+        lastPointerRef.current = { x: event.clientX, y: event.clientY };
+        return;
+      }
       if (!hoveredRef.current) return;
       const last = lastPointerRef.current;
       lastPointerRef.current = { x: event.clientX, y: event.clientY };
@@ -265,7 +293,6 @@ export const TooltipWrapper = ({
       const moved =
         Math.abs(event.clientX - last.x) + Math.abs(event.clientY - last.y) >= 1;
       if (!moved) return;
-      const store = useTooltipStore.getState();
       if (store.blockUntilPointerMove) {
         store.clearTooltipBlock();
       }
@@ -275,22 +302,27 @@ export const TooltipWrapper = ({
     },
     onMouseLeave: (event: MouseEvent) => {
       child.props.onMouseLeave?.(event);
-      hoveredRef.current = false;
-      hoveredElementRef.current = null;
-      hoverMovedRef.current = false;
-      lastPointerRef.current = null;
+      resetHoverState();
       hideTooltip();
     },
     onFocus: (event: FocusEvent) => {
       child.props.onFocus?.(event);
       const target = event.currentTarget as HTMLElement | null;
       if (target) {
+        const store = useTooltipStore.getState();
+        if (hoverSessionRef.current !== store.hoverSession) {
+          return;
+        }
+        if (!target.matches(":focus-visible")) {
+          return;
+        }
         const rect = target.getBoundingClientRect();
         scheduleTooltip(rect.left + rect.width / 2, rect.bottom, "focus");
       }
     },
     onBlur: (event: FocusEvent) => {
       child.props.onBlur?.(event);
+      resetHoverState();
       hideTooltip();
     },
   };

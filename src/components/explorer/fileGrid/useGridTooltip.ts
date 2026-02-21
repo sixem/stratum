@@ -51,6 +51,7 @@ export const useGridTooltip = ({
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   const delayRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
+  const hoverSessionRef = useRef(useTooltipStore.getState().hoverSession);
 
   useEffect(() => {
     entryByPathRef.current = entryByPath;
@@ -78,6 +79,12 @@ export const useGridTooltip = ({
     const hideTooltip = () => {
       clearPending();
       useTooltipStore.getState().hideTooltip();
+    };
+    const resetHoverState = () => {
+      hoveredPathRef.current = null;
+      hoverMovedRef.current = false;
+      lastPointerRef.current = null;
+      hoverSessionRef.current = useTooltipStore.getState().hoverSession;
     };
 
     if (disabled) {
@@ -202,6 +209,15 @@ export const useGridTooltip = ({
         Math.abs(event.clientX - previous.x) + Math.abs(event.clientY - previous.y) >= 1;
 
       const store = useTooltipStore.getState();
+      if (hoverSessionRef.current !== store.hoverSession) {
+        resetHoverState();
+        hideTooltip();
+        if (resolved) {
+          hoveredPathRef.current = resolved.path;
+          lastPointerRef.current = { x: event.clientX, y: event.clientY };
+        }
+        return;
+      }
       if (moved && store.blockUntilPointerMove) {
         store.clearTooltipBlock();
       }
@@ -225,15 +241,21 @@ export const useGridTooltip = ({
     };
 
     const handleMouseLeave = () => {
-      hoveredPathRef.current = null;
-      hoverMovedRef.current = false;
-      lastPointerRef.current = null;
+      resetHoverState();
       hideTooltip();
     };
 
     const handleFocusIn = (event: FocusEvent) => {
       const resolved = resolveTooltipTarget(event.target);
       if (!resolved) return;
+      const target = resolved.card;
+      const store = useTooltipStore.getState();
+      if (hoverSessionRef.current !== store.hoverSession) {
+        return;
+      }
+      if (!target.matches(":focus-visible")) {
+        return;
+      }
       hoveredPathRef.current = resolved.path;
       hoverMovedRef.current = false;
       const rect = resolved.card.getBoundingClientRect();
@@ -241,8 +263,7 @@ export const useGridTooltip = ({
     };
 
     const handleFocusOut = () => {
-      hoveredPathRef.current = null;
-      hoverMovedRef.current = false;
+      resetHoverState();
       hideTooltip();
     };
 
@@ -256,9 +277,7 @@ export const useGridTooltip = ({
       viewport.removeEventListener("mouseleave", handleMouseLeave);
       viewport.removeEventListener("focusin", handleFocusIn);
       viewport.removeEventListener("focusout", handleFocusOut);
-      hoveredPathRef.current = null;
-      hoverMovedRef.current = false;
-      lastPointerRef.current = null;
+      resetHoverState();
       hideTooltip();
     };
   }, [delayMs, disabled, viewportRef]);
