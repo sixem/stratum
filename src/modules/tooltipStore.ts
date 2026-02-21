@@ -11,6 +11,7 @@ type TooltipState = {
   tooltipElement: HTMLDivElement | null;
   nonce: number;
   blockUntilPointerMove: boolean;
+  hoverSession: number;
 };
 
 type TooltipCoords = {
@@ -27,6 +28,7 @@ type TooltipStore = TooltipState & {
   hideTooltip: () => void;
   blockTooltips: () => void;
   clearTooltipBlock: () => void;
+  bumpHoverSession: () => void;
 };
 
 export const useTooltipStore = createWithEqualityFn<TooltipStore>((set, _get) => ({
@@ -38,6 +40,7 @@ export const useTooltipStore = createWithEqualityFn<TooltipStore>((set, _get) =>
   tooltipElement: null,
   nonce: 0,
   blockUntilPointerMove: false,
+  hoverSession: 0,
   setTooltipElement: (element) => set({ tooltipElement: element }),
   setTooltipDelay: (delayMs) => set({ tooltipDelay: clampTooltipDelay(delayMs) }),
   setTooltipText: (text) =>
@@ -62,4 +65,8 @@ export const useTooltipStore = createWithEqualityFn<TooltipStore>((set, _get) =>
     }),
   blockTooltips: () => set({ blockUntilPointerMove: true }),
   clearTooltipBlock: () => set({ blockUntilPointerMove: false }),
+  bumpHoverSession: () =>
+    set((state) => ({
+      hoverSession: state.hoverSession + 1,
+    })),
 }));

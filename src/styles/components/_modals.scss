@@ -854,7 +854,7 @@
     color: var(--muted);
     font-size: 11px;
 
-    span {
+    > span {
       text-transform: uppercase;
       letter-spacing: 0.1em;
       font-weight: 650;

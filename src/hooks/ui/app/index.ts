@@ -1,6 +1,7 @@
 // Barrel exports for app-level UI hooks.
 export { useAppAppearance } from "./useAppAppearance";
 export { useAppCommands } from "./useAppCommands";
+export { useAppContextMenuSection } from "./useAppContextMenuSection";
 export { useAppContextMenus } from "./useAppContextMenus";
 export { useAppEffects } from "./useAppEffects";
 export { useAppFileViewProps } from "./useAppFileViewProps";
@@ -9,7 +10,9 @@ export { useAppHandlers } from "./useAppHandlers";
 export { useAppKeybinds } from "./useAppKeybinds";
 export { useAppMenuState } from "./useAppMenuState";
 export { useAppNavigationController } from "./useAppNavigationController";
+export { useAppOverlaySection } from "./useAppOverlaySection";
 export { useAppOverlayController } from "./useAppOverlayController";
+export { useAppPreviewSection } from "./useAppPreviewSection";
 export { useAppRenameFlow } from "./useAppRenameFlow";
 export { useAppSelectionHandlers } from "./useAppSelectionHandlers";
 export { useAppTopstackProps } from "./useAppTopstackProps";

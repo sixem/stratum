@@ -10,7 +10,6 @@ import type { ParentCardProps } from "./gridCard.types";
 export const ParentCard = memo(({
   path,
   index,
-  selected,
   dropTarget,
   showMeta,
   onSelect,
@@ -21,20 +20,17 @@ export const ParentCard = memo(({
 }: ParentCardProps) => {
   const handleMouseDown = (event: ReactMouseEvent) => {
     if (event.button === 1) {
-      event.preventDefault();
-      event.stopPropagation();
+      onOpenNewTab?.(event);
+      if (!event.defaultPrevented) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
       return;
     }
     if (event.button === 0) {
-      onSelect(event);
+      onSelect?.(event);
     }
     onOpenNewTab?.(event);
-  };
-
-  const handleClick = (event: ReactMouseEvent) => {
-    if (event.detail === 0) {
-      onSelect(event);
-    }
   };
   const handleContextMenuDown = (event: ReactPointerEvent) => {
     if (event.button !== 2) return;
@@ -50,14 +46,13 @@ export const ParentCard = memo(({
   return (
     <button
       type="button"
-      className={`thumb-card is-parent${selected ? " is-selected" : ""}`}
-      data-selectable="true"
+      className="thumb-card is-parent"
+      data-selectable="false"
       data-path={path}
       data-index={index}
       data-is-dir="true"
       data-drop-target={dropTarget ? "true" : "false"}
-      aria-selected={selected}
-      onClick={handleClick}
+      aria-selected={false}
       onDoubleClick={onOpen}
       onMouseDown={handleMouseDown}
       onPointerDown={handleContextMenuDown}

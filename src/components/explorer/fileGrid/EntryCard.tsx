@@ -3,7 +3,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import { memo } from "react";
+import { memo, useLayoutEffect, useRef, useState } from "react";
 import { splitNameExtension, stripNameExtension } from "@/lib";
 import { RenameField } from "@/components/primitives/RenameField";
 import type { EntryCardProps } from "./gridCard.types";
@@ -63,8 +63,39 @@ export const EntryCard = memo(({
   const showInfo = Boolean(resolvedSizeLabel) || Boolean(extensionLabel);
   const displayName =
     hideExtension && !entry.isDir ? stripNameExtension(entry.name) : entry.name;
+  const nameRef = useRef<HTMLSpanElement | null>(null);
+  const nameMeasureRef = useRef<HTMLSpanElement | null>(null);
+  const [isNameOverflowing, setIsNameOverflowing] = useState(false);
+
+  // Only enable middle-split rendering when the full name is actually wider than
+  // the label container. This avoids unnecessary splitting for names that fit.
+  useLayoutEffect(() => {
+    if (nameEllipsis !== "middle") {
+      setIsNameOverflowing(false);
+      return;
+    }
+
+    const nameEl = nameRef.current;
+    const measureEl = nameMeasureRef.current;
+    if (!nameEl || !measureEl) return;
+
+    const updateOverflow = () => {
+      const nextOverflow = measureEl.offsetWidth > nameEl.clientWidth + 1;
+      setIsNameOverflowing((prev) => (prev === nextOverflow ? prev : nextOverflow));
+    };
+
+    updateOverflow();
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(() => updateOverflow());
+    observer.observe(nameEl);
+    return () => observer.disconnect();
+  }, [displayName, nameEllipsis]);
+
   const nameParts =
-    nameEllipsis === "middle" ? buildMiddleEllipsisParts(displayName) : null;
+    nameEllipsis === "middle" && isNameOverflowing
+      ? buildMiddleEllipsisParts(displayName)
+      : null;
   const useMiddleEllipsis = Boolean(nameParts && nameParts.head.length > 0);
   const nameNodes = useMiddleEllipsis
     ? [
@@ -86,15 +117,18 @@ export const EntryCard = memo(({
   }${selected ? " is-selected" : ""}${isRemoved ? " is-removed" : ""}`;
   const handleMouseDown = (event: ReactMouseEvent) => {
     if (!isInteractive) return;
-    if (event.button === 1 && onPreviewPress) {
-      onPreviewPress(entry.path);
-      event.preventDefault();
-      event.stopPropagation();
-      return;
-    }
     if (event.button === 1) {
-      event.preventDefault();
-      event.stopPropagation();
+      const previewHandled = !entry.isDir && Boolean(onPreviewPress?.(entry.path));
+      if (previewHandled) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      onOpenNewTab?.(event);
+      if (!event.defaultPrevented) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
       return;
     }
     if (event.button === 0) {
@@ -111,7 +145,9 @@ export const EntryCard = memo(({
   const handleMouseUp = (event: ReactMouseEvent) => {
     if (!isInteractive) return;
     if (event.button !== 1) return;
-    onPreviewRelease?.(entry.path);
+    if (!entry.isDir) {
+      onPreviewRelease?.(entry.path);
+    }
     event.preventDefault();
     event.stopPropagation();
   };
@@ -181,8 +217,13 @@ export const EntryCard = memo(({
             onCancel={onRenameCancel}
           />
         ) : (
-          <span className="thumb-name" data-ellipsis={nameEllipsisMode}>
+          <span className="thumb-name" data-ellipsis={nameEllipsisMode} ref={nameRef}>
             {nameNodes}
+            {nameEllipsis === "middle" ? (
+              <span className="thumb-name-measure" ref={nameMeasureRef} aria-hidden="true">
+                {displayName}
+              </span>
+            ) : null}
           </span>
         )}
         {showInfo ? (

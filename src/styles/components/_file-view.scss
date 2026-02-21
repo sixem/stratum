@@ -192,10 +192,10 @@
     cursor: default;
   }
 
-  // Give folders a subtle neutral tint so they are easier to distinguish from files.
-  .thumb-card.is-dir {
-    background: rgba(170, 182, 203, 0.08);
-    border-color: rgba(170, 182, 203, 0.2);
+  // Give folders a subtle cool tint so they are easier to distinguish from files.
+  .thumb-card.is-dir:not(.is-selected):not([data-drop-target="true"]) {
+    background: rgba(92, 126, 196, 0.12);
+    border-color: rgba(92, 126, 196, 0.3);
   }
 
 
@@ -204,9 +204,20 @@
     background: var(--surface-control-strong);
   }
 
+  .thumb-card.is-dir:not(.is-selected):not([data-drop-target="true"]):hover {
+    background: rgba(110, 146, 221, 0.18);
+    border-color: rgba(124, 157, 226, 0.38);
+  }
+
   .thumb-card.is-selected {
     border-color: rgba(var(--accent-rgb), 0.7);
     background: rgba(var(--accent-rgb), 0.12);
+  }
+
+  // Keep folder selection slightly distinct from file selection.
+  .thumb-card.is-dir.is-selected:not([data-drop-target="true"]) {
+    border-color: rgba(var(--accent-rgb), 0.86);
+    background: rgba(var(--accent-rgb), 0.2);
   }
 
   .thumb-card[data-drop-target="true"] {
@@ -304,11 +315,23 @@
   }
 
   .thumb-name {
+    position: relative;
+    display: block;
+    min-width: 0;
     font-size: 12px;
     font-weight: 600;
     line-height: 14px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .thumb-name .thumb-name-measure {
+    position: absolute;
+    left: 0;
+    top: 0;
+    visibility: hidden;
+    pointer-events: none;
     white-space: nowrap;
   }
 
@@ -324,14 +347,14 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: pre;
     flex: 0 1 auto;
   }
 
   .thumb-name[data-ellipsis="middle"] .thumb-name-end {
     line-height: inherit;
     flex: 0 0 auto;
-    white-space: nowrap;
+    white-space: pre;
   }
 
   .thumb-info {
@@ -373,6 +396,20 @@
   border-color: rgba(255, 255, 255, 0.040);
 }
 
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not(
+    [data-drop-target="true"]
+  ) {
+  background: rgba(92, 126, 196, 0.11);
+  border-color: rgba(124, 157, 226, 0.26);
+}
+
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not(
+    [data-drop-target="true"]
+  ):hover {
+  background: rgba(110, 146, 221, 0.14);
+  border-color: rgba(124, 157, 226, 0.3);
+}
+
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-parent-icon {
   color: rgba(220, 227, 238, 0.82);
 }
@@ -380,6 +417,13 @@
 :root[data-ambient="true"][data-compact="true"] :where(.thumb-shell) .thumb-card.is-selected {
   border-color: rgba(var(--accent-rgb), 0.7);
   background: rgba(var(--accent-rgb), 0.12);
+}
+
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir.is-selected:not(
+    [data-drop-target="true"]
+  ) {
+  border-color: rgba(var(--accent-rgb), 0.82);
+  background: rgba(var(--accent-rgb), 0.18);
 }
 
 :root[data-ambient="true"][data-compact="true"]
@@ -699,6 +743,13 @@
     opacity: 0.7;
   }
 
+  // Mirror folder tint in list view so directories are easier to spot.
+  .row.is-dir:not(.is-selected):not([data-drop-target="true"]) {
+    background: rgba(92, 126, 196, 0.1);
+    border-color: rgba(92, 126, 196, 0.2);
+    --list-dot-color: rgba(132, 164, 232, 0.9);
+  }
+
   .row[aria-disabled="true"] {
     opacity: 0.8;
   }
@@ -708,9 +759,21 @@
     background: var(--surface-control-strong);
   }
 
+  .row.is-dir:not(.is-selected):not([data-drop-target="true"]):hover {
+    background: rgba(110, 146, 221, 0.16);
+    border-color: rgba(124, 157, 226, 0.34);
+  }
+
   .row.is-selected {
     border-color: rgba(var(--accent-rgb), 0.7);
     background: rgba(var(--accent-rgb), 0.12);
+  }
+
+  // Keep folder selection slightly distinct from file selection.
+  .row.is-dir.is-selected:not([data-drop-target="true"]) {
+    border-color: rgba(var(--accent-rgb), 0.84);
+    background: rgba(var(--accent-rgb), 0.19);
+    --list-dot-color: rgba(var(--accent-rgb), 0.98);
   }
 
   .row[data-drop-target="true"] {
@@ -769,6 +832,27 @@
 
 :root[data-ambient="true"] :where(.file-list) .row {
   background: rgba(18, 22, 33, 0.82);
+}
+
+:root[data-ambient="true"] :where(.file-list) .row.is-dir:not(.is-selected):not(
+    [data-drop-target="true"]
+  ) {
+  background: rgba(58, 78, 126, 0.48);
+  border-color: rgba(124, 157, 226, 0.26);
+}
+
+:root[data-ambient="true"] :where(.file-list) .row.is-dir:not(.is-selected):not(
+    [data-drop-target="true"]
+  ):hover {
+  background: rgba(110, 146, 221, 0.14);
+  border-color: rgba(124, 157, 226, 0.3);
+}
+
+:root[data-ambient="true"] :where(.file-list) .row.is-dir.is-selected:not(
+    [data-drop-target="true"]
+  ) {
+  border-color: rgba(var(--accent-rgb), 0.8);
+  background: rgba(var(--accent-rgb), 0.17);
 }
 
 // Category tinting for list view dots.

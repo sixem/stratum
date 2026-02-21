@@ -34,6 +34,9 @@ const alignAxis = (anchor: number, size: number, viewport: number) => {
   return clamp(anchor - size / 2, minStart, maxStart);
 };
 
+const isContextMenuOpen = () =>
+  Boolean(document.querySelector(".context-menu[data-open=\"true\"]"));
+
 export const useGridTooltip = ({
   viewportRef,
   entryByPath,
@@ -48,6 +51,7 @@ export const useGridTooltip = ({
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   const delayRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
+  const hoverSessionRef = useRef(useTooltipStore.getState().hoverSession);
 
   useEffect(() => {
     entryByPathRef.current = entryByPath;
@@ -76,6 +80,12 @@ export const useGridTooltip = ({
       clearPending();
       useTooltipStore.getState().hideTooltip();
     };
+    const resetHoverState = () => {
+      hoveredPathRef.current = null;
+      hoverMovedRef.current = false;
+      lastPointerRef.current = null;
+      hoverSessionRef.current = useTooltipStore.getState().hoverSession;
+    };
 
     if (disabled) {
       hideTooltip();
@@ -103,11 +113,16 @@ export const useGridTooltip = ({
       anchorX: number,
       anchorY: number,
       requestId: number,
+      trigger: "mouse" | "focus",
     ) => {
+      if (isContextMenuOpen()) return;
+      if (document.visibilityState !== "visible") return;
+      if (!document.hasFocus()) return;
       const text = resolveTooltipText(path);
       if (!text) return;
       const tooltipApi = useTooltipStore.getState();
       if (tooltipApi.nonce !== requestId) return;
+      if (trigger === "mouse" && tooltipApi.blockUntilPointerMove) return;
       tooltipApi.setTooltipText(text);
       if (rafRef.current != null) {
         window.cancelAnimationFrame(rafRef.current);
@@ -115,6 +130,9 @@ export const useGridTooltip = ({
       rafRef.current = window.requestAnimationFrame(() => {
         const latest = useTooltipStore.getState();
         if (latest.nonce !== requestId) return;
+        if (trigger === "mouse" && latest.blockUntilPointerMove) return;
+        if (document.visibilityState !== "visible") return;
+        if (!document.hasFocus()) return;
         const tooltipRect = tooltipApi.tooltipElement
           ? tooltipApi.tooltipElement.getBoundingClientRect()
           : ({ width: 0, height: 0 } as DOMRect);
@@ -123,6 +141,24 @@ export const useGridTooltip = ({
         if (useTooltipStore.getState().nonce !== requestId) return;
         tooltipApi.showTooltip({ text, x: left, y: top });
       });
+    };
+
+    const resolveTooltipTarget = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return null;
+      const card = target.closest<HTMLElement>("[data-grid-tooltip=\"true\"]");
+      if (!card || !viewport.contains(card)) return null;
+      if (card.dataset.tooltipDisabled === "true") return null;
+      const path = card.dataset.path ?? "";
+      if (!path) return null;
+      return { card, path };
+    };
+
+    const isPointerStillOnPath = (path: string, x: number, y: number) => {
+      if (hoveredPathRef.current !== path) return false;
+      const pointerTarget = document.elementFromPoint(x, y);
+      const resolved = resolveTooltipTarget(pointerTarget);
+      if (!resolved) return false;
+      return resolved.path === path;
     };
 
     const scheduleTooltip = (
@@ -140,12 +176,14 @@ export const useGridTooltip = ({
         const latest = useTooltipStore.getState();
         if (latest.nonce !== requestId) return;
         if (trigger === "mouse" && latest.blockUntilPointerMove) return;
+        if (isContextMenuOpen()) return;
         if (document.visibilityState !== "visible") return;
-        if (trigger === "mouse" && !document.hasFocus()) return;
+        if (!document.hasFocus()) return;
         const nextAnchor = trigger === "mouse" ? lastPointerRef.current : null;
         const x = nextAnchor?.x ?? anchorX;
         const y = nextAnchor?.y ?? anchorY;
-        showTooltip(path, x, y, requestId);
+        if (trigger === "mouse" && !isPointerStillOnPath(path, x, y)) return;
+        showTooltip(path, x, y, requestId, trigger);
       };
 
       if (!delayMs) {
@@ -158,17 +196,11 @@ export const useGridTooltip = ({
       }, delayMs);
     };
 
-    const resolveTooltipTarget = (target: EventTarget | null) => {
-      if (!(target instanceof Element)) return null;
-      const card = target.closest<HTMLElement>("[data-grid-tooltip=\"true\"]");
-      if (!card || !viewport.contains(card)) return null;
-      if (card.dataset.tooltipDisabled === "true") return null;
-      const path = card.dataset.path ?? "";
-      if (!path) return null;
-      return { card, path };
-    };
-
     const handleMouseMove = (event: MouseEvent) => {
+      if (isContextMenuOpen()) {
+        hideTooltip();
+        return;
+      }
       const resolved = resolveTooltipTarget(event.target);
       const previous = lastPointerRef.current;
       lastPointerRef.current = { x: event.clientX, y: event.clientY };
@@ -177,6 +209,15 @@ export const useGridTooltip = ({
         Math.abs(event.clientX - previous.x) + Math.abs(event.clientY - previous.y) >= 1;
 
       const store = useTooltipStore.getState();
+      if (hoverSessionRef.current !== store.hoverSession) {
+        resetHoverState();
+        hideTooltip();
+        if (resolved) {
+          hoveredPathRef.current = resolved.path;
+          lastPointerRef.current = { x: event.clientX, y: event.clientY };
+        }
+        return;
+      }
       if (moved && store.blockUntilPointerMove) {
         store.clearTooltipBlock();
       }
@@ -200,15 +241,21 @@ export const useGridTooltip = ({
     };
 
     const handleMouseLeave = () => {
-      hoveredPathRef.current = null;
-      hoverMovedRef.current = false;
-      lastPointerRef.current = null;
+      resetHoverState();
       hideTooltip();
     };
 
     const handleFocusIn = (event: FocusEvent) => {
       const resolved = resolveTooltipTarget(event.target);
       if (!resolved) return;
+      const target = resolved.card;
+      const store = useTooltipStore.getState();
+      if (hoverSessionRef.current !== store.hoverSession) {
+        return;
+      }
+      if (!target.matches(":focus-visible")) {
+        return;
+      }
       hoveredPathRef.current = resolved.path;
       hoverMovedRef.current = false;
       const rect = resolved.card.getBoundingClientRect();
@@ -216,8 +263,7 @@ export const useGridTooltip = ({
     };
 
     const handleFocusOut = () => {
-      hoveredPathRef.current = null;
-      hoverMovedRef.current = false;
+      resetHoverState();
       hideTooltip();
     };
 
@@ -231,9 +277,7 @@ export const useGridTooltip = ({
       viewport.removeEventListener("mouseleave", handleMouseLeave);
       viewport.removeEventListener("focusin", handleFocusIn);
       viewport.removeEventListener("focusout", handleFocusOut);
-      hoveredPathRef.current = null;
-      hoverMovedRef.current = false;
-      lastPointerRef.current = null;
+      resetHoverState();
       hideTooltip();
     };
   }, [delayMs, disabled, viewportRef]);

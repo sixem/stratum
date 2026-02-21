@@ -16,6 +16,13 @@ export type PlaceContextTarget = {
   source: PlaceContextSource;
 };
 
+export type ContextMenuIcon =
+  | "open-external"
+  | "convert"
+  | "quick-convert"
+  | "copy"
+  | "delete";
+
 export type ContextMenuItem =
   | {
       kind?: "item";
@@ -25,6 +32,7 @@ export type ContextMenuItem =
       active?: boolean;
       hint?: string;
       disabled?: boolean;
+      icon?: ContextMenuIcon;
     }
   | {
       kind: "submenu";
@@ -33,6 +41,7 @@ export type ContextMenuItem =
       items: ContextMenuItem[];
       hint?: string;
       disabled?: boolean;
+      icon?: ContextMenuIcon;
     }
   | {
       kind: "divider";

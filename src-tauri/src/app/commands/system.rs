@@ -56,6 +56,27 @@ pub async fn open_path_properties(paths: Vec<String>) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn list_open_with_handlers(path: String) -> Result<Vec<opener::OpenWithHandler>, String> {
+    tauri::async_runtime::spawn_blocking(move || opener::list_open_with_handlers(path))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn open_path_with_handler(path: String, handler_id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || opener::open_path_with_handler(path, handler_id))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn open_path_with_dialog(path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || opener::open_path_with_dialog(path))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
 pub async fn get_shell_availability() -> shells::ShellAvailability {
     tauri::async_runtime::spawn_blocking(shells::get_shell_availability)
         .await

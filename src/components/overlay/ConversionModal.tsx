@@ -31,7 +31,7 @@ import type {
   ConversionRunState,
 } from "@/types";
 
-type ConversionModalProps = {
+export type ConversionModalProps = {
   open: boolean;
   request: ConversionModalRequest | null;
   draft: ConversionModalDraft | null;
@@ -259,7 +259,7 @@ export const ConversionModal = ({
       if (current && sortedOverrideItems.some((item) => item.path === current)) {
         return current;
       }
-      return sortedOverrideItems[0]?.path ?? null;
+      return null;
     });
   }, [draft, itemPathsKey, open, requestKey, sortedOverrideItems]);
   useEffect(() => {
@@ -500,7 +500,7 @@ export const ConversionModal = ({
   const videoCount = sortedOverrideItems.filter((item) => item.kind === "video").length;
   const imageCount = sortedOverrideItems.filter((item) => item.kind === "image").length;
   const activeOverrideItem =
-    sortedOverrideItems.find((item) => item.path === activeOverridePath) ?? sortedOverrideItems[0] ?? null;
+    sortedOverrideItems.find((item) => item.path === activeOverridePath) ?? null;
   const activeOverrideDefaultFormat = activeOverrideItem
     ? findRuleFormat(draft, activeOverrideItem.kind)
     : null;
@@ -744,7 +744,7 @@ export const ConversionModal = ({
                   const appliedFormat = item.override?.targetFormat ?? defaultFormat;
                   const itemStatus = runState?.itemStatusByPath[item.path] ?? "idle";
                   const itemStatusLabel = ITEM_STATUS_LABELS[itemStatus];
-                  const isActive = activeOverrideItem?.path === item.path;
+                  const isActive = overrideEditorOpen && activeOverrideItem?.path === item.path;
                   const hasOverride = Boolean(item.override?.targetFormat);
                   return (
                     <PressButton
@@ -786,7 +786,7 @@ export const ConversionModal = ({
                     <DropdownSelect
                       value={activeOverrideItem.override?.targetFormat ?? null}
                       groups={overrideGroupsByKind[activeOverrideItem.kind]}
-                      placeholder="Use type default"
+                      placeholder="Choose target format"
                       ariaLabel={`Override format for ${activeOverrideItem.name}`}
                       onChange={(next) => setItemOverrideFormat(activeOverrideItem.path, next)}
                       disabled={runInProgress}

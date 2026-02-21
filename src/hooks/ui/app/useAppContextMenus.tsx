@@ -2,7 +2,9 @@
 import { useCallback } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { flushSync } from "react-dom";
-import { isEditableElement } from "@/lib";
+import { openPathProperties } from "@/api";
+import { isEditableElement, toMessage } from "@/lib";
+import { usePromptStore } from "@/modules";
 import type {
   ConversionModalRequest,
   EntryContextTarget,
@@ -44,6 +46,7 @@ type UseAppContextMenusOptions = {
   onOpenShell: (kind: ShellKind, path: string) => void;
   onOpenEntry: (path: string) => void;
   onOpenDir: (path: string) => void;
+  onOpenDirNewTab: (path: string) => void;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   confirmDelete: boolean;
   onClearSelection: () => void;
@@ -84,6 +87,7 @@ export const useAppContextMenus = ({
   onOpenShell,
   onOpenEntry,
   onOpenDir,
+  onOpenDirNewTab,
   onDeleteEntries,
   confirmDelete,
   onClearSelection,
@@ -162,20 +166,13 @@ export const useAppContextMenus = ({
   const handleEntryContextMenu = useCallback(
     (event: ReactPointerEvent, target: EntryContextTarget) => {
       if (event.button !== 2) return;
-      if (target.isDir) {
-        openPlaceMenu(event, {
-          name: target.name,
-          path: target.path,
-          source: "entry",
-        });
-        return;
-      }
+      // Right-click should align selection with the clicked entry for both files and folders.
       if (!selected.has(target.path)) {
         onSelectionChange([target.path], target.path);
       }
       openEntryMenu(event, target);
     },
-    [onSelectionChange, openEntryMenu, openPlaceMenu, selected],
+    [onSelectionChange, openEntryMenu, selected],
   );
 
   // Context menu content is derived from the current target + sort state.
@@ -200,6 +197,7 @@ export const useAppContextMenus = ({
     currentPath,
     onOpenEntry,
     onOpenDir,
+    onOpenDirNewTab,
     onDeleteEntries,
     confirmDelete,
     onClearSelection,
@@ -213,11 +211,23 @@ export const useAppContextMenus = ({
   const placeTargetMenuItems = buildPlaceTargetMenuItems({
     target: contextMenu?.kind === "place-target" ? contextMenu.target : null,
     places,
+    onOpenPath: onOpenDir,
+    onOpenPathNewTab: onOpenDirNewTab,
     onAddPlace,
     onPinPlace,
     onUnpinPlace,
     onRemovePlace,
     onRemoveRecentJump,
+    onOpenProperties: (path) => {
+      void openPathProperties(path).catch((error) => {
+        usePromptStore.getState().showPrompt({
+          title: "Couldn't open properties",
+          content: toMessage(error, "Unable to open the properties dialog."),
+          confirmLabel: "OK",
+          cancelLabel: null,
+        });
+      });
+    },
   });
   const contextMenuItems =
     contextMenu?.kind === "entry"

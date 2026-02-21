@@ -60,6 +60,7 @@ export const QuickPreviewTimeline = ({
 }: QuickPreviewTimelineProps) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
+  const progressRef = useRef<number>(-1);
   const lastLabelUpdateRef = useRef(0);
   const durationRef = useRef(0);
   const displayRef = useRef(0);
@@ -74,11 +75,16 @@ export const QuickPreviewTimeline = ({
     now: 0,
     max: 0,
   });
+  const setDraggingIfChanged = (next: boolean) => {
+    setDragging((prev) => (prev === next ? prev : next));
+  };
 
   const writeProgress = (time: number, duration: number) => {
     const root = rootRef.current;
     if (!root) return;
     const progress = duration > 0 ? clamp((time / duration) * 100, 0, 100) : 0;
+    if (Math.abs(progressRef.current - progress) < 0.001) return;
+    progressRef.current = progress;
     root.style.setProperty("--preview-seek-progress", `${progress}%`);
   };
 
@@ -94,11 +100,22 @@ export const QuickPreviewTimeline = ({
       return;
     }
     lastLabelUpdateRef.current = now;
-    setLabels({
+    const nextLabels: TimelineLabels = {
       current: formatMediaTime(clampedTime),
       remaining: formatMediaTime(Math.max(0, clampedDuration - clampedTime)),
       now: clampedTime,
       max: clampedDuration,
+    };
+    setLabels((prev) => {
+      if (
+        prev.current === nextLabels.current &&
+        prev.remaining === nextLabels.remaining &&
+        Math.abs(prev.now - nextLabels.now) < 0.001 &&
+        Math.abs(prev.max - nextLabels.max) < 0.001
+      ) {
+        return prev;
+      }
+      return nextLabels;
     });
   };
 
@@ -202,7 +219,7 @@ export const QuickPreviewTimeline = ({
       dragActiveRef.current = false;
       dragPointerIdRef.current = null;
       previewTimeRef.current = null;
-      setDragging(false);
+      setDraggingIfChanged(false);
     }
   }, [open]);
 
@@ -211,7 +228,7 @@ export const QuickPreviewTimeline = ({
       dragActiveRef.current = false;
       dragPointerIdRef.current = null;
       previewTimeRef.current = null;
-      setDragging(false);
+      setDraggingIfChanged(false);
     };
 
     window.addEventListener("blur", cancelDragOnBlur);
@@ -228,7 +245,7 @@ export const QuickPreviewTimeline = ({
     event.currentTarget.setPointerCapture(event.pointerId);
     dragActiveRef.current = true;
     dragPointerIdRef.current = event.pointerId;
-    setDragging(true);
+    setDraggingIfChanged(true);
     const target = resolveTimeFromPointer(event.clientX);
     previewTimeRef.current = target;
     syncDisplay(target, duration, true);
@@ -255,7 +272,7 @@ export const QuickPreviewTimeline = ({
     }
     dragActiveRef.current = false;
     dragPointerIdRef.current = null;
-    setDragging(false);
+    setDraggingIfChanged(false);
     const target = previewTimeRef.current;
     previewTimeRef.current = null;
     if (!shouldCommit || target == null) return;

@@ -5,11 +5,14 @@ import type { ContextMenuItem, PlaceContextTarget, Place } from "@/types";
 type BuildPlaceTargetMenuItemsOptions = {
   target: PlaceContextTarget | null;
   places: Place[];
+  onOpenPath?: (path: string) => void;
+  onOpenPathNewTab?: (path: string) => void;
   onAddPlace: (path: string, name?: string, options?: { pinned?: boolean }) => void;
   onPinPlace: (path: string) => void;
   onUnpinPlace: (path: string) => void;
   onRemovePlace: (path: string) => void;
   onRemoveRecentJump?: (path: string) => void;
+  onOpenProperties?: (path: string) => void | Promise<unknown>;
 };
 
 const placeKey = (path: string) => normalizePath(path.trim()) ?? path.trim().toLowerCase();
@@ -38,11 +41,14 @@ const buildPinLabel = (source: PlaceContextTarget["source"], exists: boolean, pi
 export const buildPlaceTargetMenuItems = ({
   target,
   places,
+  onOpenPath,
+  onOpenPathNewTab,
   onAddPlace,
   onPinPlace,
   onUnpinPlace,
   onRemovePlace,
   onRemoveRecentJump,
+  onOpenProperties,
 }: BuildPlaceTargetMenuItemsOptions): ContextMenuItem[] => {
   if (!target) return [];
   const path = target.path.trim();
@@ -57,6 +63,27 @@ export const buildPlaceTargetMenuItems = ({
   };
 
   const items: ContextMenuItem[] = [];
+  const hasOpenActions = Boolean(onOpenPath) || Boolean(onOpenPathNewTab);
+
+  if (onOpenPath) {
+    items.push({
+      id: "place-target-open",
+      label: "Open",
+      onSelect: () => onOpenPath(path),
+    });
+  }
+
+  if (onOpenPathNewTab) {
+    items.push({
+      id: "place-target-open-new-tab",
+      label: "Open in new tab",
+      onSelect: () => onOpenPathNewTab(path),
+    });
+  }
+
+  if (hasOpenActions) {
+    items.push({ kind: "divider", id: "place-target-divider-open" });
+  }
 
   if (existing) {
     items.push({
@@ -94,6 +121,17 @@ export const buildPlaceTargetMenuItems = ({
       id: "place-target-remove-recent",
       label: "Remove from recent jumps",
       onSelect: () => onRemoveRecentJump(path),
+    });
+  }
+
+  if (onOpenProperties) {
+    items.push({ kind: "divider", id: "place-target-divider-properties" });
+    items.push({
+      id: "place-target-properties",
+      label: "Properties",
+      onSelect: () => {
+        void onOpenProperties(path);
+      },
     });
   }
 

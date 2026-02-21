@@ -212,6 +212,107 @@ export const ChevronDownIcon = ({ className }: IconProps) => {
   );
 };
 
+// Compact right chevron used by nested context menu rows.
+export const ContextChevronRightIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 12 12" aria-hidden="true" className={className} fill="none">
+      <path
+        d="M4 2.25L8.75 6 4 9.75"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
+
+// "Open external" glyph used by context-menu actions that launch an OS picker/app.
+export const OpenExternalIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className={className} fill="none">
+      <path
+        d="M8 4H4V16H16V12"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11 3H17V9"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M17 3L9 11"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
+
+// Circular conversion arrows used by conversion-related context actions.
+export const ConvertIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 330 330" aria-hidden="true" className={className} fill="currentColor">
+      <path d="M79.395 175.607c2.87 2.87 6.706 4.395 10.61 4.395 1.932 0 3.881-.374 5.736-1.143 5.605-2.321 9.26-7.791 9.26-13.858v-60h210c8.284 0 15-6.716 15-15s-6.716-15-15-15h-210v-60c0-6.066-3.654-11.536-9.26-13.858C90.136-1.18 83.683.104 79.395 4.394l-75 75c-5.858 5.858-5.858 15.355 0 21.213l75 75z" />
+      <path d="M250.607 154.394c-4.29-4.291-10.742-5.574-16.347-3.252-5.605 2.322-9.26 7.792-9.26 13.858v60h-210c-8.284 0-15 6.716-15 15 0 8.284 6.716 15 15 15h210v60c0 6.067 3.654 11.537 9.26 13.858 1.855.769 3.805 1.143 5.736 1.143 3.904 0 7.741-1.524 10.61-4.395l75-75c5.858-5.857 5.858-15.354 0-21.213l-75-74.999z" />
+    </svg>
+  );
+};
+
+// Lightning icon used by quick-convert submenu entries.
+export const QuickConvertIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 16 20" aria-hidden="true" className={className} fill="currentColor">
+      <polygon points="8 20 8 12 0 12 8 0 8 8 16 8" />
+    </svg>
+  );
+};
+
+// Copy action icon used by context-menu items.
+export const CopyActionIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="none">
+      <path
+        d="M9 9V6.2002C9 5.08009 9 4.51962 9.21799 4.0918C9.40973 3.71547 9.71547 3.40973 10.0918 3.21799C10.5196 3 11.0801 3 12.2002 3H17.8002C18.9203 3 19.4801 3 19.9079 3.21799C20.2842 3.40973 20.5905 3.71547 20.7822 4.0918C21.0002 4.51962 21.0002 5.07967 21.0002 6.19978V11.7998C21.0002 12.9199 21.0002 13.48 20.7822 13.9078C20.5905 14.2841 20.2839 14.5905 19.9076 14.7822C19.4802 15 18.921 15 17.8031 15H15M9 9H6.2002C5.08009 9 4.51962 9 4.0918 9.21799C3.71547 9.40973 3.40973 9.71547 3.21799 10.0918C3 10.5196 3 11.0801 3 12.2002V17.8002C3 18.9203 3 19.4801 3.21799 19.9079C3.40973 20.2842 3.71547 20.5905 4.0918 20.7822C4.5192 21 5.07899 21 6.19691 21H11.8036C12.9215 21 13.4805 21 13.9079 20.7822C14.2842 20.5905 14.5905 20.2839 14.7822 19.9076C15 19.4802 15 18.921 15 17.8031V15M9 9H11.8002C12.9203 9 13.4801 9 13.9079 9.21799C14.2842 9.40973 14.5905 9.71547 14.7822 10.0918C15 10.5192 15 11.079 15 12.1969L15 15"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
+
+// Delete action icon used by context-menu items.
+export const DeleteActionIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className={className} fill="currentColor">
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M0 8L6 2H16V14H6L0 8ZM6.79289 6.20711L8.58579 8L6.79289 9.79289L8.20711 11.2071L10 9.41421L11.7929 11.2071L13.2071 9.79289L11.4142 8L13.2071 6.20711L11.7929 4.79289L10 6.58579L8.20711 4.79289L6.79289 6.20711Z"
+      />
+    </svg>
+  );
+};
+
+// Recycle Bin toolbar icon.
+export const RecycleBinIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor">
+      <path d="M8 1.5V2.5H3C2.44772 2.5 2 2.94772 2 3.5V4.5C2 5.05228 2.44772 5.5 3 5.5H21C21.5523 5.5 22 5.05228 22 4.5V3.5C22 2.94772 21.5523 2.5 21 2.5H16V1.5C16 0.947715 15.5523 0.5 15 0.5H9C8.44772 0.5 8 0.947715 8 1.5Z" />
+      <path d="M3.9231 7.5H20.0767L19.1344 20.2216C19.0183 21.7882 17.7135 23 16.1426 23H7.85724C6.28636 23 4.98148 21.7882 4.86544 20.2216L3.9231 7.5Z" />
+    </svg>
+  );
+};
+
 // Sidebar section collapse icon.
 export const SidebarCollapseIcon = ({ className }: IconProps) => {
   return (

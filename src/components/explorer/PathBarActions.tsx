@@ -1,7 +1,7 @@
 // Action cluster aligned to the right side of the path bar.
 import { TransferStatusButton } from "@/components/transfer/TransferStatusButton";
 import { ToolbarIconButton } from "@/components/primitives/ToolbarIconButton";
-import { GridIcon, ListIcon, SettingsIcon } from "@/components/icons";
+import { GridIcon, ListIcon, RecycleBinIcon, SettingsIcon } from "@/components/icons";
 import type { ViewMode } from "@/types";
 
 type PathBarActionsProps = {
@@ -9,6 +9,7 @@ type PathBarActionsProps = {
   settingsOpen: boolean;
   onViewChange: (mode: ViewMode) => void;
   onToggleSettings: () => void;
+  onOpenRecycleBin: () => void;
 };
 
 export const PathBarActions = ({
@@ -16,11 +17,18 @@ export const PathBarActions = ({
   settingsOpen,
   onViewChange,
   onToggleSettings,
+  onOpenRecycleBin,
 }: PathBarActionsProps) => {
   return (
     <div className="pathbar-actions">
       <TransferStatusButton />
       <div className="view-switch">
+        <ToolbarIconButton
+          label="Recycle Bin"
+          onClick={onOpenRecycleBin}
+        >
+          <RecycleBinIcon />
+        </ToolbarIconButton>
         <ToolbarIconButton
           label="List view"
           active={viewMode === "list"}

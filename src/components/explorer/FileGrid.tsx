@@ -170,7 +170,7 @@ const FileGrid = ({
     () =>
       viewItems.map((item) => ({
         path: item.type === "parent" ? item.path : item.entry.path,
-        selectable: item.presence !== "removed",
+        selectable: item.type !== "parent" && item.presence !== "removed",
       })),
     [viewItems],
   );
@@ -356,6 +356,13 @@ const FileGrid = ({
     event.preventDefault();
     event.stopPropagation();
   }, []);
+  const handleParentSelect = useCallback(
+    (event: ReactMouseEvent) => {
+      if (event.button !== 0) return;
+      onClearSelection();
+    },
+    [onClearSelection],
+  );
 
   const showCreatePrompt = useCreateEntryPrompt();
   const hasContent = viewItems.length > 0;
@@ -390,10 +397,9 @@ const FileGrid = ({
                   key={item.key}
                   path={item.path}
                   index={baseIndex}
-                  selected={selectedPaths.has(item.path)}
                   dropTarget={isDropTarget}
                   showMeta={gridMetaEnabled}
-                  onSelect={handleCardSelect}
+                  onSelect={handleParentSelect}
                   onOpen={handleCardOpen}
                   onOpenNewTab={handleCardOpenNewTab}
                   onContextMenu={handleParentContextMenu}

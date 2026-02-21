@@ -46,6 +46,7 @@ type AppEffectView = {
   deferredSearchValue: string;
   sortState: SortState;
   tabs: Tab[];
+  contextMenuOpen: boolean;
 };
 
 type AppEffectActions = {
@@ -116,6 +117,7 @@ export const useAppEffects = ({
     deferredSearchValue,
     sortState,
     tabs,
+    contextMenuOpen,
   } = view;
   const {
     clearSearchAndFocusView,
@@ -194,6 +196,13 @@ export const useAppEffects = ({
   useEffect(() => {
     useTooltipStore.getState().hideTooltip();
   }, [activeTabId, currentPath, sidebarOpen, viewMode]);
+
+  useEffect(() => {
+    if (!contextMenuOpen) return;
+    const tooltip = useTooltipStore.getState();
+    tooltip.hideTooltip();
+    tooltip.blockTooltips();
+  }, [contextMenuOpen]);
 
   useEffect(() => {
     // Clear rename state on navigation or view switches.

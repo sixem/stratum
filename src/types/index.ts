@@ -23,11 +23,13 @@ export type {
 } from "./fs";
 export type {
   ContextMenuItem,
+  ContextMenuIcon,
   EntryContextTarget,
   PlaceContextSource,
   PlaceContextTarget,
 } from "./contextMenu";
 export type { FileIconHit } from "./fileIcons";
+export type { OpenWithHandler } from "./opener";
 export type {
   ConversionItemDraft,
   ConversionMediaKind,

@@ -4,6 +4,16 @@ import { useCallback, useEffect, useRef } from "react";
 import { startDirWatch, stopDirWatch } from "@/api";
 import { makeDebug, normalizePath } from "@/lib";
 import type { DirChangedEvent, DirRenameEvent, ListDirOptions, SortState, Tab } from "@/types";
+import {
+  consumePendingChanges,
+  consumeQueuedRefreshWhenIdle,
+  createWatchRefreshSchedulerState,
+  evaluateActiveRefresh,
+  finishRefreshRun,
+  markActiveTabSynced,
+  pruneSchedulerTabs,
+  shouldRefreshOnTabSwitch,
+} from "./watchRefreshScheduler";
 
 type MetaRequestOptions = {
   force?: boolean;
@@ -62,16 +72,11 @@ export const useDirWatch = ({
   // Optional metadata refresh for changed entries to keep thumbnails accurate.
   const requestEntryMetaRef = useRef(requestEntryMeta);
   const loadingRef = useRef(loading);
-  const dirtyTabIdsRef = useRef<Set<string>>(new Set());
-  const renameDirtyTabIdsRef = useRef<Set<string>>(new Set());
+  const schedulerRef = useRef(createWatchRefreshSchedulerState());
   const pendingRenamePathsRef = useRef<Set<string>>(new Set());
-  const lastRefreshRef = useRef<Map<string, number>>(new Map());
-  const refreshInFlightRef = useRef(false);
-  const refreshQueuedRef = useRef(false);
   const refreshActiveRef = useRef<(reason: string) => void>(() => {});
   const presenceToggleRef = useRef<((suppress: boolean) => void) | null>(null);
   const externalSuppressedRef = useRef(false);
-  const suppressNextRefreshRef = useRef(false);
   const pendingPathsRef = useRef<Set<string>>(new Set());
   const pendingEntryPathsRef = useRef<Set<string>>(new Set());
   const flushTimerRef = useRef<number | null>(null);
@@ -114,42 +119,17 @@ export const useDirWatch = ({
   }, []);
 
   const refreshActive = useCallback((reason: string) => {
-    if (!enabledRef.current) return;
-    const tabId = activeTabIdRef.current;
-    const viewPath = activeTabPathRef.current.trim();
-    if (!tabId || !viewPath) return;
-    if (loadingRef.current) {
-      refreshQueuedRef.current = true;
-      return;
-    }
-
-    const viewKey = normalizePath(viewPath);
-    const currentKey = normalizePath(currentPathRef.current);
-    if (!viewKey || viewKey !== currentKey) {
-      dirtyTabIdsRef.current.add(tabId);
-      return;
-    }
-
-    const now = Date.now();
-    const lastRefresh = lastRefreshRef.current.get(tabId) ?? 0;
-    if (now - lastRefresh < REFRESH_COOLDOWN_MS) {
-      refreshQueuedRef.current = true;
-      return;
-    }
-    if (refreshInFlightRef.current) {
-      refreshQueuedRef.current = true;
-      return;
-    }
-
-    refreshInFlightRef.current = true;
-    refreshQueuedRef.current = false;
-    lastRefreshRef.current.set(tabId, now);
-    dirtyTabIdsRef.current.delete(tabId);
-    const shouldSuppress =
-      suppressNextRefreshRef.current || renameDirtyTabIdsRef.current.has(tabId);
-    if (shouldSuppress) {
-      suppressNextRefreshRef.current = false;
-      renameDirtyTabIdsRef.current.delete(tabId);
+    const decision = evaluateActiveRefresh(schedulerRef.current, {
+      enabled: enabledRef.current,
+      activeTabId: activeTabIdRef.current,
+      activeTabPath: activeTabPathRef.current,
+      currentPath: currentPathRef.current,
+      loading: loadingRef.current,
+      now: Date.now(),
+      refreshCooldownMs: REFRESH_COOLDOWN_MS,
+    });
+    if (decision.kind !== "start") return;
+    if (decision.suppressPresence) {
       setExternalSuppressed(true);
     }
 
@@ -162,14 +142,13 @@ export const useDirWatch = ({
       // A single full refresh keeps ordering stable and prevents flicker.
       fast: sortRef.current.key === "name",
     };
-    log("refresh(%s): %s", reason, viewPath);
-    void loadDirRef.current(viewPath, options).finally(() => {
-      refreshInFlightRef.current = false;
-      if (shouldSuppress) {
+    log("refresh(%s): %s", reason, decision.viewPath);
+    void loadDirRef.current(decision.viewPath, options).finally(() => {
+      const runQueued = finishRefreshRun(schedulerRef.current);
+      if (decision.suppressPresence) {
         setExternalSuppressed(false);
       }
-      if (refreshQueuedRef.current) {
-        refreshQueuedRef.current = false;
+      if (runQueued) {
         refreshActiveRef.current("queued");
       }
     });
@@ -236,45 +215,15 @@ export const useDirWatch = ({
     pendingEntryPathsRef.current.clear();
     const renamePending = new Set(pendingRenamePathsRef.current);
     pendingRenamePathsRef.current.clear();
-    const renameKeys = new Set<string>();
-    renamePending.forEach((path) => {
-      const key = normalizePath(path);
-      if (key) {
-        renameKeys.add(key);
-      }
+    const changeResult = consumePendingChanges(schedulerRef.current, {
+      pendingPaths: pending,
+      renamePaths: Array.from(renamePending),
+      activeTabId: activeTabIdRef.current,
+      activeTabPath: activeTabPathRef.current,
+      tabs: tabsRef.current,
     });
 
-    const activeId = activeTabIdRef.current;
-    const activeKey = normalizePath(activeTabPathRef.current);
-    const tabsSnapshot = tabsRef.current;
-    let shouldRefreshActive = false;
-    let shouldSuppressActive = false;
-
-    pending.forEach((rawPath) => {
-      const key = normalizePath(rawPath);
-      if (!key) return;
-      const isRename = renameKeys.has(key);
-      tabsSnapshot.forEach((tab) => {
-        const tabKey = normalizePath(tab.path);
-        if (!tabKey || tabKey !== key) return;
-        if (tab.id === activeId && activeKey === key) {
-          shouldRefreshActive = true;
-          if (isRename) {
-            shouldSuppressActive = true;
-          }
-        } else {
-          dirtyTabIdsRef.current.add(tab.id);
-          if (isRename) {
-            renameDirtyTabIdsRef.current.add(tab.id);
-          }
-        }
-      });
-    });
-
-    if (shouldRefreshActive) {
-      if (shouldSuppressActive) {
-        suppressNextRefreshRef.current = true;
-      }
+    if (changeResult.shouldRefreshActive) {
       refreshActiveRef.current("fs-event");
       // Re-check after a short backoff in case a large write finishes later.
       scheduleRefreshBackoff(activeTabPathRef.current);
@@ -390,22 +339,7 @@ export const useDirWatch = ({
 
   useEffect(() => {
     // Drop stale IDs when tabs close so dirty/refresh maps stay bounded.
-    const ids = new Set(tabs.map((tab) => tab.id));
-    dirtyTabIdsRef.current.forEach((id) => {
-      if (!ids.has(id)) {
-        dirtyTabIdsRef.current.delete(id);
-      }
-    });
-    renameDirtyTabIdsRef.current.forEach((id) => {
-      if (!ids.has(id)) {
-        renameDirtyTabIdsRef.current.delete(id);
-      }
-    });
-    lastRefreshRef.current.forEach((_value, id) => {
-      if (!ids.has(id)) {
-        lastRefreshRef.current.delete(id);
-      }
-    });
+    pruneSchedulerTabs(schedulerRef.current, tabs);
   }, [tabs]);
 
   useEffect(() => {
@@ -420,10 +354,14 @@ export const useDirWatch = ({
       tabCheckTimerRef.current = null;
       const tabId = activeTabIdRef.current;
       if (!tabId) return;
-      const isDirty = dirtyTabIdsRef.current.has(tabId);
-      const lastRefresh = lastRefreshRef.current.get(tabId) ?? 0;
-      const now = Date.now();
-      if (isDirty || now - lastRefresh > TAB_SWITCH_REFRESH_COOLDOWN_MS) {
+      if (
+        shouldRefreshOnTabSwitch(
+          schedulerRef.current,
+          tabId,
+          Date.now(),
+          TAB_SWITCH_REFRESH_COOLDOWN_MS,
+        )
+      ) {
         refreshActiveRef.current("tab-switch");
       }
     }, TAB_SWITCH_CHECK_DELAY_MS);
@@ -436,21 +374,19 @@ export const useDirWatch = ({
   }, [activeTabId, enabled]);
 
   useEffect(() => {
-    if (!enabled) return;
-    if (loading) return;
-    if (!refreshQueuedRef.current) return;
-    refreshQueuedRef.current = false;
-    refreshActiveRef.current("queued");
+    if (consumeQueuedRefreshWhenIdle(schedulerRef.current, enabled, loading)) {
+      refreshActiveRef.current("queued");
+    }
   }, [enabled, loading]);
 
   useEffect(() => {
-    if (!activeTabId) return;
-    const viewKey = normalizePath(activeTabPath);
-    const currentKey = normalizePath(currentPath);
-    if (!viewKey || viewKey !== currentKey) return;
-    dirtyTabIdsRef.current.delete(activeTabId);
-    renameDirtyTabIdsRef.current.delete(activeTabId);
-    lastRefreshRef.current.set(activeTabId, Date.now());
+    markActiveTabSynced(
+      schedulerRef.current,
+      activeTabId,
+      activeTabPath,
+      currentPath,
+      Date.now(),
+    );
   }, [activeTabId, activeTabPath, currentPath]);
 
   useEffect(() => {
