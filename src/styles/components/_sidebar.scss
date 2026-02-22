@@ -6,6 +6,7 @@
   --scrollbar-thumb: #1f2736;
   background: #0d0f14;
   border: 1px solid #1a2233;
+  border-left: none;
   border-radius: var(--panel-radius);
   padding: var(--sidebar-padding);
   display: flex;
@@ -252,10 +253,5 @@
 
 :root[data-ambient="true"] :where(.sidebar) .section-toggle.is-open .toggle-mark {
   color: rgba(var(--accent-rgb), 0.95);
-}
-
-// Compact mode removes the outer container frame while keeping the content intact.
-:root[data-compact="true"] .sidebar {
-  border-left: none;
 }
 

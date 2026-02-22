@@ -8,7 +8,6 @@ type SettingsGeneralSectionProps = {
   defaultViewMode: ViewMode;
   smoothScroll: boolean;
   gridCentered: boolean;
-  compactMode: boolean;
   showParentEntry: boolean;
   confirmDelete: boolean;
   confirmClose: boolean;
@@ -20,7 +19,6 @@ export const SettingsGeneralSection = ({
   defaultViewMode,
   smoothScroll,
   gridCentered,
-  compactMode,
   showParentEntry,
   confirmDelete,
   confirmClose,
@@ -77,22 +75,6 @@ export const SettingsGeneralSection = ({
             type="checkbox"
             checked={gridCentered}
             onChange={(event) => onUpdate({ gridCentered: event.currentTarget.checked })}
-          />
-          <span />
-        </label>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Compact mode</div>
-          <div className="settings-desc">
-            Edge-to-edge layout with a flush sidebar and a simplified content frame.
-          </div>
-        </div>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={compactMode}
-            onChange={(event) => onUpdate({ compactMode: event.currentTarget.checked })}
           />
           <span />
         </label>

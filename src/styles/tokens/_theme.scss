@@ -50,13 +50,14 @@ $accent-themes: (
   --accent-rgb: 225, 76, 76;
   --topstack-height: 120px;
   --statusbar-height: 30px;
-  // Layout sizing tokens to keep density changes centralized.
-  --layout-gap: 16px;
-  --layout-padding: 12px 16px 16px;
-  --panel-radius: 10px;
+  // Layout sizing tokens for the default edge-to-edge shell.
+  --layout-gap: 0;
+  --layout-padding: 0;
+  --panel-radius: 0;
   --sidebar-padding: 16px;
-  --main-padding: 12px;
+  --main-padding: 0;
   --thumb-grid-margin: 0;
+  --content-edge-gap: 8px;
 }
 
 @each $name, $theme in $accent-themes {
@@ -73,14 +74,4 @@ $accent-themes: (
   --ambient-glow-strong: rgba(var(--accent-rgb), 0.55);
   --ambient-glow-mid: rgba(var(--accent-rgb), 0.32);
   --ambient-glow-soft: rgba(var(--accent-rgb), 0.18);
-}
-
-// Compact mode trims layout chrome for an edge-to-edge workspace.
-:root[data-compact="true"] {
-  --layout-gap: 0;
-  --layout-padding: 0;
-  --panel-radius: 0;
-  --main-padding: 0;
-  --thumb-grid-margin: 0;
-  --compact-edge-gap: 8px;
 }

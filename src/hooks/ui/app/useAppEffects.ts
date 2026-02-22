@@ -29,7 +29,6 @@ type AppEffectSettings = {
   blurOverlays: boolean;
   gridRounded: boolean;
   gridCentered: boolean;
-  compactMode: boolean;
 };
 
 type AppEffectView = {
@@ -101,7 +100,6 @@ export const useAppEffects = ({
     blurOverlays,
     gridRounded,
     gridCentered,
-    compactMode,
   } = settings;
   const {
     activeTabId,
@@ -172,7 +170,6 @@ export const useAppEffects = ({
     blurOverlays,
     gridRounded,
     gridCentered,
-    compactMode,
   });
 
   useEffect(() => {

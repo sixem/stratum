@@ -440,7 +440,6 @@ const App = () => {
       blurOverlays: settings.blurOverlays,
       gridRounded: settings.gridRounded,
       gridCentered: settings.gridCentered,
-      compactMode: settings.compactMode,
     },
     view: {
       activeTabId,
@@ -698,7 +697,6 @@ const App = () => {
           scrollRestoreTop,
           scrollRequest,
           smoothScroll: settings.smoothScroll,
-          compactMode: settings.compactMode,
           sortState,
           canGoUp,
         },

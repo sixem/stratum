@@ -35,7 +35,6 @@ type FileGridProps = {
   scrollRestoreTop: number;
   scrollRequest?: { index: number; nonce: number } | null;
   smoothScroll: boolean;
-  compactMode: boolean;
   selectedPaths: Set<string>;
   onSetSelection: (paths: string[], anchor?: string) => void;
   onOpenDir: (path: string) => void;
@@ -107,7 +106,6 @@ const FileGrid = ({
   scrollRestoreTop,
   scrollRequest,
   smoothScroll,
-  compactMode,
   selectedPaths,
   onSetSelection,
   onOpenDir,
@@ -225,7 +223,6 @@ const FileGrid = ({
     columnCount,
     rowCount,
     rowHeight,
-    compactMode,
     viewItems,
   });
 
@@ -269,7 +266,6 @@ const FileGrid = ({
     columnWidth,
     rowHeight,
     gridGap,
-    compactMode,
     onSetSelection,
     onClearSelection,
     onStartDragOut,

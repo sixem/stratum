@@ -5,13 +5,8 @@
   gap: 12px;
   min-height: 0;
   flex: 1;
-  padding-top: 10px;
-  --list-columns: 1fr 110px 180px;
-}
-
-:root[data-compact="true"] :where(.file-list) {
+  padding: var(--content-edge-gap);
   --list-columns: 1fr 90px 150px;
-  padding: var(--compact-edge-gap);
 }
 
 // Scope list internals to the list container.
@@ -56,12 +51,8 @@
     overflow-y: auto;
     min-height: 0;
     flex: 1;
-    padding: var(--thumb-padding, 6px);
-    // Compensate for the reserved scrollbar gutter so side + top gaps stay even.
-    padding-right: max(
-      calc(var(--thumb-padding, 6px) - var(--thumb-scrollbar-size, 10px)),
-      0px
-    );
+    padding: 0;
+    padding-right: 0;
     scroll-behavior: auto;
     scrollbar-gutter: stable;
     scrollbar-width: auto;
@@ -102,10 +93,6 @@
     width: 100%;
     margin: var(--thumb-grid-margin);
   }
-}
-
-:root[data-compact="true"] :where(.thumb-shell) .thumb-viewport {
-  padding: 0;
 }
 
 :root[data-grid-center="false"] :where(.thumb-shell) .thumb-grid {
@@ -164,10 +151,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-:root[data-compact="true"] :where(.thumb-shell) {
-  padding: var(--compact-edge-gap);
+  padding: var(--content-edge-gap);
 }
 
 :where(.thumb-shell) {
@@ -414,7 +398,7 @@
   color: rgba(220, 227, 238, 0.82);
 }
 
-:root[data-ambient="true"][data-compact="true"] :where(.thumb-shell) .thumb-card.is-selected {
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-selected {
   border-color: rgba(var(--accent-rgb), 0.7);
   background: rgba(var(--accent-rgb), 0.12);
 }
@@ -426,9 +410,7 @@
   background: rgba(var(--accent-rgb), 0.18);
 }
 
-:root[data-ambient="true"][data-compact="true"]
-  :where(.thumb-shell)
-  .thumb-card[data-drop-target="true"] {
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-card[data-drop-target="true"] {
   border-color: rgba(var(--accent-rgb), 0.9);
   background: rgba(var(--accent-rgb), 0.18);
 }
@@ -527,7 +509,7 @@
     display: grid;
     grid-template-columns: var(--list-columns);
     align-items: center;
-    padding: 6px 10px;
+    padding: 4px 8px;
     border-bottom: 1px solid var(--stroke);
     background: rgba(12, 16, 24, 0.6);
   }
@@ -538,14 +520,14 @@
     justify-content: flex-start;
     gap: 6px;
     width: 100%;
-    padding: 4px 6px;
+    padding: 3px 4px;
     border-radius: 6px;
     border: 1px solid transparent;
     background: transparent;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.12em;
     color: var(--muted);
     text-align: left;
     transition: none;
@@ -585,22 +567,12 @@
   }
 }
 
-:root[data-compact="true"] :where(.file-list) .list-header {
-  padding: 4px 8px;
-}
-
-:root[data-compact="true"] :where(.file-list) .list-header-button {
-  padding: 3px 4px;
-  font-size: 10px;
-  letter-spacing: 0.12em;
-}
-
 :where(.file-list) {
   .list-body {
     position: relative;
     overflow-x: hidden;
     overflow-y: auto;
-    padding-right: 8px;
+    padding-right: 0;
     min-width: 0;
     flex: 1;
     scroll-behavior: auto;
@@ -675,10 +647,6 @@
   }
 }
 
-:root[data-compact="true"] :where(.file-list) .list-body {
-  padding-right: 0;
-}
-
 .selection-rect {
   position: fixed;
   z-index: 3;
@@ -718,10 +686,10 @@
     display: grid;
     grid-template-columns: var(--list-columns);
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
+    gap: 8px;
+    padding: 6px 10px;
     height: var(--list-row-height, auto);
-    border-radius: 8px;
+    border-radius: 6px;
     background: var(--surface-control-muted);
     --list-dot-color: var(--accent);
     border: 1px solid transparent;
@@ -736,7 +704,7 @@
 
   .row.is-renaming .name {
     overflow: visible;
-    gap: 8px;
+    gap: 6px;
   }
 
   .row.is-parent {
@@ -784,7 +752,8 @@
   .row .name {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    font-size: 13px;
     font-weight: 600;
     min-width: 0;
     overflow: hidden;
@@ -794,8 +763,8 @@
 
   .row .name::before {
     content: "";
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 999px;
     background: var(--list-dot-color);
   }
@@ -807,27 +776,6 @@
     color: var(--muted);
     font-size: 13px;
   }
-}
-
-:root[data-compact="true"] :where(.file-list) .row {
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 6px;
-}
-
-
-:root[data-compact="true"] :where(.file-list) .row .name {
-  gap: 8px;
-  font-size: 13px;
-}
-
-:root[data-compact="true"] :where(.file-list) .row.is-renaming .name {
-  gap: 6px;
-}
-
-:root[data-compact="true"] :where(.file-list) .row .name::before {
-  width: 8px;
-  height: 8px;
 }
 
 :root[data-ambient="true"] :where(.file-list) .row {

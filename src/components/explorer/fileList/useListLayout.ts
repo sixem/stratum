@@ -3,13 +3,10 @@ import type { CSSProperties, RefObject } from "react";
 import { useMemo, useRef } from "react";
 import { useScrollRestore, useWheelSnap } from "@/hooks";
 
-const ROW_HEIGHT = 48;
-const ROW_GAP = 8;
-const COMPACT_ROW_HEIGHT = 36;
-const COMPACT_ROW_GAP = 6;
+const ROW_HEIGHT = 36;
+const ROW_GAP = 6;
 
 type UseListLayoutOptions = {
-  compactMode: boolean;
   smoothScroll: boolean;
   scrollRestoreKey: string;
   scrollRestoreTop: number;
@@ -25,16 +22,14 @@ type ListLayoutState = {
 };
 
 export const useListLayout = ({
-  compactMode,
   smoothScroll,
   scrollRestoreKey,
   scrollRestoreTop,
   loading,
 }: UseListLayoutOptions): ListLayoutState => {
   const listRef = useRef<HTMLDivElement | null>(null);
-  // Match virtualization height with compact spacing when enabled.
-  const rowHeight = compactMode ? COMPACT_ROW_HEIGHT : ROW_HEIGHT;
-  const rowGap = compactMode ? COMPACT_ROW_GAP : ROW_GAP;
+  const rowHeight = ROW_HEIGHT;
+  const rowGap = ROW_GAP;
   const itemHeight = rowHeight + rowGap;
 
   const listVars = useMemo(

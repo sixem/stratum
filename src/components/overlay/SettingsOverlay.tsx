@@ -43,7 +43,6 @@ export const SettingsOverlay = ({
     fixedWidthTabs,
     smoothScroll,
     smartTabJump,
-    compactMode,
     accentTheme,
     categoryTinting,
     showParentEntry,
@@ -253,7 +252,6 @@ export const SettingsOverlay = ({
               defaultViewMode={defaultViewMode}
               smoothScroll={smoothScroll}
               gridCentered={gridCentered}
-              compactMode={compactMode}
               showParentEntry={showParentEntry}
               confirmDelete={confirmDelete}
               confirmClose={confirmClose}

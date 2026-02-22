@@ -27,7 +27,6 @@ export const DEFAULT_SETTINGS: Settings = {
   fixedWidthTabs: false,
   smoothScroll: false,
   smartTabJump: true,
-  compactMode: true,
   accentTheme: "red",
   categoryTinting: false,
   showParentEntry: true,

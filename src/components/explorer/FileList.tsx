@@ -34,7 +34,6 @@ type FileListProps = {
   scrollRestoreTop: number;
   scrollRequest?: { index: number; nonce: number } | null;
   smoothScroll: boolean;
-  compactMode: boolean;
   sortState: SortState;
   onSortChange: (next: SortState) => void;
   categoryTinting: boolean;
@@ -88,7 +87,6 @@ const FileList = ({
   scrollRestoreTop,
   scrollRequest,
   smoothScroll,
-  compactMode,
   sortState,
   onSortChange,
   categoryTinting,
@@ -148,7 +146,6 @@ const FileList = ({
   }, [indexMap, items]);
 
   const { listRef, itemHeight, rowHeight, listVars } = useListLayout({
-    compactMode,
     smoothScroll,
     scrollRestoreKey,
     scrollRestoreTop,
@@ -159,7 +156,6 @@ const FileList = ({
     listRef,
     viewKey,
     itemHeight,
-    compactMode,
     rows,
   });
 
@@ -185,7 +181,6 @@ const FileList = ({
     selectionItems,
     itemHeight,
     rowHeight,
-    compactMode,
     onSetSelection,
     onClearSelection,
     onStartDragOut,

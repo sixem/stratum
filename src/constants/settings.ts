@@ -10,4 +10,4 @@ export const GRID_GAP_MAX = 24;
 export const GRID_GAP_DEFAULT = 8;
 
 export const SETTINGS_STORAGE_KEY = "stratum.settings";
-export const SETTINGS_STORAGE_VERSION = 18;
+export const SETTINGS_STORAGE_VERSION = 19;
