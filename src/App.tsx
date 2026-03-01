@@ -697,6 +697,7 @@ const App = () => {
           scrollRestoreTop,
           scrollRequest,
           smoothScroll: settings.smoothScroll,
+          pendingDeletePaths: fileManager.pendingDeletePaths,
           sortState,
           canGoUp,
         },

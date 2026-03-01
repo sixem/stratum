@@ -9,7 +9,7 @@ import {
   useEntryPresence,
   useScrollToIndex,
 } from "@/hooks";
-import { getEmptyMessage, handleMiddleClick } from "@/lib";
+import { getEmptyMessage, handleMiddleClick, normalizePath } from "@/lib";
 import type { DropTarget, EntryItem } from "@/lib";
 import type { GridNameEllipsis, GridSize, ThumbnailFit } from "@/modules";
 import type { EntryMeta, FileEntry, RenameCommitReason, ThumbnailRequest } from "@/types";
@@ -35,6 +35,7 @@ type FileGridProps = {
   scrollRestoreTop: number;
   scrollRequest?: { index: number; nonce: number } | null;
   smoothScroll: boolean;
+  pendingDeletePaths: Set<string>;
   selectedPaths: Set<string>;
   onSetSelection: (paths: string[], anchor?: string) => void;
   onOpenDir: (path: string) => void;
@@ -106,6 +107,7 @@ const FileGrid = ({
   scrollRestoreTop,
   scrollRequest,
   smoothScroll,
+  pendingDeletePaths,
   selectedPaths,
   onSetSelection,
   onOpenDir,
@@ -158,6 +160,13 @@ const FileGrid = ({
   canGoUp,
   onGoUp,
 }: FileGridProps) => {
+  const isDeletePending = useCallback(
+    (path: string) => {
+      const key = normalizePath(path) ?? path.trim();
+      return key ? pendingDeletePaths.has(key) : false;
+    },
+    [pendingDeletePaths],
+  );
   const emptyMessage = useMemo(() => getEmptyMessage(searchQuery), [searchQuery]);
   const { items: viewItems } = useEntryPresence({
     items,
@@ -168,9 +177,12 @@ const FileGrid = ({
     () =>
       viewItems.map((item) => ({
         path: item.type === "parent" ? item.path : item.entry.path,
-        selectable: item.type !== "parent" && item.presence !== "removed",
+        selectable:
+          item.type !== "parent" &&
+          item.presence !== "removed" &&
+          !isDeletePending(item.entry.path),
       })),
-    [viewItems],
+    [isDeletePending, viewItems],
   );
   const resolvedIndexMap = useMemo(() => {
     if (indexMap) return indexMap;
@@ -432,6 +444,7 @@ const FileGrid = ({
                 nameEllipsis={gridNameEllipsis}
                 hideExtension={gridNameHideExtension}
                 selected={selectedPaths.has(item.entry.path)}
+                isDeleting={isDeletePending(item.entry.path)}
                 dropTarget={isDropTarget}
                 isRenaming={renameTargetPath === item.entry.path}
                 renameValue={renameValue}

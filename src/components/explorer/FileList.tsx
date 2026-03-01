@@ -9,7 +9,7 @@ import {
   useEntryPresence,
   useScrollToIndex,
 } from "@/hooks";
-import { getEmptyMessage, handleMiddleClick } from "@/lib";
+import { getEmptyMessage, handleMiddleClick, normalizePath } from "@/lib";
 import type { DropTarget, EntryItem } from "@/lib";
 import type { EntryMeta, FileEntry, RenameCommitReason, SortState } from "@/types";
 import { EmptyState } from "@/components/primitives/EmptyState";
@@ -34,6 +34,7 @@ type FileListProps = {
   scrollRestoreTop: number;
   scrollRequest?: { index: number; nonce: number } | null;
   smoothScroll: boolean;
+  pendingDeletePaths: Set<string>;
   sortState: SortState;
   onSortChange: (next: SortState) => void;
   categoryTinting: boolean;
@@ -87,6 +88,7 @@ const FileList = ({
   scrollRestoreTop,
   scrollRequest,
   smoothScroll,
+  pendingDeletePaths,
   sortState,
   onSortChange,
   categoryTinting,
@@ -121,6 +123,13 @@ const FileList = ({
   canGoUp,
   onGoUp,
 }: FileListProps) => {
+  const isDeletePending = useCallback(
+    (path: string) => {
+      const key = normalizePath(path) ?? path.trim();
+      return key ? pendingDeletePaths.has(key) : false;
+    },
+    [pendingDeletePaths],
+  );
   const emptyMessage = useMemo(() => getEmptyMessage(searchQuery), [searchQuery]);
   const { items: rows } = useEntryPresence({
     items,
@@ -131,9 +140,11 @@ const FileList = ({
     () =>
       rows.map((row) => ({
         path: row.type === "parent" ? row.path : row.entry.path,
-        selectable: row.presence !== "removed",
+        selectable:
+          row.presence !== "removed" &&
+          (row.type === "parent" || !isDeletePending(row.entry.path)),
       })),
-    [rows],
+    [isDeletePending, rows],
   );
   const resolvedIndexMap = useMemo(() => {
     if (indexMap) return indexMap;
@@ -347,6 +358,7 @@ const FileList = ({
                     sizeLabel={rowMeta?.sizeLabel ?? ""}
                     modifiedLabel={rowMeta?.modifiedLabel ?? ""}
                     selected={selectedPaths.has(row.entry.path)}
+                    isDeleting={isDeletePending(row.entry.path)}
                     dropTarget={isDropTarget}
                     isRenaming={renameTargetPath === row.entry.path}
                     renameValue={renameValue}
