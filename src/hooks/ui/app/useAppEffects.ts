@@ -297,6 +297,22 @@ export const useAppEffects = ({
   }, [appName, appVersion, isTauriEnv, viewPath]);
 
   useEffect(() => {
+    const root = document.documentElement;
+    const syncWindowFocus = () => {
+      root.dataset.windowFocus = document.hasFocus() ? "true" : "false";
+    };
+
+    syncWindowFocus();
+    window.addEventListener("focus", syncWindowFocus);
+    window.addEventListener("blur", syncWindowFocus);
+
+    return () => {
+      window.removeEventListener("focus", syncWindowFocus);
+      window.removeEventListener("blur", syncWindowFocus);
+    };
+  }, []);
+
+  useEffect(() => {
     const handleBeforeUnload = () => {
       stashActiveScroll();
     };

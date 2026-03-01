@@ -1,6 +1,6 @@
 // App shell wiring: composes state hooks, layout blocks, and overlays.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppOverlays, AppShellLayout } from "@/components";
+import { AppOverlays, AppShellLayout, AppWindowFrame } from "@/components";
 import {
   useAppCommands,
   useAppContextMenuSection,
@@ -873,6 +873,7 @@ const App = () => {
         }}
       />
       <AppOverlays {...overlayProps} />
+      <AppWindowFrame />
     </div>
   );
 };

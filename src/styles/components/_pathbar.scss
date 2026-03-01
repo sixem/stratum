@@ -1,12 +1,21 @@
-// Path bar, drive picker, and path/search inputs.
-.pathbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+// Path bar shell, drive picker, and path/search inputs.
+.pathbar-shell {
+  --pathbar-hover-surface: rgba(255, 255, 255, 0.06);
   background: var(--panel-2);
-  border-bottom: 1px solid var(--stroke);
-  width: 100%;
+  border-bottom: 2px solid #1b213061;
+}
+
+:root[data-window-focus="false"] .pathbar-shell {
+  background: color-mix(in srgb, var(--panel-2) 97%, white);
+}
+
+:root[data-window-focus="false"] .pathbar-shell .drive-toggle-body {
+  background: color-mix(in srgb, var(--surface-control) 96%, white);
+}
+
+.pathbar {
+  gap: 6px;
+  background: transparent;
 }
 
 // Scope path bar internals to the bar without increasing specificity.
@@ -15,7 +24,7 @@
   .pathbar-right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex: 0 0 auto;
   }
 
@@ -24,6 +33,8 @@
     align-items: center;
     min-width: 0;
     flex: 1 1 auto;
+    // Let the drag host receive pointer events anywhere the picker has no live controls.
+    pointer-events: none;
   }
 
   .pathbar-right {
@@ -31,8 +42,11 @@
   }
 
   .pathbar-brand {
-    display: flex;
-    align-items: center;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
     background: none;
     border: none;
     padding: 0;
@@ -41,19 +55,20 @@
   }
 
   .brand-mark {
-    width: 30px;
-    height: 30px;
-    border-radius: 6px;
+    width: 22px;
+    height: 22px;
     display: grid;
     place-items: center;
-    border: 1px solid var(--stroke);
-    background: var(--surface-control);
-    overflow: hidden;
+    border: none;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--accent);
+    overflow: visible;
 
-    img {
+    .brand-mark-icon {
       width: 100%;
       height: 100%;
-      object-fit: contain;
       display: block;
     }
   }
@@ -64,17 +79,19 @@
     border-radius: 6px;
   }
 
-  .pathbar-brand:hover .brand-mark {
-    filter: brightness(1.08) saturate(1.08);
+  .pathbar-brand:hover {
+    background: var(--pathbar-hover-surface);
+    border-radius: 5px;
   }
 
   .drive-picker {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
     flex: 1 1 auto;
+    pointer-events: none;
   }
 
   .drive-toggle {
@@ -82,30 +99,35 @@
     align-items: center;
     min-width: 0;
     flex: 1 1 auto;
+    // Let unused width fall through to the path bar drag region.
+    pointer-events: none;
   }
 
   .drive-toggle-body {
     display: inline-flex;
     align-items: center;
-    gap: 2px;
+    gap: 0;
     min-width: 0;
     max-width: 100%;
-    height: 28px;
-    border-radius: 6px;
+    height: 26px;
+    border-radius: 5px;
     background: var(--surface-control);
-    padding: 0 2px;
+    padding: 0;
     overflow: hidden;
+    // Keep the picker chrome itself transparent to dragging.
+    // Only the real controls inside should capture input.
+    pointer-events: none;
   }
 
   .drive-picker-button {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 0 10px;
-    border-radius: 4px;
+    padding: 0 9px;
+    border-radius: 3px;
     border: 1px solid transparent;
     background: transparent;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.08em;
     color: var(--muted);
@@ -114,10 +136,13 @@
     white-space: nowrap;
     height: 100%;
     flex: 0 0 auto;
+    align-self: stretch;
+    min-height: 100%;
+    pointer-events: auto;
   }
 
   .drive-picker-button:hover {
-    color: var(--text);
+    background: var(--pathbar-hover-surface);
   }
 
   .drive-picker-button:disabled {
@@ -146,6 +171,10 @@
     transform: translateX(0);
   }
 
+  .drive-picker[data-expanded="true"] .drive-picker-button {
+    border-radius: 3px 0 0 3px;
+  }
+
   .drive-picker-scroll {
     position: relative;
     display: flex;
@@ -153,6 +182,12 @@
     min-width: 0;
     padding: 0 6px 0 2px;
     height: 100%;
+  }
+
+  .drive-picker[data-expanded="true"] .drive-picker-scroll {
+    margin-left: 2px;
+    padding-left: 6px;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .drive-picker-scroll::before,
@@ -203,7 +238,7 @@
   }
 
   .drive-picker-item:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: var(--pathbar-hover-surface);
   }
 
   .drive-picker-item.is-active {
@@ -263,14 +298,67 @@
   .pathbar-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+
+    .view-btn:hover {
+      background: var(--pathbar-hover-surface);
+    }
   }
 
   .path-controls {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     flex: 0 0 auto;
+
+    > .btn {
+      border: none;
+    }
+
+    > .btn:hover:not(:disabled) {
+      background: var(--pathbar-hover-surface);
+    }
+  }
+
+  .transfer-button {
+    height: 26px;
+    padding: 0 8px;
+    gap: 5px;
+  }
+
+  .transfer-label {
+    font-size: 10px;
+  }
+
+  .transfer-count {
+    font-size: 9px;
+  }
+
+  .transfer-indicator {
+    width: 12px;
+    height: 12px;
+  }
+
+  .view-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 5px;
+  }
+
+  .view-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .btn {
+    min-height: 26px;
+    padding: 2px 8px;
+    border-radius: 5px;
+  }
+
+  .btn-icon {
+    width: 14px;
+    height: 14px;
   }
 
   .nav-arrow {
@@ -282,11 +370,15 @@
   }
 }
 
+.pathbar-window-controls {
+  min-height: var(--window-chrome-bar-height);
+}
+
 .path-tabs {
   display: flex;
   flex-direction: column;
   background: var(--panel);
-  border-bottom: 1px solid var(--stroke);
+  border-bottom: 2px solid #1b213061;
 }
 
 .path-inputbar {
@@ -406,4 +498,3 @@
   height: 16px;
   display: block;
 }
-

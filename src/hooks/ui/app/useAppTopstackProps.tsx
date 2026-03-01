@@ -1,11 +1,14 @@
 // Builds the topstack props so App.tsx stays focused on data flow.
 import type { ComponentProps, RefObject } from "react";
+import { PATHBAR_TOOLTIP_DELAY_MS } from "@/constants";
 import {
   DrivePicker,
   PathBarActions,
   PressButton,
   SidebarIcon,
+  StratumBrandIcon,
   ToolbarIconButton,
+  WindowControls,
 } from "@/components";
 import type { AppTopstackContainerProps } from "@/components/app/AppTopstackContainer";
 import { PathBar } from "@/components/explorer/PathBar";
@@ -16,7 +19,10 @@ import { TabsBar } from "@/components/navigation/TabsBar";
 type UseAppTopstackPropsOptions = {
   appName: string;
   topstackRef: RefObject<HTMLDivElement | null>;
-  pathBar: Omit<ComponentProps<typeof PathBar>, "leftSlot" | "driveSlot" | "rightSlot">;
+  pathBar: Omit<
+    ComponentProps<typeof PathBar>,
+    "leftSlot" | "driveSlot" | "rightSlot" | "windowControlsSlot"
+  >;
   pathInputsBar: ComponentProps<typeof PathInputsBar>;
   tabsBar: ComponentProps<typeof TabsBar>;
   crumbsBar: ComponentProps<typeof PathCrumbsBar>;
@@ -50,13 +56,14 @@ export const useAppTopstackProps = ({
         onClick={onOpenAbout}
       >
         <div className="brand-mark">
-          <img src="/favicon.png" alt="" aria-hidden="true" />
+          <StratumBrandIcon className="brand-mark-icon" />
         </div>
       </PressButton>
       <ToolbarIconButton
         label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
         active={sidebarOpen}
         pressed={sidebarOpen}
+        tooltipDelayMs={PATHBAR_TOOLTIP_DELAY_MS}
         onClick={onToggleSidebar}
       >
         <SidebarIcon />
@@ -71,6 +78,7 @@ export const useAppTopstackProps = ({
       leftSlot,
       driveSlot: <DrivePicker {...drivePicker} />,
       rightSlot: <PathBarActions {...pathBarActions} />,
+      windowControlsSlot: <WindowControls />,
     },
     pathInputsBar,
     tabsBar,

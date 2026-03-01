@@ -102,15 +102,10 @@ export const AboutModal = ({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="about-header">
-          <div className="about-mark">
-            <img src="/favicon.png" alt="" aria-hidden="true" />
+          <div className="about-title" id="about-title">
+            {appName}
           </div>
-          <div className="about-upper">
-            <div className="about-title" id="about-title">
-              {appName}
-            </div>
-            <div className="about-subtitle">{description}</div>
-          </div>
+          <div className="about-subtitle">{description}</div>
         </header>
 
         <div className="about-meta">
@@ -162,8 +157,6 @@ export const AboutModal = ({
             </span>
           </div>
         </div>
-
-        <div className="about-footer">Made with Tauri + React 🌟</div>
 
         <div className="about-actions">
           <PressButton

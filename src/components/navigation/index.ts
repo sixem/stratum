@@ -6,3 +6,4 @@ export { SidebarSection } from "./SidebarSection";
 export { StatusBar } from "./StatusBar";
 export { TabsBar } from "./TabsBar";
 export { TopBar } from "./TopBar";
+export { WindowControls } from "./WindowControls";

@@ -26,9 +26,11 @@
     flex-direction: column;
     gap: 12px;
     min-height: 0;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: scroll;
     // Reserve a stable scrollbar gutter and align the scrollbar to the panel edge.
     scrollbar-gutter: stable;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
     margin-right: calc(var(--sidebar-padding) * -1 + var(--sidebar-scrollbar-gap));
     padding-right: calc(var(--sidebar-padding) + 4px - var(--sidebar-scrollbar-gap));
     flex: 1;

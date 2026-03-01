@@ -8,6 +8,7 @@ type ToolbarIconButtonProps = {
   active?: boolean;
   pressed?: boolean;
   onClick: () => void;
+  tooltipDelayMs?: number;
   children: ReactNode;
 };
 
@@ -16,10 +17,11 @@ export const ToolbarIconButton = ({
   active = false,
   pressed,
   onClick,
+  tooltipDelayMs,
   children,
 }: ToolbarIconButtonProps) => {
   return (
-    <TooltipWrapper text={label}>
+    <TooltipWrapper text={label} delayMs={tooltipDelayMs}>
       <PressButton
         type="button"
         className={`view-btn${active ? " is-active" : ""}`}

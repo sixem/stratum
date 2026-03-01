@@ -1,4 +1,5 @@
 // Action cluster aligned to the right side of the path bar.
+import { PATHBAR_TOOLTIP_DELAY_MS } from "@/constants";
 import { TransferStatusButton } from "@/components/transfer/TransferStatusButton";
 import { ToolbarIconButton } from "@/components/primitives/ToolbarIconButton";
 import { GridIcon, ListIcon, RecycleBinIcon, SettingsIcon } from "@/components/icons";
@@ -25,6 +26,7 @@ export const PathBarActions = ({
       <div className="view-switch">
         <ToolbarIconButton
           label="Recycle Bin"
+          tooltipDelayMs={PATHBAR_TOOLTIP_DELAY_MS}
           onClick={onOpenRecycleBin}
         >
           <RecycleBinIcon />
@@ -33,6 +35,7 @@ export const PathBarActions = ({
           label="List view"
           active={viewMode === "list"}
           pressed={viewMode === "list"}
+          tooltipDelayMs={PATHBAR_TOOLTIP_DELAY_MS}
           onClick={() => onViewChange("list")}
         >
           <ListIcon />
@@ -41,6 +44,7 @@ export const PathBarActions = ({
           label="Thumbnails view"
           active={viewMode === "thumbs"}
           pressed={viewMode === "thumbs"}
+          tooltipDelayMs={PATHBAR_TOOLTIP_DELAY_MS}
           onClick={() => onViewChange("thumbs")}
         >
           <GridIcon />
@@ -49,6 +53,7 @@ export const PathBarActions = ({
           label="Settings"
           active={settingsOpen}
           pressed={settingsOpen}
+          tooltipDelayMs={PATHBAR_TOOLTIP_DELAY_MS}
           onClick={onToggleSettings}
         >
           <SettingsIcon />

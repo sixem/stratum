@@ -30,11 +30,86 @@
   z-index: 2450;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 120px;
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   background: rgba(4, 6, 10, 0.64);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s ease;
+}
+
+.quick-preview-topbar-shell {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  background: linear-gradient(180deg, rgba(8, 10, 16, 0.82), rgba(8, 10, 16, 0.58));
+  border-bottom: 2px solid #1b213061;
+  backdrop-filter: blur(2px) saturate(1.05);
+  -webkit-backdrop-filter: blur(2px) saturate(1.05);
+}
+
+:root[data-window-focus="false"] .quick-preview-topbar-shell {
+  background: linear-gradient(180deg, rgba(12, 15, 22, 0.83), rgba(12, 15, 22, 0.6));
+}
+
+.quick-preview-topbar-window-controls {
+  min-height: var(--window-chrome-bar-height);
+}
+
+.quick-preview-topbar {
+  gap: 8px;
+}
+
+.quick-preview-topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.quick-preview-topbar-nav > .btn {
+  border: none;
+}
+
+.quick-preview-topbar-nav > .btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.quick-preview-topbar-nav .btn-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.quick-preview-topbar-nav .nav-arrow {
+  transform-origin: center;
+}
+
+.quick-preview-topbar-nav .nav-arrow.is-back {
+  transform: rotate(180deg);
+}
+
+.quick-preview-topbar-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+}
+
+.quick-preview-topbar-position {
+  flex: 0 0 auto;
+  min-width: 44px;
+  text-align: right;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 :root[data-ambient="true"] .quick-preview {
@@ -70,7 +145,7 @@
   position: relative;
   min-height: 0;
   grid-column: 1;
-  grid-row: 1;
+  grid-row: 2;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -200,7 +275,7 @@
   padding: 8px 16px;
   // Keep the info bar in the main column so it doesn't overlap the right strip.
   grid-column: 1 / 2;
-  grid-row: 3;
+  grid-row: 4;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(8, 10, 16, 0.6);
   backdrop-filter: blur(2px) saturate(1.05);
@@ -225,7 +300,7 @@
   position: relative;
   // Keep video controls in the main column so they don't overlay the right strip.
   grid-column: 1 / 2;
-  grid-row: 2;
+  grid-row: 3;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -505,39 +580,6 @@
     0 5px 11px rgba(0, 0, 0, 0.35);
 }
 
-// Title fades out after a moment so the media remains the focus.
-.quick-preview-title {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  max-width: min(55vw, 560px);
-  padding: 4px 8px;
-  border-radius: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(8, 10, 16, 0.6);
-  backdrop-filter: blur(2px) saturate(1.05);
-  -webkit-backdrop-filter: blur(2px) saturate(1.05);
-  color: var(--text);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  word-break: break-word;
-  pointer-events: none;
-  opacity: 1;
-  animation: quick-preview-title-fade 2.4s ease 2.4s forwards;
-  transition: opacity 0.2s ease;
-}
-
-@keyframes quick-preview-title-fade {
-  0%,
-  35% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
 .quick-preview-info-error {
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -570,7 +612,7 @@
 .quick-preview-strip {
   position: relative;
   grid-column: 2;
-  grid-row: 1 / -1;
+  grid-row: 2 / -1;
   overflow-x: hidden;
   overflow-y: auto;
   min-width: 0;

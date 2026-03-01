@@ -33,7 +33,12 @@
   transition: none;
 }
 
-.tabs-scroll-wrap[data-overflowed="false"] .tab-scroll-button {
+.tabs-scroll-wrap[data-overflowed="false"] .tab-scroll-button.is-left {
+  opacity: 0.24;
+  pointer-events: none;
+}
+
+.tabs-scroll-wrap[data-overflowed="false"] .tab-scroll-button.is-right {
   opacity: 0;
   pointer-events: none;
 }
