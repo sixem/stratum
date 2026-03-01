@@ -21,6 +21,7 @@
     "tinykeys": "^3.0.0"
   },
   "devDependencies": {
+    "@types/node": "^24.3.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@types/debug": "^4.1.12",
