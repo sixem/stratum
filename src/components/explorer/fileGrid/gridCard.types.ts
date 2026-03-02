@@ -48,6 +48,7 @@ export type EntryCardProps = {
   nameEllipsis: GridNameEllipsis;
   hideExtension: boolean;
   selected: boolean;
+  isDeleting: boolean;
   dropTarget: boolean;
   isRenaming: boolean;
   renameValue: string;

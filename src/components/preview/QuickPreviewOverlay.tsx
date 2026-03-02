@@ -1,9 +1,10 @@
 // Full-screen media preview overlay composed from focused hooks and view blocks.
-import { useMemo } from "react";
-import { getFileKind, getPathName } from "@/lib";
+import { useCallback, useMemo } from "react";
+import { getFileKind, getPathName, normalizePath } from "@/lib";
 import type { EntryMeta, FileEntry, ThumbnailRequest } from "@/types";
 import { LoadingIndicator } from "@/components/primitives/LoadingIndicator";
 import { QuickPreviewStrip } from "./QuickPreviewStrip";
+import { QuickPreviewTopBar } from "./QuickPreviewTopBar";
 import { PreviewControls } from "./PreviewControls";
 import { PreviewError } from "./PreviewError";
 import { PreviewStage } from "./PreviewStage";
@@ -50,6 +51,7 @@ const QuickPreviewOverlayContent = ({
   const previewPathIsVideo = useMemo(() => {
     return getFileKind(getPathName(path)) === "video";
   }, [path]);
+  const activePathKey = useMemo(() => normalizePath(path), [path]);
 
   const {
     containerRef,
@@ -87,6 +89,31 @@ const QuickPreviewOverlayContent = ({
     resetViewport,
     fitMediaToViewport,
   });
+  const activePreviewIndex = useMemo(() => {
+    const strictIndex = preview.previewItems.findIndex((entry) => entry.path === path);
+    if (strictIndex >= 0) return strictIndex;
+    return preview.previewItems.findIndex((entry) => normalizePath(entry.path) === activePathKey);
+  }, [activePathKey, path, preview.previewItems]);
+  const canGoPreviewBack = activePreviewIndex > 0;
+  const canGoPreviewForward =
+    activePreviewIndex >= 0 && activePreviewIndex < preview.previewItems.length - 1;
+  const showPreviewNavigation = preview.previewItems.length > 1;
+  const previewPositionLabel =
+    showPreviewNavigation && preview.previewItems.length > 0
+      ? `${Math.max(activePreviewIndex + 1, 1)} / ${preview.previewItems.length}`
+      : null;
+  const handleGoPreviewBack = useCallback(() => {
+    if (!canGoPreviewBack) return;
+    const previous = preview.previewItems[activePreviewIndex - 1];
+    if (!previous) return;
+    onSelectPreview(previous.path);
+  }, [activePreviewIndex, canGoPreviewBack, onSelectPreview, preview.previewItems]);
+  const handleGoPreviewForward = useCallback(() => {
+    if (!canGoPreviewForward) return;
+    const next = preview.previewItems[activePreviewIndex + 1];
+    if (!next) return;
+    onSelectPreview(next.path);
+  }, [activePreviewIndex, canGoPreviewForward, onSelectPreview, preview.previewItems]);
 
   return (
     <div
@@ -98,6 +125,15 @@ const QuickPreviewOverlayContent = ({
       aria-label={preview.label}
       tabIndex={-1}
     >
+      <QuickPreviewTopBar
+        title={preview.titleText}
+        positionLabel={previewPositionLabel}
+        showNavigation={showPreviewNavigation}
+        canGoBack={canGoPreviewBack}
+        canGoForward={canGoPreviewForward}
+        onGoBack={handleGoPreviewBack}
+        onGoForward={handleGoPreviewForward}
+      />
       <PreviewStage
         src={preview.src}
         label={preview.label}
@@ -150,9 +186,6 @@ const QuickPreviewOverlayContent = ({
         <div className="quick-preview-loading-card">
           <LoadingIndicator label={preview.isVideo ? "Loading video" : "Loading image"} />
         </div>
-      </div>
-      <div key={path} className="quick-preview-title">
-        {preview.titleText}
       </div>
       <PreviewControls
         open={open}

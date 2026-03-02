@@ -1,0 +1,75 @@
+// Shared sizing for app-owned title bars so every window chrome row stays aligned.
+.window-chrome-bar {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--window-chrome-bar-height);
+  padding: 4px 2px 2px 2px;
+}
+
+.window-chrome-bar-drag {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--window-chrome-bar-height);
+  padding: 4px 8px;
+}
+
+.window-chrome-bar-controls {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  align-self: stretch;
+}
+
+.window-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex: 0 0 auto;
+  align-self: stretch;
+}
+
+.window-control-button {
+  width: 40px;
+  min-height: var(--window-chrome-bar-height);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: none;
+  padding: 0;
+  align-self: stretch;
+}
+
+.window-control-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.window-control-button.is-close:hover {
+  background: rgba(225, 76, 76, 0.22);
+  color: #fff;
+}
+
+.window-control-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.window-control-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
+  flex: 0 0 auto;
+}
+
+.window-control-icon.is-minimize {
+  width: 10px;
+  height: 10px;
+}

@@ -14,18 +14,12 @@
 }
 
 .main {
-  background: var(--panel);
-  border: 1px solid var(--stroke);
+  background: transparent;
+  border: none;
   border-radius: var(--panel-radius);
   padding: var(--main-padding);
   min-height: 0;
   display: flex;
   flex-direction: column;
   min-width: 0;
-}
-
-// Compact mode removes the outer container frame while keeping the content intact.
-:root[data-compact="true"] .main {
-  background: transparent;
-  border: none;
 }

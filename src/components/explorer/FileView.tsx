@@ -51,7 +51,7 @@ type FileViewProps = {
   scrollRestoreTop: number;
   scrollRequest?: { index: number; nonce: number } | null;
   smoothScroll: boolean;
-  compactMode: boolean;
+  pendingDeletePaths: Set<string>;
   sortState: SortState;
   onSortChange: (next: SortState) => void;
   selectedPaths: Set<string>;
@@ -154,7 +154,7 @@ export const FileView = ({
   onEntryPreviewPress,
   onEntryPreviewRelease,
   smoothScroll,
-  compactMode,
+  pendingDeletePaths,
   sortState,
   onSortChange,
   onContextMenuDown,
@@ -206,7 +206,7 @@ export const FileView = ({
             {...viewProps}
             currentPath={currentPath}
             smoothScroll={smoothScroll}
-            compactMode={compactMode}
+            pendingDeletePaths={pendingDeletePaths}
             canGoUp={canGoUp}
             onGoUp={onGoUp}
             thumbnailsEnabled={thumbnailsEnabled}
@@ -251,7 +251,7 @@ export const FileView = ({
             {...viewProps}
             currentPath={currentPath}
             smoothScroll={smoothScroll}
-            compactMode={compactMode}
+            pendingDeletePaths={pendingDeletePaths}
             sortState={sortState}
             onSortChange={onSortChange}
             categoryTinting={categoryTinting}

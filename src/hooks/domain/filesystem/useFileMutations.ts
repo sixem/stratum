@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { renameEntry } from "@/api";
 import { UNDO_STACK_LIMIT } from "@/constants";
-import { tabLabel, toMessage } from "@/lib";
+import { normalizePath, tabLabel, toMessage } from "@/lib";
 import { usePromptStore } from "@/modules";
 import { useFileManagerCopy } from "./fileManagerCopy";
 import { useFileManagerCreate } from "./fileManagerCreate";
@@ -40,6 +40,14 @@ export const useFileMutations = ({
   const homeDriveKeyRef = useRef<string | null>(null);
   // Suppress add/remove presence animation while undoing rename so entries stay in-place.
   const [suppressUndoPresence, setSuppressUndoPresence] = useState(false);
+  // Tracks entries currently being deleted so views can show immediate progress feedback.
+  const [pendingDeletePaths, setPendingDeletePaths] = useState<Set<string>>(new Set());
+
+  const toPathKey = useCallback((path: string) => {
+    const trimmed = path.trim();
+    if (!trimmed) return "";
+    return normalizePath(trimmed) ?? trimmed;
+  }, []);
 
   const pushUndo = useCallback((action: UndoAction) => {
     const stack = undoStackRef.current;
@@ -64,7 +72,7 @@ export const useFileMutations = ({
     log,
   });
 
-  const { deleteEntriesInView } = useFileManagerDelete({
+  const { deleteEntriesInView: runDeleteEntriesInView } = useFileManagerDelete({
     deleteInFlightRef,
     trashRootRef,
     homePathRef,
@@ -73,6 +81,37 @@ export const useFileMutations = ({
     refreshAfterChange,
     log,
   });
+
+  const deleteEntriesInView = useCallback(
+    async (paths: string[]) => {
+      if (deleteInFlightRef.current) return null;
+      const nextPending = new Set(
+        paths
+          .map((path) => toPathKey(path))
+          .filter(Boolean),
+      );
+      if (nextPending.size === 0) return null;
+
+      setPendingDeletePaths((previous) => {
+        if (previous.size === 0) return new Set(nextPending);
+        const merged = new Set(previous);
+        nextPending.forEach((path) => merged.add(path));
+        return merged;
+      });
+
+      try {
+        return await runDeleteEntriesInView(paths);
+      } finally {
+        setPendingDeletePaths((previous) => {
+          if (previous.size === 0) return previous;
+          const next = new Set(previous);
+          nextPending.forEach((path) => next.delete(path));
+          return next;
+        });
+      }
+    },
+    [runDeleteEntriesInView, toPathKey],
+  );
 
   const performRenameRequests = useCallback(
     async (
@@ -172,6 +211,7 @@ export const useFileMutations = ({
 
   return {
     suppressUndoPresence,
+    pendingDeletePaths,
     deleteEntriesInView,
     duplicateEntriesInView,
     pasteEntriesInView,

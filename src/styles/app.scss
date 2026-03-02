@@ -10,6 +10,8 @@
 @use "./layout/layout";
 
 @use "./components/topstack";
+@use "./components/window-chrome";
+@use "./components/window-frame";
 @use "./components/pathbar";
 @use "./components/tabs";
 @use "./components/crumbbar";

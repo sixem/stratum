@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDynamicOverscan, useVirtualRange } from "@/hooks";
 import type { EntryItem } from "@/lib";
-import { COMPACT_VIEW_INSET } from "../fileView/constants";
+import { VIEW_INSET } from "../fileView/constants";
 
 const GRID_OVERSCAN = 3;
 const GRID_OVERSCAN_MIN = 1;
@@ -19,7 +19,6 @@ type UseGridVirtualOptions = {
   columnCount: number;
   rowCount: number;
   rowHeight: number;
-  compactMode: boolean;
   viewItems: EntryItem[];
 };
 
@@ -36,7 +35,6 @@ export const useGridVirtual = ({
   columnCount,
   rowCount,
   rowHeight,
-  compactMode,
   viewItems,
 }: UseGridVirtualOptions): GridVirtualState => {
   const baseOverscan = useDynamicOverscan({
@@ -142,14 +140,13 @@ export const useGridVirtual = ({
     GRID_OVERSCAN_BURST_MAX,
     Math.max(GRID_OVERSCAN_MIN, baseOverscan + wheelBurstOverscan),
   );
-  const viewInset = compactMode ? COMPACT_VIEW_INSET : 0;
   const virtual = useVirtualRange(
     viewportRef,
     rowCount,
     rowHeight,
     overscan,
-    viewInset,
-    viewInset,
+    VIEW_INSET,
+    VIEW_INSET,
   );
   const startIndex = virtual.startIndex * columnCount;
   const endIndex = Math.min(viewItems.length, virtual.endIndex * columnCount);

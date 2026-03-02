@@ -20,7 +20,7 @@ type UseAppFileViewPropsOptions = {
     | "scrollRestoreTop"
     | "scrollRequest"
     | "smoothScroll"
-    | "compactMode"
+    | "pendingDeletePaths"
     | "sortState"
     | "canGoUp"
   >;

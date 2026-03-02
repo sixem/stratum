@@ -18,6 +18,7 @@ type EntryRowProps = {
   sizeLabel: string;
   modifiedLabel: string;
   selected: boolean;
+  isDeleting: boolean;
   dropTarget: boolean;
   isRenaming: boolean;
   renameValue: string;
@@ -42,6 +43,7 @@ export const EntryRow = memo(({
   sizeLabel,
   modifiedLabel,
   selected,
+  isDeleting,
   dropTarget,
   isRenaming,
   renameValue,
@@ -58,8 +60,8 @@ export const EntryRow = memo(({
   presence = "stable",
 }: EntryRowProps) => {
   const isRemoved = presence === "removed";
-  const isInteractive = !isRenaming && !isRemoved;
-  const isSelectable = !isRemoved;
+  const isInteractive = !isRenaming && !isRemoved && !isDeleting;
+  const isSelectable = !isRemoved && !isDeleting;
   const handleMouseDown = (event: ReactMouseEvent) => {
     if (!isInteractive) return;
     if (event.button === 1) {
@@ -120,7 +122,7 @@ export const EntryRow = memo(({
       <div
         className={`row is-renaming${entry.isDir ? " is-dir" : ""}${
           selected ? " is-selected" : ""
-        }${isRemoved ? " is-removed" : ""}`}
+        }${isRemoved ? " is-removed" : ""}${isDeleting ? " is-deleting" : ""}`}
         data-selectable={isSelectable ? "true" : "false"}
         data-path={entry.path}
         data-name={entry.name}
@@ -128,6 +130,7 @@ export const EntryRow = memo(({
         data-is-dir={entry.isDir ? "true" : "false"}
         data-kind={fileKind}
         data-drop-target={dropTarget ? "true" : "false"}
+        data-delete-pending={isDeleting ? "true" : "false"}
         data-presence={presence}
         aria-selected={selected}
         aria-hidden={isRemoved ? "true" : "false"}
@@ -153,7 +156,7 @@ export const EntryRow = memo(({
         type="button"
         className={`row${entry.isDir ? " is-dir" : ""}${selected ? " is-selected" : ""}${
           isRemoved ? " is-removed" : ""
-        }`}
+        }${isDeleting ? " is-deleting" : ""}`}
         data-selectable={isSelectable ? "true" : "false"}
         data-path={entry.path}
         data-name={entry.name}
@@ -161,6 +164,7 @@ export const EntryRow = memo(({
         data-is-dir={entry.isDir ? "true" : "false"}
         data-kind={fileKind}
         data-drop-target={dropTarget ? "true" : "false"}
+        data-delete-pending={isDeleting ? "true" : "false"}
         data-presence={presence}
         aria-selected={selected}
         aria-hidden={isRemoved ? "true" : "false"}

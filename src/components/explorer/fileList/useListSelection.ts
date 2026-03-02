@@ -2,7 +2,7 @@
 import type { RefObject } from "react";
 import { useEntryDragOut, useSelectionDrag } from "@/hooks";
 import type { DropTarget } from "@/lib";
-import { COMPACT_VIEW_INSET } from "../fileView/constants";
+import { VIEW_INSET } from "../fileView/constants";
 
 const noop = () => {};
 
@@ -12,7 +12,6 @@ type UseListSelectionOptions = {
   selectionItems: { path: string; selectable: boolean }[];
   itemHeight: number;
   rowHeight: number;
-  compactMode: boolean;
   onSetSelection: (paths: string[], anchor?: string) => void;
   onClearSelection: () => void;
   onStartDragOut?: (paths: string[]) => void;
@@ -27,7 +26,6 @@ export const useListSelection = ({
   selectionItems,
   itemHeight,
   rowHeight,
-  compactMode,
   onSetSelection,
   onClearSelection,
   onStartDragOut,
@@ -45,7 +43,7 @@ export const useListSelection = ({
       items: selectionItems,
       itemHeight,
       rowHeight,
-      insetTop: compactMode ? COMPACT_VIEW_INSET : 0,
+      insetTop: VIEW_INSET,
     },
   });
 

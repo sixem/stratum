@@ -1,6 +1,6 @@
 // App shell wiring: composes state hooks, layout blocks, and overlays.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppOverlays, AppShellLayout } from "@/components";
+import { AppOverlays, AppShellLayout, AppWindowFrame } from "@/components";
 import {
   useAppCommands,
   useAppContextMenuSection,
@@ -440,7 +440,6 @@ const App = () => {
       blurOverlays: settings.blurOverlays,
       gridRounded: settings.gridRounded,
       gridCentered: settings.gridCentered,
-      compactMode: settings.compactMode,
     },
     view: {
       activeTabId,
@@ -698,7 +697,7 @@ const App = () => {
           scrollRestoreTop,
           scrollRequest,
           smoothScroll: settings.smoothScroll,
-          compactMode: settings.compactMode,
+          pendingDeletePaths: fileManager.pendingDeletePaths,
           sortState,
           canGoUp,
         },
@@ -874,6 +873,7 @@ const App = () => {
         }}
       />
       <AppOverlays {...overlayProps} />
+      <AppWindowFrame />
     </div>
   );
 };

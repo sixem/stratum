@@ -150,10 +150,6 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.smartTabJump === "boolean"
         ? value.smartTabJump
         : DEFAULT_SETTINGS.smartTabJump,
-    compactMode:
-      typeof value?.compactMode === "boolean"
-        ? value.compactMode
-        : DEFAULT_SETTINGS.compactMode,
     accentTheme: coerceAccentTheme(value?.accentTheme),
     categoryTinting:
       typeof value?.categoryTinting === "boolean"

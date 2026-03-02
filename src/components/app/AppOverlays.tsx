@@ -24,7 +24,7 @@ const LazyQuickPreviewOverlay = lazy(async () => {
   return { default: module.QuickPreviewOverlay };
 });
 
-const useDeferredMount = (open: boolean) => {
+const useDeferredMount = (open: boolean, prewarmOnIdle = false) => {
   const [mounted, setMounted] = useState(open);
 
   useEffect(() => {
@@ -32,6 +32,46 @@ const useDeferredMount = (open: boolean) => {
       setMounted(true);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (mounted || open || !prewarmOnIdle) return;
+    if (typeof window === "undefined") return;
+
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (
+        callback: IdleRequestCallback,
+        options?: IdleRequestOptions,
+      ) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    let timeoutId: number | null = null;
+    let idleId: number | null = null;
+
+    const prewarm = () => {
+      setMounted(true);
+    };
+
+    // Warm hidden heavyweight overlays after the first paint so the first open feels instant.
+    if (typeof idleWindow.requestIdleCallback === "function") {
+      idleId = idleWindow.requestIdleCallback(() => {
+        prewarm();
+      }, { timeout: 1200 });
+    } else {
+      timeoutId = window.setTimeout(prewarm, 280);
+    }
+
+    return () => {
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId);
+      }
+      if (
+        idleId != null &&
+        typeof idleWindow.cancelIdleCallback === "function"
+      ) {
+        idleWindow.cancelIdleCallback(idleId);
+      }
+    };
+  }, [mounted, open, prewarmOnIdle]);
 
   return mounted;
 };
@@ -52,8 +92,8 @@ export const AppOverlays = ({
   settings,
 }: AppOverlaysProps) => {
   // Load heavyweight overlays on first use, then keep them mounted.
-  const conversionMounted = useDeferredMount(conversion.open);
-  const settingsMounted = useDeferredMount(settings.open);
+  const conversionMounted = useDeferredMount(conversion.open, true);
+  const settingsMounted = useDeferredMount(settings.open, true);
   const quickPreviewMounted = useDeferredMount(quickPreview.open);
 
   return (

@@ -7,3 +7,5 @@ export { LoadingState } from "./LoadingState";
 export { PressButton } from "./PressButton";
 export { RenameField } from "./RenameField";
 export { ToolbarIconButton } from "./ToolbarIconButton";
+export { WindowChromeBar } from "./WindowChromeBar";
+export { WindowDragRegion } from "./WindowDragRegion";

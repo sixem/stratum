@@ -7,3 +7,4 @@ export { AppShellLayout } from "./AppShellLayout";
 export { AppStatusbar } from "./AppStatusbar";
 export { AppTopstack } from "./AppTopstack";
 export { AppTopstackContainer } from "./AppTopstackContainer";
+export { AppWindowFrame } from "./AppWindowFrame";

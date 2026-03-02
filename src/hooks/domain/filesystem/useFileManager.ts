@@ -92,6 +92,7 @@ export function useFileManager() {
     entryMeta: metaCache.entryMeta,
     loading: directoryLoader.loading,
     suppressUndoPresence: fileMutations.suppressUndoPresence,
+    pendingDeletePaths: fileMutations.pendingDeletePaths,
     status: directoryLoader.status,
     loadDir: directoryLoader.loadDir,
     clearDir: directoryLoader.clearDir,

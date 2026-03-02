@@ -6,6 +6,7 @@
   --scrollbar-thumb: #1f2736;
   background: #0d0f14;
   border: 1px solid #1a2233;
+  border-left: none;
   border-radius: var(--panel-radius);
   padding: var(--sidebar-padding);
   display: flex;
@@ -25,9 +26,11 @@
     flex-direction: column;
     gap: 12px;
     min-height: 0;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: scroll;
     // Reserve a stable scrollbar gutter and align the scrollbar to the panel edge.
     scrollbar-gutter: stable;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
     margin-right: calc(var(--sidebar-padding) * -1 + var(--sidebar-scrollbar-gap));
     padding-right: calc(var(--sidebar-padding) + 4px - var(--sidebar-scrollbar-gap));
     flex: 1;
@@ -252,10 +255,5 @@
 
 :root[data-ambient="true"] :where(.sidebar) .section-toggle.is-open .toggle-mark {
   color: rgba(var(--accent-rgb), 0.95);
-}
-
-// Compact mode removes the outer container frame while keeping the content intact.
-:root[data-compact="true"] .sidebar {
-  border-left: none;
 }
 

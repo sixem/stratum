@@ -1,5 +1,6 @@
 // Tooltip timing and spacing defaults.
 export const DEFAULT_TOOLTIP_DELAY_MS = 200;
+export const PATHBAR_TOOLTIP_DELAY_MS = DEFAULT_TOOLTIP_DELAY_MS * 2;
 export const FILE_TOOLTIP_DELAY_MS = 1000;
 export const TOOLTIP_EDGE_PADDING = 12;
 export const TOOLTIP_GAP = 8;

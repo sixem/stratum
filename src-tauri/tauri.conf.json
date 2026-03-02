@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Stratum",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "identifier": "com.emy.stratum",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:1421",
+    "devUrl": "http://127.0.0.1:1420",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
@@ -18,6 +18,8 @@
         "minWidth": 900,
         "minHeight": 600,
         "dragDropEnabled": false,
+        "decorations": false,
+        "shadow": true,
         "backgroundColor": "#0a0b10"
       }
     ],

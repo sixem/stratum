@@ -29,7 +29,6 @@ type AppEffectSettings = {
   blurOverlays: boolean;
   gridRounded: boolean;
   gridCentered: boolean;
-  compactMode: boolean;
 };
 
 type AppEffectView = {
@@ -101,7 +100,6 @@ export const useAppEffects = ({
     blurOverlays,
     gridRounded,
     gridCentered,
-    compactMode,
   } = settings;
   const {
     activeTabId,
@@ -172,7 +170,6 @@ export const useAppEffects = ({
     blurOverlays,
     gridRounded,
     gridCentered,
-    compactMode,
   });
 
   useEffect(() => {
@@ -298,6 +295,22 @@ export const useAppEffects = ({
     const title = trimmed && !isUntitled ? `${trimmed} - ${appName} ${appVersion}` : `${appName} ${appVersion}`;
     void appWindow.setTitle(title);
   }, [appName, appVersion, isTauriEnv, viewPath]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const syncWindowFocus = () => {
+      root.dataset.windowFocus = document.hasFocus() ? "true" : "false";
+    };
+
+    syncWindowFocus();
+    window.addEventListener("focus", syncWindowFocus);
+    window.addEventListener("blur", syncWindowFocus);
+
+    return () => {
+      window.removeEventListener("focus", syncWindowFocus);
+      window.removeEventListener("blur", syncWindowFocus);
+    };
+  }, []);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
