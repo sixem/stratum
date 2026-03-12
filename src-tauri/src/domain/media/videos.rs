@@ -89,16 +89,20 @@ pub fn convert_video(
         .arg(source_path);
 
     push_video_args(&mut command, options.encoder, options.speed, quality);
-    push_audio_args(&mut command, options.format, options.audio_enabled.unwrap_or(true));
+    push_audio_args(
+        &mut command,
+        options.format,
+        options.audio_enabled.unwrap_or(true),
+    );
     if matches!(options.format, VideoTargetFormat::Mp4) {
         command.arg("-movflags").arg("+faststart");
     }
     command.arg(destination_path);
     command.stdout(Stdio::null()).stderr(Stdio::piped());
 
-    let output = command.output().map_err(|err| {
-        format!("Failed to launch ffmpeg: {err}")
-    })?;
+    let output = command
+        .output()
+        .map_err(|err| format!("Failed to launch ffmpeg: {err}"))?;
 
     if output.status.success() {
         return Ok(());
@@ -133,7 +137,9 @@ fn validate_encoder_for_format(
         VideoTargetFormat::Mp4 | VideoTargetFormat::Mov | VideoTargetFormat::Avi => {
             matches!(encoder, VideoEncoder::Libx264)
         }
-        VideoTargetFormat::Mkv => matches!(encoder, VideoEncoder::Libx264 | VideoEncoder::LibvpxVp9),
+        VideoTargetFormat::Mkv => {
+            matches!(encoder, VideoEncoder::Libx264 | VideoEncoder::LibvpxVp9)
+        }
     };
     if supported {
         Ok(())
