@@ -4,6 +4,10 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { DragDropEvent } from "@tauri-apps/api/webview";
 import { statEntries, transferEntries } from "@/api";
 import {
+  getTransferErrorMessage,
+  isTransferCancelledError,
+} from "@/hooks/domain/filesystem/transferJobErrors";
+import {
   buildDropCandidate,
   formatFailures,
   getDriveKey,
@@ -23,7 +27,12 @@ type UseFileDropOptions = {
   enabled?: boolean;
 };
 
-type MoveConflictDecision = "overwrite" | "skip" | "skip-all" | "cancel";
+type MoveConflictDecision =
+  | "overwrite"
+  | "overwrite-all"
+  | "skip"
+  | "skip-all"
+  | "cancel";
 
 const log = makeDebug("drop");
 
@@ -52,10 +61,9 @@ export const useFileDrop = ({
   const inFlightRef = useRef(false);
   const lastHoverRef = useRef<string | null>(null);
   const promptStore = useMemo(() => usePromptStore.getState(), []);
-  const startTransferJob = useTransferStore((state) => state.startJob);
-  const updateTransferLabel = useTransferStore((state) => state.updateLabel);
-  const completeTransferJob = useTransferStore((state) => state.completeJob);
-  const failTransferJob = useTransferStore((state) => state.failJob);
+  const registerTransferJob = useTransferStore((state) => state.registerJob);
+  const updateTransferLabel = useTransferStore((state) => state.updateJobLabel);
+  const recordTransferJobOutcome = useTransferStore((state) => state.recordJobOutcome);
 
   const setDropTarget = useCallback((target: DropTarget | null) => {
     if (!target) {
@@ -145,6 +153,7 @@ export const useFileDrop = ({
       );
       const overwriteKeys = new Set<string>();
       const skippedKeys = new Set<string>();
+      let overwriteAllMoveConflicts = false;
 
       if (copyConflicts.length > 0) {
         const samples = copyConflicts.slice(0, 4).map((item) => item.name);
@@ -173,6 +182,10 @@ export const useFileDrop = ({
         const item = moveConflicts[index];
         if (!item) continue;
         if (skippedKeys.has(item.pathKey)) continue;
+        if (overwriteAllMoveConflicts) {
+          overwriteKeys.add(item.pathKey);
+          continue;
+        }
         const remaining = moveConflicts.length - index;
         const decision = await new Promise<MoveConflictDecision>((resolve) => {
           const actions: {
@@ -187,6 +200,11 @@ export const useFileDrop = ({
             },
           ];
           if (remaining > 1) {
+            actions.push({
+              label: "Overwrite all",
+              onClick: () => resolve("overwrite-all"),
+              variant: "ghost",
+            });
             actions.push({
               label: "Skip all",
               onClick: () => resolve("skip-all"),
@@ -205,6 +223,11 @@ export const useFileDrop = ({
         });
         if (decision === "cancel") return;
         if (decision === "overwrite") {
+          overwriteKeys.add(item.pathKey);
+          continue;
+        }
+        if (decision === "overwrite-all") {
+          overwriteAllMoveConflicts = true;
           overwriteKeys.add(item.pathKey);
           continue;
         }
@@ -233,9 +256,8 @@ export const useFileDrop = ({
         overwriteKeys.has(normalizePath(candidate.path)),
       );
 
-      const job = startTransferJob({
+      const job = registerTransferJob({
         label: "Transfer",
-        total: transferCandidates.length,
         items: transferCandidates.map((candidate) => candidate.path),
       });
       inFlightRef.current = true;
@@ -254,7 +276,7 @@ export const useFileDrop = ({
               ? "Move"
               : "Copy";
         updateTransferLabel(job.id, label);
-        completeTransferJob(job.id, {
+        recordTransferJobOutcome(job.id, {
           copied: report.copied,
           moved: report.moved,
           skipped: report.skipped + skippedByPrompt,
@@ -282,11 +304,22 @@ export const useFileDrop = ({
           refreshRef.current?.();
         }
       } catch (error) {
-        failTransferJob(job.id);
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : "Failed to transfer dropped items.";
+        if (isTransferCancelledError(error)) {
+          const touchedCurrentDestination = destinationKey === currentPathKeyRef.current;
+          const touchedCurrentSource = transferCandidates.some((candidate) => {
+            const parent = getParentPath(candidate.path) ?? "";
+            return normalizePath(parent) === currentPathKeyRef.current;
+          });
+          if (touchedCurrentDestination || touchedCurrentSource) {
+            refreshRef.current?.();
+          }
+          return;
+        }
+        recordTransferJobOutcome(job.id, { failures: 1 });
+        const message = getTransferErrorMessage(
+          error,
+          "Failed to transfer dropped items.",
+        );
         promptStore.showPrompt({
           title: "Transfer failed",
           content: message,
@@ -298,10 +331,9 @@ export const useFileDrop = ({
       }
     },
     [
-      completeTransferJob,
-      failTransferJob,
       promptStore,
-      startTransferJob,
+      recordTransferJobOutcome,
+      registerTransferJob,
       updateTransferLabel,
     ],
   );

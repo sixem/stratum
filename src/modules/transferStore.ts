@@ -1,14 +1,48 @@
-// Tracks active and recent file transfers for lightweight status UI.
+// Transfer UI state backed by backend queue snapshots.
+// The backend owns real job lifecycle state; this store adds local labels,
+// lightweight timing, and byte-level hints for the current file row.
 import { createWithEqualityFn } from "zustand/traditional";
+import type {
+  TransferJobCapabilities,
+  TransferJobKind,
+  TransferJobPhase,
+  TransferJobSnapshot,
+  TransferJobsSnapshotEvent,
+  TransferProgressEvent,
+  TransferQueueSnapshot,
+} from "@/types";
 
-export type TransferStatus = "running" | "completed" | "failed";
+export type TransferStatus =
+  | "queued"
+  | "running"
+  | "paused"
+  | "completed"
+  | "cancelled"
+  | "failed";
+
+type TransferThroughputSample = {
+  recordedAt: number;
+  processed: number;
+  bytesCompleted: number;
+};
+
+type LocalTransferJobKind = TransferJobKind | "conversion";
+
+const NO_TRANSFER_CONTROLS: TransferJobCapabilities = {
+  canPause: false,
+  canCancel: false,
+};
 
 export type TransferJob = {
   id: string;
   label: string;
+  kind: LocalTransferJobKind;
+  backendManaged: boolean;
+  capabilities: TransferJobCapabilities;
+  status: TransferStatus;
+  phase: TransferJobPhase;
   total: number;
   processed: number;
-  status: TransferStatus;
   startedAt: number;
   finishedAt?: number;
   items?: string[];
@@ -16,29 +50,59 @@ export type TransferJob = {
   currentBytes?: number;
   currentTotalBytes?: number;
   currentStartedAt?: number;
+  bytesCompleted?: number;
+  bytesTotal?: number;
+  throughputSamples?: TransferThroughputSample[];
   copied?: number;
   moved?: number;
   skipped?: number;
   failures?: number;
 };
 
-// Transfer jobs flow start -> updateProgress (0..n) -> complete/fail.
-// `currentPath` and byte fields are optional hints for the UI, not a strict audit log.
-type TransferProgressUpdate = {
-  processed: number;
-  total?: number;
-  currentPath?: string | null;
-  currentBytes?: number | null;
-  currentTotalBytes?: number | null;
+type TransferJobRegistration = {
+  id: string;
 };
 
-type TransferStore = {
+type TransferJobMetadata = {
+  label: string;
+  items?: string[];
+  copied?: number;
+  moved?: number;
+  skipped?: number;
+  failures?: number;
+};
+
+type TransferStoreState = {
   jobs: TransferJob[];
+  backendJobs: TransferJob[];
+  localJobs: TransferJob[];
+  jobMetadata: Record<string, TransferJobMetadata>;
+  dismissedJobIds: Record<string, true>;
+};
+
+type TransferStore = TransferStoreState & {
   startJob: (input: { label: string; total: number; items?: string[] }) => TransferJob;
-  updateProgress: (id: string, update: TransferProgressUpdate) => void;
+  updateProgress: (
+    id: string,
+    update: {
+      processed: number;
+      total?: number;
+      currentPath?: string | null;
+      currentBytes?: number | null;
+      currentTotalBytes?: number | null;
+    },
+  ) => void;
   updateLabel: (id: string, label: string) => void;
   completeJob: (id: string, patch?: Partial<TransferJob>) => void;
   failJob: (id: string, patch?: Partial<TransferJob>) => void;
+  registerJob: (input: { label: string; items?: string[] }) => TransferJobRegistration;
+  updateJobLabel: (id: string, label: string) => void;
+  recordJobOutcome: (
+    id: string,
+    patch: Partial<Pick<TransferJobMetadata, "copied" | "moved" | "skipped" | "failures">>,
+  ) => void;
+  applyQueueSnapshot: (snapshot: TransferQueueSnapshot | TransferJobsSnapshotEvent) => void;
+  applyProgressHint: (event: TransferProgressEvent) => void;
   clearAll: () => void;
 };
 
@@ -46,36 +110,252 @@ const createTransferId = () => {
   return `transfer-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const TRANSFER_THROUGHPUT_WINDOW_MS = 4_000;
+
+const orderedSnapshotJobs = (snapshot: TransferQueueSnapshot): TransferJobSnapshot[] => {
+  const ordered: TransferJobSnapshot[] = [];
+  if (snapshot.activeJob) {
+    ordered.push(snapshot.activeJob);
+  }
+  ordered.push(...snapshot.queuedJobs);
+  ordered.push(...snapshot.completedJobs);
+  return ordered;
+};
+
+const normalizeItems = (items?: string[]) => {
+  return items?.map((value) => value.trim()).filter(Boolean);
+};
+
+const mergeVisibleJobs = (backendJobs: TransferJob[], localJobs: TransferJob[]) => {
+  return [...backendJobs, ...localJobs];
+};
+
+const getDefaultJobLabel = (kind: LocalTransferJobKind) => {
+  switch (kind) {
+    case "copy":
+      return "Copy";
+    case "delete":
+      return "Delete";
+    case "move":
+      return "Move";
+    case "trash":
+      return "Trash";
+    case "conversion":
+      return "Conversion";
+    case "transfer":
+    default:
+      return "Transfer";
+  }
+};
+
+const buildThroughputSamples = (
+  previousSamples: TransferThroughputSample[] | undefined,
+  status: TransferStatus,
+  processed: number,
+  bytesCompleted: number,
+  now: number,
+) => {
+  if (status === "queued") {
+    return [] satisfies TransferThroughputSample[];
+  }
+
+  const recentSamples = (previousSamples ?? []).filter(
+    (sample) => now - sample.recordedAt <= TRANSFER_THROUGHPUT_WINDOW_MS,
+  );
+  const lastSample = recentSamples[recentSamples.length - 1];
+  const shouldAppend =
+    !lastSample ||
+    lastSample.processed !== processed ||
+    lastSample.bytesCompleted !== bytesCompleted;
+
+  if (status === "running" || status === "paused") {
+    if (shouldAppend) {
+      recentSamples.push({
+        recordedAt: now,
+        processed,
+        bytesCompleted,
+      });
+    }
+    if (recentSamples.length === 0) {
+      recentSamples.push({
+        recordedAt: now,
+        processed,
+        bytesCompleted,
+      });
+    }
+  }
+
+  return recentSamples;
+};
+
+const buildTransferJob = (
+  snapshotJob: TransferJobSnapshot,
+  previousJob: TransferJob | undefined,
+  metadata: TransferJobMetadata | undefined,
+  now: number,
+): TransferJob => {
+  const total = snapshotJob.work.filesTotal ?? snapshotJob.work.rootsTotal;
+  const processed =
+    snapshotJob.work.filesTotal != null
+      ? snapshotJob.work.filesCompleted
+      : snapshotJob.work.rootsCompleted;
+  const bytesCompleted = snapshotJob.work.bytesCompleted ?? 0;
+  const currentPathChanged =
+    snapshotJob.currentPath !== undefined &&
+    snapshotJob.currentPath !== previousJob?.currentPath;
+  const nextStatus = snapshotJob.status;
+  const startedNow =
+    previousJob == null ||
+    (previousJob.status === "queued" && nextStatus !== "queued");
+  const startedAt = startedNow
+    ? now
+    : previousJob?.startedAt ?? now;
+  const finishedAt =
+    nextStatus === "completed" ||
+    nextStatus === "failed" ||
+    nextStatus === "cancelled"
+      ? previousJob?.finishedAt ?? now
+      : undefined;
+  const keepByteHints = nextStatus === "running" || nextStatus === "paused";
+  const currentBytes = keepByteHints && !currentPathChanged
+    ? previousJob?.currentBytes
+    : undefined;
+  const currentTotalBytes = keepByteHints && !currentPathChanged
+    ? previousJob?.currentTotalBytes
+    : undefined;
+  const currentStartedAt = keepByteHints && !currentPathChanged
+    ? previousJob?.currentStartedAt
+    : undefined;
+  const throughputSamples = buildThroughputSamples(
+    previousJob?.throughputSamples,
+    nextStatus,
+    processed,
+    bytesCompleted,
+    now,
+  );
+
+  return {
+    id: snapshotJob.id,
+    label:
+      metadata?.label ??
+      previousJob?.label ??
+      getDefaultJobLabel(snapshotJob.kind),
+    kind: snapshotJob.kind,
+    backendManaged: true,
+    capabilities: snapshotJob.capabilities,
+    status: nextStatus,
+    phase: snapshotJob.phase,
+    total,
+    processed,
+    startedAt,
+    finishedAt,
+    items: metadata?.items ?? previousJob?.items,
+    currentPath: snapshotJob.currentPath ?? previousJob?.currentPath,
+    currentBytes,
+    currentTotalBytes,
+    currentStartedAt,
+    bytesCompleted,
+    bytesTotal: snapshotJob.work.bytesTotal ?? undefined,
+    throughputSamples,
+    copied: metadata?.copied ?? previousJob?.copied,
+    moved: metadata?.moved ?? previousJob?.moved,
+    skipped: metadata?.skipped ?? previousJob?.skipped,
+    failures: metadata?.failures ?? previousJob?.failures,
+  };
+};
+
+const applyProgressHintToJob = (job: TransferJob, event: TransferProgressEvent): TransferJob => {
+  if (job.id !== event.id) {
+    return job;
+  }
+
+  const nextCurrentPath =
+    event.currentPath === undefined
+      ? job.currentPath
+      : event.currentPath ?? undefined;
+  const nextCurrentBytes =
+    event.currentBytes === undefined
+      ? job.currentBytes
+      : event.currentBytes ?? undefined;
+  const nextCurrentTotalBytes =
+    event.currentTotalBytes === undefined
+      ? job.currentTotalBytes
+      : event.currentTotalBytes ?? undefined;
+  const pathChanged = nextCurrentPath != null && nextCurrentPath !== job.currentPath;
+  const bytesReset =
+    nextCurrentBytes != null &&
+    (job.currentBytes == null || nextCurrentBytes < job.currentBytes);
+  const totalBytesChanged =
+    nextCurrentTotalBytes != null &&
+    nextCurrentTotalBytes !== job.currentTotalBytes;
+  let currentStartedAt = job.currentStartedAt;
+  if (pathChanged || bytesReset || totalBytesChanged) {
+    currentStartedAt = Date.now();
+  }
+  if (!currentStartedAt && nextCurrentBytes != null) {
+    currentStartedAt = Date.now();
+  }
+
+  const nextStatus: TransferStatus =
+    job.status === "queued" ? "running" : job.status;
+
+  return {
+    ...job,
+    status: nextStatus,
+    kind: job.kind,
+    backendManaged: job.backendManaged,
+    capabilities: job.capabilities,
+    startedAt: job.status === "queued" ? Date.now() : job.startedAt,
+    currentPath: nextCurrentPath,
+    currentBytes: nextCurrentBytes,
+    currentTotalBytes: nextCurrentTotalBytes,
+    currentStartedAt,
+  };
+};
+
 export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
   jobs: [],
+  backendJobs: [],
+  localJobs: [],
+  jobMetadata: {},
+  dismissedJobIds: {},
   startJob: ({ label, total, items }) => {
     const nextJob: TransferJob = {
       id: createTransferId(),
       label,
+      kind: "conversion",
+      backendManaged: false,
+      capabilities: NO_TRANSFER_CONTROLS,
+      status: "running",
+      phase: "executing",
       total: Math.max(0, total),
       processed: 0,
-      status: "running",
       startedAt: Date.now(),
-      items: items?.map((value) => value.trim()).filter(Boolean),
+      items: normalizeItems(items),
+      throughputSamples: [],
     };
     set((state) => {
-      const hasActive = state.jobs.some((job) => job.status === "running");
-      const jobs = hasActive ? state.jobs : [];
-      return { jobs: [...jobs, nextJob] };
+      const localJobs = [...state.localJobs, nextJob];
+      return {
+        localJobs,
+        jobs: mergeVisibleJobs(state.backendJobs, localJobs),
+      };
     });
     return nextJob;
   },
   updateProgress: (id, update) =>
-    set((state) => ({
-      jobs: state.jobs.map((job) => {
-        if (job.id !== id || job.status !== "running") return job;
-        // Clamp processed counts so totals never go backwards or overshoot.
+    set((state) => {
+      const localJobs = state.localJobs.map((job) => {
+        if (job.id !== id || (job.status !== "running" && job.status !== "queued")) {
+          return job;
+        }
+        const becameRunning = job.status === "queued";
+        const startedAt = becameRunning ? Date.now() : job.startedAt;
         const nextTotal = update.total ?? job.total;
         const nextProcessed = Math.min(
           Math.max(update.processed, 0),
           nextTotal || update.processed,
         );
-        // Preserve the current path unless an explicit update arrives.
         const nextCurrentPath =
           update.currentPath === undefined
             ? job.currentPath
@@ -88,20 +368,11 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
           update.currentTotalBytes === undefined
             ? job.currentTotalBytes
             : update.currentTotalBytes ?? undefined;
-        // If we weren't given a path, fall back to the source item list.
-        const items = job.items;
-        let currentPath = nextCurrentPath ?? job.currentPath;
-        if (!nextCurrentPath && items && items.length > 0) {
-          const index = Math.min(Math.max(nextProcessed - 1, 0), items.length - 1);
-          currentPath = items[index] ?? currentPath;
-        }
         const pathChanged = nextCurrentPath && nextCurrentPath !== job.currentPath;
-        // Reset byte counters when the file changes unless the backend sent bytes.
         if (pathChanged && update.currentBytes === undefined) {
           nextCurrentBytes = undefined;
           nextCurrentTotalBytes = undefined;
         }
-        // Restart the per-file timer when byte progress jumps or total changes.
         const bytesReset =
           nextCurrentBytes != null &&
           (job.currentBytes == null || nextCurrentBytes < job.currentBytes);
@@ -115,27 +386,47 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
         if (!currentStartedAt && nextCurrentBytes != null) {
           currentStartedAt = Date.now();
         }
-        return {
+        const nextJob: TransferJob = {
           ...job,
+          status: "running",
+          startedAt,
           total: nextTotal,
           processed: nextProcessed,
-          currentPath,
+          currentPath: nextCurrentPath,
           currentBytes: nextCurrentBytes,
           currentTotalBytes: nextCurrentTotalBytes,
           currentStartedAt,
+          throughputSamples: buildThroughputSamples(
+            job.throughputSamples,
+            "running",
+            nextProcessed,
+            job.bytesCompleted ?? 0,
+            Date.now(),
+          ),
         };
-      }),
-    })),
+        return nextJob;
+      });
+      return {
+        localJobs,
+        jobs: mergeVisibleJobs(state.backendJobs, localJobs),
+      };
+    }),
   updateLabel: (id, label) =>
-    set((state) => ({
-      jobs: state.jobs.map((job) => (job.id === id ? { ...job, label } : job)),
-    })),
+    set((state) => {
+      const localJobs = state.localJobs.map((job) =>
+        job.id === id ? { ...job, label } : job,
+      );
+      return {
+        localJobs,
+        jobs: mergeVisibleJobs(state.backendJobs, localJobs),
+      };
+    }),
   completeJob: (id, patch) =>
-    set((state) => ({
-      jobs: state.jobs.map((job) => {
+    set((state) => {
+      const localJobs = state.localJobs.map((job) => {
         if (job.id !== id) return job;
         const lastPath = job.items?.[job.items.length - 1];
-        return {
+        const nextJob: TransferJob = {
           ...job,
           ...patch,
           status: "completed",
@@ -143,15 +434,175 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
           currentPath: job.currentPath ?? lastPath,
           finishedAt: Date.now(),
         };
-      }),
-    })),
+        return nextJob;
+      });
+      return {
+        localJobs,
+        jobs: mergeVisibleJobs(state.backendJobs, localJobs),
+      };
+    }),
   failJob: (id, patch) =>
+    set((state) => {
+      const localJobs = state.localJobs.map((job) => {
+        if (job.id !== id) {
+          return job;
+        }
+        const nextJob: TransferJob = {
+          ...job,
+          ...patch,
+          status: "failed",
+          finishedAt: Date.now(),
+        };
+        return nextJob;
+      });
+      return {
+        localJobs,
+        jobs: mergeVisibleJobs(state.backendJobs, localJobs),
+      };
+    }),
+  registerJob: ({ label, items }) => {
+    const id = createTransferId();
     set((state) => ({
-      jobs: state.jobs.map((job) =>
+      jobMetadata: {
+        ...state.jobMetadata,
+        [id]: {
+          ...state.jobMetadata[id],
+          label,
+          items: normalizeItems(items),
+        },
+      },
+    }));
+    return { id };
+  },
+  updateJobLabel: (id, label) =>
+    set((state) => {
+      const backendJobs = state.backendJobs.map((job) =>
+        job.id === id ? { ...job, label } : job,
+      );
+      const localJobs = state.localJobs.map((job) =>
+        job.id === id ? { ...job, label } : job,
+      );
+      return {
+        jobMetadata: {
+          ...state.jobMetadata,
+          [id]: {
+            ...state.jobMetadata[id],
+            label,
+          },
+        },
+        backendJobs,
+        localJobs,
+        jobs: mergeVisibleJobs(backendJobs, localJobs),
+      };
+    }),
+  recordJobOutcome: (id, patch) =>
+    set((state) => {
+      const backendJobs = state.backendJobs.map((job) =>
         job.id === id
-          ? { ...job, ...patch, status: "failed", finishedAt: Date.now() }
+          ? {
+              ...job,
+              ...patch,
+            }
           : job,
-      ),
-    })),
-  clearAll: () => set({ jobs: [] }),
+      );
+      const localJobs = state.localJobs.map((job) =>
+        job.id === id
+          ? {
+              ...job,
+              ...patch,
+            }
+          : job,
+      );
+      return {
+        jobMetadata: {
+          ...state.jobMetadata,
+          [id]: {
+            ...state.jobMetadata[id],
+            ...patch,
+          },
+        },
+        backendJobs,
+        localJobs,
+        jobs: mergeVisibleJobs(backendJobs, localJobs),
+      };
+    }),
+  applyQueueSnapshot: (snapshot) =>
+    set((state) => {
+      const previousJobsById = new Map(state.jobs.map((job) => [job.id, job]));
+      const now = Date.now();
+      const backendJobs = orderedSnapshotJobs(snapshot)
+        .filter((job) => {
+          const dismissed = state.dismissedJobIds[job.id];
+          if (!dismissed) return true;
+          return (
+            job.status === "queued" ||
+            job.status === "running" ||
+            job.status === "paused"
+          );
+        })
+        .map((job) =>
+          buildTransferJob(
+            job,
+            previousJobsById.get(job.id),
+            state.jobMetadata[job.id],
+            now,
+          ),
+        );
+
+      return {
+        backendJobs,
+        jobs: mergeVisibleJobs(backendJobs, state.localJobs),
+      };
+    }),
+  applyProgressHint: (event) =>
+    set((state) => {
+      const backendJobs = state.backendJobs.map((job) =>
+        applyProgressHintToJob(job, event),
+      );
+      const localJobs = state.localJobs.map((job) =>
+        applyProgressHintToJob(job, event),
+      );
+      return {
+        backendJobs,
+        localJobs,
+        jobs: mergeVisibleJobs(backendJobs, localJobs),
+      };
+    }),
+  clearAll: () =>
+    set((state) => {
+      const dismissedJobIds = { ...state.dismissedJobIds };
+      state.jobs.forEach((job) => {
+        if (
+          job.status === "running" ||
+          job.status === "queued" ||
+          job.status === "paused"
+        ) {
+          return;
+        }
+        dismissedJobIds[job.id] = true;
+      });
+      return {
+        dismissedJobIds,
+        backendJobs: state.backendJobs.filter(
+          (job) =>
+            job.status === "running" ||
+            job.status === "queued" ||
+            job.status === "paused",
+        ),
+        localJobs: state.localJobs.filter(
+          (job) => job.status === "running" || job.status === "queued",
+        ),
+        jobs: mergeVisibleJobs(
+          state.backendJobs.filter(
+            (job) =>
+              job.status === "running" ||
+              job.status === "queued" ||
+              job.status === "paused",
+          ),
+          state.localJobs.filter(
+            (job) => job.status === "running" || job.status === "queued",
+          ),
+        ),
+      };
+    }),
 }));

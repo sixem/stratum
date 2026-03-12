@@ -64,6 +64,26 @@ export type CopyReport = {
   failures: string[];
 };
 
+export type CopyConflictKind =
+  | "fileToFile"
+  | "fileToDirectory"
+  | "directoryToFile";
+
+export type CopyConflict = {
+  sourcePath: string;
+  destinationPath: string;
+  kind: CopyConflictKind;
+};
+
+export type CopyPlan = {
+  conflicts: CopyConflict[];
+};
+
+export type CopyOptions = {
+  overwritePaths?: string[];
+  skipPaths?: string[];
+};
+
 export type TransferMode = "copy" | "move" | "auto";
 
 export type TransferReport = {
@@ -71,6 +91,53 @@ export type TransferReport = {
   moved: number;
   skipped: number;
   failures: string[];
+};
+
+export type TransferJobStatus =
+  | "queued"
+  | "running"
+  | "paused"
+  | "completed"
+  | "cancelled"
+  | "failed";
+
+export type TransferJobKind =
+  | "transfer"
+  | "copy"
+  | "move"
+  | "delete"
+  | "trash";
+
+export type TransferJobPhase = "planning" | "executing" | "finalizing";
+
+export type TransferJobCapabilities = {
+  canPause: boolean;
+  canCancel: boolean;
+};
+
+export type TransferWorkEstimate = {
+  rootsTotal: number;
+  rootsCompleted: number;
+  filesTotal?: number | null;
+  filesCompleted: number;
+  bytesTotal?: number | null;
+  bytesCompleted: number;
+};
+
+export type TransferJobSnapshot = {
+  id: string;
+  kind: TransferJobKind;
+  status: TransferJobStatus;
+  phase: TransferJobPhase;
+  capabilities: TransferJobCapabilities;
+  currentPath?: string | null;
+  work: TransferWorkEstimate;
+};
+
+export type TransferQueueSnapshot = {
+  activeJob?: TransferJobSnapshot | null;
+  queuedJobs: TransferJobSnapshot[];
+  completedJobs: TransferJobSnapshot[];
 };
 
 // Emitted while a copy/move operation progresses.
@@ -83,9 +150,12 @@ export type TransferProgressEvent = {
   currentTotalBytes?: number | null;
 };
 
+export type TransferJobsSnapshotEvent = TransferQueueSnapshot;
+
 export type DeleteReport = {
   deleted: number;
   skipped: number;
+  cancelled: boolean;
   failures: string[];
 };
 
@@ -99,6 +169,7 @@ export type RecycleEntry = {
 export type TrashReport = {
   deleted: number;
   skipped: number;
+  cancelled: boolean;
   failures: string[];
   failedPaths: string[];
   recycled: RecycleEntry[];

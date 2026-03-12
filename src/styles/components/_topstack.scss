@@ -185,11 +185,14 @@
   }
 
   .transfer-list {
+    --scrollbar-thumb: #1f2736;
     display: flex;
     flex-direction: column;
     gap: 10px;
     max-height: 260px;
     overflow-y: auto;
+    scrollbar-gutter: stable;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
 
   .transfer-item {
@@ -210,7 +213,17 @@
   }
 
   .transfer-item-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-weight: 600;
+  }
+
+  .transfer-item-header-side {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
   }
 
   .transfer-item-count {
@@ -275,6 +288,55 @@
     font-size: 10px;
     font-weight: 500;
     color: #97a3b9;
+  }
+
+  .transfer-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .transfer-item-action {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(234, 239, 248, 0.88);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition:
+      border-color 120ms ease,
+      background-color 120ms ease,
+      color 120ms ease;
+  }
+
+  .transfer-item-action svg {
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+  }
+
+  .transfer-item-action:hover:not(:disabled) {
+    border-color: rgba(var(--accent-rgb), 0.36);
+    background: rgba(var(--accent-rgb), 0.08);
+    color: var(--text);
+  }
+
+  .transfer-item-action-danger:hover:not(:disabled) {
+    border-color: rgba(225, 76, 76, 0.42);
+    background: rgba(225, 76, 76, 0.08);
+    color: #ffd7d7;
+  }
+
+  .transfer-item-action:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
   }
 
   .transfer-item-failed {

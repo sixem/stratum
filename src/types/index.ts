@@ -1,5 +1,9 @@
 // Barrel exports for shared type definitions.
 export type {
+  CopyConflict,
+  CopyConflictKind,
+  CopyOptions,
+  CopyPlan,
   CopyReport,
   DeleteReport,
   DriveInfo,
@@ -16,8 +20,16 @@ export type {
   RestorePathsReport,
   TrashReport,
   TransferMode,
+  TransferJobPhase,
+  TransferJobKind,
+  TransferJobCapabilities,
+  TransferJobSnapshot,
+  TransferJobStatus,
   TransferReport,
+  TransferJobsSnapshotEvent,
+  TransferQueueSnapshot,
   TransferProgressEvent,
+  TransferWorkEstimate,
   DirChangedEvent,
   DirRenameEvent,
 } from "./fs";

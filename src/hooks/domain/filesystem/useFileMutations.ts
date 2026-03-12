@@ -84,7 +84,6 @@ export const useFileMutations = ({
 
   const deleteEntriesInView = useCallback(
     async (paths: string[]) => {
-      if (deleteInFlightRef.current) return null;
       const nextPending = new Set(
         paths
           .map((path) => toPathKey(path))

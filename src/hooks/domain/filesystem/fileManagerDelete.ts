@@ -1,5 +1,5 @@
 // Handles delete and trash operations for the file manager.
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { RefObject } from "react";
 import {
   deleteEntries as deleteEntriesApi,
@@ -10,6 +10,10 @@ import {
   transferEntries,
 } from "@/api";
 import {
+  getManagedJobErrorMessage,
+  isManagedJobCancelledError,
+} from "@/hooks/domain/filesystem/transferJobErrors";
+import {
   entryExists,
   formatFailures,
   getDriveKey,
@@ -19,7 +23,7 @@ import {
   tabLabel,
   toMessage,
 } from "@/lib";
-import { usePromptStore } from "@/modules";
+import { usePromptStore, useTransferStore } from "@/modules";
 import type { DeleteReport } from "@/types";
 import type { UndoAction, UndoTrashEntry } from "./fileManagerUndo";
 
@@ -52,6 +56,12 @@ export const useFileManagerDelete = ({
   refreshAfterChange,
   log,
 }: UseFileManagerDeleteOptions) => {
+  // Track overlapping delete requests without blocking the backend queue from
+  // showing later jobs immediately in the shared operations log.
+  const activeDeleteRequestCountRef = useRef(0);
+  const registerTransferJob = useTransferStore((state) => state.registerJob);
+  const recordTransferJobOutcome = useTransferStore((state) => state.recordJobOutcome);
+
   const driveKeyToRoot = useCallback((driveKey: string) => {
     if (!driveKey) return null;
     if (driveKey.startsWith("\\\\")) {
@@ -104,13 +114,92 @@ export const useFileManagerDelete = ({
     return joinPath(root, `delete-${Date.now()}-${nonce}`);
   }, []);
 
-  const deleteEntriesInView = useCallback(
+  const runManagedTrashEntries = useCallback(
+    async (paths: string[]) => {
+      const job = registerTransferJob({
+        label: "Delete",
+        items: paths,
+      });
+      try {
+        const report = await trashEntries(paths, job.id);
+        recordTransferJobOutcome(job.id, {
+          skipped: report.skipped,
+          failures: report.failures.length,
+        });
+        return report;
+      } catch (error) {
+        if (!isManagedJobCancelledError(error)) {
+          recordTransferJobOutcome(job.id, { failures: 1 });
+        }
+        throw error;
+      }
+    },
+    [recordTransferJobOutcome, registerTransferJob],
+  );
+
+  const runManagedDeleteEntries = useCallback(
+    async (paths: string[]) => {
+      const job = registerTransferJob({
+        label: "Delete",
+        items: paths,
+      });
+      try {
+        const report = await deleteEntriesApi(paths, job.id);
+        recordTransferJobOutcome(job.id, {
+          skipped: report.skipped,
+          failures: report.failures.length,
+        });
+        return report;
+      } catch (error) {
+        if (!isManagedJobCancelledError(error)) {
+          recordTransferJobOutcome(job.id, { failures: 1 });
+        }
+        throw error;
+      }
+    },
+    [recordTransferJobOutcome, registerTransferJob],
+  );
+
+  const runManagedTrashMove = useCallback(
+    async (paths: string[], destination: string) => {
+      const job = registerTransferJob({
+        label: "Delete",
+        items: paths,
+      });
+      try {
+        const report = await transferEntries(
+          paths,
+          destination,
+          {
+            mode: "move",
+            overwrite: false,
+          },
+          job.id,
+        );
+        recordTransferJobOutcome(job.id, {
+          moved: report.moved,
+          skipped: report.skipped,
+          failures: report.failures.length,
+        });
+        return report;
+      } catch (error) {
+        if (!isManagedJobCancelledError(error)) {
+          recordTransferJobOutcome(job.id, { failures: 1 });
+        }
+        throw error;
+      }
+    },
+    [recordTransferJobOutcome, registerTransferJob],
+  );
+
+  const executeDeleteEntries = useCallback(
     async (paths: string[]): Promise<DeleteReport | null> => {
-      if (deleteInFlightRef.current) return null;
       const unique = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
       if (unique.length === 0) return null;
+
       log?.("delete entries (trash): %d items", unique.length);
-      deleteInFlightRef.current = true;
+      const promptStore = usePromptStore.getState();
+
       try {
         const useNativeTrash = isWindowsEnv() && isTauriEnv();
         if (useNativeTrash) {
@@ -119,16 +208,23 @@ export const useFileManagerDelete = ({
           const deleteStartedAtMs = Math.max(0, Date.now() - 5_000);
           let report = null;
           try {
-            report = await trashEntries(unique);
+            report = await runManagedTrashEntries(unique);
           } catch (error) {
-            usePromptStore.getState().showPrompt({
+            if (isManagedJobCancelledError(error)) {
+              return null;
+            }
+            promptStore.showPrompt({
               title: "Delete failed",
-              content: toMessage(error, "Failed to delete selected items."),
+              content: getManagedJobErrorMessage(
+                error,
+                "Failed to delete selected items.",
+              ),
               confirmLabel: "OK",
               cancelLabel: null,
             });
             return null;
           }
+
           // Record undo by original paths, not immediate recycle metadata.
           const failedPathSet = new Set(
             report.failedPaths.map((path) => normalizePath(path)),
@@ -146,6 +242,15 @@ export const useFileManagerDelete = ({
           if (report.deleted > 0) {
             await refreshAfterChange();
           }
+          if (report.cancelled) {
+            return {
+              deleted: report.deleted,
+              skipped: report.skipped,
+              cancelled: true,
+              failures: report.failures,
+            };
+          }
+
           const remainingPaths = report.failedPaths;
           if (remainingPaths.length > 0) {
             const reasons: string[] = [];
@@ -161,8 +266,9 @@ export const useFileManagerDelete = ({
               remainingPaths.length === 1
                 ? "this item"
                 : `${remainingPaths.length} items`;
+
             return await new Promise<DeleteReport>((resolve) => {
-              usePromptStore.getState().showPrompt({
+              promptStore.showPrompt({
                 title: "Couldn't move items to Recycle Bin",
                 content: `${reasons.join("\n\n")}\n\nDelete ${countLabel} permanently instead? This cannot be undone.`,
                 confirmLabel: "Delete permanently",
@@ -170,35 +276,50 @@ export const useFileManagerDelete = ({
                 onConfirm: async () => {
                   let hardReport = null;
                   try {
-                    hardReport = await deleteEntriesApi(remainingPaths);
+                    hardReport = await runManagedDeleteEntries(remainingPaths);
                   } catch (error) {
-                    usePromptStore.getState().showPrompt({
+                    if (isManagedJobCancelledError(error)) {
+                      resolve({
+                        deleted: report.deleted,
+                        skipped: report.skipped,
+                        cancelled: true,
+                        failures: report.failures,
+                      });
+                      return;
+                    }
+                    promptStore.showPrompt({
                       title: "Delete failed",
-                      content: toMessage(error, "Failed to delete selected items."),
+                      content: getManagedJobErrorMessage(
+                        error,
+                        "Failed to delete selected items.",
+                      ),
                       confirmLabel: "OK",
                       cancelLabel: null,
                     });
                     resolve({
                       deleted: report.deleted,
                       skipped: report.skipped,
+                      cancelled: false,
                       failures: report.failures,
                     });
                     return;
                   }
-                  if (hardReport.failures.length > 0) {
-                    usePromptStore.getState().showPrompt({
+
+                  if (hardReport.deleted > 0) {
+                    await refreshAfterChange();
+                  }
+                  if (hardReport.failures.length > 0 && !hardReport.cancelled) {
+                    promptStore.showPrompt({
                       title: "Delete completed with issues",
                       content: formatFailures(hardReport.failures),
                       confirmLabel: "OK",
                       cancelLabel: null,
                     });
                   }
-                  if (hardReport.deleted > 0) {
-                    await refreshAfterChange();
-                  }
                   resolve({
                     deleted: report.deleted + hardReport.deleted,
                     skipped: report.skipped + hardReport.skipped,
+                    cancelled: hardReport.cancelled,
                     failures: [...report.failures, ...hardReport.failures],
                   });
                 },
@@ -206,14 +327,16 @@ export const useFileManagerDelete = ({
                   resolve({
                     deleted: report.deleted,
                     skipped: report.skipped,
+                    cancelled: false,
                     failures: report.failures,
                   });
                 },
               });
             });
           }
+
           if (report.failures.length > 0) {
-            usePromptStore.getState().showPrompt({
+            promptStore.showPrompt({
               title: "Delete completed with issues",
               content: formatFailures(report.failures),
               confirmLabel: "OK",
@@ -223,6 +346,7 @@ export const useFileManagerDelete = ({
           return {
             deleted: report.deleted,
             skipped: report.skipped,
+            cancelled: false,
             failures: report.failures,
           };
         }
@@ -232,6 +356,7 @@ export const useFileManagerDelete = ({
         const moved: UndoTrashEntry[] = [];
         const remaining = new Set<string>();
         const transferFailures: string[] = [];
+        let cancelled = false;
 
         for (const path of unique) {
           try {
@@ -249,15 +374,20 @@ export const useFileManagerDelete = ({
 
         for (const [trashRoot, trashCandidates] of trashGroups) {
           if (trashCandidates.length === 0) continue;
+
           // Move items into a per-delete batch folder so undo can restore them.
           const batchDir = buildTrashBatchDir(trashRoot);
           await ensureDir(batchDir);
 
-          const report = await transferEntries(trashCandidates, batchDir, {
-            mode: "move",
-            overwrite: false,
-          });
-          transferFailures.push(...report.failures);
+          try {
+            const report = await runManagedTrashMove(trashCandidates, batchDir);
+            transferFailures.push(...report.failures);
+          } catch (error) {
+            if (!isManagedJobCancelledError(error)) {
+              throw error;
+            }
+            cancelled = true;
+          }
 
           // Verify what actually disappeared from the source path before we mark it as trashed.
           const originalMeta = await statEntries(trashCandidates);
@@ -273,6 +403,10 @@ export const useFileManagerDelete = ({
               trashPath: joinPath(batchDir, getPathName(path)),
             });
           });
+
+          if (cancelled) {
+            break;
+          }
         }
 
         if (moved.length > 0) {
@@ -281,6 +415,15 @@ export const useFileManagerDelete = ({
         }
 
         const remainingPaths = Array.from(remaining);
+        const combinedFailures = [...trashFailures, ...transferFailures];
+        if (cancelled) {
+          return {
+            deleted: moved.length,
+            skipped: Math.max(0, unique.length - moved.length),
+            cancelled: true,
+            failures: combinedFailures,
+          };
+        }
 
         if (remainingPaths.length > 0) {
           const reasons: string[] = [];
@@ -301,8 +444,9 @@ export const useFileManagerDelete = ({
             remainingPaths.length === 1
               ? "this item"
               : `${remainingPaths.length} items`;
+
           return await new Promise<DeleteReport>((resolve) => {
-            usePromptStore.getState().showPrompt({
+            promptStore.showPrompt({
               title: "Couldn't move items to Trash",
               content: `${reasons.join("\n\n")}\n\nDelete ${countLabel} permanently instead? This cannot be undone.`,
               confirmLabel: "Delete permanently",
@@ -310,31 +454,45 @@ export const useFileManagerDelete = ({
               onConfirm: async () => {
                 let hardReport = null;
                 try {
-                  hardReport = await deleteEntriesApi(remainingPaths);
+                  hardReport = await runManagedDeleteEntries(remainingPaths);
                 } catch (error) {
-                  usePromptStore.getState().showPrompt({
+                  if (isManagedJobCancelledError(error)) {
+                    resolve({
+                      deleted: moved.length,
+                      skipped: Math.max(0, unique.length - moved.length),
+                      cancelled: true,
+                      failures: combinedFailures,
+                    });
+                    return;
+                  }
+                  promptStore.showPrompt({
                     title: "Delete failed",
-                    content: toMessage(error, "Failed to delete selected items."),
+                    content: getManagedJobErrorMessage(
+                      error,
+                      "Failed to delete selected items.",
+                    ),
                     confirmLabel: "OK",
                     cancelLabel: null,
                   });
                   resolve({
                     deleted: moved.length,
                     skipped: Math.max(0, unique.length - moved.length),
-                    failures: transferFailures,
+                    cancelled: false,
+                    failures: combinedFailures,
                   });
                   return;
                 }
-                if (hardReport.failures.length > 0) {
-                  usePromptStore.getState().showPrompt({
+
+                if (hardReport.deleted > 0) {
+                  await refreshAfterChange();
+                }
+                if (hardReport.failures.length > 0 && !hardReport.cancelled) {
+                  promptStore.showPrompt({
                     title: "Delete completed with issues",
                     content: formatFailures(hardReport.failures),
                     confirmLabel: "OK",
                     cancelLabel: null,
                   });
-                }
-                if (hardReport.deleted > 0) {
-                  await refreshAfterChange();
                 }
                 resolve({
                   deleted: moved.length + hardReport.deleted,
@@ -342,24 +500,26 @@ export const useFileManagerDelete = ({
                     0,
                     unique.length - moved.length - hardReport.deleted,
                   ),
-                  failures: [...transferFailures, ...hardReport.failures],
+                  cancelled: hardReport.cancelled,
+                  failures: [...combinedFailures, ...hardReport.failures],
                 });
               },
               onCancel: () => {
                 resolve({
                   deleted: moved.length,
                   skipped: Math.max(0, unique.length - moved.length),
-                  failures: transferFailures,
+                  cancelled: false,
+                  failures: combinedFailures,
                 });
               },
             });
           });
         }
 
-        if (transferFailures.length > 0) {
-          usePromptStore.getState().showPrompt({
+        if (combinedFailures.length > 0) {
+          promptStore.showPrompt({
             title: "Delete completed with issues",
-            content: formatFailures(transferFailures),
+            content: formatFailures(combinedFailures),
             confirmLabel: "OK",
             cancelLabel: null,
           });
@@ -367,32 +527,56 @@ export const useFileManagerDelete = ({
         return {
           deleted: moved.length,
           skipped: Math.max(0, unique.length - moved.length),
-          failures: transferFailures,
+          cancelled: false,
+          failures: combinedFailures,
         };
       } catch (error) {
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : "Failed to delete selected items.";
-        usePromptStore.getState().showPrompt({
+        if (isManagedJobCancelledError(error)) {
+          return null;
+        }
+        promptStore.showPrompt({
           title: "Delete failed",
-          content: message,
+          content: getManagedJobErrorMessage(
+            error,
+            "Failed to delete selected items.",
+          ),
           confirmLabel: "OK",
           cancelLabel: null,
         });
         return null;
-      } finally {
-        deleteInFlightRef.current = false;
       }
     },
     [
       buildTrashBatchDir,
-      deleteInFlightRef,
       log,
       pushUndo,
       refreshAfterChange,
       resolveTrashRootForPath,
+      runManagedDeleteEntries,
+      runManagedTrashEntries,
+      runManagedTrashMove,
     ],
+  );
+
+  const deleteEntriesInView = useCallback(
+    async (paths: string[]): Promise<DeleteReport | null> => {
+      const unique = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
+      if (unique.length === 0) return null;
+
+      activeDeleteRequestCountRef.current += 1;
+      deleteInFlightRef.current = true;
+
+      try {
+        return await executeDeleteEntries(unique);
+      } finally {
+        activeDeleteRequestCountRef.current = Math.max(
+          activeDeleteRequestCountRef.current - 1,
+          0,
+        );
+        deleteInFlightRef.current = activeDeleteRequestCountRef.current > 0;
+      }
+    },
+    [deleteInFlightRef, executeDeleteEntries],
   );
 
   return { deleteEntriesInView };

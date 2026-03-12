@@ -1,6 +1,8 @@
 // Renders a single transfer row for the status popover.
 // Keeps the button component focused on layout and interaction.
 import { buildTransferItemView } from "@/components/transfer/transferStatusView";
+import { TransferStatusItemActions } from "@/components/transfer/TransferStatusItemActions";
+import { useDisplayedTransferFileName } from "@/components/transfer/useDisplayedTransferFileName";
 import type { TransferJob } from "@/modules/transferStore";
 
 type TransferStatusItemProps = {
@@ -10,6 +12,10 @@ type TransferStatusItemProps = {
 
 export const TransferStatusItem = ({ job, now }: TransferStatusItemProps) => {
   const view = buildTransferItemView(job, now);
+  const displayedFileName = useDisplayedTransferFileName({
+    fileName: view.fileName,
+    status: view.status,
+  });
   const progressValue =
     view.indeterminate ? undefined : view.progressPercentValue ?? undefined;
   const progressText = view.progressPercentText ?? view.statusLabel;
@@ -21,12 +27,15 @@ export const TransferStatusItem = ({ job, now }: TransferStatusItemProps) => {
     >
       <div className="transfer-item-header">
         <div className="transfer-item-title">{view.label}</div>
-        <div className="transfer-item-count tnum">{view.countLabel}</div>
+        <div className="transfer-item-header-side">
+          <div className="transfer-item-count tnum">{view.countLabel}</div>
+          <TransferStatusItemActions job={job} />
+        </div>
       </div>
-      {view.fileName ? (
+      {displayedFileName ? (
         <div className="transfer-item-file">
           <span className="transfer-item-file-label">{view.fileLabel}:</span>
-          <span className="transfer-item-file-name">{view.fileName}</span>
+          <span className="transfer-item-file-name">{displayedFileName}</span>
         </div>
       ) : null}
       <div

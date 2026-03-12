@@ -5,6 +5,7 @@ import type { TransferJob, TransferStatus } from "@/modules/transferStore";
 
 export type TransferSummary = {
   activeCount: number;
+  queuedCount: number;
   hasActive: boolean;
   latestJob: TransferJob | null;
   countLabel: string;
@@ -25,6 +26,8 @@ export type TransferItemView = {
   statusLabel: string;
   rateLabel: string | null;
 };
+
+const TRANSFER_RECENT_RATE_WINDOW_MS = 4_000;
 
 const formatDuration = (elapsedMs: number) => {
   if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return "0s";
@@ -49,20 +52,71 @@ const formatByteRate = (bytes: number, elapsedMs: number) => {
   return `${formatBytes(perSecond)}/s`;
 };
 
+const buildRecentThroughputLabel = (job: TransferJob, now: number) => {
+  if (job.status !== "running") {
+    return null;
+  }
+
+  const recentSamples = (job.throughputSamples ?? []).filter(
+    (sample) => now - sample.recordedAt <= TRANSFER_RECENT_RATE_WINDOW_MS,
+  );
+  if (recentSamples.length < 2) {
+    return null;
+  }
+
+  const firstSample = recentSamples[0];
+  const lastSample = recentSamples[recentSamples.length - 1];
+  if (!firstSample || !lastSample) {
+    return null;
+  }
+
+  const elapsedMs = lastSample.recordedAt - firstSample.recordedAt;
+  if (elapsedMs <= 0) {
+    return null;
+  }
+
+  const bytesDelta = lastSample.bytesCompleted - firstSample.bytesCompleted;
+  if (bytesDelta > 0) {
+    return formatByteRate(bytesDelta, elapsedMs);
+  }
+
+  const itemsDelta = lastSample.processed - firstSample.processed;
+  if (itemsDelta > 0) {
+    return formatRate(itemsDelta, elapsedMs);
+  }
+
+  return null;
+};
+
 export const buildTransferSummary = (jobs: TransferJob[]): TransferSummary => {
-  const active = jobs.filter((job) => job.status === "running");
+  const active = jobs.filter(
+    (job) => job.status === "running" || job.status === "paused",
+  );
+  const queued = jobs.filter((job) => job.status === "queued");
   const activeCount = active.length;
-  const hasActive = activeCount > 0;
+  const queuedCount = queued.length;
+  const hasActive = activeCount > 0 || queuedCount > 0;
   const latestJob = jobs.length > 0 ? jobs[jobs.length - 1] ?? null : null;
   const countLabel = hasActive
-    ? `${activeCount} active`
+    ? activeCount > 0 && queuedCount > 0
+      ? `${activeCount} active, ${queuedCount} queued`
+      : activeCount > 0
+        ? `${activeCount} active`
+        : `${queuedCount} queued`
     : latestJob?.status === "failed"
       ? "Failed"
+      : latestJob?.status === "cancelled"
+        ? "Cancelled"
       : "Complete";
-  const title = hasActive ? "Transfers in progress" : "Last transfer";
+  const title = hasActive
+    ? queuedCount > 0
+      ? "Operations queue"
+      : "Operations in progress"
+    : "Last operation";
 
   return {
     activeCount,
+    queuedCount,
     hasActive,
     latestJob,
     countLabel,
@@ -76,43 +130,48 @@ export const buildTransferItemView = (
 ): TransferItemView => {
   const total = job.total || 0;
   const processed = job.processed || 0;
+  const isQueued = job.status === "queued";
+  const isPlanning =
+    (job.status === "running" || job.status === "paused") &&
+    job.phase === "planning";
   const hasByteProgress =
+    !isQueued &&
+    !isPlanning &&
     job.currentBytes != null &&
     job.currentTotalBytes != null &&
     job.currentTotalBytes > 0;
-  const progress = hasByteProgress
+  const progress = isQueued
+    ? 0
+    : hasByteProgress
     ? Math.min((job.currentBytes ?? 0) / (job.currentTotalBytes ?? 1), 1)
     : total > 0
       ? Math.min(processed / total, 1)
       : 0;
   const progressDecimals = hasByteProgress ? 1 : 0;
   const progressPercentValue =
-    hasByteProgress || total > 0
+    !isQueued && (hasByteProgress || total > 0)
       ? Number((progress * 100).toFixed(progressDecimals))
       : null;
   const progressPercentText =
     progressPercentValue != null
       ? `${progressPercentValue.toFixed(progressDecimals)}%`
       : null;
-  // Nudge the count while running so the UI feels responsive to the first tick.
-  const displayProcessed =
-    job.status === "running" && total > 0 && processed < total
-      ? Math.min(processed + 1, total)
-      : processed;
   const finishedAt = job.finishedAt ?? now;
   const elapsedMs = finishedAt - job.startedAt;
-  const byteElapsedMs =
-    job.currentStartedAt != null ? finishedAt - job.currentStartedAt : elapsedMs;
-  const byteRate =
-    hasByteProgress && job.currentBytes != null
-      ? formatByteRate(job.currentBytes, byteElapsedMs)
-      : null;
-  const rate = formatRate(processed, elapsedMs);
+  const recentRate = buildRecentThroughputLabel(job, now);
   const statusLabel =
-    job.status === "completed"
-      ? `Completed in ${formatDuration(elapsedMs)}`
-      : job.status === "failed"
-        ? "Failed"
+    job.status === "queued"
+      ? "Queued"
+      : job.status === "paused"
+        ? "Paused"
+      : job.status === "completed"
+        ? `Completed in ${formatDuration(elapsedMs)}`
+        : job.status === "cancelled"
+          ? "Cancelled"
+        : job.status === "failed"
+          ? "Failed"
+        : isPlanning
+          ? "Planning..."
         : hasByteProgress
           ? `${formatBytes(job.currentBytes ?? 0)} / ${formatBytes(
               job.currentTotalBytes ?? null,
@@ -122,14 +181,13 @@ export const buildTransferItemView = (
             : "Working...";
   const currentName = job.currentPath ? getPathName(job.currentPath) : "";
   const fileLabel = currentName
-    ? job.status === "completed"
-      ? "Last file"
-      : "File"
+    ? job.status === "completed" ||
+      job.status === "failed" ||
+      job.status === "cancelled"
+      ? "Last item"
+      : "Item"
     : null;
-  const countLabelBase = total > 0 ? `${displayProcessed}/${total}` : `${processed}`;
-  const countLabel = progressPercentText
-    ? `${countLabelBase} (${progressPercentText})`
-    : countLabelBase;
+  const countLabel = total > 0 ? `${processed}/${total} items` : `${processed} items`;
   const indeterminate =
     job.status === "running" && !hasByteProgress && processed === 0;
 
@@ -145,6 +203,6 @@ export const buildTransferItemView = (
     progressPercentValue,
     indeterminate,
     statusLabel,
-    rateLabel: byteRate ?? rate,
+    rateLabel: recentRate,
   };
 };
