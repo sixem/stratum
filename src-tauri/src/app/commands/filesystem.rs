@@ -1,7 +1,7 @@
 // Filesystem-centric command handlers.
 use crate::domain::filesystem as fs;
+use crate::services::transfer_manager;
 use crate::services::watch;
-use tauri::Emitter;
 
 #[tauri::command]
 pub async fn get_home() -> Option<String> {
@@ -99,38 +99,27 @@ pub async fn parent_dir(path: String) -> Option<String> {
 }
 
 #[tauri::command]
+pub async fn plan_copy_entries(
+    paths: Vec<String>,
+    destination: String,
+) -> Result<fs::CopyPlan, String> {
+    tauri::async_runtime::spawn_blocking(move || fs::plan_copy_entries(paths, destination))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
 pub async fn copy_entries(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
     window: tauri::Window,
     paths: Vec<String>,
     destination: String,
+    options: Option<fs::CopyOptions>,
     transfer_id: Option<String>,
 ) -> Result<fs::CopyReport, String> {
+    let manager = transfer_manager.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        // Only wire progress events when the UI provides a transfer id.
-        let transfer_id = transfer_id
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
-        let mut emitter = transfer_id.map(|id| {
-            let window = window.clone();
-            move |update: fs::TransferProgressUpdate| {
-                let payload = fs::TransferProgress {
-                    id: id.clone(),
-                    processed: update.processed,
-                    total: update.total,
-                    current_path: update.current_path,
-                    current_bytes: update.current_bytes,
-                    current_total_bytes: update.current_total_bytes,
-                };
-                let _ = window.emit("transfer_progress", payload);
-            }
-        });
-        fs::copy_entries(
-            paths,
-            destination,
-            emitter
-                .as_mut()
-                .map(|callback| callback as &mut dyn FnMut(fs::TransferProgressUpdate)),
-        )
+        manager.copy_entries(window, paths, destination, options, transfer_id)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -138,54 +127,74 @@ pub async fn copy_entries(
 
 #[tauri::command]
 pub async fn transfer_entries(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
     window: tauri::Window,
     paths: Vec<String>,
     destination: String,
     options: Option<fs::TransferOptions>,
     transfer_id: Option<String>,
 ) -> Result<fs::TransferReport, String> {
+    let manager = transfer_manager.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        // Only wire progress events when the UI provides a transfer id.
-        let transfer_id = transfer_id
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
-        let mut emitter = transfer_id.map(|id| {
-            let window = window.clone();
-            move |update: fs::TransferProgressUpdate| {
-                let payload = fs::TransferProgress {
-                    id: id.clone(),
-                    processed: update.processed,
-                    total: update.total,
-                    current_path: update.current_path,
-                    current_bytes: update.current_bytes,
-                    current_total_bytes: update.current_total_bytes,
-                };
-                let _ = window.emit("transfer_progress", payload);
-            }
-        });
-        fs::transfer_entries(
-            paths,
-            destination,
-            options,
-            emitter
-                .as_mut()
-                .map(|callback| callback as &mut dyn FnMut(fs::TransferProgressUpdate)),
-        )
+        manager.transfer_entries(window, paths, destination, options, transfer_id)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
-pub async fn delete_entries(paths: Vec<String>) -> Result<fs::DeleteReport, String> {
-    tauri::async_runtime::spawn_blocking(move || fs::delete_entries(paths))
+pub fn list_transfer_jobs(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
+) -> fs::TransferQueueSnapshot {
+    transfer_manager.inner().snapshot()
+}
+
+#[tauri::command]
+pub fn pause_transfer_job(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
+    job_id: String,
+) -> Result<bool, String> {
+    transfer_manager.inner().pause_job(job_id.trim())
+}
+
+#[tauri::command]
+pub fn resume_transfer_job(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
+    job_id: String,
+) -> Result<bool, String> {
+    transfer_manager.inner().resume_job(job_id.trim())
+}
+
+#[tauri::command]
+pub fn cancel_transfer_job(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
+    job_id: String,
+) -> Result<bool, String> {
+    transfer_manager.inner().cancel_job(job_id.trim())
+}
+
+#[tauri::command]
+pub async fn delete_entries(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
+    window: tauri::Window,
+    paths: Vec<String>,
+    transfer_id: Option<String>,
+) -> Result<fs::DeleteReport, String> {
+    let manager = transfer_manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager.delete_entries(window, paths, transfer_id))
         .await
         .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
-pub async fn trash_entries(paths: Vec<String>) -> Result<fs::TrashReport, String> {
-    tauri::async_runtime::spawn_blocking(move || fs::trash_entries(paths))
+pub async fn trash_entries(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
+    window: tauri::Window,
+    paths: Vec<String>,
+    transfer_id: Option<String>,
+) -> Result<fs::TrashReport, String> {
+    let manager = transfer_manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager.trash_entries(window, paths, transfer_id))
         .await
         .map_err(|err| err.to_string())?
 }

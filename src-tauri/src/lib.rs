@@ -46,9 +46,17 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            #[cfg(target_os = "windows")]
+            if let Err(error) =
+                platform::windows::console::install_console_exit_handler(&app.handle().clone())
+            {
+                eprintln!("Failed to install console exit handler: {error}");
+            }
+
             let thumbnails = domain::media::thumbs::init(app.handle().clone());
             app.manage(thumbnails);
             app.manage(services::watch::DirWatchHandle::default());
+            app.manage(services::transfer_manager::TransferManagerHandle::init());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -64,8 +72,13 @@ pub fn run() {
             app::commands::stat_entries,
             app::commands::list_folder_thumb_samples_batch,
             app::commands::parent_dir,
+            app::commands::plan_copy_entries,
             app::commands::copy_entries,
             app::commands::transfer_entries,
+            app::commands::list_transfer_jobs,
+            app::commands::pause_transfer_job,
+            app::commands::resume_transfer_job,
+            app::commands::cancel_transfer_job,
             app::commands::set_clipboard_paths,
             app::commands::get_clipboard_paths,
             app::commands::delete_entries,

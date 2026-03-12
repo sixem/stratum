@@ -1,51 +1,18 @@
-// Copy/move helpers with optional per-item progress reporting.
-use super::{
-    CopyReport, TransferMode, TransferOptions, TransferProgressCallback, TransferProgressUpdate,
-    TransferReport,
+// Transfer execution for copy and move operations.
+// Keeps the file-operation loops readable while progress and conflict behavior stay centralized.
+use super::common::{
+    build_copy_decision_sets, check_transfer_control, emit_transfer_progress,
+    is_same_directory_copy, remove_existing, same_drive, should_overwrite_copy_destination,
+    should_skip_copy_destination, unique_destination, CopyDecisionSets, CopyExecution,
+    COPY_CHUNK_SIZE,
+};
+use crate::domain::filesystem::{
+    CopyOptions, CopyReport, TransferControlCallback, TransferMode, TransferOptions,
+    TransferProgressCallback, TransferProgressUpdate, TransferReport,
 };
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-
-fn unique_destination(path: &Path) -> PathBuf {
-    if !path.exists() {
-        return path.to_path_buf();
-    }
-    let parent = match path.parent() {
-        Some(parent) => parent,
-        None => return path.to_path_buf(),
-    };
-    let stem = path
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .unwrap_or("item");
-    let ext = path.extension().and_then(|value| value.to_str());
-
-    for index in 1..=10_000 {
-        let candidate = match ext {
-            Some(ext) => format!("{} ({}).{}", stem, index, ext),
-            None => format!("{} ({})", stem, index),
-        };
-        let candidate_path = parent.join(candidate);
-        if !candidate_path.exists() {
-            return candidate_path;
-        }
-    }
-
-    path.to_path_buf()
-}
-
-// Chunk size for streaming file copies while emitting progress updates.
-const COPY_CHUNK_SIZE: usize = 1024 * 1024;
-
-fn emit_transfer_progress(
-    callback: &mut Option<&mut TransferProgressCallback>,
-    update: TransferProgressUpdate,
-) {
-    if let Some(handler) = callback.as_mut() {
-        handler(update);
-    }
-}
 
 fn copy_file_with_progress(
     src: &Path,
@@ -53,7 +20,9 @@ fn copy_file_with_progress(
     processed: usize,
     total: usize,
     on_progress: &mut Option<&mut TransferProgressCallback>,
+    on_control: &mut Option<&mut TransferControlCallback>,
 ) -> Result<(), String> {
+    check_transfer_control(on_control)?;
     if on_progress.is_none() {
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent).map_err(|err| err.to_string())?;
@@ -81,6 +50,7 @@ fn copy_file_with_progress(
     let mut copied: u64 = 0;
     let mut buffer = vec![0u8; COPY_CHUNK_SIZE];
     loop {
+        check_transfer_control(on_control)?;
         let bytes = reader.read(&mut buffer).map_err(|err| err.to_string())?;
         if bytes == 0 {
             break;
@@ -113,16 +83,26 @@ fn copy_dir(
     processed: usize,
     total: usize,
     on_progress: &mut Option<&mut TransferProgressCallback>,
+    on_control: &mut Option<&mut TransferControlCallback>,
 ) -> Result<(), String> {
+    check_transfer_control(on_control)?;
     if on_progress.is_none() {
         fs::create_dir_all(dest).map_err(|err| err.to_string())?;
         for entry in fs::read_dir(src).map_err(|err| err.to_string())? {
+            check_transfer_control(on_control)?;
             let entry = entry.map_err(|err| err.to_string())?;
             let src_path = entry.path();
             let dest_path = dest.join(entry.file_name());
             let metadata = entry.metadata().map_err(|err| err.to_string())?;
             if metadata.is_dir() {
-                copy_dir(&src_path, &dest_path, processed, total, on_progress)?;
+                copy_dir(
+                    &src_path,
+                    &dest_path,
+                    processed,
+                    total,
+                    on_progress,
+                    on_control,
+                )?;
             } else {
                 fs::copy(&src_path, &dest_path).map_err(|err| err.to_string())?;
             }
@@ -141,14 +121,29 @@ fn copy_dir(
         },
     );
     for entry in fs::read_dir(src).map_err(|err| err.to_string())? {
+        check_transfer_control(on_control)?;
         let entry = entry.map_err(|err| err.to_string())?;
         let src_path = entry.path();
         let dest_path = dest.join(entry.file_name());
         let metadata = entry.metadata().map_err(|err| err.to_string())?;
         if metadata.is_dir() {
-            copy_dir(&src_path, &dest_path, processed, total, on_progress)?;
+            copy_dir(
+                &src_path,
+                &dest_path,
+                processed,
+                total,
+                on_progress,
+                on_control,
+            )?;
         } else {
-            copy_file_with_progress(&src_path, &dest_path, processed, total, on_progress)?;
+            copy_file_with_progress(
+                &src_path,
+                &dest_path,
+                processed,
+                total,
+                on_progress,
+                on_control,
+            )?;
         }
     }
     Ok(())
@@ -160,18 +155,176 @@ fn copy_path(
     processed: usize,
     total: usize,
     on_progress: &mut Option<&mut TransferProgressCallback>,
+    on_control: &mut Option<&mut TransferControlCallback>,
 ) -> Result<(), String> {
+    check_transfer_control(on_control)?;
     let metadata = fs::metadata(src).map_err(|err| err.to_string())?;
     if metadata.is_dir() {
-        return copy_dir(src, dest, processed, total, on_progress);
+        return copy_dir(src, dest, processed, total, on_progress, on_control);
     }
-    copy_file_with_progress(src, dest, processed, total, on_progress)
+    copy_file_with_progress(src, dest, processed, total, on_progress, on_control)
+}
+
+fn copy_file_with_decisions(
+    src: &Path,
+    dest: &Path,
+    processed: usize,
+    total: usize,
+    on_progress: &mut Option<&mut TransferProgressCallback>,
+    on_control: &mut Option<&mut TransferControlCallback>,
+    decisions: &CopyDecisionSets,
+) -> Result<CopyExecution, String> {
+    check_transfer_control(on_control)?;
+    if dest.exists() {
+        if should_skip_copy_destination(dest, decisions) {
+            return Ok(CopyExecution {
+                copied_root: false,
+                skipped: 1,
+            });
+        }
+        if should_overwrite_copy_destination(dest, decisions) {
+            remove_existing(dest)?;
+        } else {
+            return Err("destination already exists".to_string());
+        }
+    }
+
+    copy_file_with_progress(src, dest, processed, total, on_progress, on_control)?;
+    Ok(CopyExecution {
+        copied_root: true,
+        skipped: 0,
+    })
+}
+
+fn copy_dir_with_decisions(
+    src: &Path,
+    dest: &Path,
+    processed: usize,
+    total: usize,
+    on_progress: &mut Option<&mut TransferProgressCallback>,
+    on_control: &mut Option<&mut TransferControlCallback>,
+    decisions: &CopyDecisionSets,
+) -> Result<CopyExecution, String> {
+    check_transfer_control(on_control)?;
+    if dest.exists() {
+        let metadata = fs::metadata(dest).map_err(|err| err.to_string())?;
+        if !metadata.is_dir() {
+            if should_skip_copy_destination(dest, decisions) {
+                return Ok(CopyExecution {
+                    copied_root: false,
+                    skipped: 1,
+                });
+            }
+            if should_overwrite_copy_destination(dest, decisions) {
+                remove_existing(dest)?;
+            } else {
+                return Err("destination already exists".to_string());
+            }
+        }
+    }
+
+    fs::create_dir_all(dest).map_err(|err| err.to_string())?;
+    emit_transfer_progress(
+        on_progress,
+        TransferProgressUpdate {
+            processed,
+            total,
+            current_path: Some(src.to_string_lossy().to_string()),
+            current_bytes: None,
+            current_total_bytes: None,
+        },
+    );
+
+    let mut skipped = 0;
+    for entry in fs::read_dir(src).map_err(|err| err.to_string())? {
+        check_transfer_control(on_control)?;
+        let entry = entry.map_err(|err| err.to_string())?;
+        let src_path = entry.path();
+        let dest_path = dest.join(entry.file_name());
+        let outcome = copy_path_with_decisions(
+            &src_path,
+            &dest_path,
+            processed,
+            total,
+            on_progress,
+            on_control,
+            decisions,
+        )?;
+        skipped += outcome.skipped;
+    }
+
+    Ok(CopyExecution {
+        copied_root: true,
+        skipped,
+    })
+}
+
+fn copy_path_with_decisions(
+    src: &Path,
+    dest: &Path,
+    processed: usize,
+    total: usize,
+    on_progress: &mut Option<&mut TransferProgressCallback>,
+    on_control: &mut Option<&mut TransferControlCallback>,
+    decisions: &CopyDecisionSets,
+) -> Result<CopyExecution, String> {
+    check_transfer_control(on_control)?;
+    let metadata = fs::metadata(src).map_err(|err| err.to_string())?;
+    if metadata.is_dir() {
+        return copy_dir_with_decisions(
+            src,
+            dest,
+            processed,
+            total,
+            on_progress,
+            on_control,
+            decisions,
+        );
+    }
+    copy_file_with_decisions(
+        src,
+        dest,
+        processed,
+        total,
+        on_progress,
+        on_control,
+        decisions,
+    )
+}
+
+fn move_path(
+    src: &Path,
+    dest: &Path,
+    processed: usize,
+    total: usize,
+    on_progress: &mut Option<&mut TransferProgressCallback>,
+    on_control: &mut Option<&mut TransferControlCallback>,
+) -> Result<(), String> {
+    check_transfer_control(on_control)?;
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    match fs::rename(src, dest) {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            copy_path(src, dest, processed, total, on_progress, on_control)?;
+            check_transfer_control(on_control)?;
+            let cleanup = if src.is_dir() {
+                fs::remove_dir_all(src)
+            } else {
+                fs::remove_file(src)
+            };
+            cleanup.map_err(|err| err.to_string())
+        }
+    }
 }
 
 pub fn copy_entries(
     paths: Vec<String>,
     destination: String,
+    options: Option<CopyOptions>,
     mut on_progress: Option<&mut TransferProgressCallback>,
+    mut on_control: Option<&mut TransferControlCallback>,
 ) -> Result<CopyReport, String> {
     let target = destination.trim();
     if target.is_empty() {
@@ -190,9 +343,11 @@ pub fn copy_entries(
         skipped: 0,
         failures: Vec::new(),
     };
+    let decisions = build_copy_decision_sets(options.as_ref());
 
     let total = paths.len();
     for (index, path) in paths.into_iter().enumerate() {
+        check_transfer_control(&mut on_control)?;
         let processed = index;
         let completed = index + 1;
         let trimmed = path.trim();
@@ -263,9 +418,27 @@ pub fn copy_entries(
                 continue;
             }
         };
-        let dest_path = unique_destination(&target_path.join(name));
-        match copy_path(&src, &dest_path, processed, total, &mut on_progress) {
-            Ok(_) => report.copied += 1,
+        let default_dest = target_path.join(name);
+        let dest_path = if is_same_directory_copy(&src, &target_path) {
+            unique_destination(&default_dest)
+        } else {
+            default_dest
+        };
+        match copy_path_with_decisions(
+            &src,
+            &dest_path,
+            processed,
+            total,
+            &mut on_progress,
+            &mut on_control,
+            &decisions,
+        ) {
+            Ok(outcome) => {
+                if outcome.copied_root {
+                    report.copied += 1;
+                }
+                report.skipped += outcome.skipped;
+            }
             Err(err) => report.failures.push(format!("{}: {}", trimmed, err)),
         }
         emit_transfer_progress(
@@ -283,82 +456,6 @@ pub fn copy_entries(
     Ok(report)
 }
 
-#[cfg(target_os = "windows")]
-fn drive_key(path: &Path) -> Option<String> {
-    use std::path::Component;
-    use std::path::Prefix;
-
-    let component = path.components().next()?;
-    if let Component::Prefix(prefix) = component {
-        return match prefix.kind() {
-            Prefix::Disk(letter) | Prefix::VerbatimDisk(letter) => {
-                Some(format!("{}:", char::from(letter).to_ascii_uppercase()))
-            }
-            Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) => Some(format!(
-                "\\\\{}\\{}",
-                server.to_string_lossy(),
-                share.to_string_lossy()
-            )),
-            _ => None,
-        };
-    }
-    None
-}
-
-#[cfg(not(target_os = "windows"))]
-fn drive_key(path: &Path) -> Option<String> {
-    if path.is_absolute() {
-        Some("/".to_string())
-    } else {
-        None
-    }
-}
-
-fn same_drive(left: &Path, right: &Path) -> bool {
-    let left_key = drive_key(left);
-    let right_key = drive_key(right);
-    match (left_key, right_key) {
-        (Some(l), Some(r)) => l.eq_ignore_ascii_case(&r),
-        _ => false,
-    }
-}
-
-fn remove_existing(path: &Path) -> Result<(), String> {
-    if !path.exists() {
-        return Ok(());
-    }
-    let result = if path.is_dir() {
-        fs::remove_dir_all(path)
-    } else {
-        fs::remove_file(path)
-    };
-    result.map_err(|err| err.to_string())
-}
-
-fn move_path(
-    src: &Path,
-    dest: &Path,
-    processed: usize,
-    total: usize,
-    on_progress: &mut Option<&mut TransferProgressCallback>,
-) -> Result<(), String> {
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-    }
-    match fs::rename(src, dest) {
-        Ok(_) => Ok(()),
-        Err(_) => {
-            copy_path(src, dest, processed, total, on_progress)?;
-            let cleanup = if src.is_dir() {
-                fs::remove_dir_all(src)
-            } else {
-                fs::remove_file(src)
-            };
-            cleanup.map_err(|err| err.to_string())
-        }
-    }
-}
-
 // Transfers entries into a destination folder with optional overwrite.
 // Auto mode moves within the same drive and copies across drives.
 pub fn transfer_entries(
@@ -366,6 +463,7 @@ pub fn transfer_entries(
     destination: String,
     options: Option<TransferOptions>,
     mut on_progress: Option<&mut TransferProgressCallback>,
+    mut on_control: Option<&mut TransferControlCallback>,
 ) -> Result<TransferReport, String> {
     let target = destination.trim();
     if target.is_empty() {
@@ -397,6 +495,7 @@ pub fn transfer_entries(
 
     let total = paths.len();
     for (index, path) in paths.into_iter().enumerate() {
+        check_transfer_control(&mut on_control)?;
         let processed = index;
         let completed = index + 1;
         let trimmed = path.trim();
@@ -511,11 +610,27 @@ pub fn transfer_entries(
         };
 
         let outcome = if should_move {
-            move_path(&src, &dest_path, processed, total, &mut on_progress).map(|_| {
+            move_path(
+                &src,
+                &dest_path,
+                processed,
+                total,
+                &mut on_progress,
+                &mut on_control,
+            )
+            .map(|_| {
                 report.moved += 1;
             })
         } else {
-            copy_path(&src, &dest_path, processed, total, &mut on_progress).map(|_| {
+            copy_path(
+                &src,
+                &dest_path,
+                processed,
+                total,
+                &mut on_progress,
+                &mut on_control,
+            )
+            .map(|_| {
                 report.copied += 1;
             })
         };

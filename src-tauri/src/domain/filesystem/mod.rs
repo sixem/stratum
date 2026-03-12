@@ -9,16 +9,18 @@ mod fs_delete;
 mod fs_list;
 #[cfg(target_os = "windows")]
 mod fs_recycle_windows;
-mod fs_transfer;
 mod fs_trash;
+pub(crate) mod transfer;
 
-pub use fs_delete::delete_entries;
+pub(crate) use fs_delete::delete_entries;
 pub use fs_list::{
     get_home, get_places, list_dir, list_dir_with_parent, list_drive_info, list_drives,
     list_folder_thumb_samples_batch, parent_dir, stat_entries,
 };
-pub use fs_transfer::{copy_entries, transfer_entries};
-pub use fs_trash::{restore_recycle_entries, restore_recycle_paths, trash_entries};
+pub(crate) use fs_trash::trash_entries;
+pub use fs_trash::{restore_recycle_entries, restore_recycle_paths};
+pub use transfer::types::TransferQueueSnapshot;
+pub use transfer::{copy_entries, plan_copy_entries, transfer_entries};
 
 // Listing and metadata types shared with the UI.
 #[derive(Clone, Serialize)]
@@ -134,6 +136,35 @@ pub struct CopyReport {
     pub failures: Vec<String>,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CopyConflictKind {
+    FileToFile,
+    FileToDirectory,
+    DirectoryToFile,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyConflict {
+    pub source_path: String,
+    pub destination_path: String,
+    pub kind: CopyConflictKind,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyPlan {
+    pub conflicts: Vec<CopyConflict>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyOptions {
+    pub overwrite_paths: Option<Vec<String>>,
+    pub skip_paths: Option<Vec<String>>,
+}
+
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TransferMode {
@@ -175,7 +206,10 @@ pub(crate) struct TransferProgressUpdate {
 }
 
 // Optional per-item progress reporting for copy/transfer commands.
-type TransferProgressCallback = dyn FnMut(TransferProgressUpdate);
+pub(crate) type TransferProgressCallback = dyn FnMut(TransferProgressUpdate);
+
+// Optional cooperative transfer-control checks used by the backend manager.
+pub(crate) type TransferControlCallback = dyn FnMut() -> Result<(), String>;
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -190,6 +224,7 @@ pub struct TransferOptions {
 pub struct DeleteReport {
     pub deleted: usize,
     pub skipped: usize,
+    pub cancelled: bool,
     pub failures: Vec<String>,
 }
 
@@ -208,6 +243,7 @@ pub struct RecycleEntry {
 pub struct TrashReport {
     pub deleted: usize,
     pub skipped: usize,
+    pub cancelled: bool,
     pub failures: Vec<String>,
     pub failed_paths: Vec<String>,
     pub recycled: Vec<RecycleEntry>,
