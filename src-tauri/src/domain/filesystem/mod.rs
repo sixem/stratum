@@ -194,6 +194,12 @@ pub struct TransferProgress {
     pub current_bytes: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_total_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_percent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rate_text: Option<String>,
 }
 
 #[derive(Clone)]
@@ -203,6 +209,9 @@ pub(crate) struct TransferProgressUpdate {
     pub current_path: Option<String>,
     pub current_bytes: Option<u64>,
     pub current_total_bytes: Option<u64>,
+    pub progress_percent: Option<f64>,
+    pub status_text: Option<String>,
+    pub rate_text: Option<String>,
 }
 
 // Optional per-item progress reporting for copy/transfer commands.

@@ -44,6 +44,9 @@ fn copy_file_with_progress(
             current_path: Some(src.to_string_lossy().to_string()),
             current_bytes: Some(0),
             current_total_bytes: Some(total_bytes),
+            progress_percent: None,
+            status_text: None,
+            rate_text: None,
         },
     );
 
@@ -67,6 +70,9 @@ fn copy_file_with_progress(
                 current_path: None,
                 current_bytes: Some(copied),
                 current_total_bytes: Some(total_bytes),
+                progress_percent: None,
+                status_text: None,
+                rate_text: None,
             },
         );
     }
@@ -118,6 +124,9 @@ fn copy_dir(
             current_path: Some(src.to_string_lossy().to_string()),
             current_bytes: None,
             current_total_bytes: None,
+            progress_percent: None,
+            status_text: None,
+            rate_text: None,
         },
     );
     for entry in fs::read_dir(src).map_err(|err| err.to_string())? {
@@ -232,6 +241,9 @@ fn copy_dir_with_decisions(
             current_path: Some(src.to_string_lossy().to_string()),
             current_bytes: None,
             current_total_bytes: None,
+            progress_percent: None,
+            status_text: None,
+            rate_text: None,
         },
     );
 
@@ -361,6 +373,9 @@ pub fn copy_entries(
                     current_path: None,
                     current_bytes: None,
                     current_total_bytes: None,
+                    progress_percent: None,
+                    status_text: None,
+                    rate_text: None,
                 },
             );
             continue;
@@ -380,6 +395,9 @@ pub fn copy_entries(
                         current_path: None,
                         current_bytes: None,
                         current_total_bytes: None,
+                        progress_percent: None,
+                        status_text: None,
+                        rate_text: None,
                     },
                 );
                 continue;
@@ -397,6 +415,9 @@ pub fn copy_entries(
                     current_path: None,
                     current_bytes: None,
                     current_total_bytes: None,
+                    progress_percent: None,
+                    status_text: None,
+                    rate_text: None,
                 },
             );
             continue;
@@ -413,6 +434,9 @@ pub fn copy_entries(
                         current_path: None,
                         current_bytes: None,
                         current_total_bytes: None,
+                        progress_percent: None,
+                        status_text: None,
+                        rate_text: None,
                     },
                 );
                 continue;
@@ -449,6 +473,9 @@ pub fn copy_entries(
                 current_path: None,
                 current_bytes: None,
                 current_total_bytes: None,
+                progress_percent: None,
+                status_text: None,
+                rate_text: None,
             },
         );
     }
@@ -509,6 +536,9 @@ pub fn transfer_entries(
                     current_path: None,
                     current_bytes: None,
                     current_total_bytes: None,
+                    progress_percent: None,
+                    status_text: None,
+                    rate_text: None,
                 },
             );
             continue;
@@ -528,6 +558,9 @@ pub fn transfer_entries(
                         current_path: None,
                         current_bytes: None,
                         current_total_bytes: None,
+                        progress_percent: None,
+                        status_text: None,
+                        rate_text: None,
                     },
                 );
                 continue;
@@ -545,6 +578,9 @@ pub fn transfer_entries(
                     current_path: None,
                     current_bytes: None,
                     current_total_bytes: None,
+                    progress_percent: None,
+                    status_text: None,
+                    rate_text: None,
                 },
             );
             continue;
@@ -561,6 +597,9 @@ pub fn transfer_entries(
                         current_path: None,
                         current_bytes: None,
                         current_total_bytes: None,
+                        progress_percent: None,
+                        status_text: None,
+                        rate_text: None,
                     },
                 );
                 continue;
@@ -581,6 +620,9 @@ pub fn transfer_entries(
                             current_path: None,
                             current_bytes: None,
                             current_total_bytes: None,
+                            progress_percent: None,
+                            status_text: None,
+                            rate_text: None,
                         },
                     );
                     continue;
@@ -597,6 +639,9 @@ pub fn transfer_entries(
                         current_path: None,
                         current_bytes: None,
                         current_total_bytes: None,
+                        progress_percent: None,
+                        status_text: None,
+                        rate_text: None,
                     },
                 );
                 continue;
@@ -648,6 +693,9 @@ pub fn transfer_entries(
                 current_path: None,
                 current_bytes: None,
                 current_total_bytes: None,
+                progress_percent: None,
+                status_text: None,
+                rate_text: None,
             },
         );
     }

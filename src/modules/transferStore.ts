@@ -49,6 +49,9 @@ export type TransferJob = {
   currentPath?: string;
   currentBytes?: number;
   currentTotalBytes?: number;
+  progressPercent?: number;
+  statusText?: string;
+  rateText?: string;
   currentStartedAt?: number;
   bytesCompleted?: number;
   bytesTotal?: number;
@@ -90,6 +93,9 @@ type TransferStore = TransferStoreState & {
       currentPath?: string | null;
       currentBytes?: number | null;
       currentTotalBytes?: number | null;
+      progressPercent?: number | null;
+      statusText?: string | null;
+      rateText?: string | null;
     },
   ) => void;
   updateLabel: (id: string, label: string) => void;
@@ -103,7 +109,7 @@ type TransferStore = TransferStoreState & {
   ) => void;
   applyQueueSnapshot: (snapshot: TransferQueueSnapshot | TransferJobsSnapshotEvent) => void;
   applyProgressHint: (event: TransferProgressEvent) => void;
-  clearAll: () => void;
+  clearFinishedJobs: () => void;
 };
 
 const createTransferId = () => {
@@ -146,6 +152,57 @@ const getDefaultJobLabel = (kind: LocalTransferJobKind) => {
     default:
       return "Transfer";
   }
+};
+
+const isTerminalStatus = (status: TransferStatus) => {
+  return status === "completed" || status === "failed" || status === "cancelled";
+};
+
+const isActiveStatus = (status: TransferStatus) => {
+  return status === "queued" || status === "running" || status === "paused";
+};
+
+const resolveSnapshotStatus = (
+  snapshotStatus: TransferStatus,
+  previousStatus?: TransferStatus,
+): TransferStatus => {
+  if (!previousStatus) {
+    return snapshotStatus;
+  }
+  if (isTerminalStatus(previousStatus)) {
+    return previousStatus;
+  }
+  if (snapshotStatus === "queued" && previousStatus !== "queued") {
+    return previousStatus;
+  }
+  return snapshotStatus;
+};
+
+const TRANSFER_PHASE_ORDER: Record<TransferJobPhase, number> = {
+  planning: 0,
+  executing: 1,
+  finalizing: 2,
+};
+
+const resolveSnapshotPhase = (
+  snapshotPhase: TransferJobPhase,
+  resolvedStatus: TransferStatus,
+  previousStatus?: TransferStatus,
+  previousPhase?: TransferJobPhase,
+): TransferJobPhase => {
+  if (isTerminalStatus(resolvedStatus)) {
+    return "finalizing";
+  }
+  if (!previousPhase || !previousStatus) {
+    return snapshotPhase;
+  }
+  if (snapshotPhase === "planning" && previousStatus !== "queued") {
+    return previousPhase;
+  }
+  if (TRANSFER_PHASE_ORDER[snapshotPhase] < TRANSFER_PHASE_ORDER[previousPhase]) {
+    return previousPhase;
+  }
+  return snapshotPhase;
 };
 
 const buildThroughputSamples = (
@@ -203,7 +260,13 @@ const buildTransferJob = (
   const currentPathChanged =
     snapshotJob.currentPath !== undefined &&
     snapshotJob.currentPath !== previousJob?.currentPath;
-  const nextStatus = snapshotJob.status;
+  const nextStatus = resolveSnapshotStatus(snapshotJob.status, previousJob?.status);
+  const nextPhase = resolveSnapshotPhase(
+    snapshotJob.phase,
+    nextStatus,
+    previousJob?.status,
+    previousJob?.phase,
+  );
   const startedNow =
     previousJob == null ||
     (previousJob.status === "queued" && nextStatus !== "queued");
@@ -244,7 +307,7 @@ const buildTransferJob = (
     backendManaged: true,
     capabilities: snapshotJob.capabilities,
     status: nextStatus,
-    phase: snapshotJob.phase,
+    phase: nextPhase,
     total,
     processed,
     startedAt,
@@ -281,6 +344,18 @@ const applyProgressHintToJob = (job: TransferJob, event: TransferProgressEvent):
     event.currentTotalBytes === undefined
       ? job.currentTotalBytes
       : event.currentTotalBytes ?? undefined;
+  const nextProgressPercent =
+    event.progressPercent === undefined
+      ? job.progressPercent
+      : event.progressPercent ?? undefined;
+  const nextStatusText =
+    event.statusText === undefined
+      ? job.statusText
+      : event.statusText ?? undefined;
+  const nextRateText =
+    event.rateText === undefined
+      ? job.rateText
+      : event.rateText ?? undefined;
   const pathChanged = nextCurrentPath != null && nextCurrentPath !== job.currentPath;
   const bytesReset =
     nextCurrentBytes != null &&
@@ -309,6 +384,10 @@ const applyProgressHintToJob = (job: TransferJob, event: TransferProgressEvent):
     currentPath: nextCurrentPath,
     currentBytes: nextCurrentBytes,
     currentTotalBytes: nextCurrentTotalBytes,
+    progressPercent:
+      pathChanged && event.progressPercent === undefined ? undefined : nextProgressPercent,
+    statusText: pathChanged && event.statusText === undefined ? undefined : nextStatusText,
+    rateText: pathChanged && event.rateText === undefined ? undefined : nextRateText,
     currentStartedAt,
   };
 };
@@ -368,6 +447,18 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
           update.currentTotalBytes === undefined
             ? job.currentTotalBytes
             : update.currentTotalBytes ?? undefined;
+        const nextProgressPercent =
+          update.progressPercent === undefined
+            ? job.progressPercent
+            : update.progressPercent ?? undefined;
+        const nextStatusText =
+          update.statusText === undefined
+            ? job.statusText
+            : update.statusText ?? undefined;
+        const nextRateText =
+          update.rateText === undefined
+            ? job.rateText
+            : update.rateText ?? undefined;
         const pathChanged = nextCurrentPath && nextCurrentPath !== job.currentPath;
         if (pathChanged && update.currentBytes === undefined) {
           nextCurrentBytes = undefined;
@@ -395,6 +486,12 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
           currentPath: nextCurrentPath,
           currentBytes: nextCurrentBytes,
           currentTotalBytes: nextCurrentTotalBytes,
+          progressPercent:
+            pathChanged && update.progressPercent === undefined ? undefined : nextProgressPercent,
+          statusText:
+            pathChanged && update.statusText === undefined ? undefined : nextStatusText,
+          rateText:
+            pathChanged && update.rateText === undefined ? undefined : nextRateText,
           currentStartedAt,
           throughputSamples: buildThroughputSamples(
             job.throughputSamples,
@@ -568,41 +665,27 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
         jobs: mergeVisibleJobs(backendJobs, localJobs),
       };
     }),
-  clearAll: () =>
+  clearFinishedJobs: () =>
     set((state) => {
       const dismissedJobIds = { ...state.dismissedJobIds };
+      const clearedJobIds = new Set<string>();
       state.jobs.forEach((job) => {
-        if (
-          job.status === "running" ||
-          job.status === "queued" ||
-          job.status === "paused"
-        ) {
+        if (!isTerminalStatus(job.status)) {
           return;
         }
         dismissedJobIds[job.id] = true;
+        clearedJobIds.add(job.id);
       });
+      const backendJobs = state.backendJobs.filter((job) => isActiveStatus(job.status));
+      const localJobs = state.localJobs.filter((job) => isActiveStatus(job.status));
       return {
         dismissedJobIds,
-        backendJobs: state.backendJobs.filter(
-          (job) =>
-            job.status === "running" ||
-            job.status === "queued" ||
-            job.status === "paused",
+        jobMetadata: Object.fromEntries(
+          Object.entries(state.jobMetadata).filter(([jobId]) => !clearedJobIds.has(jobId)),
         ),
-        localJobs: state.localJobs.filter(
-          (job) => job.status === "running" || job.status === "queued",
-        ),
-        jobs: mergeVisibleJobs(
-          state.backendJobs.filter(
-            (job) =>
-              job.status === "running" ||
-              job.status === "queued" ||
-              job.status === "paused",
-          ),
-          state.localJobs.filter(
-            (job) => job.status === "running" || job.status === "queued",
-          ),
-        ),
+        backendJobs,
+        localJobs,
+        jobs: mergeVisibleJobs(backendJobs, localJobs),
       };
     }),
 }));

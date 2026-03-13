@@ -1,4 +1,4 @@
-// View-model helpers for the transfer status popover.
+// View-model helpers for the work-log popover.
 // Keeps formatting and per-job calculations in one place for readability.
 import { formatBytes, getPathName } from "@/lib";
 import type { TransferJob, TransferStatus } from "@/modules/transferStore";
@@ -6,7 +6,9 @@ import type { TransferJob, TransferStatus } from "@/modules/transferStore";
 export type TransferSummary = {
   activeCount: number;
   queuedCount: number;
+  finishedCount: number;
   hasActive: boolean;
+  hasFinished: boolean;
   latestJob: TransferJob | null;
   countLabel: string;
   title: string;
@@ -93,9 +95,17 @@ export const buildTransferSummary = (jobs: TransferJob[]): TransferSummary => {
     (job) => job.status === "running" || job.status === "paused",
   );
   const queued = jobs.filter((job) => job.status === "queued");
+  const finished = jobs.filter(
+    (job) =>
+      job.status === "completed" ||
+      job.status === "failed" ||
+      job.status === "cancelled",
+  );
   const activeCount = active.length;
   const queuedCount = queued.length;
+  const finishedCount = finished.length;
   const hasActive = activeCount > 0 || queuedCount > 0;
+  const hasFinished = finishedCount > 0;
   const latestJob = jobs.length > 0 ? jobs[jobs.length - 1] ?? null : null;
   const countLabel = hasActive
     ? activeCount > 0 && queuedCount > 0
@@ -110,14 +120,16 @@ export const buildTransferSummary = (jobs: TransferJob[]): TransferSummary => {
       : "Complete";
   const title = hasActive
     ? queuedCount > 0
-      ? "Operations queue"
-      : "Operations in progress"
-    : "Last operation";
+      ? "Work queue"
+      : "Work in progress"
+    : "Recent jobs";
 
   return {
     activeCount,
     queuedCount,
+    finishedCount,
     hasActive,
+    hasFinished,
     latestJob,
     countLabel,
     title,
@@ -140,16 +152,22 @@ export const buildTransferItemView = (
     job.currentBytes != null &&
     job.currentTotalBytes != null &&
     job.currentTotalBytes > 0;
+  const hasGenericProgress =
+    !isQueued &&
+    Number.isFinite(job.progressPercent) &&
+    (job.progressPercent ?? 0) >= 0;
   const progress = isQueued
     ? 0
+    : hasGenericProgress
+    ? Math.min(Math.max((job.progressPercent ?? 0) / 100, 0), 1)
     : hasByteProgress
     ? Math.min((job.currentBytes ?? 0) / (job.currentTotalBytes ?? 1), 1)
     : total > 0
       ? Math.min(processed / total, 1)
       : 0;
-  const progressDecimals = hasByteProgress ? 1 : 0;
+  const progressDecimals = hasByteProgress || hasGenericProgress ? 1 : 0;
   const progressPercentValue =
-    !isQueued && (hasByteProgress || total > 0)
+    !isQueued && (hasGenericProgress || hasByteProgress || total > 0)
       ? Number((progress * 100).toFixed(progressDecimals))
       : null;
   const progressPercentText =
@@ -169,9 +187,11 @@ export const buildTransferItemView = (
         : job.status === "cancelled"
           ? "Cancelled"
         : job.status === "failed"
-          ? "Failed"
+        ? "Failed"
         : isPlanning
           ? "Planning..."
+        : job.statusText
+          ? job.statusText
         : hasByteProgress
           ? `${formatBytes(job.currentBytes ?? 0)} / ${formatBytes(
               job.currentTotalBytes ?? null,
@@ -189,7 +209,7 @@ export const buildTransferItemView = (
     : null;
   const countLabel = total > 0 ? `${processed}/${total} items` : `${processed} items`;
   const indeterminate =
-    job.status === "running" && !hasByteProgress && processed === 0;
+    job.status === "running" && !hasGenericProgress && !hasByteProgress && processed === 0;
 
   return {
     id: job.id,
@@ -203,6 +223,6 @@ export const buildTransferItemView = (
     progressPercentValue,
     indeterminate,
     statusLabel,
-    rateLabel: recentRate,
+    rateLabel: job.rateText ?? recentRate,
   };
 };

@@ -29,6 +29,7 @@ pub enum TransferJobKind {
     Move,
     Delete,
     Trash,
+    Conversion,
 }
 
 #[derive(Clone, Copy, Serialize)]

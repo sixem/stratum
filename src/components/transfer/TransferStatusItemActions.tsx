@@ -2,6 +2,7 @@
 // These stay separate from the main row layout so the item component remains readable.
 import { useMemo, useState } from "react";
 import { cancelTransferJob, pauseTransferJob, resumeTransferJob } from "@/api";
+import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PressButton } from "@/components/primitives/PressButton";
 import { usePromptStore } from "@/modules";
 import type { TransferJob } from "@/modules/transferStore";
@@ -89,58 +90,67 @@ export const TransferStatusItemActions = ({
   return (
     <div className="transfer-item-actions" role="group" aria-label="Operation controls">
       {showPause ? (
-        <PressButton
-          type="button"
-          className="transfer-item-action"
-          onClick={() =>
-            void runAction(
-              "pause",
-              pauseTransferJob,
-              "Unable to pause the active operation.",
-            )
-          }
-          disabled={disableActions}
-          aria-label="Pause operation"
-          title="Pause operation"
-        >
-          <PauseIcon />
-        </PressButton>
+        <TooltipWrapper text="Pause operation">
+          <span className="transfer-item-action-shell">
+            <PressButton
+              type="button"
+              className="transfer-item-action"
+              onClick={() =>
+                void runAction(
+                  "pause",
+                  pauseTransferJob,
+                  "Unable to pause the active operation.",
+                )
+              }
+              disabled={disableActions}
+              aria-label="Pause operation"
+            >
+              <PauseIcon />
+            </PressButton>
+          </span>
+        </TooltipWrapper>
       ) : null}
       {showResume ? (
-        <PressButton
-          type="button"
-          className="transfer-item-action"
-          onClick={() =>
-            void runAction(
-              "resume",
-              resumeTransferJob,
-              "Unable to resume the active operation.",
-            )
-          }
-          disabled={disableActions}
-          aria-label="Resume operation"
-          title="Resume operation"
-        >
-          <ResumeIcon />
-        </PressButton>
+        <TooltipWrapper text="Resume operation">
+          <span className="transfer-item-action-shell">
+            <PressButton
+              type="button"
+              className="transfer-item-action"
+              onClick={() =>
+                void runAction(
+                  "resume",
+                  resumeTransferJob,
+                  "Unable to resume the active operation.",
+                )
+              }
+              disabled={disableActions}
+              aria-label="Resume operation"
+            >
+              <ResumeIcon />
+            </PressButton>
+          </span>
+        </TooltipWrapper>
       ) : null}
       {showCancel ? (
-        <PressButton
-          type="button"
-          className="transfer-item-action transfer-item-action-danger"
-          onClick={() =>
-            void runAction(
-              "cancel",
-              cancelTransferJob,
-              "Unable to cancel the selected operation.",
-            )
-          }
-          disabled={disableActions}
-          aria-label="Cancel operation"
-          title="Cancel operation"
-        >
-          <CancelIcon />
-        </PressButton>
+        <TooltipWrapper text="Cancel operation">
+          <span className="transfer-item-action-shell">
+            <PressButton
+              type="button"
+              className="transfer-item-action transfer-item-action-danger"
+              onClick={() =>
+                void runAction(
+                  "cancel",
+                  cancelTransferJob,
+                  "Unable to cancel the selected operation.",
+                )
+              }
+              disabled={disableActions}
+              aria-label="Cancel operation"
+            >
+              <CancelIcon />
+            </PressButton>
+          </span>
+        </TooltipWrapper>
       ) : null}
     </div>
   );

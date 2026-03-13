@@ -90,5 +90,8 @@ fn emit_delete_progress(
         current_path,
         current_bytes: None,
         current_total_bytes: None,
+        progress_percent: None,
+        status_text: None,
+        rate_text: None,
     });
 }
