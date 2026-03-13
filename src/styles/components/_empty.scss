@@ -24,7 +24,7 @@
 
   .empty-subtitle {
     margin-top: 6px;
-    font-size: 13px;
+    font-size: var(--font-size-md);
   }
 
   .empty-actions {
@@ -43,7 +43,7 @@
     border-radius: 8px;
     border: 1px solid var(--stroke);
     background: var(--surface-control);
-    font-size: 12px;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     color: var(--text);
     cursor: pointer;
@@ -191,13 +191,13 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.02);
     color: var(--muted);
-    font-size: 10px;
+    font-size: var(--font-size-2xs);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
 
   .lander-section-title {
-    font-size: 10px;
+    font-size: var(--font-size-2xs);
     text-transform: uppercase;
     letter-spacing: 0.16em;
     color: var(--muted);
@@ -206,7 +206,7 @@
 
   .lander-recents-empty,
   .lander-drives-empty {
-    font-size: 12px;
+    font-size: var(--font-size-sm);
     color: var(--muted);
     padding: 8px 2px 6px;
   }

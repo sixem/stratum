@@ -89,6 +89,7 @@ export const SettingsGridSection = ({
           <div className="settings-range">
             <input
               type="range"
+              className="ui-range"
               min={GRID_AUTO_COLUMNS_MIN}
               max={GRID_AUTO_COLUMNS_MAX}
               step={1}
@@ -106,6 +107,7 @@ export const SettingsGridSection = ({
         <div className="settings-range">
           <input
             type="range"
+            className="ui-range"
             min={GRID_GAP_MIN}
             max={GRID_GAP_MAX}
             step={1}

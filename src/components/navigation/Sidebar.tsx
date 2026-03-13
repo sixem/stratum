@@ -10,6 +10,7 @@ import {
   normalizeSidebarSectionOrder,
   refreshSessionHint,
 } from "@/modules";
+import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PinIcon } from "@/components/icons";
 import { PressButton } from "@/components/primitives/PressButton";
 import { SidebarSection } from "./SidebarSection";
@@ -92,9 +93,11 @@ const SidebarItem = ({
       <span className="place-head">
         <span className="place-name">{title}</span>
         {isPinned ? (
-          <span className="place-pin" aria-label="Pinned place" title="Pinned place">
-            <PinIcon className="place-pin-icon" />
-          </span>
+          <TooltipWrapper text="Pinned place">
+            <span className="place-pin" aria-hidden="true">
+              <PinIcon className="place-pin-icon" />
+            </span>
+          </TooltipWrapper>
         ) : null}
       </span>
       <span className="place-path">{subtitle}</span>

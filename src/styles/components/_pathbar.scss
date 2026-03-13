@@ -127,7 +127,7 @@
     border-radius: 3px;
     border: 1px solid transparent;
     background: transparent;
-    font-size: 10px;
+    font-size: var(--font-size-2xs);
     font-weight: 600;
     letter-spacing: 0.08em;
     color: var(--muted);
@@ -228,7 +228,7 @@
   .drive-picker-item {
     padding: 2px 12px;
     border-radius: 2px;
-    font-size: 11px;
+    font-size: var(--font-size-xs);
     letter-spacing: 0.08em;
     font-weight: 600;
     color: var(--text);
@@ -255,7 +255,7 @@
     border-radius: 999px;
     background: rgba(47, 54, 70, 0.7);
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--font-size-sm);
     font-weight: 700;
     display: grid;
     place-items: center;
@@ -327,11 +327,11 @@
   }
 
   .transfer-label {
-    font-size: 10px;
+    font-size: var(--font-size-2xs);
   }
 
   .transfer-count {
-    font-size: 9px;
+    font-size: var(--font-size-2xs);
   }
 
   .transfer-indicator {
@@ -399,7 +399,7 @@
     border: 1px solid var(--stroke);
     background: var(--surface-control-strong);
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--font-size-md);
     height: 30px;
   }
 
@@ -432,7 +432,7 @@
     min-width: 0;
     width: 100%;
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--font-size-md);
   }
 
   .search-input::placeholder {
@@ -475,7 +475,7 @@
   border: 1px solid var(--stroke);
   background: var(--surface-control);
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   cursor: pointer;
   transition: none;
 }

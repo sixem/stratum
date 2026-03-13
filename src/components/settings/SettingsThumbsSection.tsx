@@ -76,6 +76,7 @@ export const SettingsThumbsSection = ({
         <div className="settings-range">
           <input
             type="range"
+            className="ui-range"
             min={SIZE_MIN}
             max={SIZE_MAX}
             step={SIZE_STEP}
@@ -93,6 +94,7 @@ export const SettingsThumbsSection = ({
         <div className="settings-range">
           <input
             type="range"
+            className="ui-range"
             min={QUALITY_MIN}
             max={QUALITY_MAX}
             step={QUALITY_STEP}

@@ -43,12 +43,12 @@
     place-items: center;
     text-align: center;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--font-size-sm);
     padding: 12px;
   }
 
   .section-title {
-    font-size: 10px;
+    font-size: var(--font-size-2xs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.11em;
@@ -67,7 +67,7 @@
     justify-content: space-between;
     gap: 10px;
     padding: 6px 8px;
-    font-size: 11px;
+    font-size: var(--font-size-xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.12em;
@@ -117,7 +117,7 @@
   .tips {
     display: grid;
     gap: 6px;
-    font-size: 11px;
+    font-size: var(--font-size-xs);
     color: var(--muted);
     line-height: 1.4;
     margin-top: 8px;
@@ -208,7 +208,7 @@
   }
 
   .place-path {
-    font-size: 11px;
+    font-size: var(--font-size-xs);
     font-weight: 500;
     line-height: 1.25;
     color: var(--muted);
@@ -238,7 +238,7 @@
 }
 
 :where(.sidebar) .place-name {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 1.2;
 }
 

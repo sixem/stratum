@@ -21,6 +21,7 @@
 }
 
 .settings-panel {
+  --scrollbar-thumb: #1c2434;
   width: min(
     1320px,
     calc(100vw - (var(--settings-edge-gap) + var(--settings-edge-gap)))
@@ -53,13 +54,13 @@
 
 .settings-title {
   margin: 0 0 6px;
-  font-size: 20px;
+  font-size: var(--font-size-2xl);
   letter-spacing: 0.02em;
 }
 
 .settings-subtitle {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--muted);
   max-width: 520px;
   line-height: 1.4;
@@ -97,6 +98,7 @@
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .settings-sidebar-actions {
@@ -116,7 +118,7 @@
   border-radius: 8px;
   border: 1px solid var(--stroke);
   background: var(--surface-nav);
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--muted);
   text-align: left;
@@ -155,7 +157,7 @@
 }
 
 .settings-sidebar-title {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   text-transform: uppercase;
   letter-spacing: 0.16em;
   color: var(--muted);
@@ -170,7 +172,7 @@
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--muted);
 }
 
@@ -190,10 +192,27 @@
   overflow: auto;
   padding-right: 6px;
   scrollbar-gutter: stable;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 
   > .settings-section:not(:first-child) {
     margin-top: 14px;
   }
+}
+
+.settings-nav::-webkit-scrollbar,
+.settings-content::-webkit-scrollbar {
+  width: 7px;
+}
+
+.settings-nav::-webkit-scrollbar-thumb,
+.settings-content::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+}
+
+.settings-nav::-webkit-scrollbar-thumb:hover,
+.settings-content::-webkit-scrollbar-thumb:hover {
+  background: #273046;
 }
 
 .settings-section {
@@ -208,7 +227,7 @@
 }
 
 .settings-section-title {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: none;
@@ -237,7 +256,7 @@
 
 .settings-label {
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
 }
 
 .settings-label-row {
@@ -252,13 +271,13 @@
   border-radius: 999px;
   border: 1px solid var(--stroke);
   background: var(--surface-card);
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   letter-spacing: 0.04em;
   color: var(--muted);
 }
 
 .settings-desc {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--muted);
   margin-top: 2px;
   line-height: 1.4;
@@ -270,18 +289,28 @@
 
 .settings-toggle {
   position: relative;
-  width: 42px;
+  width: 40px;
   height: 22px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  background: var(--surface-card);
   border: 1px solid var(--stroke);
   cursor: pointer;
   display: inline-block;
+  transition: background-color 0.16s ease, border-color 0.16s ease;
 }
 
 .settings-toggle:has(input:checked) {
-  background: rgba(var(--accent-rgb), 0.2);
-  border-color: rgba(var(--accent-rgb), 0.42);
+  background: rgba(48, 92, 60, 0.42);
+  border-color: rgba(108, 194, 129, 0.38);
+}
+
+.settings-toggle:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.settings-toggle:has(input:focus-visible) {
+  border-color: rgba(108, 194, 129, 0.5);
+  box-shadow: 0 0 0 1px rgba(108, 194, 129, 0.14);
 }
 
 .settings-toggle input {
@@ -293,18 +322,22 @@
 
 .settings-toggle span {
   position: absolute;
-  top: 3px;
-  left: 3px;
+  top: 2px;
+  left: 2px;
   width: 16px;
   height: 16px;
-  border-radius: 999px;
-  background: #c6cedd;
-  transition: transform 0.18s ease, background 0.18s ease;
+  border-radius: 3px;
+  background: rgba(229, 235, 246, 0.86);
+  transition:
+    transform 0.16s ease,
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .settings-toggle input:checked + span {
-  transform: translateX(18px);
-  background: #f1f5ff;
+  transform: translateX(20px);
+  background: rgba(244, 247, 255, 0.96);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .settings-range {
@@ -315,17 +348,16 @@
   min-width: 160px;
 }
 
-.settings-range input {
+.settings-range .ui-range {
   width: 160px;
-  accent-color: var(--accent);
 }
 
-.settings-range input:disabled {
+.settings-range .ui-range:disabled {
   opacity: 0.5;
 }
 
 .settings-value {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--muted);
   min-width: 56px;
   text-align: right;
@@ -335,11 +367,11 @@
 .settings-pills {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 2px;
   align-items: center;
   padding: 2px;
   border: 1px solid var(--stroke);
-  border-radius: 999px;
+  border-radius: 4px;
   background: var(--surface-card);
   justify-self: start;
 }
@@ -371,7 +403,7 @@
 }
 
 .settings-order-label {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--text);
 }
@@ -418,7 +450,7 @@
   border-radius: 6px;
   border: 1px solid var(--stroke);
   background: var(--surface-card);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--text);
   cursor: pointer;
@@ -441,7 +473,7 @@
   border-radius: 999px;
   border: 1px solid var(--stroke);
   background: var(--surface-card);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -457,7 +489,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--text);
 }
@@ -472,8 +504,8 @@
 
 .settings-pill {
   padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
+  border-radius: 3px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--muted);
   border: 1px solid transparent;
@@ -482,6 +514,11 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.settings-pill:hover:not(:disabled):not(.is-active) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .settings-pill-check {
@@ -501,8 +538,8 @@
 
 .settings-pill.is-active {
   color: var(--text);
-  border-color: rgba(255, 255, 255, 0.15);
-  background: var(--surface-control-strong);
+  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--surface-control);
 }
 
 .settings-pill:disabled {

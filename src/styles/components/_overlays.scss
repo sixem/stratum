@@ -12,7 +12,7 @@
   border: 1px solid var(--stroke);
   background: #0b0e14;
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   letter-spacing: 0.02em;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
   pointer-events: none;
@@ -159,7 +159,7 @@
     gap: 8px;
     padding: 6px 8px;
     border-radius: 4px;
-    font-size: 12px;
+    font-size: var(--font-size-sm);
     text-align: left;
     cursor: pointer;
     color: var(--text);
@@ -225,7 +225,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
+    font-size: var(--font-size-xs);
     color: var(--accent);
   }
 
@@ -247,7 +247,7 @@
 
   .context-hint {
     justify-self: end;
-    font-size: 10px;
+    font-size: var(--font-size-2xs);
     letter-spacing: 0.08em;
     color: var(--muted);
     max-width: 12ch;

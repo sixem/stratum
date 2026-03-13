@@ -151,7 +151,7 @@
   }
 
   .tab-index {
-    font-size: 10px;
+    font-size: var(--font-size-2xs);
     font-weight: 600;
     letter-spacing: 0.08em;
     color: var(--muted);
@@ -167,7 +167,7 @@
 
   .tab-title {
     font-weight: 600;
-    font-size: 12px;
+    font-size: var(--font-size-sm);
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -240,7 +240,7 @@
   background: transparent;
   display: grid;
   place-items: center;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 600;
   line-height: 1;
   padding: 0;

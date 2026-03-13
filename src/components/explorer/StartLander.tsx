@@ -1,6 +1,7 @@
 // Landing content shown when no folder is selected in the active tab.
 import { formatBytes, handleMiddleClick, normalizePath } from "@/lib";
 import type { DriveInfo, Place } from "@/types";
+import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PinIcon } from "@/components/icons";
 import { EmptyState } from "@/components/primitives/EmptyState";
 import { PressButton } from "@/components/primitives/PressButton";
@@ -280,9 +281,11 @@ export const StartLander = ({
                         {place.name}
                       </span>
                       {place.pinned ? (
-                        <span className="place-pin" aria-label="Pinned place" title="Pinned place">
-                          <PinIcon className="place-pin-icon" />
-                        </span>
+                        <TooltipWrapper text="Pinned place">
+                          <span className="place-pin" aria-hidden="true">
+                            <PinIcon className="place-pin-icon" />
+                          </span>
+                        </TooltipWrapper>
                       ) : null}
                     </div>
                     <span className="place-path lander-place-path">{place.path}</span>

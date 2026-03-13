@@ -115,6 +115,7 @@ export const SettingsBarsSection = ({
         <div className="settings-range">
           <input
             type="range"
+            className="ui-range"
             min={SIDEBAR_RECENT_LIMIT_MIN}
             max={SIDEBAR_RECENT_LIMIT_MAX}
             step={RECENT_STEP}

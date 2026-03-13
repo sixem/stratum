@@ -126,7 +126,7 @@
   display: grid;
   gap: 8px;
   place-items: center;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--muted);
@@ -148,6 +148,12 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+// Shared entry-state helpers keep grid cards and list rows visually aligned.
+@mixin entry-state-surface($border-color, $background) {
+  border-color: $border-color;
+  background: $background;
 }
 
 .thumb-shell {
@@ -225,39 +231,6 @@
 
   .thumb-card.is-deleting .thumb-meta {
     opacity: 0.74;
-  }
-
-  // Give folders a subtle cool tint so they are easier to distinguish from files.
-  .thumb-card.is-dir:not(.is-selected):not([data-drop-target="true"]) {
-    background: rgba(92, 126, 196, 0.12);
-    border-color: rgba(92, 126, 196, 0.3);
-  }
-
-
-  .thumb-card:hover {
-    border-color: rgba(255, 255, 255, 0.16);
-    background: var(--surface-control-strong);
-  }
-
-  .thumb-card.is-dir:not(.is-selected):not([data-drop-target="true"]):hover {
-    background: rgba(110, 146, 221, 0.18);
-    border-color: rgba(124, 157, 226, 0.38);
-  }
-
-  .thumb-card.is-selected {
-    border-color: rgba(var(--accent-rgb), 0.7);
-    background: rgba(var(--accent-rgb), 0.12);
-  }
-
-  // Keep folder selection slightly distinct from file selection.
-  .thumb-card.is-dir.is-selected:not([data-drop-target="true"]) {
-    border-color: rgba(var(--accent-rgb), 0.86);
-    background: rgba(var(--accent-rgb), 0.2);
-  }
-
-  .thumb-card[data-drop-target="true"] {
-    border-color: rgba(var(--accent-rgb), 0.9);
-    background: rgba(var(--accent-rgb), 0.18);
   }
 
   .thumb-card[aria-disabled="true"] {
@@ -353,7 +326,7 @@
     position: relative;
     display: block;
     min-width: 0;
-    font-size: 12px;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     line-height: 14px;
     overflow: hidden;
@@ -426,44 +399,8 @@
   }
 }
 
-:root[data-ambient="true"] :where(.thumb-shell) .thumb-card {
-  background: rgba(255, 255, 255, 0.025);
-  border-color: rgba(255, 255, 255, 0.040);
-}
-
-:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not(
-    [data-drop-target="true"]
-  ) {
-  background: rgba(92, 126, 196, 0.11);
-  border-color: rgba(124, 157, 226, 0.26);
-}
-
-:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not(
-    [data-drop-target="true"]
-  ):hover {
-  background: rgba(110, 146, 221, 0.14);
-  border-color: rgba(124, 157, 226, 0.3);
-}
-
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-parent-icon {
   color: rgba(220, 227, 238, 0.82);
-}
-
-:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-selected {
-  border-color: rgba(var(--accent-rgb), 0.7);
-  background: rgba(var(--accent-rgb), 0.12);
-}
-
-:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir.is-selected:not(
-    [data-drop-target="true"]
-  ) {
-  border-color: rgba(var(--accent-rgb), 0.82);
-  background: rgba(var(--accent-rgb), 0.18);
-}
-
-:root[data-ambient="true"] :where(.thumb-shell) .thumb-card[data-drop-target="true"] {
-  border-color: rgba(var(--accent-rgb), 0.9);
-  background: rgba(var(--accent-rgb), 0.18);
 }
 
 :where(.thumb-shell)[data-category-tint="true"] .thumb-card[data-kind="document"] {
@@ -544,7 +481,7 @@
 
 // Keep grid rename typography aligned with the thumb name styles.
 :where(.thumb-shell) .rename-input.rename-input-grid {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 14px;
   font-weight: 600;
 }
@@ -575,7 +512,7 @@
     border-radius: 6px;
     border: 1px solid transparent;
     background: transparent;
-    font-size: 10px;
+    font-size: var(--font-size-2xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.12em;
@@ -807,49 +744,15 @@
     opacity: 0.7;
   }
 
-  // Mirror folder tint in list view so directories are easier to spot.
-  .row.is-dir:not(.is-selected):not([data-drop-target="true"]) {
-    background: rgba(92, 126, 196, 0.1);
-    border-color: rgba(92, 126, 196, 0.2);
-    --list-dot-color: rgba(132, 164, 232, 0.9);
-  }
-
   .row[aria-disabled="true"] {
     opacity: 0.8;
-  }
-
-  .row:hover {
-    border-color: rgba(255, 255, 255, 0.16);
-    background: var(--surface-control-strong);
-  }
-
-  .row.is-dir:not(.is-selected):not([data-drop-target="true"]):hover {
-    background: rgba(110, 146, 221, 0.16);
-    border-color: rgba(124, 157, 226, 0.34);
-  }
-
-  .row.is-selected {
-    border-color: rgba(var(--accent-rgb), 0.7);
-    background: rgba(var(--accent-rgb), 0.12);
-  }
-
-  // Keep folder selection slightly distinct from file selection.
-  .row.is-dir.is-selected:not([data-drop-target="true"]) {
-    border-color: rgba(var(--accent-rgb), 0.84);
-    background: rgba(var(--accent-rgb), 0.19);
-    --list-dot-color: rgba(var(--accent-rgb), 0.98);
-  }
-
-  .row[data-drop-target="true"] {
-    border-color: rgba(var(--accent-rgb), 0.9);
-    background: rgba(var(--accent-rgb), 0.18);
   }
 
   .row .name {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
+    font-size: var(--font-size-md);
     font-weight: 600;
     min-width: 0;
     overflow: hidden;
@@ -870,33 +773,107 @@
     text-align: right;
     font-variant-numeric: tabular-nums;
     color: var(--muted);
-    font-size: 13px;
+    font-size: var(--font-size-md);
   }
+}
+
+// Shared grid/list interaction states.
+:where(.thumb-shell) .thumb-card:hover,
+:where(.file-list) .row:hover {
+  @include entry-state-surface(rgba(255, 255, 255, 0.16), var(--surface-control-strong));
+}
+
+// Give folders a subtle cool tint so they are easier to distinguish from files.
+:where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not([data-drop-target="true"]) {
+  @include entry-state-surface(rgba(92, 126, 196, 0.3), rgba(92, 126, 196, 0.12));
+}
+
+:where(.file-list) .row.is-dir:not(.is-selected):not([data-drop-target="true"]) {
+  @include entry-state-surface(rgba(92, 126, 196, 0.2), rgba(92, 126, 196, 0.1));
+  --list-dot-color: rgba(132, 164, 232, 0.9);
+}
+
+:where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include entry-state-surface(rgba(124, 157, 226, 0.38), rgba(110, 146, 221, 0.18));
+}
+
+:where(.file-list) .row.is-dir:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include entry-state-surface(rgba(124, 157, 226, 0.34), rgba(110, 146, 221, 0.16));
+}
+
+:where(.thumb-shell) .thumb-card.is-selected,
+:where(.file-list) .row.is-selected {
+  @include entry-state-surface(rgba(var(--accent-rgb), 0.7), rgba(var(--accent-rgb), 0.12));
+}
+
+// Keep folder selection slightly distinct from file selection.
+:where(.thumb-shell) .thumb-card.is-dir.is-selected:not([data-drop-target="true"]) {
+  @include entry-state-surface(rgba(var(--accent-rgb), 0.86), rgba(var(--accent-rgb), 0.2));
+}
+
+:where(.file-list) .row.is-dir.is-selected:not([data-drop-target="true"]) {
+  @include entry-state-surface(rgba(var(--accent-rgb), 0.84), rgba(var(--accent-rgb), 0.19));
+  --list-dot-color: rgba(var(--accent-rgb), 0.98);
+}
+
+:where(.thumb-shell) .thumb-card[data-drop-target="true"],
+:where(.file-list) .row[data-drop-target="true"] {
+  @include entry-state-surface(rgba(var(--accent-rgb), 0.9), rgba(var(--accent-rgb), 0.18));
+}
+
+// Ambient mode keeps the base surfaces softer, but preserves the same state hierarchy.
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-card {
+  @include entry-state-surface(rgba(255, 255, 255, 0.040), rgba(255, 255, 255, 0.025));
 }
 
 :root[data-ambient="true"] :where(.file-list) .row {
   background: rgba(18, 22, 33, 0.82);
 }
 
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not(
+    [data-drop-target="true"]
+  ) {
+  @include entry-state-surface(rgba(124, 157, 226, 0.26), rgba(92, 126, 196, 0.11));
+}
+
 :root[data-ambient="true"] :where(.file-list) .row.is-dir:not(.is-selected):not(
     [data-drop-target="true"]
   ) {
-  background: rgba(58, 78, 126, 0.48);
-  border-color: rgba(124, 157, 226, 0.26);
+  @include entry-state-surface(rgba(124, 157, 226, 0.26), rgba(58, 78, 126, 0.48));
+}
+
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not(
+    [data-drop-target="true"]
+  ):hover {
+  @include entry-state-surface(rgba(124, 157, 226, 0.3), rgba(110, 146, 221, 0.14));
 }
 
 :root[data-ambient="true"] :where(.file-list) .row.is-dir:not(.is-selected):not(
     [data-drop-target="true"]
   ):hover {
-  background: rgba(110, 146, 221, 0.14);
-  border-color: rgba(124, 157, 226, 0.3);
+  @include entry-state-surface(rgba(124, 157, 226, 0.3), rgba(110, 146, 221, 0.14));
+}
+
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-selected,
+:root[data-ambient="true"] :where(.file-list) .row.is-selected {
+  @include entry-state-surface(rgba(var(--accent-rgb), 0.7), rgba(var(--accent-rgb), 0.12));
+}
+
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir.is-selected:not(
+    [data-drop-target="true"]
+  ) {
+  @include entry-state-surface(rgba(var(--accent-rgb), 0.82), rgba(var(--accent-rgb), 0.18));
 }
 
 :root[data-ambient="true"] :where(.file-list) .row.is-dir.is-selected:not(
     [data-drop-target="true"]
   ) {
-  border-color: rgba(var(--accent-rgb), 0.8);
-  background: rgba(var(--accent-rgb), 0.17);
+  @include entry-state-surface(rgba(var(--accent-rgb), 0.8), rgba(var(--accent-rgb), 0.17));
+}
+
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-card[data-drop-target="true"],
+:root[data-ambient="true"] :where(.file-list) .row[data-drop-target="true"] {
+  @include entry-state-surface(rgba(var(--accent-rgb), 0.9), rgba(var(--accent-rgb), 0.18));
 }
 
 // Category tinting for list view dots.

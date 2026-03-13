@@ -111,6 +111,7 @@ export const SettingsCacheSection = ({
         <div className="settings-range">
           <input
             type="range"
+            className="ui-range"
             min={CACHE_MIN}
             max={CACHE_MAX}
             step={CACHE_STEP}
