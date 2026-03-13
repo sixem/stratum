@@ -6,6 +6,19 @@ textarea {
   color: inherit;
 }
 
+// Keep text selections inside form fields high-contrast regardless of theme.
+input::selection,
+textarea::selection {
+  background: #fff;
+  color: #000;
+}
+
+input::-moz-selection,
+textarea::-moz-selection {
+  background: #fff;
+  color: #000;
+}
+
 button {
   appearance: none;
   border: none;

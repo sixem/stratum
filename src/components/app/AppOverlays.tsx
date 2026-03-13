@@ -4,13 +4,13 @@ import { AboutModal } from "@/components/overlay/AboutModal";
 import { ContextMenu } from "@/components/overlay/ContextMenu";
 import { PromptModal } from "@/components/overlay/PromptModal";
 import { TooltipDisplay } from "@/components/overlay/Tooltip";
-import type { ConversionModalProps } from "@/components/overlay/ConversionModal";
+import type { ConversionModalProps } from "@/components/overlay/conversionModal";
 import type { SettingsOverlayProps } from "@/components/overlay/SettingsOverlay";
 import type { QuickPreviewOverlayProps } from "@/components/preview/QuickPreviewOverlay";
 import type { ComponentProps } from "react";
 
 const LazyConversionModal = lazy(async () => {
-  const module = await import("@/components/overlay/ConversionModal");
+  const module = await import("@/components/overlay/conversionModal");
   return { default: module.ConversionModal };
 });
 
@@ -94,7 +94,7 @@ export const AppOverlays = ({
   // Load heavyweight overlays on first use, then keep them mounted.
   const conversionMounted = useDeferredMount(conversion.open, true);
   const settingsMounted = useDeferredMount(settings.open, true);
-  const quickPreviewMounted = useDeferredMount(quickPreview.open);
+  const quickPreviewMounted = useDeferredMount(quickPreview.open, true);
 
   return (
     <>

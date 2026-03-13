@@ -1,4 +1,5 @@
 // Minimal title-bar chrome for quick preview with gallery navigation and window controls.
+import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { NavArrowIcon } from "@/components/icons";
 import { WindowControls } from "@/components/navigation/WindowControls";
 import { PressButton } from "@/components/primitives/PressButton";
@@ -48,9 +49,11 @@ export const QuickPreviewTopBar = ({
     </div>
   ) : null;
   const centerSlot = (
-    <div className="quick-preview-topbar-title" title={title}>
-      {title}
-    </div>
+    <TooltipWrapper text={title}>
+      <div className="quick-preview-topbar-title">
+        {title}
+      </div>
+    </TooltipWrapper>
   );
   const rightSlot = positionLabel ? (
     <div className="quick-preview-topbar-position" aria-label={`Preview position ${positionLabel}`}>

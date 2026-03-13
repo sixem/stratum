@@ -94,7 +94,7 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: 0.03em;
   pointer-events: none;
@@ -105,7 +105,7 @@
   min-width: 44px;
   text-align: right;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   font-weight: 600;
   letter-spacing: 0.04em;
   white-space: nowrap;
@@ -219,14 +219,14 @@
 }
 
 .quick-preview-error-title {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 650;
   letter-spacing: 0.02em;
   color: var(--text);
 }
 
 .quick-preview-error-desc {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 1.45;
   color: var(--muted);
 }
@@ -241,7 +241,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
@@ -263,7 +263,7 @@
 }
 
 .quick-preview-error-hint {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--muted);
 }
 
@@ -317,7 +317,7 @@
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(16, 20, 30, 0.84);
   color: var(--text);
-  font-size: 9px;
+  font-size: var(--font-size-micro);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -499,7 +499,7 @@
 }
 
 .quick-preview-control-time {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   letter-spacing: 0.02em;
   color: rgba(229, 235, 245, 0.75);
   font-variant-numeric: tabular-nums;
@@ -581,7 +581,7 @@
 }
 
 .quick-preview-info-error {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
@@ -597,7 +597,7 @@
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
@@ -686,7 +686,7 @@
 }
 
 .quick-preview-strip-fallback {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
