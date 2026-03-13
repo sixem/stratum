@@ -38,8 +38,8 @@ export {
   openPathWithDialog,
   openPathWithHandler,
 } from "./opener";
-export { convertImage, getImageInfo } from "./images";
-export { convertVideo } from "./videos";
+export { getImageInfo } from "./images";
+export { convertMediaEntries } from "./conversion";
 export { getFileIcons, toFileIconUrl } from "./fileIcons";
 export {
   clearThumbCache,

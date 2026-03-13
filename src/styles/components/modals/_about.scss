@@ -1,0 +1,100 @@
+// About modal overlay and app metadata presentation.
+
+@use "./shared" as modal;
+
+.about-modal {
+  @include modal.overlay-shell(2350, 24px);
+}
+
+.about-modal[data-open="true"] {
+  @include modal.overlay-open();
+}
+
+.about-panel {
+  @include modal.panel-shell(
+    min(560px, calc(100vw - 32px)),
+    min(70vh, 560px),
+    20px,
+    14px,
+    14px
+  );
+}
+
+.about-modal[data-open="true"] .about-panel {
+  @include modal.panel-open();
+}
+
+:where(.about-panel) {
+  .about-header {
+    display: grid;
+    gap: 4px;
+  }
+
+  .about-title {
+    font-size: var(--font-size-xl);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text);
+  }
+
+  .about-subtitle {
+    font-size: var(--font-size-sm);
+    color: var(--muted);
+    line-height: 1.4;
+    max-width: 420px;
+  }
+
+  .about-meta {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(8, 11, 16, 0.35);
+  }
+
+  .about-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: var(--font-size-sm);
+  }
+
+  .about-label {
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: var(--font-size-2xs);
+  }
+
+  .about-value {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .about-links {
+    display: grid;
+    gap: 8px;
+    font-size: var(--font-size-sm);
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .about-footer {
+    font-size: var(--font-size-xs);
+    color: var(--muted);
+  }
+
+  .about-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+}

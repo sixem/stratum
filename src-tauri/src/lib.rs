@@ -100,8 +100,7 @@ pub fn run() {
             app::commands::clear_thumb_cache,
             app::commands::get_thumb_cache_size,
             app::commands::get_image_info,
-            app::commands::convert_image,
-            app::commands::convert_video,
+            app::commands::convert_media_entries,
             app::commands::get_file_icons,
             app::commands::get_shell_availability,
             app::commands::open_shell

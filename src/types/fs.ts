@@ -106,7 +106,8 @@ export type TransferJobKind =
   | "copy"
   | "move"
   | "delete"
-  | "trash";
+  | "trash"
+  | "conversion";
 
 export type TransferJobPhase = "planning" | "executing" | "finalizing";
 
@@ -148,6 +149,9 @@ export type TransferProgressEvent = {
   currentPath?: string | null;
   currentBytes?: number | null;
   currentTotalBytes?: number | null;
+  progressPercent?: number | null;
+  statusText?: string | null;
+  rateText?: string | null;
 };
 
 export type TransferJobsSnapshotEvent = TransferQueueSnapshot;

@@ -1,5 +1,6 @@
 // Media-oriented command handlers (thumbnails, icons, conversion).
-use crate::domain::media::{file_icons, images, thumbs, videos};
+use crate::domain::media::{conversion_jobs, file_icons, images, thumbs};
+use crate::services::transfer_manager;
 
 #[tauri::command]
 pub async fn request_thumbnails(
@@ -64,23 +65,16 @@ pub async fn get_image_info(path: String) -> Result<images::ImageInfo, String> {
 }
 
 #[tauri::command]
-pub async fn convert_image(
-    path: String,
-    destination: String,
-    options: images::ImageConvertOptions,
-) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || images::convert_image(path, destination, options))
-        .await
-        .map_err(|err| err.to_string())?
-}
-
-#[tauri::command]
-pub async fn convert_video(
-    path: String,
-    destination: String,
-    options: videos::VideoConvertOptions,
-) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || videos::convert_video(path, destination, options))
-        .await
-        .map_err(|err| err.to_string())?
+pub async fn convert_media_entries(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
+    window: tauri::Window,
+    items: Vec<conversion_jobs::ConversionJobItem>,
+    transfer_id: Option<String>,
+) -> Result<conversion_jobs::ConversionReport, String> {
+    let manager = transfer_manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        manager.convert_media_entries(window, items, transfer_id)
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }

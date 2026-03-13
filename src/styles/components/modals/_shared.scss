@@ -1,0 +1,51 @@
+// Shared modal-shell mixins for centered overlays.
+// Keep the chrome consistent while individual modal partials define their own content.
+
+@mixin overlay-shell(
+  $z-index,
+  $padding,
+  $background: rgba(6, 8, 12, 0.68)
+) {
+  position: fixed;
+  inset: 0;
+  z-index: $z-index;
+  display: grid;
+  place-items: center;
+  padding: $padding;
+  background: $background;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+@mixin overlay-open() {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@mixin panel-shell(
+  $width,
+  $max-height,
+  $padding,
+  $gap,
+  $radius,
+  $background: linear-gradient(160deg, var(--surface-nav) 0%, var(--panel-deep) 100%),
+  $shadow: 0 18px 44px rgba(0, 0, 0, 0.42)
+) {
+  width: $width;
+  max-height: $max-height;
+  background: $background;
+  border: 1px solid var(--stroke);
+  border-radius: $radius;
+  box-shadow: $shadow;
+  padding: $padding;
+  display: flex;
+  flex-direction: column;
+  gap: $gap;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+@mixin panel-open() {
+  opacity: 1;
+}

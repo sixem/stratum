@@ -25,6 +25,7 @@ type DropdownSelectProps = {
   ariaLabel: string;
   disabled?: boolean;
   className?: string;
+  menuClassName?: string;
 };
 
 type FlattenedOption = DropdownOption & {
@@ -60,13 +61,17 @@ export const DropdownSelect = ({
   ariaLabel,
   disabled = false,
   className,
+  menuClassName,
 }: DropdownSelectProps) => {
   const controlId = useId();
   const listId = `${controlId}-listbox`;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const positionFrameRef = useRef<number | null>(null);
+  const followupPositionFrameRef = useRef<number | null>(null);
   const [open, setOpen] = useState(false);
+  const [menuReady, setMenuReady] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [menuPosition, setMenuPosition] = useState<{
     top: number;
@@ -110,6 +115,17 @@ export const DropdownSelect = ({
   const activeDescendantId =
     open && activeIndex >= 0 ? `${listId}-option-${activeIndex}` : open ? clearOptionId : undefined;
 
+  const openMenu = useCallback(() => {
+    setMenuReady(false);
+    setOpen(true);
+  }, []);
+
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    setMenuReady(false);
+    setActiveIndex(-1);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const handlePointerDown = (event: PointerEvent) => {
@@ -119,13 +135,11 @@ export const DropdownSelect = ({
       if (!root) return;
       if (root.contains(target)) return;
       if (menu?.contains(target)) return;
-      setOpen(false);
-      setActiveIndex(-1);
+      closeMenu();
     };
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      setOpen(false);
-      setActiveIndex(-1);
+      closeMenu();
     };
     window.addEventListener("pointerdown", handlePointerDown, { capture: true });
     window.addEventListener("keydown", handleEscape, { capture: true });
@@ -133,7 +147,7 @@ export const DropdownSelect = ({
       window.removeEventListener("pointerdown", handlePointerDown, { capture: true });
       window.removeEventListener("keydown", handleEscape, { capture: true });
     };
-  }, [open]);
+  }, [closeMenu, open]);
 
   const updateMenuPosition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -174,10 +188,54 @@ export const DropdownSelect = ({
     });
   }, []);
 
+  const cancelScheduledPositionRefresh = useCallback(() => {
+    if (positionFrameRef.current != null) {
+      window.cancelAnimationFrame(positionFrameRef.current);
+      positionFrameRef.current = null;
+    }
+    if (followupPositionFrameRef.current != null) {
+      window.cancelAnimationFrame(followupPositionFrameRef.current);
+      followupPositionFrameRef.current = null;
+    }
+  }, []);
+
+  const schedulePositionRefresh = useCallback((revealWhenSettled = false) => {
+    cancelScheduledPositionRefresh();
+    // Re-anchor after the next paint(s) so late focus/scroll/layout shifts do not
+    // leave the portal menu stuck on a stale first measurement.
+    positionFrameRef.current = window.requestAnimationFrame(() => {
+      positionFrameRef.current = null;
+      updateMenuPosition();
+      followupPositionFrameRef.current = window.requestAnimationFrame(() => {
+        followupPositionFrameRef.current = null;
+        updateMenuPosition();
+        if (revealWhenSettled) {
+          setMenuReady(true);
+        }
+      });
+    });
+  }, [cancelScheduledPositionRefresh, updateMenuPosition]);
+
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open) {
+      cancelScheduledPositionRefresh();
+      setMenuReady(false);
+      return;
+    }
     updateMenuPosition();
-  }, [groups.length, open, updateMenuPosition]);
+    if (!menuReady) {
+      schedulePositionRefresh(true);
+      return;
+    }
+    schedulePositionRefresh();
+  }, [
+    cancelScheduledPositionRefresh,
+    flattenedOptions.length,
+    menuReady,
+    open,
+    schedulePositionRefresh,
+    updateMenuPosition,
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -193,6 +251,22 @@ export const DropdownSelect = ({
   }, [open, updateMenuPosition]);
 
   useEffect(() => {
+    if (!open || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      updateMenuPosition();
+    });
+    if (triggerRef.current) {
+      observer.observe(triggerRef.current);
+    }
+    if (menuRef.current) {
+      observer.observe(menuRef.current);
+    }
+    return () => observer.disconnect();
+  }, [open, updateMenuPosition]);
+
+  useEffect(() => cancelScheduledPositionRefresh, [cancelScheduledPositionRefresh]);
+
+  useEffect(() => {
     if (!open) return;
     const selectedIndex = flattenedOptions.findIndex((option) => option.value === value);
     if (selectedIndex >= 0 && !flattenedOptions[selectedIndex]?.disabled) {
@@ -204,14 +278,12 @@ export const DropdownSelect = ({
 
   useEffect(() => {
     if (!disabled || !open) return;
-    setOpen(false);
-    setActiveIndex(-1);
-  }, [disabled, open]);
+    closeMenu();
+  }, [closeMenu, disabled, open]);
 
   const commitValue = (next: string | null) => {
     onChange(next);
-    setOpen(false);
-    setActiveIndex(-1);
+    closeMenu();
   };
 
   const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
@@ -219,7 +291,7 @@ export const DropdownSelect = ({
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       if (!open) {
-        setOpen(true);
+        openMenu();
         return;
       }
       const direction = event.key === "ArrowDown" ? 1 : -1;
@@ -229,7 +301,7 @@ export const DropdownSelect = ({
     if (event.key === "Home") {
       event.preventDefault();
       if (!open) {
-        setOpen(true);
+        openMenu();
       }
       setActiveIndex(getNextEnabledIndex(flattenedOptions, -1, 1));
       return;
@@ -237,7 +309,7 @@ export const DropdownSelect = ({
     if (event.key === "End") {
       event.preventDefault();
       if (!open) {
-        setOpen(true);
+        openMenu();
       }
       setActiveIndex(getNextEnabledIndex(flattenedOptions, 0, -1));
       return;
@@ -255,14 +327,17 @@ export const DropdownSelect = ({
           return;
         }
       }
-      setOpen((prev) => !prev);
+      if (open) {
+        closeMenu();
+        return;
+      }
+      openMenu();
     }
   };
 
   const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Tab") {
-      setOpen(false);
-      setActiveIndex(-1);
+      closeMenu();
       return;
     }
     if (event.key === "ArrowDown") {
@@ -285,8 +360,7 @@ export const DropdownSelect = ({
     }
     if (event.key === "Escape") {
       event.preventDefault();
-      setOpen(false);
-      setActiveIndex(-1);
+      closeMenu();
       return;
     }
     if (event.key === "Home") {
@@ -310,6 +384,7 @@ export const DropdownSelect = ({
       <PressButton
         ref={triggerRef}
         type="button"
+        pressOnPointerDown={false}
         className="ui-select-trigger"
         role="combobox"
         aria-expanded={open}
@@ -319,7 +394,11 @@ export const DropdownSelect = ({
         onKeyDown={handleTriggerKeyDown}
         onClick={() => {
           if (disabled) return;
-          setOpen((prev) => !prev);
+          if (open) {
+            closeMenu();
+            return;
+          }
+          openMenu();
         }}
         disabled={disabled}
       >
@@ -334,7 +413,7 @@ export const DropdownSelect = ({
             <div
               ref={menuRef}
               id={listId}
-              className="ui-select-menu"
+              className={`ui-select-menu${menuClassName ? ` ${menuClassName}` : ""}`}
               role="listbox"
               onKeyDown={handleMenuKeyDown}
               style={{
@@ -342,6 +421,8 @@ export const DropdownSelect = ({
                 left: `${menuPosition.left}px`,
                 width: `${menuPosition.width}px`,
                 maxHeight: `${menuPosition.maxHeight}px`,
+                visibility: menuReady ? "visible" : "hidden",
+                pointerEvents: menuReady ? "auto" : "none",
               }}
             >
               <PressButton

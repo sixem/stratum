@@ -58,6 +58,12 @@ export type {
   ConversionRuleOverrideDraft,
   ConversionItemRunStatus,
 } from "./conversion";
+export type {
+  ConversionJobItem,
+  ConversionReport,
+  ImageConversionJobItem,
+  VideoConversionJobItem,
+} from "./conversionJobs";
 export type { ImageConvertOptions, ImageInfo, ImageTargetFormat } from "./images";
 export type { VideoConvertOptions } from "./videos";
 export type { ShellAvailability, ShellKind } from "./shells";

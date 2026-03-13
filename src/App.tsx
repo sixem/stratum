@@ -161,7 +161,6 @@ const App = () => {
     handleStartConversion,
     handleQuickConvertImages,
   } = useConversionController({
-    deleteEntries: fileManager.deleteEntries,
     refreshEntries: fileManager.refresh,
     ffmpegPath: settings.ffmpegPath,
   });

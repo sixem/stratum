@@ -1,0 +1,91 @@
+// Prompt modal overlay and simple prompt-form controls.
+
+@use "./shared" as modal;
+
+.prompt-modal {
+  @include modal.overlay-shell(2400, 24px);
+}
+
+.prompt-modal[data-open="true"] {
+  @include modal.overlay-open();
+}
+
+.prompt-panel {
+  @include modal.panel-shell(
+    min(520px, calc(100vw - 32px)),
+    min(70vh, 520px),
+    18px,
+    12px,
+    12px
+  );
+}
+
+.prompt-modal[data-open="true"] .prompt-panel {
+  @include modal.panel-open();
+}
+
+// Scope prompt content styles to the panel without adding specificity.
+:where(.prompt-panel) {
+  .prompt-title {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text);
+  }
+
+  .prompt-content {
+    font-size: var(--font-size-sm);
+    color: var(--muted);
+    line-height: 1.5;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    min-height: 0;
+  }
+
+  // Simple form controls inside prompts (e.g., create folder/file).
+  .prompt-field {
+    display: grid;
+    gap: 8px;
+  }
+
+  .prompt-label {
+    font-size: var(--font-size-2xs);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+  }
+
+  .prompt-input {
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--stroke);
+    background: var(--surface-card);
+    color: var(--text);
+    font-size: var(--font-size-sm);
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+  }
+
+  .prompt-input:focus {
+    border-color: rgba(var(--accent-rgb), 0.6);
+    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+  }
+
+  .prompt-input::selection {
+    background: #fff;
+    color: #000;
+  }
+
+  .prompt-input::-moz-selection {
+    background: #fff;
+    color: #000;
+  }
+
+  .prompt-actions {
+    margin-top: 4px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+}
