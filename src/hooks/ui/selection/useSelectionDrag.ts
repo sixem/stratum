@@ -1,41 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { isEditableElement, makeDebug } from "@/lib";
+import {
+  buildLayoutSnapshot,
+  computeDragSelectionGeometry,
+  resolveSelectionUpdate,
+  selectPathsFromDomRects,
+  selectPathsFromLayoutSnapshot,
+} from "./selectionDragMath";
+import type {
+  CachedSelectionItem,
+  LayoutSnapshot,
+  SelectionBox,
+  SelectionLayout,
+} from "./selectionDragMath";
 
-export type SelectionBox = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-};
+export type { SelectionBox, SelectionLayout, SelectionLayoutItem } from "./selectionDragMath";
 
-export type SelectionLayoutItem = {
-  path: string;
-  selectable: boolean;
-};
-
-export type SelectionLayout =
-  | {
-      kind: "list";
-      items: SelectionLayoutItem[];
-      itemHeight: number;
-      rowHeight: number;
-      insetTop?: number;
-    }
-  | {
-      kind: "grid";
-      items: SelectionLayoutItem[];
-      columnCount: number;
-      columnWidth: number;
-      rowHeight: number;
-      gap: number;
-      insetTop?: number;
-    };
-
-type CachedItem = {
-  path: string;
-  rect: DOMRect;
-};
+type CachedItem = CachedSelectionItem;
 
 type CacheState = {
   items: CachedItem[];
@@ -69,59 +51,6 @@ type DragState = {
 const DRAG_THRESHOLD = 4;
 const log = makeDebug("selection");
 
-const clamp = (value: number, min: number, max: number) => {
-  if (value < min) return min;
-  if (value > max) return max;
-  return value;
-};
-
-const selectionMatches = (paths: string[], current: Set<string>) => {
-  if (paths.length !== current.size) return false;
-  for (const path of paths) {
-    if (!current.has(path)) return false;
-  }
-  return true;
-};
-
-const setsMatch = (next: Set<string>, current: Set<string>) => {
-  if (next.size !== current.size) return false;
-  for (const path of next) {
-    if (!current.has(path)) return false;
-  }
-  return true;
-};
-
-type ContentRect = {
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-};
-
-type ListLayoutSnapshot = {
-  kind: "list";
-  items: SelectionLayoutItem[];
-  itemHeight: number;
-  rowHeight: number;
-  insetTop: number;
-};
-
-type GridLayoutSnapshot = {
-  kind: "grid";
-  items: SelectionLayoutItem[];
-  columnCount: number;
-  columnWidth: number;
-  rowHeight: number;
-  gap: number;
-  insetTop: number;
-  gridLeft: number;
-  gridTop: number;
-  columnStride: number;
-  cardHeight: number;
-};
-
-type LayoutSnapshot = ListLayoutSnapshot | GridLayoutSnapshot;
-
 const parsePixels = (value: string | null) => {
   if (!value) return 0;
   const parsed = Number.parseFloat(value);
@@ -149,146 +78,6 @@ const isPointerOnNativeScrollbar = (element: HTMLElement, event: PointerEvent) =
     event.clientY >= contentBottom &&
     event.clientY <= bounds.bottom;
   return onVerticalScrollbar || onHorizontalScrollbar;
-};
-
-const buildLayoutSnapshot = (
-  element: HTMLElement,
-  layout: SelectionLayout,
-): LayoutSnapshot | null => {
-  if (layout.kind === "list") {
-    return {
-      kind: "list",
-      items: layout.items,
-      itemHeight: layout.itemHeight,
-      rowHeight: layout.rowHeight,
-      insetTop: layout.insetTop ?? 0,
-    };
-  }
-
-  if (layout.columnCount <= 0 || layout.columnWidth <= 0 || layout.rowHeight <= 0) {
-    return null;
-  }
-
-  const styles = window.getComputedStyle(element);
-  const paddingLeft = parsePixels(styles.paddingLeft);
-  const paddingRight = parsePixels(styles.paddingRight);
-  const paddingTop = parsePixels(styles.paddingTop);
-  const contentWidth = Math.max(0, element.clientWidth - paddingLeft - paddingRight);
-  const columnGap = Math.max(0, layout.gap);
-  const columnWidth = Math.max(0, layout.columnWidth);
-  const columnCount = layout.columnCount;
-  const gridWidth =
-    columnCount * columnWidth + columnGap * Math.max(0, columnCount - 1);
-  const extraLeft = getGridCentered()
-    ? Math.max(0, (contentWidth - gridWidth) / 2)
-    : 0;
-  const insetTop = layout.insetTop ?? 0;
-  const rowHeight = layout.rowHeight;
-  const cardHeight = Math.max(0, rowHeight - columnGap);
-
-  return {
-    kind: "grid",
-    items: layout.items,
-    columnCount,
-    columnWidth,
-    rowHeight,
-    gap: columnGap,
-    insetTop,
-    gridLeft: paddingLeft + extraLeft,
-    gridTop: paddingTop + insetTop,
-    columnStride: columnWidth + columnGap,
-    cardHeight,
-  };
-};
-
-const selectFromListLayout = (
-  layout: ListLayoutSnapshot,
-  rect: ContentRect,
-) => {
-  const orderedPaths: string[] = [];
-  const { items, itemHeight, rowHeight, insetTop } = layout;
-  if (items.length === 0 || itemHeight <= 0 || rowHeight <= 0) {
-    return orderedPaths;
-  }
-
-  const top = Math.min(rect.top, rect.bottom);
-  const bottom = Math.max(rect.top, rect.bottom);
-  const startIndex = Math.max(0, Math.floor((top - insetTop) / itemHeight));
-  const endIndex = Math.min(
-    items.length - 1,
-    Math.floor((bottom - insetTop) / itemHeight),
-  );
-
-  for (let index = startIndex; index <= endIndex; index += 1) {
-    const rowTop = insetTop + index * itemHeight;
-    const rowBottom = rowTop + rowHeight;
-    if (rowBottom < top || rowTop > bottom) continue;
-    const item = items[index];
-    if (!item || !item.selectable) continue;
-    orderedPaths.push(item.path);
-  }
-
-  return orderedPaths;
-};
-
-const selectFromGridLayout = (layout: GridLayoutSnapshot, rect: ContentRect) => {
-  const orderedPaths: string[] = [];
-  const {
-    items,
-    columnCount,
-    columnStride,
-    columnWidth,
-    rowHeight,
-    cardHeight,
-    gridLeft,
-    gridTop,
-  } = layout;
-  if (items.length === 0 || columnCount <= 0 || columnStride <= 0 || rowHeight <= 0) {
-    return orderedPaths;
-  }
-
-  const rectLeft = Math.min(rect.left, rect.right);
-  const rectRight = Math.max(rect.left, rect.right);
-  const rectTop = Math.min(rect.top, rect.bottom);
-  const rectBottom = Math.max(rect.top, rect.bottom);
-
-  const relLeft = rectLeft - gridLeft;
-  const relRight = rectRight - gridLeft;
-  const relTop = rectTop - gridTop;
-  const relBottom = rectBottom - gridTop;
-
-  if (relRight < 0 || relBottom < 0) {
-    return orderedPaths;
-  }
-
-  const maxRowIndex = Math.max(0, Math.ceil(items.length / columnCount) - 1);
-  const startRow = Math.max(0, Math.floor(relTop / rowHeight));
-  const endRow = Math.min(maxRowIndex, Math.floor(relBottom / rowHeight));
-  const startCol = clamp(Math.floor(relLeft / columnStride), 0, columnCount - 1);
-  const endCol = clamp(Math.floor(relRight / columnStride), 0, columnCount - 1);
-
-  if (startRow > endRow || startCol > endCol) {
-    return orderedPaths;
-  }
-
-  for (let row = startRow; row <= endRow; row += 1) {
-    const itemTop = gridTop + row * rowHeight;
-    const itemBottom = itemTop + cardHeight;
-    if (itemBottom < rectTop || itemTop > rectBottom) continue;
-    const rowIndex = row * columnCount;
-    for (let col = startCol; col <= endCol; col += 1) {
-      const itemLeft = gridLeft + col * columnStride;
-      const itemRight = itemLeft + columnWidth;
-      if (itemRight < rectLeft || itemLeft > rectRight) continue;
-      const index = rowIndex + col;
-      if (index >= items.length) continue;
-      const item = items[index];
-      if (!item.selectable) continue;
-      orderedPaths.push(item.path);
-    }
-  }
-
-  return orderedPaths;
 };
 
 export const useSelectionDrag = (
@@ -334,6 +123,7 @@ export const useSelectionDrag = (
     layoutRef.current = layout;
   }, [layout]);
 
+  // Convert the current drag gesture into a visible box and the matching paths.
   const updateSelection = useCallback(() => {
     const element = ref.current;
     if (!element) return;
@@ -341,44 +131,28 @@ export const useSelectionDrag = (
     if (!drag.active || !drag.dragging) return;
 
     const dragRoot = element.closest(".main") as HTMLElement | null;
-    const bounds = (dragRoot ?? element).getBoundingClientRect();
     const elementBounds = element.getBoundingClientRect();
-    const endClientX = clamp(drag.lastX, bounds.left, bounds.right);
-    const endClientY = clamp(drag.lastY, bounds.top, bounds.bottom);
-    // Convert the start/end points into content space so scrolling expands the box.
-    const startContentX = drag.startX - elementBounds.left + drag.startScrollLeft;
-    const startContentY = drag.startY - elementBounds.top + drag.startScrollTop;
-    const endContentX = endClientX - elementBounds.left + element.scrollLeft;
-    const endContentY = endClientY - elementBounds.top + element.scrollTop;
-    const leftContent = Math.min(startContentX, endContentX);
-    const rightContent = Math.max(startContentX, endContentX);
-    const topContent = Math.min(startContentY, endContentY);
-    const bottomContent = Math.max(startContentY, endContentY);
-    // Convert back to viewport space for rendering and hit-testing.
-    const left = leftContent - element.scrollLeft + elementBounds.left;
-    const right = rightContent - element.scrollLeft + elementBounds.left;
-    const top = topContent - element.scrollTop + elementBounds.top;
-    const bottom = bottomContent - element.scrollTop + elementBounds.top;
-
-    setSelectionBox({
-      left,
-      top,
-      width: right - left,
-      height: bottom - top,
+    const selectionGeometry = computeDragSelectionGeometry({
+      dragBounds: (dragRoot ?? element).getBoundingClientRect(),
+      elementBounds,
+      startX: drag.startX,
+      startY: drag.startY,
+      lastX: drag.lastX,
+      lastY: drag.lastY,
+      startScrollLeft: drag.startScrollLeft,
+      startScrollTop: drag.startScrollTop,
+      scrollLeft: element.scrollLeft,
+      scrollTop: element.scrollTop,
     });
 
-    const contentRect = {
-      left: leftContent,
-      right: rightContent,
-      top: topContent,
-      bottom: bottomContent,
-    };
+    setSelectionBox(selectionGeometry.selectionBox);
+
     let orderedPaths: string[] = [];
     if (drag.layoutSnapshot) {
-      orderedPaths =
-        drag.layoutSnapshot.kind === "list"
-          ? selectFromListLayout(drag.layoutSnapshot, contentRect)
-          : selectFromGridLayout(drag.layoutSnapshot, contentRect);
+      orderedPaths = selectPathsFromLayoutSnapshot(
+        drag.layoutSnapshot,
+        selectionGeometry.contentRect,
+      );
     } else {
       const cached = cacheRef.current;
       if (
@@ -399,56 +173,31 @@ export const useSelectionDrag = (
         };
       }
 
-      const items = cacheRef.current?.items ?? [];
-      if (!items.length) {
-        if (!drag.addMode) {
-          if (selectedRef.current.size > 0) {
-            if (log.enabled) {
-              log("update: no items -> clear selection");
-            }
-            setSelectionRef.current([], undefined);
-          }
-        }
-        return;
-      }
-
-      items.forEach((item) => {
-        const itemRect = item.rect;
-        if (
-          itemRect.right < left ||
-          itemRect.left > right ||
-          itemRect.bottom < top ||
-          itemRect.top > bottom
-        ) {
-          return;
-        }
-        orderedPaths.push(item.path);
-      });
+      orderedPaths = selectPathsFromDomRects(
+        cacheRef.current?.items ?? [],
+        selectionGeometry.viewportRect,
+      );
     }
 
-    // Keep DOM order so keyboard navigation matches the on-screen order.
-    const anchor = orderedPaths[orderedPaths.length - 1];
+    const nextSelection = resolveSelectionUpdate({
+      addMode: drag.addMode,
+      orderedPaths,
+      baseSelection: baseSelectionRef.current,
+      currentSelection: selectedRef.current,
+    });
 
-    if (drag.addMode) {
-      const next = new Set(baseSelectionRef.current);
-      orderedPaths.forEach((path) => next.add(path));
-      if (setsMatch(next, selectedRef.current)) {
-        return;
-      }
-      if (log.enabled) {
-        log("update: setSelection add=%s count=%d", "yes", next.size);
-      }
-      setSelectionRef.current(Array.from(next), anchor);
+    if (nextSelection.kind === "noop") {
       return;
     }
 
-    if (selectionMatches(orderedPaths, selectedRef.current)) {
-      return;
-    }
     if (log.enabled) {
-      log("update: setSelection add=%s count=%d", "no", orderedPaths.length);
+      log(
+        "update: setSelection add=%s count=%d",
+        drag.addMode ? "yes" : "no",
+        nextSelection.paths.length,
+      );
     }
-    setSelectionRef.current(orderedPaths, anchor);
+    setSelectionRef.current(nextSelection.paths, nextSelection.anchor);
   }, [itemSelector, ref]);
 
   useEffect(() => {
@@ -459,7 +208,12 @@ export const useSelectionDrag = (
 
     const resetDrag = (clear: boolean, reason: string) => {
       if (log.enabled) {
-        log("reset: reason=%s clear=%s dragging=%s", reason, clear ? "yes" : "no", dragRef.current.dragging ? "yes" : "no");
+        log(
+          "reset: reason=%s clear=%s dragging=%s",
+          reason,
+          clear ? "yes" : "no",
+          dragRef.current.dragging ? "yes" : "no",
+        );
       }
       dragRef.current.active = false;
       dragRef.current.dragging = false;
@@ -520,7 +274,11 @@ export const useSelectionDrag = (
       }
 
       if (log.enabled) {
-        log("pointerdown: add=%s id=%s", event.ctrlKey || event.metaKey || event.altKey ? "yes" : "no", event.pointerId);
+        log(
+          "pointerdown: add=%s id=%s",
+          event.ctrlKey || event.metaKey || event.altKey ? "yes" : "no",
+          event.pointerId,
+        );
       }
 
       dragRef.current = {
@@ -537,9 +295,24 @@ export const useSelectionDrag = (
       };
       baseSelectionRef.current = new Set(selectedRef.current);
       const layout = layoutRef.current;
-      dragRef.current.layoutSnapshot = layout
-        ? buildLayoutSnapshot(element, layout)
-        : null;
+      if (layout) {
+        const styles =
+          layout.kind === "grid" ? window.getComputedStyle(element) : null;
+        dragRef.current.layoutSnapshot = buildLayoutSnapshot(
+          layout,
+          styles
+            ? {
+                clientWidth: element.clientWidth,
+                paddingLeft: parsePixels(styles.paddingLeft),
+                paddingRight: parsePixels(styles.paddingRight),
+                paddingTop: parsePixels(styles.paddingTop),
+                centerGrid: getGridCentered(),
+              }
+            : undefined,
+        );
+      } else {
+        dragRef.current.layoutSnapshot = null;
+      }
       cacheRef.current = null;
       pointerIdRef.current = event.pointerId;
       dragElement.setPointerCapture(event.pointerId);
