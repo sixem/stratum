@@ -7,9 +7,13 @@ const host = process.env.TAURI_DEV_HOST;
 const localDevHost = "127.0.0.1";
 const devPort = 1420;
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
+const appRootDir = resolve(rootDir, "public");
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+  // Keep the HTML entry in `public` while the compiled app still lands in `dist` for Tauri.
+  root: appRootDir,
+  publicDir: false,
   plugins: [react()],
   resolve: {
     alias: {
@@ -17,6 +21,8 @@ export default defineConfig(async () => ({
     },
   },
   build: {
+    outDir: resolve(rootDir, "dist"),
+    emptyOutDir: true,
     rollupOptions: {
       output: {
         // Keep chunk boundaries stable as features grow.

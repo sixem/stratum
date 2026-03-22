@@ -14,9 +14,15 @@ pub fn run() {
         > = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
         #[cfg(target_os = "windows")]
         let registered = registered.clone();
-        move |window, _event| {
+        move |window, event| {
             #[cfg(target_os = "windows")]
             {
+                // Experimental resize smoothing: a tiny sleep can reduce how aggressively
+                // the WebView resize path thrashes during a live drag on Windows.
+                if let tauri::WindowEvent::Resized(_) = event {
+                    std::thread::sleep(std::time::Duration::from_nanos(1));
+                }
+
                 // Register the custom drop target once per window label.
                 let label = window.label().to_string();
                 let mut seen = match registered.lock() {
