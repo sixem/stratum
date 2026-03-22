@@ -21,7 +21,6 @@
 }
 
 .settings-panel {
-  --scrollbar-thumb: #1c2434;
   width: min(
     1320px,
     calc(100vw - (var(--settings-edge-gap) + var(--settings-edge-gap)))
@@ -98,7 +97,6 @@
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .settings-sidebar-actions {
@@ -192,7 +190,6 @@
   overflow: auto;
   padding-right: 6px;
   scrollbar-gutter: stable;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
 
   > .settings-section:not(:first-child) {
     margin-top: 14px;
@@ -202,17 +199,6 @@
 .settings-nav::-webkit-scrollbar,
 .settings-content::-webkit-scrollbar {
   width: 7px;
-}
-
-.settings-nav::-webkit-scrollbar-thumb,
-.settings-content::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 999px;
-}
-
-.settings-nav::-webkit-scrollbar-thumb:hover,
-.settings-content::-webkit-scrollbar-thumb:hover {
-  background: #273046;
 }
 
 .settings-section {

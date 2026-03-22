@@ -3,7 +3,6 @@
   // Tighten the sidebar density without affecting global layout tokens.
   --sidebar-padding: 12px;
   --sidebar-scrollbar-gap: 4px;
-  --scrollbar-thumb: #1f2736;
   background: #0d0f14;
   border: 1px solid #1a2233;
   border-left: none;
@@ -14,8 +13,6 @@
   min-height: 0;
   min-width: 0;
   height: 100%;
-  position: sticky;
-  top: 0;
   overflow: hidden;
 }
 
@@ -30,7 +27,6 @@
     overflow-y: scroll;
     // Reserve a stable scrollbar gutter and align the scrollbar to the panel edge.
     scrollbar-gutter: stable;
-    scrollbar-color: var(--scrollbar-thumb) transparent;
     margin-right: calc(var(--sidebar-padding) * -1 + var(--sidebar-scrollbar-gap));
     padding-right: calc(var(--sidebar-padding) + 4px - var(--sidebar-scrollbar-gap));
     flex: 1;

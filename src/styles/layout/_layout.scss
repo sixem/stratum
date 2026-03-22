@@ -1,12 +1,12 @@
 // Overall layout grid and main panel.
 .layout {
-  flex: 1;
   display: grid;
-  grid-template-columns: 250px 1fr;
+  grid-template-columns: 250px minmax(0, 1fr);
   gap: var(--layout-gap);
   padding: var(--layout-padding);
   min-height: 0;
   min-width: 0;
+  overflow: hidden;
 }
 
 .layout.is-full {
@@ -22,4 +22,5 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
 }

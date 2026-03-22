@@ -1,6 +1,6 @@
 // Global frame accents that should remain visible above fullscreen overlays.
 .app-window-frame {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;

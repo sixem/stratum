@@ -55,9 +55,6 @@
 }
 
 .view-lander {
-  // Keep new-tab scrollbars darker than the global compact-mode scrollbar.
-  --scrollbar-thumb: #162033;
-  --scrollbar-track: #0d1422;
   display: flex;
   align-items: stretch;
   justify-content: center;
@@ -411,37 +408,4 @@
     text-overflow: ellipsis;
   }
 
-  // Scoped scrollbar styling for the new-tab page.
-  .lander-panel,
-  .lander-drives-list,
-  .lander-recents-list {
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
-  }
-
-  .lander-panel::-webkit-scrollbar,
-  .lander-drives-list::-webkit-scrollbar,
-  .lander-recents-list::-webkit-scrollbar {
-    width: 9px;
-    height: 9px;
-  }
-
-  .lander-panel::-webkit-scrollbar-track,
-  .lander-drives-list::-webkit-scrollbar-track,
-  .lander-recents-list::-webkit-scrollbar-track {
-    background: var(--scrollbar-track);
-  }
-
-  .lander-panel::-webkit-scrollbar-thumb,
-  .lander-drives-list::-webkit-scrollbar-thumb,
-  .lander-recents-list::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-    border-radius: 999px;
-  }
-
-  .lander-panel::-webkit-scrollbar-thumb:hover,
-  .lander-drives-list::-webkit-scrollbar-thumb:hover,
-  .lander-recents-list::-webkit-scrollbar-thumb:hover {
-    background: #1f2b43;
-  }
 }

@@ -1,6 +1,9 @@
 // Shared scrollbar styling.
 :root {
-  --scrollbar-thumb: #d9deea;
+  // Match the darker thumb used by the sidebar so every scroller reads consistently.
+  --scrollbar-thumb: #1f2736;
+  --scrollbar-thumb-hover: #273046;
+  --scrollbar-track: transparent;
 }
 .list-body::-webkit-scrollbar {
   width: 10px;
@@ -10,14 +13,9 @@
   width: var(--thumb-scrollbar-size, 10px);
 }
 
-.list-body::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 999px;
-}
-
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 *::-webkit-scrollbar {
@@ -25,10 +23,14 @@
 }
 
 *::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--scrollbar-track);
 }
 
 *::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
   border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
 }
