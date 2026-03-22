@@ -14,6 +14,7 @@ import {
   formatBytes,
   getExtension,
   getFileKind,
+  makeDebug,
   normalizePath,
 } from "@/lib";
 import type { FileKind } from "@/lib";
@@ -35,6 +36,7 @@ type UseGridThumbRequestsOptions = {
   viewportRef: RefObject<HTMLDivElement | null>;
   viewKey: string;
   visibleItems: EntryItem[];
+  isResizing: boolean;
   entryMeta: Map<string, EntryMeta>;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
@@ -54,10 +56,12 @@ type GridThumbRequestsState = {
   folderThumbSource: Map<string, string>;
   fileIcons: Map<string, string>;
   scrolling: boolean;
+  interactionActive: boolean;
 };
 
 const FOLDER_SAMPLE_CACHE_LIMIT = 3000;
 const GRID_META_CACHE_LIMIT = 5000;
+const perf = makeDebug("perf:resize:enrich");
 
 const upsertFolderSample = (
   cache: Map<string, string | null>,
@@ -95,6 +99,7 @@ export const useGridThumbRequests = ({
   viewportRef,
   viewKey,
   visibleItems,
+  isResizing,
   entryMeta,
   onRequestMeta,
   thumbnailsEnabled,
@@ -109,10 +114,12 @@ export const useGridThumbRequests = ({
 }: UseGridThumbRequestsOptions): GridThumbRequestsState => {
   const scrolling = useScrollSettled(viewportRef);
   const typingActive = useTypingActivity({ resetDelayMs: THUMB_TYPING_PAUSE_MS });
-  const interactionActive = scrolling || typingActive;
+  // Treat resize like scroll/typing so enrichment yields while layout is hot.
+  const interactionActive = scrolling || typingActive || isResizing;
   const [thumbsSuppressed, setThumbsSuppressed] = useState(false);
   const thumbSnapshotRef = useRef<Map<string, string>>(new Map());
   const lastSuppressedRef = useRef(false);
+  const lastPipelineLogRef = useRef("");
 
   useEffect(() => {
     // Hide thumbnail previews briefly during/after interaction to keep scrolling smooth.
@@ -213,7 +220,7 @@ export const useGridThumbRequests = ({
     return next;
   }, [entryMeta, viewKey, visibleItems]);
 
-  useEntryMetaRequest(loading || scrolling, metaPaths, onRequestMeta);
+  useEntryMetaRequest(loading || interactionActive, metaPaths, onRequestMeta);
   // Pause thumbnail generation while the user is actively interacting.
   useThumbnailPause(interactionActive, thumbnailsEnabled);
   const canRequestThumbs = thumbnailsEnabled && !loading && !interactionActive;
@@ -341,7 +348,7 @@ export const useGridThumbRequests = ({
   }, [folderPaths, folderSampleByPath, thumbnailFolders, thumbSource, thumbnailsEnabled]);
 
   const iconRequests = useMemo(() => {
-    if (!thumbnailAppIcons || visibleItems.length === 0) {
+    if (!thumbnailAppIcons || loading || interactionActive || visibleItems.length === 0) {
       return [];
     }
     const requests: string[] = [];
@@ -356,12 +363,63 @@ export const useGridThumbRequests = ({
       requests.push(extension);
     }
     return requests;
-  }, [thumbnailAppIcons, visibleItems]);
+  }, [interactionActive, loading, thumbnailAppIcons, visibleItems]);
 
   useEffect(() => {
     if (iconRequests.length === 0) return;
     requestFileIcons(iconRequests);
   }, [iconRequests, requestFileIcons]);
+
+  useEffect(() => {
+    if (!perf.enabled) return;
+    const snapshot = [
+      viewKey,
+      visibleItems.length,
+      metaPaths.length,
+      thumbRequests.length,
+      folderPaths.length,
+      folderThumbRequests.length,
+      iconRequests.length,
+      loading ? "1" : "0",
+      scrolling ? "1" : "0",
+      typingActive ? "1" : "0",
+      isResizing ? "1" : "0",
+      interactionActive ? "1" : "0",
+      thumbsSuppressed ? "1" : "0",
+    ].join(":");
+    if (lastPipelineLogRef.current === snapshot) return;
+    lastPipelineLogRef.current = snapshot;
+    perf(
+      "pipeline view=%s visible=%d meta=%d thumbs=%d folders=%d folderThumbs=%d icons=%d loading=%s scrolling=%s typing=%s resizing=%s active=%s suppressed=%s",
+      viewKey,
+      visibleItems.length,
+      metaPaths.length,
+      thumbRequests.length,
+      folderPaths.length,
+      folderThumbRequests.length,
+      iconRequests.length,
+      loading ? "yes" : "no",
+      scrolling ? "yes" : "no",
+      typingActive ? "yes" : "no",
+      isResizing ? "yes" : "no",
+      interactionActive ? "yes" : "no",
+      thumbsSuppressed ? "yes" : "no",
+    );
+  }, [
+    folderPaths.length,
+    folderThumbRequests.length,
+    iconRequests.length,
+    isResizing,
+    interactionActive,
+    loading,
+    metaPaths.length,
+    scrolling,
+    thumbRequests.length,
+    thumbsSuppressed,
+    typingActive,
+    viewKey,
+    visibleItems.length,
+  ]);
 
   return {
     gridMetaByPath,
@@ -369,5 +427,6 @@ export const useGridThumbRequests = ({
     folderThumbSource,
     fileIcons,
     scrolling,
+    interactionActive,
   };
 };

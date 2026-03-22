@@ -4,7 +4,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import { memo, useLayoutEffect, useRef, useState } from "react";
-import { splitNameExtension, stripNameExtension } from "@/lib";
+import { makeDebug, splitNameExtension, stripNameExtension } from "@/lib";
 import { RenameField } from "@/components/primitives/RenameField";
 import type { EntryCardProps } from "./gridCard.types";
 import { ThumbnailIcon } from "./ThumbnailIcon";
@@ -12,6 +12,34 @@ import { ThumbnailIcon } from "./ThumbnailIcon";
 // Keep a chunk of the name tail visible when using middle-ellipsis truncation.
 const GRID_NAME_MIN_TAIL_CHARS = 8;
 const GRID_NAME_BASE_TAIL_CHARS = 9;
+const GRID_OVERFLOW_LOG_INTERVAL_MS = 1000;
+const perf = makeDebug("perf:resize:ellipsis");
+const overflowPerfState = {
+  activeObservers: 0,
+  measures: 0,
+  observerCallbacks: 0,
+  stateChanges: 0,
+  lastLogAt: 0,
+};
+
+const flushOverflowPerf = (force = false) => {
+  if (!perf.enabled) return;
+  const now = performance.now();
+  if (!force && now - overflowPerfState.lastLogAt < GRID_OVERFLOW_LOG_INTERVAL_MS) {
+    return;
+  }
+  overflowPerfState.lastLogAt = now;
+  perf(
+    "cards active=%d measures=%d callbacks=%d stateChanges=%d",
+    overflowPerfState.activeObservers,
+    overflowPerfState.measures,
+    overflowPerfState.observerCallbacks,
+    overflowPerfState.stateChanges,
+  );
+  overflowPerfState.measures = 0;
+  overflowPerfState.observerCallbacks = 0;
+  overflowPerfState.stateChanges = 0;
+};
 
 const buildMiddleEllipsisParts = (name: string) => {
   const { dotExtension } = splitNameExtension(name);
@@ -81,16 +109,32 @@ export const EntryCard = memo(({
     if (!nameEl || !measureEl) return;
 
     const updateOverflow = () => {
+      overflowPerfState.measures += 1;
       const nextOverflow = measureEl.offsetWidth > nameEl.clientWidth + 1;
-      setIsNameOverflowing((prev) => (prev === nextOverflow ? prev : nextOverflow));
+      setIsNameOverflowing((prev) => {
+        if (prev !== nextOverflow) {
+          overflowPerfState.stateChanges += 1;
+        }
+        return prev === nextOverflow ? prev : nextOverflow;
+      });
+      flushOverflowPerf();
     };
 
     updateOverflow();
     if (typeof ResizeObserver === "undefined") return;
 
-    const observer = new ResizeObserver(() => updateOverflow());
+    overflowPerfState.activeObservers += 1;
+    flushOverflowPerf(true);
+    const observer = new ResizeObserver(() => {
+      overflowPerfState.observerCallbacks += 1;
+      updateOverflow();
+    });
     observer.observe(nameEl);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      overflowPerfState.activeObservers = Math.max(0, overflowPerfState.activeObservers - 1);
+      flushOverflowPerf(true);
+    };
   }, [displayName, nameEllipsis]);
 
   const nameParts =

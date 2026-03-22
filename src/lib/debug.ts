@@ -50,8 +50,8 @@ export const initDebug = () => {
   if (initialized) return;
   initialized = true;
 
-  // Prefer console.debug so browser devtools can filter debug logs easily.
-  createDebug.log = console.debug.bind(console);
+  // Use console.log because some embedded debugger consoles hide console.debug entirely.
+  createDebug.log = console.log.bind(console);
   patchFormatArgs();
 
   // Only apply an explicit namespace set in development.

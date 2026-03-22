@@ -9,6 +9,11 @@ type VirtualRange = {
   totalHeight: number;
 };
 
+type UseVirtualRangeOptions = {
+  viewportHeight?: number;
+  observeContainerResize?: boolean;
+};
+
 export function useVirtualRange(
   containerRef: RefObject<HTMLElement | null>,
   itemCount: number,
@@ -17,6 +22,7 @@ export function useVirtualRange(
   // Extra scrollable padding before/after the virtualized content.
   insetTop = 0,
   insetBottom = 0,
+  { viewportHeight, observeContainerResize = true }: UseVirtualRangeOptions = {},
 ): VirtualRange {
   const rafRef = useRef<number | null>(null);
   const rangeRef = useRef<VirtualRange>({
@@ -47,12 +53,12 @@ export function useVirtualRange(
       return;
     }
 
-    const viewportHeight = element.clientHeight;
+    const resolvedViewportHeight = viewportHeight ?? element.clientHeight;
     const safeInsetTop = Math.max(0, insetTop);
     const safeInsetBottom = Math.max(0, insetBottom);
     const contentHeight = Math.max(0, itemCount * itemHeight);
     const totalHeight = contentHeight + safeInsetTop + safeInsetBottom;
-    const maxScrollTop = Math.max(0, totalHeight - viewportHeight);
+    const maxScrollTop = Math.max(0, totalHeight - resolvedViewportHeight);
     const scrollTop = Math.min(element.scrollTop, maxScrollTop);
     if (element.scrollTop !== scrollTop) {
       element.scrollTop = scrollTop;
@@ -62,7 +68,7 @@ export function useVirtualRange(
     const startIndex = Math.max(0, Math.floor(effectiveScrollTop / itemHeight) - overscan);
     const endIndex = Math.min(
       itemCount,
-      Math.ceil((effectiveScrollTop + viewportHeight) / itemHeight) + overscan,
+      Math.ceil((effectiveScrollTop + resolvedViewportHeight) / itemHeight) + overscan,
     );
     const offsetTop = safeInsetTop + startIndex * itemHeight;
     const offsetBottom =
@@ -87,7 +93,7 @@ export function useVirtualRange(
 
     rangeRef.current = nextRange;
     setRange(nextRange);
-  }, [containerRef, itemCount, itemHeight, insetBottom, insetTop, overscan]);
+  }, [containerRef, itemCount, itemHeight, insetBottom, insetTop, overscan, viewportHeight]);
 
   useLayoutEffect(() => {
     updateRange();
@@ -111,18 +117,20 @@ export function useVirtualRange(
 
     element.addEventListener("scroll", handleScroll, { passive: true });
 
-    const observer = new ResizeObserver(() => scheduleUpdate());
-    observer.observe(element);
+    const observer = observeContainerResize
+      ? new ResizeObserver(() => scheduleUpdate())
+      : null;
+    observer?.observe(element);
 
     return () => {
       element.removeEventListener("scroll", handleScroll);
-      observer.disconnect();
+      observer?.disconnect();
       if (rafRef.current != null) {
         window.cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
     };
-  }, [containerRef, updateRange]);
+  }, [containerRef, observeContainerResize, updateRange]);
 
   return range;
 }

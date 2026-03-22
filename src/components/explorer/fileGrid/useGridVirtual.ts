@@ -2,6 +2,7 @@
 import type { RefObject } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDynamicOverscan, useVirtualRange } from "@/hooks";
+import { makeDebug } from "@/lib";
 import type { EntryItem } from "@/lib";
 import { VIEW_INSET } from "../fileView/constants";
 
@@ -12,9 +13,11 @@ const GRID_OVERSCAN_BURST_MAX = 8;
 const GRID_OVERSCAN_BURST_DECAY_MS = 140;
 const GRID_WHEEL_BURST_GAP_MS = 42;
 const GRID_WHEEL_DELTA_MIN = 60;
+const perf = makeDebug("perf:resize:virtual");
 
 type UseGridVirtualOptions = {
   viewportRef: RefObject<HTMLDivElement | null>;
+  viewportHeight: number;
   viewKey: string;
   columnCount: number;
   rowCount: number;
@@ -31,6 +34,7 @@ export type GridVirtualState = {
 
 export const useGridVirtual = ({
   viewportRef,
+  viewportHeight,
   viewKey,
   columnCount,
   rowCount,
@@ -47,6 +51,7 @@ export const useGridVirtual = ({
   const wheelBurstOverscanRef = useRef(0);
   const burstTimerRef = useRef<number | null>(null);
   const lastWheelAtRef = useRef(0);
+  const lastVirtualLogRef = useRef("");
 
   useEffect(() => {
     const element = viewportRef.current;
@@ -147,6 +152,10 @@ export const useGridVirtual = ({
     overscan,
     VIEW_INSET,
     VIEW_INSET,
+    {
+      viewportHeight,
+      observeContainerResize: false,
+    },
   );
   const startIndex = virtual.startIndex * columnCount;
   const endIndex = Math.min(viewItems.length, virtual.endIndex * columnCount);
@@ -155,6 +164,45 @@ export const useGridVirtual = ({
     () => viewItems.slice(startIndex, endIndex),
     [endIndex, startIndex, viewItems],
   );
+
+  useEffect(() => {
+    if (!perf.enabled) return;
+    const snapshot = [
+      viewKey,
+      columnCount,
+      rowCount,
+      rowHeight,
+      overscan,
+      startIndex,
+      endIndex,
+      visibleItems.length,
+      viewItems.length,
+    ].join(":");
+    if (lastVirtualLogRef.current === snapshot) return;
+    lastVirtualLogRef.current = snapshot;
+    perf(
+      "window view=%s cols=%d rows=%d rowHeight=%d overscan=%d visible=%d range=%d-%d total=%d",
+      viewKey,
+      columnCount,
+      rowCount,
+      rowHeight,
+      overscan,
+      visibleItems.length,
+      startIndex,
+      endIndex,
+      viewItems.length,
+    );
+  }, [
+    columnCount,
+    endIndex,
+    overscan,
+    rowCount,
+    rowHeight,
+    startIndex,
+    viewItems.length,
+    viewKey,
+    visibleItems.length,
+  ]);
 
   return { virtual, visibleItems, startIndex, endIndex };
 };

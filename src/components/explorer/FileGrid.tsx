@@ -205,11 +205,13 @@ const FileGrid = ({
     viewportRef,
     gridVars,
     gridStyle,
+    viewportHeight,
     columnCount,
     columnWidth,
     rowCount,
     rowHeight,
     gridMetaEnabled,
+    isResizing,
   } = useGridSizing({
     gridSize,
     gridAutoColumns,
@@ -231,6 +233,7 @@ const FileGrid = ({
 
   const { virtual, visibleItems, startIndex } = useGridVirtual({
     viewportRef,
+    viewportHeight,
     viewKey,
     columnCount,
     rowCount,
@@ -246,11 +249,18 @@ const FileGrid = ({
     scrollKey: viewKey,
   });
 
-  const { gridMetaByPath, thumbSource, folderThumbSource, fileIcons, scrolling } =
+  const {
+    gridMetaByPath,
+    thumbSource,
+    folderThumbSource,
+    fileIcons,
+    interactionActive,
+  } =
     useGridThumbRequests({
       viewportRef,
       viewKey,
       visibleItems,
+      isResizing,
       entryMeta,
       onRequestMeta,
       thumbnailsEnabled,
@@ -267,7 +277,7 @@ const FileGrid = ({
     viewportRef,
     entryByPath,
     entryMeta,
-    disabled: scrolling,
+    disabled: interactionActive,
   });
 
   const { selectionBox } = useGridSelection({
@@ -438,7 +448,7 @@ const FileGrid = ({
                 thumbUrl={thumbUrl}
                 appIconUrl={appIconUrl}
                 appIconsEnabled={thumbnailAppIcons}
-                disableTooltip={scrolling}
+                disableTooltip={interactionActive}
                 showSize={gridShowSize}
                 showExtension={gridShowExtension}
                 nameEllipsis={gridNameEllipsis}

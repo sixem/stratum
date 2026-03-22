@@ -1,9 +1,11 @@
 // Grid sizing calculations and layout effects for the file grid.
 import type { CSSProperties, RefObject } from "react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useElementSize, useScrollRestore, useWheelSnap } from "@/hooks";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useScrollRestore, useWheelSnap } from "@/hooks";
+import { makeDebug } from "@/lib";
 import { GRID_AUTO_COLUMNS_MAX, GRID_AUTO_COLUMNS_MIN } from "@/modules";
 import type { GridSize, ThumbnailFit } from "@/modules";
+import { useGridViewportLayout } from "./useGridViewportLayout";
 
 type GridPreset = {
   column: number;
@@ -43,7 +45,8 @@ const GRID_META_GAP = 6;
 const GRID_ICON_RATIO = 3 / 4;
 const GRID_NAME_LINE_HEIGHT = 14;
 const GRID_INFO_LINE_HEIGHT = 13;
-const AUTO_GRID_RESIZE_DEBOUNCE_MS = 180;
+const GRID_PERF_LOG_INTERVAL_MS = 120;
+const perf = makeDebug("perf:resize:grid");
 
 const getGridIconHeight = (column: number, padding: number) => {
   const innerWidth = column - padding * 2 - GRID_CARD_BORDER * 2;
@@ -118,11 +121,13 @@ export type GridSizingState = {
   viewportRef: RefObject<HTMLDivElement | null>;
   gridVars: CSSProperties;
   gridStyle: CSSProperties;
+  viewportHeight: number;
   columnCount: number;
   columnWidth: number;
   rowCount: number;
   rowHeight: number;
   gridMetaEnabled: boolean;
+  isResizing: boolean;
 };
 
 export const useGridSizing = ({
@@ -144,98 +149,27 @@ export const useGridSizing = ({
   viewItemsLength,
 }: UseGridSizingOptions): GridSizingState => {
   const gridMetaEnabled = gridShowSize || gridShowExtension;
-  const viewportRef = useRef<HTMLDivElement | null>(null);
-  const { width: viewportWidth } = useElementSize(viewportRef);
-  const [stableViewportWidth, setStableViewportWidth] = useState(
-    () => autoViewportWidth ?? viewportWidth,
-  );
-  const [measuredRowHeight, setMeasuredRowHeight] = useState<number | null>(null);
-  const viewportWidthRef = useRef(viewportWidth);
-  const measuredRowHeightRef = useRef<number | null>(null);
-  const resizeDebounceRef = useRef<number | null>(null);
-  const windowResizeRef = useRef(false);
-  const windowResizeTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    viewportWidthRef.current = viewportWidth;
-  }, [viewportWidth]);
-
-  useEffect(() => {
-    // Keep auto sizing responsive outside of window resizes.
-    if (gridSize !== "auto") {
-      if (resizeDebounceRef.current != null) {
-        window.clearTimeout(resizeDebounceRef.current);
-        resizeDebounceRef.current = null;
-      }
-      setStableViewportWidth(viewportWidth);
-      return;
-    }
-
-    if (!windowResizeRef.current) {
-      if (resizeDebounceRef.current != null) {
-        window.clearTimeout(resizeDebounceRef.current);
-        resizeDebounceRef.current = null;
-      }
-      setStableViewportWidth(viewportWidth);
-      return;
-    }
-
-    if (resizeDebounceRef.current != null) {
-      window.clearTimeout(resizeDebounceRef.current);
-    }
-    resizeDebounceRef.current = window.setTimeout(() => {
-      resizeDebounceRef.current = null;
-      setStableViewportWidth(viewportWidth);
-    }, AUTO_GRID_RESIZE_DEBOUNCE_MS);
-
-    return () => {
-      if (resizeDebounceRef.current != null) {
-        window.clearTimeout(resizeDebounceRef.current);
-        resizeDebounceRef.current = null;
-      }
-    };
-  }, [gridSize, viewportWidth]);
-
-  useEffect(() => {
-    const handleWindowResize = () => {
-      windowResizeRef.current = true;
-      if (windowResizeTimerRef.current != null) {
-        window.clearTimeout(windowResizeTimerRef.current);
-      }
-      windowResizeTimerRef.current = window.setTimeout(() => {
-        windowResizeRef.current = false;
-        windowResizeTimerRef.current = null;
-      }, AUTO_GRID_RESIZE_DEBOUNCE_MS);
-    };
-
-    window.addEventListener("resize", handleWindowResize);
-    return () => {
-      window.removeEventListener("resize", handleWindowResize);
-      if (windowResizeTimerRef.current != null) {
-        window.clearTimeout(windowResizeTimerRef.current);
-        windowResizeTimerRef.current = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    // Snap to the current viewport on tab/view switches.
-    const nextWidth = viewportWidthRef.current;
-    if (gridSize === "auto" && nextWidth <= 0) return;
-    setStableViewportWidth(nextWidth);
-  }, [gridSize, instantResizeKey, viewKey]);
-
-  useEffect(() => {
-    if (!onAutoViewportWidthChange) return;
-    if (gridSize !== "auto") return;
-    if (stableViewportWidth <= 0) return;
-    // Persist the most recent auto-fit width so we can reuse it across view resets.
-    onAutoViewportWidthChange(stableViewportWidth);
-  }, [gridSize, onAutoViewportWidthChange, stableViewportWidth]);
+  const {
+    viewportRef,
+    viewportWidth,
+    viewportHeight,
+    stableViewportWidth,
+    isResizing,
+  } = useGridViewportLayout({
+    gridSize,
+    autoViewportWidth,
+    instantResizeKey,
+    viewKey,
+    onAutoViewportWidthChange,
+  });
+  const lastViewportLogAtRef = useRef(0);
+  const lastLayoutLogRef = useRef("");
 
   // Keep the outer grid padding aligned with the configured grid gap.
   const viewportPadding = gridGap;
   const layoutViewportWidth = gridSize === "auto" ? stableViewportWidth : viewportWidth;
+  // Keep virtual row height tied to the declared card structure so resize does
+  // not trigger a second correction pass after cards have already rendered.
   const gridSizing = useMemo(() => {
     const basePreset = GRID_PRESETS[gridSize === "auto" ? "normal" : gridSize] ?? GRID_PRESETS.small;
     // Apply the user-configured gap while preserving preset padding/column sizing.
@@ -257,60 +191,19 @@ export const useGridSizing = ({
     viewportPadding,
   ]);
 
-  useLayoutEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    if (viewItemsLength === 0) {
-      if (measuredRowHeightRef.current != null) {
-        measuredRowHeightRef.current = null;
-        setMeasuredRowHeight(null);
-      }
-      return;
-    }
-
-    let raf = 0;
-    const measure = () => {
-      const card = viewport.querySelector<HTMLElement>(".thumb-card");
-      if (!card) return;
-      const next = Math.round(card.getBoundingClientRect().height);
-      if (!Number.isFinite(next) || next <= 0) return;
-      const current = measuredRowHeightRef.current;
-      if (current != null && Math.abs(current - next) < 1) return;
-      measuredRowHeightRef.current = next;
-      setMeasuredRowHeight(next);
-    };
-
-    raf = window.requestAnimationFrame(measure);
-    return () => {
-      if (raf) {
-        window.cancelAnimationFrame(raf);
-      }
-    };
-  }, [
-    gridMetaEnabled,
-    gridSizing.column,
-    gridSizing.iconHeight,
-    gridSizing.metaHeight,
-    gridSizing.gap,
-    viewItemsLength,
-    viewKey,
-  ]);
-
-  const resolvedRowHeight = measuredRowHeight ?? gridSizing.rowHeight;
-
   const gridVars = useMemo(
     () =>
       ({
         "--thumb-column": `${gridSizing.column}px`,
         "--thumb-gap": `${gridSizing.gap}px`,
-        "--thumb-row-height": `${resolvedRowHeight}px`,
+        "--thumb-row-height": `${gridSizing.rowHeight}px`,
         "--thumb-padding": `${viewportPadding}px`,
         "--thumb-icon-height": `${gridSizing.iconHeight}px`,
         "--thumb-meta-height": `${gridSizing.metaHeight}px`,
         "--thumb-fit": thumbnailFit,
         "--thumb-preview-bg": "transparent",
       }) as CSSProperties,
-    [gridSizing, resolvedRowHeight, thumbnailFit, viewportPadding],
+    [gridSizing, thumbnailFit, viewportPadding],
   );
 
   const contentWidth = Math.max(0, layoutViewportWidth - viewportPadding * 2);
@@ -322,8 +215,56 @@ export const useGridSizing = ({
           Math.floor((contentWidth + gridSizing.gap) / (gridSizing.column + gridSizing.gap)),
         );
   const rowCount = Math.ceil(viewItemsLength / columnCount);
-  const rowHeight = resolvedRowHeight + gridSizing.gap;
+  const rowHeight = gridSizing.rowHeight + gridSizing.gap;
   const layoutReady = viewportWidth > 0;
+
+  useEffect(() => {
+    if (!perf.enabled) return;
+    const now = performance.now();
+    if (now - lastViewportLogAtRef.current < GRID_PERF_LOG_INTERVAL_MS) return;
+    lastViewportLogAtRef.current = now;
+    perf(
+      "viewport view=%s raw=%d stable=%d auto=%s resizing=%s items=%d",
+      viewKey,
+      viewportWidth,
+      stableViewportWidth,
+      gridSize === "auto" ? "yes" : "no",
+      isResizing ? "yes" : "no",
+      viewItemsLength,
+    );
+  }, [gridSize, isResizing, stableViewportWidth, viewItemsLength, viewKey, viewportWidth]);
+
+  useEffect(() => {
+    if (!perf.enabled) return;
+    const layoutKey = [
+      viewKey,
+      layoutViewportWidth,
+      columnCount,
+      rowCount,
+      rowHeight,
+      gridSizing.rowHeight,
+      viewItemsLength,
+    ].join(":");
+    if (lastLayoutLogRef.current === layoutKey) return;
+    lastLayoutLogRef.current = layoutKey;
+    perf(
+      "layout view=%s viewport=%d cols=%d rows=%d rowHeight=%d mode=deterministic items=%d",
+      viewKey,
+      layoutViewportWidth,
+      columnCount,
+      rowCount,
+      rowHeight,
+      viewItemsLength,
+    );
+  }, [
+    columnCount,
+    gridSizing.rowHeight,
+    layoutViewportWidth,
+    rowCount,
+    rowHeight,
+    viewItemsLength,
+    viewKey,
+  ]);
 
   // When smooth scrolling is disabled, snap wheel input to a single grid row.
   useWheelSnap(viewportRef, smoothScroll ? 0 : rowHeight);
@@ -392,10 +333,12 @@ export const useGridSizing = ({
     viewportRef,
     gridVars,
     gridStyle,
+    viewportHeight,
     columnCount,
     columnWidth: gridSizing.column,
     rowCount,
     rowHeight,
     gridMetaEnabled,
+    isResizing,
   };
 };

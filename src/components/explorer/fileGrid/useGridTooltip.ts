@@ -46,8 +46,8 @@ export const useGridTooltip = ({
 }: UseGridTooltipOptions) => {
   const entryByPathRef = useRef(entryByPath);
   const entryMetaRef = useRef(entryMeta);
+  const hoveredCardRef = useRef<HTMLElement | null>(null);
   const hoveredPathRef = useRef<string | null>(null);
-  const hoverMovedRef = useRef(false);
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   const delayRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -81,10 +81,15 @@ export const useGridTooltip = ({
       useTooltipStore.getState().hideTooltip();
     };
     const resetHoverState = () => {
+      hoveredCardRef.current = null;
       hoveredPathRef.current = null;
-      hoverMovedRef.current = false;
       lastPointerRef.current = null;
       hoverSessionRef.current = useTooltipStore.getState().hoverSession;
+    };
+    const canRenderTooltip = () => {
+      if (isContextMenuOpen()) return false;
+      if (document.visibilityState !== "visible") return false;
+      return document.hasFocus();
     };
 
     if (disabled) {
@@ -115,9 +120,7 @@ export const useGridTooltip = ({
       requestId: number,
       trigger: "mouse" | "focus",
     ) => {
-      if (isContextMenuOpen()) return;
-      if (document.visibilityState !== "visible") return;
-      if (!document.hasFocus()) return;
+      if (!canRenderTooltip()) return;
       const text = resolveTooltipText(path);
       if (!text) return;
       const tooltipApi = useTooltipStore.getState();
@@ -131,8 +134,7 @@ export const useGridTooltip = ({
         const latest = useTooltipStore.getState();
         if (latest.nonce !== requestId) return;
         if (trigger === "mouse" && latest.blockUntilPointerMove) return;
-        if (document.visibilityState !== "visible") return;
-        if (!document.hasFocus()) return;
+        if (!canRenderTooltip()) return;
         const tooltipRect = tooltipApi.tooltipElement
           ? tooltipApi.tooltipElement.getBoundingClientRect()
           : ({ width: 0, height: 0 } as DOMRect);
@@ -153,14 +155,6 @@ export const useGridTooltip = ({
       return { card, path };
     };
 
-    const isPointerStillOnPath = (path: string, x: number, y: number) => {
-      if (hoveredPathRef.current !== path) return false;
-      const pointerTarget = document.elementFromPoint(x, y);
-      const resolved = resolveTooltipTarget(pointerTarget);
-      if (!resolved) return false;
-      return resolved.path === path;
-    };
-
     const scheduleTooltip = (
       path: string,
       anchorX: number,
@@ -176,13 +170,12 @@ export const useGridTooltip = ({
         const latest = useTooltipStore.getState();
         if (latest.nonce !== requestId) return;
         if (trigger === "mouse" && latest.blockUntilPointerMove) return;
-        if (isContextMenuOpen()) return;
-        if (document.visibilityState !== "visible") return;
-        if (!document.hasFocus()) return;
+        if (!canRenderTooltip()) return;
         const nextAnchor = trigger === "mouse" ? lastPointerRef.current : null;
         const x = nextAnchor?.x ?? anchorX;
         const y = nextAnchor?.y ?? anchorY;
-        if (trigger === "mouse" && !isPointerStillOnPath(path, x, y)) return;
+        if (trigger === "mouse" && hoveredPathRef.current !== path) return;
+        if (trigger === "mouse" && !hoveredCardRef.current?.isConnected) return;
         showTooltip(path, x, y, requestId, trigger);
       };
 
@@ -196,51 +189,76 @@ export const useGridTooltip = ({
       }, delayMs);
     };
 
-    const handleMouseMove = (event: MouseEvent) => {
+    let trackingPointer = false;
+    const stopPointerTracking = () => {
+      if (!trackingPointer) return;
+      trackingPointer = false;
+      viewport.removeEventListener("pointermove", handlePointerMove);
+    };
+    const startPointerTracking = () => {
+      if (trackingPointer) return;
+      trackingPointer = true;
+      viewport.addEventListener("pointermove", handlePointerMove, { passive: true });
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!hoveredPathRef.current) return;
+      const previous = lastPointerRef.current;
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
+      const store = useTooltipStore.getState();
+      if (store.blockUntilPointerMove) {
+        const moved =
+          !previous ||
+          Math.abs(event.clientX - previous.x) + Math.abs(event.clientY - previous.y) >= 1;
+        if (!moved) return;
+        store.clearTooltipBlock();
+        const path = hoveredPathRef.current;
+        if (!path) return;
+        scheduleTooltip(path, event.clientX, event.clientY, "mouse");
+        return;
+      }
+    };
+
+    const handlePointerOver = (event: PointerEvent) => {
       if (isContextMenuOpen()) {
+        resetHoverState();
+        stopPointerTracking();
         hideTooltip();
         return;
       }
       const resolved = resolveTooltipTarget(event.target);
-      const previous = lastPointerRef.current;
-      lastPointerRef.current = { x: event.clientX, y: event.clientY };
-      const moved =
-        !previous ||
-        Math.abs(event.clientX - previous.x) + Math.abs(event.clientY - previous.y) >= 1;
-
+      if (!resolved) return;
       const store = useTooltipStore.getState();
       if (hoverSessionRef.current !== store.hoverSession) {
         resetHoverState();
         hideTooltip();
-        if (resolved) {
-          hoveredPathRef.current = resolved.path;
-          lastPointerRef.current = { x: event.clientX, y: event.clientY };
-        }
+      }
+      if (hoveredPathRef.current === resolved.path) {
+        lastPointerRef.current = { x: event.clientX, y: event.clientY };
         return;
       }
-      if (moved && store.blockUntilPointerMove) {
-        store.clearTooltipBlock();
-      }
-
-      if (!resolved) {
-        hoveredPathRef.current = null;
-        hoverMovedRef.current = false;
-        hideTooltip();
-        return;
-      }
-
-      if (hoveredPathRef.current !== resolved.path) {
-        hoveredPathRef.current = resolved.path;
-        hoverMovedRef.current = false;
-        hideTooltip();
-      }
-
-      if (!moved || hoverMovedRef.current) return;
-      hoverMovedRef.current = true;
+      hoveredCardRef.current = resolved.card;
+      hoveredPathRef.current = resolved.path;
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
+      startPointerTracking();
+      hideTooltip();
+      if (store.blockUntilPointerMove) return;
       scheduleTooltip(resolved.path, event.clientX, event.clientY, "mouse");
     };
 
-    const handleMouseLeave = () => {
+    const handlePointerOut = (event: PointerEvent) => {
+      if (!hoveredPathRef.current) return;
+      const from = resolveTooltipTarget(event.target);
+      if (!from || from.path !== hoveredPathRef.current) return;
+      const next = resolveTooltipTarget(event.relatedTarget);
+      if (next?.path === hoveredPathRef.current) return;
+      stopPointerTracking();
+      resetHoverState();
+      hideTooltip();
+    };
+
+    const handlePointerLeave = () => {
+      stopPointerTracking();
       resetHoverState();
       hideTooltip();
     };
@@ -256,25 +274,29 @@ export const useGridTooltip = ({
       if (!target.matches(":focus-visible")) {
         return;
       }
+      hoveredCardRef.current = resolved.card;
       hoveredPathRef.current = resolved.path;
-      hoverMovedRef.current = false;
       const rect = resolved.card.getBoundingClientRect();
       scheduleTooltip(resolved.path, rect.left + rect.width / 2, rect.bottom, "focus");
     };
 
     const handleFocusOut = () => {
+      stopPointerTracking();
       resetHoverState();
       hideTooltip();
     };
 
-    viewport.addEventListener("mousemove", handleMouseMove);
-    viewport.addEventListener("mouseleave", handleMouseLeave);
+    viewport.addEventListener("pointerover", handlePointerOver);
+    viewport.addEventListener("pointerout", handlePointerOut);
+    viewport.addEventListener("pointerleave", handlePointerLeave);
     viewport.addEventListener("focusin", handleFocusIn);
     viewport.addEventListener("focusout", handleFocusOut);
 
     return () => {
-      viewport.removeEventListener("mousemove", handleMouseMove);
-      viewport.removeEventListener("mouseleave", handleMouseLeave);
+      stopPointerTracking();
+      viewport.removeEventListener("pointerover", handlePointerOver);
+      viewport.removeEventListener("pointerout", handlePointerOut);
+      viewport.removeEventListener("pointerleave", handlePointerLeave);
       viewport.removeEventListener("focusin", handleFocusIn);
       viewport.removeEventListener("focusout", handleFocusOut);
       resetHoverState();
