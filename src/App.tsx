@@ -61,8 +61,6 @@ const App = () => {
     onRefresh: fileManager.refresh,
   });
   const { scrollRequest, requestScrollToIndex } = useScrollRequest();
-  const topstackRef = useRef<HTMLDivElement | null>(null);
-  const statusbarRef = useRef<HTMLDivElement | null>(null);
   // Track the last rendered tab/path to reset scroll on in-tab navigation.
   const lastViewRef = useRef<{ tabId: string | null; pathKey: string } | null>(null);
   const {
@@ -427,8 +425,6 @@ const App = () => {
     appName: APP_NAME,
     appVersion: APP_VERSION,
     refs: {
-      topstackRef,
-      statusbarRef,
       searchInputRef,
       lastViewRef,
     },
@@ -612,7 +608,6 @@ const App = () => {
   // Package topstack wiring so the layout block stays readable.
   const topstackProps = useAppTopstackProps({
     appName: APP_NAME,
-    topstackRef,
     pathBar: {
       onBack: handleBack,
       onForward: handleForward,
@@ -861,7 +856,6 @@ const App = () => {
           fileViewProps,
         }}
         statusbar={{
-          statusbarRef,
           statusBar: {
             message: status.message,
             level: status.level,

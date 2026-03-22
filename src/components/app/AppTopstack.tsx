@@ -1,12 +1,11 @@
-// Renders the fixed header stack (controls, inputs, tabs, crumbs).
-import type { ComponentProps, RefObject } from "react";
+// Renders the app header stack (controls, inputs, tabs, crumbs).
+import type { ComponentProps } from "react";
 import { PathBar } from "@/components/explorer/PathBar";
 import { PathInputsBar } from "@/components/explorer/PathInputsBar";
 import { PathCrumbsBar } from "@/components/explorer/PathCrumbsBar";
 import { TabsBar } from "@/components/navigation/TabsBar";
 
 type AppTopstackProps = {
-  topstackRef: RefObject<HTMLDivElement | null>;
   pathBar: ComponentProps<typeof PathBar>;
   pathInputsBar: ComponentProps<typeof PathInputsBar>;
   tabsBar: ComponentProps<typeof TabsBar>;
@@ -14,14 +13,13 @@ type AppTopstackProps = {
 };
 
 export const AppTopstack = ({
-  topstackRef,
   pathBar,
   pathInputsBar,
   tabsBar,
   crumbsBar,
 }: AppTopstackProps) => {
   return (
-    <div className="topstack" ref={topstackRef}>
+    <div className="topstack">
       <div className="header">
         <PathBar {...pathBar} />
         <div className="path-tabs">

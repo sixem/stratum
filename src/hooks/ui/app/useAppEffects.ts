@@ -9,15 +9,12 @@ import { normalizePath } from "@/lib";
 import {
   useAppAppearance,
   useCloseConfirm,
-  useCssVarHeight,
   useDirWatch,
   useSearchHotkey,
   useTransferProgress,
 } from "@/hooks";
 
 type AppEffectRefs = {
-  topstackRef: RefObject<HTMLDivElement | null>;
-  statusbarRef: RefObject<HTMLDivElement | null>;
   searchInputRef: RefObject<HTMLInputElement | null>;
   lastViewRef: RefObject<{ tabId: string | null; pathKey: string } | null>;
 };
@@ -92,7 +89,7 @@ export const useAppEffects = ({
   shouldResetScroll,
   viewLog,
 }: UseAppEffectsOptions) => {
-  const { topstackRef, statusbarRef, searchInputRef, lastViewRef } = refs;
+  const { searchInputRef, lastViewRef } = refs;
   const {
     confirmClose,
     accentTheme,
@@ -143,8 +140,6 @@ export const useAppEffects = ({
   };
 
   useSearchHotkey(searchInputRef, clearSearchAndFocusView);
-  useCssVarHeight(topstackRef, "--topstack-height");
-  useCssVarHeight(statusbarRef, "--statusbar-height");
   useCloseConfirm({
     enabled: isTauriEnv,
     confirmClose,

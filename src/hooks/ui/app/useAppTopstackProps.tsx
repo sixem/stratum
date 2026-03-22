@@ -1,5 +1,5 @@
 // Builds the topstack props so App.tsx stays focused on data flow.
-import type { ComponentProps, RefObject } from "react";
+import type { ComponentProps } from "react";
 import { PATHBAR_TOOLTIP_DELAY_MS } from "@/constants";
 import {
   DrivePicker,
@@ -18,7 +18,6 @@ import { TabsBar } from "@/components/navigation/TabsBar";
 
 type UseAppTopstackPropsOptions = {
   appName: string;
-  topstackRef: RefObject<HTMLDivElement | null>;
   pathBar: Omit<
     ComponentProps<typeof PathBar>,
     "leftSlot" | "driveSlot" | "rightSlot" | "windowControlsSlot"
@@ -35,7 +34,6 @@ type UseAppTopstackPropsOptions = {
 
 export const useAppTopstackProps = ({
   appName,
-  topstackRef,
   pathBar,
   pathInputsBar,
   tabsBar,
@@ -72,7 +70,6 @@ export const useAppTopstackProps = ({
   );
 
   return {
-    topstackRef,
     pathBar: {
       ...pathBar,
       leftSlot,

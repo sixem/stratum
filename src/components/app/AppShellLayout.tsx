@@ -17,9 +17,9 @@ export const AppShellLayout = ({
   statusbar,
 }: AppShellLayoutProps) => {
   return (
-    <>
+    <div className="app-shell-frame">
       <AppLayout topstack={topstack} content={content} />
       <AppStatusbar {...statusbar} />
-    </>
+    </div>
   );
 };
