@@ -1,57 +1,147 @@
 // Transfer execution for copy and move operations.
-// Keeps the file-operation loops readable while progress and conflict behavior stay centralized.
+// The executor walks a manifest built during planning so it never has to
+// rediscover reparse-point behavior in the hot copy loop.
 use super::common::{
-    build_copy_decision_sets, check_transfer_control, emit_transfer_progress,
-    is_same_directory_copy, remove_existing, same_drive, should_overwrite_copy_destination,
-    should_skip_copy_destination, unique_destination, CopyDecisionSets, CopyExecution,
-    COPY_CHUNK_SIZE,
+    build_copy_decision_sets, check_transfer_control, emit_transfer_progress, inspect_path,
+    path_exists, path_is_same_or_within, remove_path_by_kind, same_drive,
+    should_overwrite_copy_destination, should_skip_copy_destination, CopyDecisionSets,
+    CopyExecution, TransferEntryKind,
 };
+use super::manifest::{
+    build_copy_destination, build_manifest_root, build_transfer_destination, requested_roots,
+    validate_destination, TransferManifestEntry, TransferManifestRoot,
+};
+#[cfg(target_os = "windows")]
+use super::native_windows::copy_file_entry_native;
 use crate::domain::filesystem::{
     CopyOptions, CopyReport, TransferControlCallback, TransferMode, TransferOptions,
     TransferProgressCallback, TransferProgressUpdate, TransferReport,
 };
 use std::fs;
+use std::io::ErrorKind;
+#[cfg(not(target_os = "windows"))]
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-fn copy_file_with_progress(
-    src: &Path,
-    dest: &Path,
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ManifestEntryOutcome {
+    Copied,
+    Skipped,
+}
+
+fn emit_root_completion(
+    on_progress: &mut Option<&mut TransferProgressCallback>,
     processed: usize,
     total: usize,
-    on_progress: &mut Option<&mut TransferProgressCallback>,
-    on_control: &mut Option<&mut TransferControlCallback>,
-) -> Result<(), String> {
-    check_transfer_control(on_control)?;
-    if on_progress.is_none() {
-        if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-        }
-        fs::copy(src, dest).map_err(|err| err.to_string())?;
-        return Ok(());
-    }
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-    }
-    let mut reader = fs::File::open(src).map_err(|err| err.to_string())?;
-    let mut writer = fs::File::create(dest).map_err(|err| err.to_string())?;
-    let total_bytes = reader.metadata().map_err(|err| err.to_string())?.len();
+) {
     emit_transfer_progress(
         on_progress,
         TransferProgressUpdate {
             processed,
             total,
-            current_path: Some(src.to_string_lossy().to_string()),
-            current_bytes: Some(0),
-            current_total_bytes: Some(total_bytes),
+            current_path: None,
+            current_bytes: None,
+            current_total_bytes: None,
             progress_percent: None,
             status_text: None,
             rate_text: None,
         },
     );
+}
 
-    let mut copied: u64 = 0;
-    let mut buffer = vec![0u8; COPY_CHUNK_SIZE];
+fn emit_directory_progress(
+    entry: &TransferManifestEntry,
+    processed: usize,
+    total: usize,
+    on_progress: &mut Option<&mut TransferProgressCallback>,
+) {
+    emit_transfer_progress(
+        on_progress,
+        TransferProgressUpdate {
+            processed,
+            total,
+            current_path: Some(entry.source.to_string_lossy().to_string()),
+            current_bytes: None,
+            current_total_bytes: None,
+            progress_percent: None,
+            status_text: None,
+            rate_text: None,
+        },
+    );
+}
+
+fn emit_file_start(
+    entry: &TransferManifestEntry,
+    processed: usize,
+    total: usize,
+    on_progress: &mut Option<&mut TransferProgressCallback>,
+) {
+    emit_transfer_progress(
+        on_progress,
+        TransferProgressUpdate {
+            processed,
+            total,
+            current_path: Some(entry.source.to_string_lossy().to_string()),
+            current_bytes: Some(0),
+            current_total_bytes: Some(entry.bytes_total),
+            progress_percent: None,
+            status_text: None,
+            rate_text: None,
+        },
+    );
+}
+
+fn emit_file_bytes(
+    processed: usize,
+    total: usize,
+    current_bytes: u64,
+    current_total_bytes: u64,
+    on_progress: &mut Option<&mut TransferProgressCallback>,
+) {
+    emit_transfer_progress(
+        on_progress,
+        TransferProgressUpdate {
+            processed,
+            total,
+            current_path: None,
+            current_bytes: Some(current_bytes),
+            current_total_bytes: Some(current_total_bytes),
+            progress_percent: None,
+            status_text: None,
+            rate_text: None,
+        },
+    );
+}
+
+fn existing_entry_kind(path: &Path) -> Result<Option<TransferEntryKind>, String> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => inspect_path(path).map(|inspection| Some(inspection.kind)),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn ensure_parent_directory(path: &Path) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn copy_file_entry_fallback(
+    entry: &TransferManifestEntry,
+    processed: usize,
+    total: usize,
+    on_progress: &mut Option<&mut TransferProgressCallback>,
+    on_control: &mut Option<&mut TransferControlCallback>,
+) -> Result<(), String> {
+    ensure_parent_directory(&entry.destination)?;
+    let mut reader = fs::File::open(&entry.source).map_err(|err| err.to_string())?;
+    let mut writer = fs::File::create(&entry.destination).map_err(|err| err.to_string())?;
+    let mut copied = 0u64;
+    let mut buffer = vec![0u8; super::common::COPY_CHUNK_SIZE];
+
     loop {
         check_transfer_control(on_control)?;
         let bytes = reader.read(&mut buffer).map_err(|err| err.to_string())?;
@@ -62,273 +152,283 @@ fn copy_file_with_progress(
             .write_all(&buffer[..bytes])
             .map_err(|err| err.to_string())?;
         copied = copied.saturating_add(bytes as u64);
-        emit_transfer_progress(
-            on_progress,
-            TransferProgressUpdate {
-                processed,
-                total,
-                current_path: None,
-                current_bytes: Some(copied),
-                current_total_bytes: Some(total_bytes),
-                progress_percent: None,
-                status_text: None,
-                rate_text: None,
-            },
-        );
+        emit_file_bytes(processed, total, copied, entry.bytes_total, on_progress);
     }
 
-    if let Ok(metadata) = fs::metadata(src) {
-        let _ = fs::set_permissions(dest, metadata.permissions());
+    if let Ok(metadata) = fs::metadata(&entry.source) {
+        let _ = fs::set_permissions(&entry.destination, metadata.permissions());
     }
+
     Ok(())
 }
 
-fn copy_dir(
-    src: &Path,
-    dest: &Path,
+fn copy_manifest_file_entry(
+    entry: &TransferManifestEntry,
     processed: usize,
     total: usize,
     on_progress: &mut Option<&mut TransferProgressCallback>,
     on_control: &mut Option<&mut TransferControlCallback>,
 ) -> Result<(), String> {
     check_transfer_control(on_control)?;
-    if on_progress.is_none() {
-        fs::create_dir_all(dest).map_err(|err| err.to_string())?;
-        for entry in fs::read_dir(src).map_err(|err| err.to_string())? {
-            check_transfer_control(on_control)?;
-            let entry = entry.map_err(|err| err.to_string())?;
-            let src_path = entry.path();
-            let dest_path = dest.join(entry.file_name());
-            let metadata = entry.metadata().map_err(|err| err.to_string())?;
-            if metadata.is_dir() {
-                copy_dir(
-                    &src_path,
-                    &dest_path,
-                    processed,
-                    total,
-                    on_progress,
-                    on_control,
-                )?;
-            } else {
-                fs::copy(&src_path, &dest_path).map_err(|err| err.to_string())?;
-            }
+    emit_file_start(entry, processed, total, on_progress);
+
+    let copy_result = {
+        #[cfg(target_os = "windows")]
+        {
+            ensure_parent_directory(&entry.destination)?;
+            copy_file_entry_native(
+                &entry.source,
+                &entry.destination,
+                entry.kind,
+                processed,
+                total,
+                entry.bytes_total,
+                on_progress,
+                on_control,
+            )
         }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            copy_file_entry_fallback(entry, processed, total, on_progress, on_control)
+        }
+    };
+
+    if let Err(error) = copy_result {
+        if path_exists(&entry.destination) {
+            let _ = remove_path_by_kind(&entry.destination, entry.kind);
+        }
+        return Err(error);
+    }
+
+    emit_file_bytes(
+        processed,
+        total,
+        entry.bytes_total,
+        entry.bytes_total,
+        on_progress,
+    );
+    Ok(())
+}
+
+fn create_manifest_directory(
+    entry: &TransferManifestEntry,
+    processed: usize,
+    total: usize,
+    on_progress: &mut Option<&mut TransferProgressCallback>,
+) -> Result<(), String> {
+    emit_directory_progress(entry, processed, total, on_progress);
+    fs::create_dir_all(&entry.destination).map_err(|err| err.to_string())
+}
+
+fn remove_manifest_source(root: &TransferManifestRoot) -> Result<(), String> {
+    for entry in root.entries.iter().rev() {
+        if !path_exists(&entry.source) {
+            continue;
+        }
+        remove_path_by_kind(&entry.source, entry.kind)?;
+    }
+    Ok(())
+}
+
+fn remove_existing_destination_root(
+    destination: &Path,
+    on_control: &mut Option<&mut TransferControlCallback>,
+) -> Result<(), String> {
+    let Some(kind) = existing_entry_kind(destination)? else {
         return Ok(());
+    };
+
+    if kind == TransferEntryKind::Directory {
+        let manifest = build_manifest_root(destination, destination, on_control)?;
+        return remove_manifest_source(&manifest);
     }
-    fs::create_dir_all(dest).map_err(|err| err.to_string())?;
-    emit_transfer_progress(
-        on_progress,
-        TransferProgressUpdate {
-            processed,
-            total,
-            current_path: Some(src.to_string_lossy().to_string()),
-            current_bytes: None,
-            current_total_bytes: None,
-            progress_percent: None,
-            status_text: None,
-            rate_text: None,
-        },
-    );
-    for entry in fs::read_dir(src).map_err(|err| err.to_string())? {
-        check_transfer_control(on_control)?;
-        let entry = entry.map_err(|err| err.to_string())?;
-        let src_path = entry.path();
-        let dest_path = dest.join(entry.file_name());
-        let metadata = entry.metadata().map_err(|err| err.to_string())?;
-        if metadata.is_dir() {
-            copy_dir(
-                &src_path,
-                &dest_path,
-                processed,
-                total,
-                on_progress,
-                on_control,
-            )?;
-        } else {
-            copy_file_with_progress(
-                &src_path,
-                &dest_path,
-                processed,
-                total,
-                on_progress,
-                on_control,
-            )?;
-        }
-    }
-    Ok(())
+
+    remove_path_by_kind(destination, kind)
 }
 
-fn copy_path(
-    src: &Path,
-    dest: &Path,
+fn execute_copy_manifest_entry_with_decisions(
+    entry: &TransferManifestEntry,
     processed: usize,
     total: usize,
     on_progress: &mut Option<&mut TransferProgressCallback>,
     on_control: &mut Option<&mut TransferControlCallback>,
-) -> Result<(), String> {
+    decisions: &CopyDecisionSets,
+) -> Result<ManifestEntryOutcome, String> {
     check_transfer_control(on_control)?;
-    let metadata = fs::metadata(src).map_err(|err| err.to_string())?;
-    if metadata.is_dir() {
-        return copy_dir(src, dest, processed, total, on_progress, on_control);
+
+    match entry.kind {
+        TransferEntryKind::Directory => match existing_entry_kind(&entry.destination)? {
+            Some(TransferEntryKind::Directory) => Ok(ManifestEntryOutcome::Copied),
+            Some(_) => {
+                if should_skip_copy_destination(&entry.destination, decisions) {
+                    Ok(ManifestEntryOutcome::Skipped)
+                } else if should_overwrite_copy_destination(&entry.destination, decisions) {
+                    remove_existing_destination_root(&entry.destination, on_control)?;
+                    create_manifest_directory(entry, processed, total, on_progress)?;
+                    Ok(ManifestEntryOutcome::Copied)
+                } else {
+                    Err("destination already exists".to_string())
+                }
+            }
+            None => {
+                create_manifest_directory(entry, processed, total, on_progress)?;
+                Ok(ManifestEntryOutcome::Copied)
+            }
+        },
+        _ => {
+            if existing_entry_kind(&entry.destination)?.is_some() {
+                if should_skip_copy_destination(&entry.destination, decisions) {
+                    return Ok(ManifestEntryOutcome::Skipped);
+                }
+                if should_overwrite_copy_destination(&entry.destination, decisions) {
+                    remove_existing_destination_root(&entry.destination, on_control)?;
+                } else {
+                    return Err("destination already exists".to_string());
+                }
+            }
+
+            copy_manifest_file_entry(entry, processed, total, on_progress, on_control)?;
+            Ok(ManifestEntryOutcome::Copied)
+        }
     }
-    copy_file_with_progress(src, dest, processed, total, on_progress, on_control)
 }
 
-fn copy_file_with_decisions(
-    src: &Path,
-    dest: &Path,
+fn execute_copy_manifest_root(
+    root: &TransferManifestRoot,
     processed: usize,
     total: usize,
     on_progress: &mut Option<&mut TransferProgressCallback>,
     on_control: &mut Option<&mut TransferControlCallback>,
     decisions: &CopyDecisionSets,
 ) -> Result<CopyExecution, String> {
-    check_transfer_control(on_control)?;
-    if dest.exists() {
-        if should_skip_copy_destination(dest, decisions) {
-            return Ok(CopyExecution {
-                copied_root: false,
-                skipped: 1,
-            });
+    let mut skipped = 0usize;
+    let mut skipped_prefixes = Vec::<PathBuf>::new();
+    let mut copied_root = true;
+
+    for entry in &root.entries {
+        if skipped_prefixes
+            .iter()
+            .any(|prefix| path_is_same_or_within(&entry.source, prefix))
+        {
+            continue;
         }
-        if should_overwrite_copy_destination(dest, decisions) {
-            remove_existing(dest)?;
-        } else {
-            return Err("destination already exists".to_string());
-        }
-    }
 
-    copy_file_with_progress(src, dest, processed, total, on_progress, on_control)?;
-    Ok(CopyExecution {
-        copied_root: true,
-        skipped: 0,
-    })
-}
-
-fn copy_dir_with_decisions(
-    src: &Path,
-    dest: &Path,
-    processed: usize,
-    total: usize,
-    on_progress: &mut Option<&mut TransferProgressCallback>,
-    on_control: &mut Option<&mut TransferControlCallback>,
-    decisions: &CopyDecisionSets,
-) -> Result<CopyExecution, String> {
-    check_transfer_control(on_control)?;
-    if dest.exists() {
-        let metadata = fs::metadata(dest).map_err(|err| err.to_string())?;
-        if !metadata.is_dir() {
-            if should_skip_copy_destination(dest, decisions) {
-                return Ok(CopyExecution {
-                    copied_root: false,
-                    skipped: 1,
-                });
-            }
-            if should_overwrite_copy_destination(dest, decisions) {
-                remove_existing(dest)?;
-            } else {
-                return Err("destination already exists".to_string());
-            }
-        }
-    }
-
-    fs::create_dir_all(dest).map_err(|err| err.to_string())?;
-    emit_transfer_progress(
-        on_progress,
-        TransferProgressUpdate {
-            processed,
-            total,
-            current_path: Some(src.to_string_lossy().to_string()),
-            current_bytes: None,
-            current_total_bytes: None,
-            progress_percent: None,
-            status_text: None,
-            rate_text: None,
-        },
-    );
-
-    let mut skipped = 0;
-    for entry in fs::read_dir(src).map_err(|err| err.to_string())? {
-        check_transfer_control(on_control)?;
-        let entry = entry.map_err(|err| err.to_string())?;
-        let src_path = entry.path();
-        let dest_path = dest.join(entry.file_name());
-        let outcome = copy_path_with_decisions(
-            &src_path,
-            &dest_path,
+        match execute_copy_manifest_entry_with_decisions(
+            entry,
             processed,
             total,
             on_progress,
             on_control,
             decisions,
-        )?;
-        skipped += outcome.skipped;
+        )? {
+            ManifestEntryOutcome::Copied => {}
+            ManifestEntryOutcome::Skipped => {
+                skipped = skipped.saturating_add(1);
+                if entry.kind.is_traversable_directory() {
+                    skipped_prefixes.push(entry.source.clone());
+                }
+                if entry.source == root.source {
+                    copied_root = false;
+                }
+            }
+        }
     }
 
     Ok(CopyExecution {
-        copied_root: true,
+        copied_root,
         skipped,
     })
 }
 
-fn copy_path_with_decisions(
-    src: &Path,
-    dest: &Path,
-    processed: usize,
-    total: usize,
-    on_progress: &mut Option<&mut TransferProgressCallback>,
-    on_control: &mut Option<&mut TransferControlCallback>,
-    decisions: &CopyDecisionSets,
-) -> Result<CopyExecution, String> {
-    check_transfer_control(on_control)?;
-    let metadata = fs::metadata(src).map_err(|err| err.to_string())?;
-    if metadata.is_dir() {
-        return copy_dir_with_decisions(
-            src,
-            dest,
-            processed,
-            total,
-            on_progress,
-            on_control,
-            decisions,
-        );
-    }
-    copy_file_with_decisions(
-        src,
-        dest,
-        processed,
-        total,
-        on_progress,
-        on_control,
-        decisions,
-    )
-}
-
-fn move_path(
-    src: &Path,
-    dest: &Path,
+fn execute_transfer_manifest_root(
+    root: &TransferManifestRoot,
     processed: usize,
     total: usize,
     on_progress: &mut Option<&mut TransferProgressCallback>,
     on_control: &mut Option<&mut TransferControlCallback>,
 ) -> Result<(), String> {
-    check_transfer_control(on_control)?;
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-    }
-    match fs::rename(src, dest) {
-        Ok(_) => Ok(()),
-        Err(_) => {
-            copy_path(src, dest, processed, total, on_progress, on_control)?;
-            check_transfer_control(on_control)?;
-            let cleanup = if src.is_dir() {
-                fs::remove_dir_all(src)
-            } else {
-                fs::remove_file(src)
-            };
-            cleanup.map_err(|err| err.to_string())
+    for entry in &root.entries {
+        check_transfer_control(on_control)?;
+        match entry.kind {
+            TransferEntryKind::Directory => {
+                create_manifest_directory(entry, processed, total, on_progress)?;
+            }
+            _ => {
+                copy_manifest_file_entry(entry, processed, total, on_progress, on_control)?;
+            }
         }
     }
+    Ok(())
+}
+
+fn execute_transfer_root(
+    root: &TransferManifestRoot,
+    overwrite: bool,
+    should_move: bool,
+    processed: usize,
+    total: usize,
+    on_progress: &mut Option<&mut TransferProgressCallback>,
+    on_control: &mut Option<&mut TransferControlCallback>,
+) -> Result<bool, String> {
+    check_transfer_control(on_control)?;
+
+    if existing_entry_kind(&root.destination)?.is_some() {
+        if !overwrite {
+            return Err("destination already exists".to_string());
+        }
+        remove_existing_destination_root(&root.destination, on_control)?;
+    }
+
+    if should_move && same_drive(&root.source, &root.destination) {
+        ensure_parent_directory(&root.destination)?;
+        if fs::rename(&root.source, &root.destination).is_ok() {
+            return Ok(true);
+        }
+    }
+
+    execute_transfer_manifest_root(root, processed, total, on_progress, on_control)?;
+    if should_move {
+        check_transfer_control(on_control)?;
+        remove_manifest_source(root)?;
+        return Ok(true);
+    }
+
+    Ok(false)
+}
+
+fn build_copy_manifest_for_path(
+    raw_path: &str,
+    target_path: &Path,
+    on_control: &mut Option<&mut TransferControlCallback>,
+) -> Result<TransferManifestRoot, String> {
+    let source = PathBuf::from(raw_path);
+    let destination = build_copy_destination(&source, target_path)
+        .ok_or_else(|| "Unable to resolve source name".to_string())?;
+    let manifest = build_manifest_root(&source, &destination, on_control)?;
+    if manifest.kind.is_traversable_directory()
+        && path_is_same_or_within(&manifest.destination, &manifest.source)
+    {
+        return Err("destination is inside source".to_string());
+    }
+    Ok(manifest)
+}
+
+fn build_transfer_manifest_for_path(
+    raw_path: &str,
+    target_path: &Path,
+    on_control: &mut Option<&mut TransferControlCallback>,
+) -> Result<TransferManifestRoot, String> {
+    let source = PathBuf::from(raw_path);
+    let destination = build_transfer_destination(&source, target_path)
+        .ok_or_else(|| "Unable to resolve source name".to_string())?;
+    let manifest = build_manifest_root(&source, &destination, on_control)?;
+    if manifest.kind.is_traversable_directory()
+        && path_is_same_or_within(&manifest.destination, &manifest.source)
+    {
+        return Err("destination is inside source".to_string());
+    }
+    Ok(manifest)
 }
 
 pub fn copy_entries(
@@ -338,119 +438,46 @@ pub fn copy_entries(
     mut on_progress: Option<&mut TransferProgressCallback>,
     mut on_control: Option<&mut TransferControlCallback>,
 ) -> Result<CopyReport, String> {
-    let target = destination.trim();
-    if target.is_empty() {
-        return Err("Empty destination".to_string());
-    }
-    let target_path = PathBuf::from(target);
-    if !target_path.exists() {
-        return Err("Destination does not exist".to_string());
-    }
-    if !target_path.is_dir() {
-        return Err("Destination is not a folder".to_string());
-    }
+    let target_path = validate_destination(&destination)?;
+    let decisions = build_copy_decision_sets(options.as_ref());
 
     let mut report = CopyReport {
         copied: 0,
         skipped: 0,
         failures: Vec::new(),
     };
-    let decisions = build_copy_decision_sets(options.as_ref());
 
-    let total = paths.len();
-    for (index, path) in paths.into_iter().enumerate() {
+    let requested = paths
+        .into_iter()
+        .filter_map(|path| {
+            let trimmed = path.trim().to_string();
+            if trimmed.is_empty() {
+                report.skipped = report.skipped.saturating_add(1);
+                None
+            } else {
+                Some(trimmed)
+            }
+        })
+        .collect::<Vec<_>>();
+    let total = requested_roots(&requested);
+
+    for (index, raw_path) in requested.into_iter().enumerate() {
         check_transfer_control(&mut on_control)?;
         let processed = index;
         let completed = index + 1;
-        let trimmed = path.trim();
-        if trimmed.is_empty() {
-            report.skipped += 1;
-            emit_transfer_progress(
-                &mut on_progress,
-                TransferProgressUpdate {
-                    processed: completed,
-                    total,
-                    current_path: None,
-                    current_bytes: None,
-                    current_total_bytes: None,
-                    progress_percent: None,
-                    status_text: None,
-                    rate_text: None,
-                },
-            );
-            continue;
-        }
-        let src = PathBuf::from(trimmed);
-        let metadata = match fs::metadata(&src) {
-            Ok(value) => value,
-            Err(err) => {
-                report
-                    .failures
-                    .push(format!("{}: {}", trimmed, err.to_string()));
-                emit_transfer_progress(
-                    &mut on_progress,
-                    TransferProgressUpdate {
-                        processed: completed,
-                        total,
-                        current_path: None,
-                        current_bytes: None,
-                        current_total_bytes: None,
-                        progress_percent: None,
-                        status_text: None,
-                        rate_text: None,
-                    },
-                );
+
+        let manifest = match build_copy_manifest_for_path(&raw_path, &target_path, &mut on_control)
+        {
+            Ok(manifest) => manifest,
+            Err(error) => {
+                report.failures.push(format!("{}: {}", raw_path, error));
+                emit_root_completion(&mut on_progress, completed, total);
                 continue;
             }
         };
-        if metadata.is_dir() && target_path.starts_with(&src) {
-            report
-                .failures
-                .push(format!("{}: destination is inside source", trimmed));
-            emit_transfer_progress(
-                &mut on_progress,
-                TransferProgressUpdate {
-                    processed: completed,
-                    total,
-                    current_path: None,
-                    current_bytes: None,
-                    current_total_bytes: None,
-                    progress_percent: None,
-                    status_text: None,
-                    rate_text: None,
-                },
-            );
-            continue;
-        }
-        let name = match src.file_name() {
-            Some(name) => name.to_string_lossy().to_string(),
-            None => {
-                report.skipped += 1;
-                emit_transfer_progress(
-                    &mut on_progress,
-                    TransferProgressUpdate {
-                        processed: completed,
-                        total,
-                        current_path: None,
-                        current_bytes: None,
-                        current_total_bytes: None,
-                        progress_percent: None,
-                        status_text: None,
-                        rate_text: None,
-                    },
-                );
-                continue;
-            }
-        };
-        let default_dest = target_path.join(name);
-        let dest_path = if is_same_directory_copy(&src, &target_path) {
-            unique_destination(&default_dest)
-        } else {
-            default_dest
-        };
-        match copy_path_with_decisions(
-            &src,
-            &dest_path,
+
+        match execute_copy_manifest_root(
+            &manifest,
             processed,
             total,
             &mut on_progress,
@@ -459,25 +486,14 @@ pub fn copy_entries(
         ) {
             Ok(outcome) => {
                 if outcome.copied_root {
-                    report.copied += 1;
+                    report.copied = report.copied.saturating_add(1);
                 }
-                report.skipped += outcome.skipped;
+                report.skipped = report.skipped.saturating_add(outcome.skipped);
             }
-            Err(err) => report.failures.push(format!("{}: {}", trimmed, err)),
+            Err(error) => report.failures.push(format!("{}: {}", raw_path, error)),
         }
-        emit_transfer_progress(
-            &mut on_progress,
-            TransferProgressUpdate {
-                processed: completed,
-                total,
-                current_path: None,
-                current_bytes: None,
-                current_total_bytes: None,
-                progress_percent: None,
-                status_text: None,
-                rate_text: None,
-            },
-        );
+
+        emit_root_completion(&mut on_progress, completed, total);
     }
 
     Ok(report)
@@ -492,18 +508,7 @@ pub fn transfer_entries(
     mut on_progress: Option<&mut TransferProgressCallback>,
     mut on_control: Option<&mut TransferControlCallback>,
 ) -> Result<TransferReport, String> {
-    let target = destination.trim();
-    if target.is_empty() {
-        return Err("Empty destination".to_string());
-    }
-    let target_path = PathBuf::from(target);
-    if !target_path.exists() {
-        return Err("Destination does not exist".to_string());
-    }
-    if !target_path.is_dir() {
-        return Err("Destination is not a folder".to_string());
-    }
-
+    let target_path = validate_destination(&destination)?;
     let mode = options
         .as_ref()
         .and_then(|value| value.mode)
@@ -520,184 +525,56 @@ pub fn transfer_entries(
         failures: Vec::new(),
     };
 
-    let total = paths.len();
-    for (index, path) in paths.into_iter().enumerate() {
+    let requested = paths
+        .into_iter()
+        .filter_map(|path| {
+            let trimmed = path.trim().to_string();
+            if trimmed.is_empty() {
+                report.skipped = report.skipped.saturating_add(1);
+                None
+            } else {
+                Some(trimmed)
+            }
+        })
+        .collect::<Vec<_>>();
+    let total = requested_roots(&requested);
+
+    for (index, raw_path) in requested.into_iter().enumerate() {
         check_transfer_control(&mut on_control)?;
         let processed = index;
         let completed = index + 1;
-        let trimmed = path.trim();
-        if trimmed.is_empty() {
-            report.skipped += 1;
-            emit_transfer_progress(
-                &mut on_progress,
-                TransferProgressUpdate {
-                    processed: completed,
-                    total,
-                    current_path: None,
-                    current_bytes: None,
-                    current_total_bytes: None,
-                    progress_percent: None,
-                    status_text: None,
-                    rate_text: None,
-                },
-            );
-            continue;
-        }
-        let src = PathBuf::from(trimmed);
-        let metadata = match fs::metadata(&src) {
-            Ok(value) => value,
-            Err(err) => {
-                report
-                    .failures
-                    .push(format!("{}: {}", trimmed, err.to_string()));
-                emit_transfer_progress(
-                    &mut on_progress,
-                    TransferProgressUpdate {
-                        processed: completed,
-                        total,
-                        current_path: None,
-                        current_bytes: None,
-                        current_total_bytes: None,
-                        progress_percent: None,
-                        status_text: None,
-                        rate_text: None,
-                    },
-                );
-                continue;
-            }
-        };
-        if metadata.is_dir() && target_path.starts_with(&src) {
-            report
-                .failures
-                .push(format!("{}: destination is inside source", trimmed));
-            emit_transfer_progress(
-                &mut on_progress,
-                TransferProgressUpdate {
-                    processed: completed,
-                    total,
-                    current_path: None,
-                    current_bytes: None,
-                    current_total_bytes: None,
-                    progress_percent: None,
-                    status_text: None,
-                    rate_text: None,
-                },
-            );
-            continue;
-        }
-        let name = match src.file_name() {
-            Some(name) => name.to_string_lossy().to_string(),
-            None => {
-                report.skipped += 1;
-                emit_transfer_progress(
-                    &mut on_progress,
-                    TransferProgressUpdate {
-                        processed: completed,
-                        total,
-                        current_path: None,
-                        current_bytes: None,
-                        current_total_bytes: None,
-                        progress_percent: None,
-                        status_text: None,
-                        rate_text: None,
-                    },
-                );
-                continue;
-            }
-        };
-        let dest_path = target_path.join(name);
-        if dest_path.exists() {
-            if overwrite {
-                if let Err(err) = remove_existing(&dest_path) {
-                    report
-                        .failures
-                        .push(format!("{}: {}", trimmed, err.to_string()));
-                    emit_transfer_progress(
-                        &mut on_progress,
-                        TransferProgressUpdate {
-                            processed: completed,
-                            total,
-                            current_path: None,
-                            current_bytes: None,
-                            current_total_bytes: None,
-                            progress_percent: None,
-                            status_text: None,
-                            rate_text: None,
-                        },
-                    );
+
+        let manifest =
+            match build_transfer_manifest_for_path(&raw_path, &target_path, &mut on_control) {
+                Ok(manifest) => manifest,
+                Err(error) => {
+                    report.failures.push(format!("{}: {}", raw_path, error));
+                    emit_root_completion(&mut on_progress, completed, total);
                     continue;
                 }
-            } else {
-                report
-                    .failures
-                    .push(format!("{}: destination already exists", trimmed));
-                emit_transfer_progress(
-                    &mut on_progress,
-                    TransferProgressUpdate {
-                        processed: completed,
-                        total,
-                        current_path: None,
-                        current_bytes: None,
-                        current_total_bytes: None,
-                        progress_percent: None,
-                        status_text: None,
-                        rate_text: None,
-                    },
-                );
-                continue;
-            }
-        }
+            };
 
         let should_move = match mode {
             TransferMode::Copy => false,
             TransferMode::Move => true,
-            TransferMode::Auto => same_drive(&src, &target_path),
+            TransferMode::Auto => same_drive(&manifest.source, &target_path),
         };
 
-        let outcome = if should_move {
-            move_path(
-                &src,
-                &dest_path,
-                processed,
-                total,
-                &mut on_progress,
-                &mut on_control,
-            )
-            .map(|_| {
-                report.moved += 1;
-            })
-        } else {
-            copy_path(
-                &src,
-                &dest_path,
-                processed,
-                total,
-                &mut on_progress,
-                &mut on_control,
-            )
-            .map(|_| {
-                report.copied += 1;
-            })
-        };
-
-        if let Err(err) = outcome {
-            report
-                .failures
-                .push(format!("{}: {}", trimmed, err.to_string()));
-        }
-        emit_transfer_progress(
+        match execute_transfer_root(
+            &manifest,
+            overwrite,
+            should_move,
+            processed,
+            total,
             &mut on_progress,
-            TransferProgressUpdate {
-                processed: completed,
-                total,
-                current_path: None,
-                current_bytes: None,
-                current_total_bytes: None,
-                progress_percent: None,
-                status_text: None,
-                rate_text: None,
-            },
-        );
+            &mut on_control,
+        ) {
+            Ok(true) => report.moved = report.moved.saturating_add(1),
+            Ok(false) => report.copied = report.copied.saturating_add(1),
+            Err(error) => report.failures.push(format!("{}: {}", raw_path, error)),
+        }
+
+        emit_root_completion(&mut on_progress, completed, total);
     }
 
     Ok(report)
