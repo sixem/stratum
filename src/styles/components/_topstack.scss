@@ -129,6 +129,11 @@
     letter-spacing: 0.02em;
     color: var(--muted);
     cursor: pointer;
+    transition: border-color 250ms ease;
+  }
+
+  .transfer-button:hover {
+    border-color: color-mix(in srgb, var(--stroke) 78%, white);
   }
 
   .transfer-button.is-open {
@@ -365,10 +370,6 @@
   }
 
   // Keep the operation name neutral and move status color to the compact meta label.
-  .transfer-item-completed .transfer-item-meta > span:first-child {
-    color: #bfe9ce;
-  }
-
   .transfer-item-failed .transfer-item-meta > span:first-child {
     color: #ffd0d0;
   }

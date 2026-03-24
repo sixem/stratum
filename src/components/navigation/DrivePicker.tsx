@@ -68,17 +68,24 @@ export const DrivePicker = ({
     () => drives.map((drive) => normalizePath(drive)),
     [drives],
   );
+  const hasLoadedDrives = drives.length > 0;
   const active = activeDrive(activePath, drives);
   const activeKey = active ? normalizePath(active) : "";
   const activeIndex = activeKey ? normalizedDrives.indexOf(activeKey) : -1;
-  const label = active ? formatDriveLabel(active) : "Drives";
+  const label = active ? formatDriveLabel(active) : hasLoadedDrives ? "Drives" : "";
   const extraCount =
     drives.length > 0 ? Math.max(0, drives.length - (activeIndex >= 0 ? 1 : 0)) : 0;
-  const displayLabel = extraCount > 0 ? `${label} +${extraCount}` : label;
+  const displayLabel = hasLoadedDrives
+    ? extraCount > 0
+      ? `${label} +${extraCount}`
+      : label
+    : "";
   const canOpen = drives.length > 1;
   const activeTooltip = active
     ? buildDriveTooltip(label, driveInfoMap.get(activeKey))
-    : "Drives";
+    : hasLoadedDrives
+      ? "Drives"
+      : "";
 
   // Track overflow so we only show navigation affordances when needed.
   const updateScrollState = useCallback(() => {
@@ -158,7 +165,12 @@ export const DrivePicker = ({
               aria-haspopup="menu"
               aria-expanded={expanded}
             >
-              {displayLabel}
+              <span
+                className="drive-picker-button-label"
+                data-loaded={hasLoadedDrives ? "true" : "false"}
+              >
+                {displayLabel}
+              </span>
             </PressButton>
           </TooltipWrapper>
           <div className="drive-picker-extend">

@@ -11,6 +11,13 @@
 
 :root[data-window-focus="false"] .pathbar-shell .drive-toggle-body {
   background: color-mix(in srgb, var(--surface-control) 96%, white);
+  border-color: color-mix(in srgb, var(--stroke) 92%, white);
+}
+
+// Keep the work status pill distinct when the unfocused title area brightens.
+:root[data-window-focus="false"] .pathbar-shell .transfer-button {
+  background: color-mix(in srgb, var(--surface-control) 96%, white);
+  border-color: color-mix(in srgb, var(--stroke) 92%, white);
 }
 
 .pathbar {
@@ -111,12 +118,18 @@
     max-width: 100%;
     height: 26px;
     border-radius: 5px;
+    border: 1px solid var(--stroke);
     background: var(--surface-control);
     padding: 0;
     overflow: hidden;
     // Keep the picker chrome itself transparent to dragging.
     // Only the real controls inside should capture input.
     pointer-events: none;
+    transition: border-color 250ms ease;
+  }
+
+  .drive-toggle-body:has(.drive-picker-button:hover) {
+    border-color: color-mix(in srgb, var(--stroke) 78%, white);
   }
 
   .drive-picker-button {
@@ -141,8 +154,13 @@
     pointer-events: auto;
   }
 
-  .drive-picker-button:hover {
-    background: var(--pathbar-hover-surface);
+  .drive-picker-button-label {
+    opacity: 0;
+    transition: opacity 250ms ease;
+  }
+
+  .drive-picker-button-label[data-loaded="true"] {
+    opacity: 1;
   }
 
   .drive-picker-button:disabled {
@@ -187,7 +205,6 @@
   .drive-picker[data-expanded="true"] .drive-picker-scroll {
     margin-left: 2px;
     padding-left: 6px;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .drive-picker-scroll::before,
@@ -283,11 +300,6 @@
   .drive-picker-scroll[data-can-right="true"] .drive-picker-scroll-button.is-right {
     opacity: 1;
     pointer-events: auto;
-  }
-
-  .drive-picker-scroll-button:hover {
-    border-color: rgba(255, 255, 255, 0.3);
-    color: var(--text);
   }
 
   .drive-picker-scroll-button:disabled {

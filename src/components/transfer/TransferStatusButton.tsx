@@ -6,7 +6,10 @@ import { useTransferStore } from "@/modules";
 import { WorkLogClearIcon } from "@/components/icons";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { TransferStatusItem } from "@/components/transfer/TransferStatusItem";
-import { buildTransferSummary } from "@/components/transfer/transferStatusView";
+import {
+  buildTransferSummary,
+  sortTransferJobsByRecent,
+} from "@/components/transfer/transferStatusView";
 import { PressButton } from "@/components/primitives/PressButton";
 
 export const TransferStatusButton = () => {
@@ -18,6 +21,7 @@ export const TransferStatusButton = () => {
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const popoverId = useId();
   const summary = useMemo(() => buildTransferSummary(jobs), [jobs]);
+  const recentJobs = useMemo(() => sortTransferJobsByRecent(jobs), [jobs]);
   const canClear = summary.hasFinished;
   const clearTooltipText = canClear
     ? `Clear ${summary.finishedCount} finished job${summary.finishedCount === 1 ? "" : "s"}`
@@ -107,7 +111,7 @@ export const TransferStatusButton = () => {
             </TooltipWrapper>
           </div>
           <div className="transfer-list" role="list">
-            {jobs.map((job) => (
+            {recentJobs.map((job) => (
               <TransferStatusItem key={job.id} job={job} now={now} />
             ))}
           </div>

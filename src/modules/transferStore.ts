@@ -44,6 +44,7 @@ export type TransferJob = {
   total: number;
   processed: number;
   startedAt: number;
+  activityAt: number;
   finishedAt?: number;
   items?: string[];
   currentPath?: string;
@@ -273,6 +274,14 @@ const buildTransferJob = (
   const startedAt = startedNow
     ? now
     : previousJob?.startedAt ?? now;
+  const activityAt =
+    nextStatus === "completed" ||
+    nextStatus === "failed" ||
+    nextStatus === "cancelled"
+      ? isTerminalStatus(previousJob?.status ?? "queued")
+        ? previousJob?.activityAt ?? now
+        : now
+      : now;
   const finishedAt =
     nextStatus === "completed" ||
     nextStatus === "failed" ||
@@ -311,6 +320,7 @@ const buildTransferJob = (
     total,
     processed,
     startedAt,
+    activityAt,
     finishedAt,
     items: metadata?.items ?? previousJob?.items,
     currentPath: snapshotJob.currentPath ?? previousJob?.currentPath,
@@ -381,6 +391,7 @@ const applyProgressHintToJob = (job: TransferJob, event: TransferProgressEvent):
     backendManaged: job.backendManaged,
     capabilities: job.capabilities,
     startedAt: job.status === "queued" ? Date.now() : job.startedAt,
+    activityAt: Date.now(),
     currentPath: nextCurrentPath,
     currentBytes: nextCurrentBytes,
     currentTotalBytes: nextCurrentTotalBytes,
@@ -410,6 +421,7 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
       total: Math.max(0, total),
       processed: 0,
       startedAt: Date.now(),
+      activityAt: Date.now(),
       items: normalizeItems(items),
       throughputSamples: [],
     };
@@ -481,6 +493,7 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
           ...job,
           status: "running",
           startedAt,
+          activityAt: Date.now(),
           total: nextTotal,
           processed: nextProcessed,
           currentPath: nextCurrentPath,
@@ -522,6 +535,7 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
     set((state) => {
       const localJobs = state.localJobs.map((job) => {
         if (job.id !== id) return job;
+        const finishedAt = Date.now();
         const lastPath = job.items?.[job.items.length - 1];
         const nextJob: TransferJob = {
           ...job,
@@ -529,7 +543,8 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
           status: "completed",
           processed: job.total ? job.total : job.processed,
           currentPath: job.currentPath ?? lastPath,
-          finishedAt: Date.now(),
+          activityAt: finishedAt,
+          finishedAt,
         };
         return nextJob;
       });
@@ -544,11 +559,13 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
         if (job.id !== id) {
           return job;
         }
+        const finishedAt = Date.now();
         const nextJob: TransferJob = {
           ...job,
           ...patch,
           status: "failed",
-          finishedAt: Date.now(),
+          activityAt: finishedAt,
+          finishedAt,
         };
         return nextJob;
       });

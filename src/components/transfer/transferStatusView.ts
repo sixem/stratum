@@ -31,6 +31,18 @@ export type TransferItemView = {
 
 const TRANSFER_RECENT_RATE_WINDOW_MS = 4_000;
 
+const getTransferJobRecentAt = (job: TransferJob) => {
+  return job.activityAt ?? job.finishedAt ?? job.startedAt;
+};
+
+export const sortTransferJobsByRecent = (jobs: TransferJob[]) => {
+  return [...jobs].sort((left, right) => {
+    const recentDelta = getTransferJobRecentAt(right) - getTransferJobRecentAt(left);
+    if (recentDelta !== 0) return recentDelta;
+    return right.startedAt - left.startedAt;
+  });
+};
+
 const formatDuration = (elapsedMs: number) => {
   if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return "0s";
   const totalSeconds = Math.round(elapsedMs / 1000);
@@ -91,6 +103,7 @@ const buildRecentThroughputLabel = (job: TransferJob, now: number) => {
 };
 
 export const buildTransferSummary = (jobs: TransferJob[]): TransferSummary => {
+  const recentJobs = sortTransferJobsByRecent(jobs);
   const active = jobs.filter(
     (job) => job.status === "running" || job.status === "paused",
   );
@@ -106,7 +119,7 @@ export const buildTransferSummary = (jobs: TransferJob[]): TransferSummary => {
   const finishedCount = finished.length;
   const hasActive = activeCount > 0 || queuedCount > 0;
   const hasFinished = finishedCount > 0;
-  const latestJob = jobs.length > 0 ? jobs[jobs.length - 1] ?? null : null;
+  const latestJob = recentJobs[0] ?? null;
   const countLabel = hasActive
     ? activeCount > 0 && queuedCount > 0
       ? `${activeCount} active, ${queuedCount} queued`
