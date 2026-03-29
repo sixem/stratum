@@ -2,6 +2,9 @@
 // The queue uses these manifests to compute stable work estimates before
 // execution starts, without following Windows reparse points by accident.
 use super::common::{check_transfer_control, same_drive};
+use super::delete_discovery::{
+    discover_delete_plan, DeleteDiscoveryPlan, DeleteDiscoveryProgressCallback,
+};
 use super::manifest::{
     build_copy_destination, build_manifest_root, build_transfer_destination, requested_roots,
     validate_destination,
@@ -16,12 +19,14 @@ use std::path::PathBuf;
 pub(crate) enum TransferProgressKind {
     Roots,
     Files,
+    Items,
 }
 
 #[derive(Clone)]
 pub(crate) struct PlannedTransferJob {
     pub work: TransferWorkEstimate,
     pub progress_kind: TransferProgressKind,
+    pub delete_discovery: Option<DeleteDiscoveryPlan>,
 }
 
 pub(crate) fn plan_root_only_job(paths: &[String]) -> PlannedTransferJob {
@@ -35,6 +40,7 @@ pub(crate) fn plan_root_only_job(paths: &[String]) -> PlannedTransferJob {
             bytes_completed: 0,
         },
         progress_kind: TransferProgressKind::Roots,
+        delete_discovery: None,
     }
 }
 
@@ -76,6 +82,7 @@ pub(crate) fn plan_copy_job(
             bytes_completed: 0,
         },
         progress_kind: TransferProgressKind::Files,
+        delete_discovery: None,
     })
 }
 
@@ -124,6 +131,7 @@ pub(crate) fn plan_transfer_job(
     let (files_total, bytes_total) = match progress_kind {
         TransferProgressKind::Roots => (None, None),
         TransferProgressKind::Files => (Some(files_total), Some(bytes_total)),
+        TransferProgressKind::Items => (Some(files_total), Some(bytes_total)),
     };
 
     Ok(PlannedTransferJob {
@@ -136,5 +144,45 @@ pub(crate) fn plan_transfer_job(
             bytes_completed: 0,
         },
         progress_kind,
+        delete_discovery: None,
+    })
+}
+
+pub(crate) fn plan_delete_job(
+    paths: &[String],
+    on_progress: Option<&mut DeleteDiscoveryProgressCallback>,
+    on_control: Option<&mut TransferControlCallback>,
+) -> Result<PlannedTransferJob, String> {
+    plan_delete_like_job(paths, on_progress, on_control)
+}
+
+pub(crate) fn plan_trash_job(
+    paths: &[String],
+    on_progress: Option<&mut DeleteDiscoveryProgressCallback>,
+    on_control: Option<&mut TransferControlCallback>,
+) -> Result<PlannedTransferJob, String> {
+    plan_delete_like_job(paths, on_progress, on_control)
+}
+
+fn plan_delete_like_job(
+    paths: &[String],
+    on_progress: Option<&mut DeleteDiscoveryProgressCallback>,
+    mut on_control: Option<&mut TransferControlCallback>,
+) -> Result<PlannedTransferJob, String> {
+    check_transfer_control(&mut on_control)?;
+    let roots_total = requested_roots(paths);
+    let discovery = discover_delete_plan(paths, on_progress, on_control)?;
+
+    Ok(PlannedTransferJob {
+        work: TransferWorkEstimate {
+            roots_total,
+            roots_completed: 0,
+            files_total: Some(discovery.item_count),
+            files_completed: 0,
+            bytes_total: Some(discovery.byte_count),
+            bytes_completed: 0,
+        },
+        progress_kind: TransferProgressKind::Items,
+        delete_discovery: Some(discovery),
     })
 }

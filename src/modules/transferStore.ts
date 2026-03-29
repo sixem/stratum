@@ -289,6 +289,11 @@ const buildTransferJob = (
       ? previousJob?.finishedAt ?? now
       : undefined;
   const keepByteHints = nextStatus === "running" || nextStatus === "paused";
+  const keepTransientHints = keepByteHints && nextPhase === previousJob?.phase;
+  const bridgePlanningStatusHint =
+    keepByteHints &&
+    previousJob?.phase === "planning" &&
+    nextPhase === "executing";
   const currentBytes = keepByteHints && !currentPathChanged
     ? previousJob?.currentBytes
     : undefined;
@@ -323,9 +328,18 @@ const buildTransferJob = (
     activityAt,
     finishedAt,
     items: metadata?.items ?? previousJob?.items,
-    currentPath: snapshotJob.currentPath ?? previousJob?.currentPath,
+    currentPath:
+      snapshotJob.currentPath !== undefined
+        ? snapshotJob.currentPath ?? undefined
+        : previousJob?.currentPath,
     currentBytes,
     currentTotalBytes,
+    progressPercent: keepTransientHints ? previousJob?.progressPercent : undefined,
+    statusText:
+      keepTransientHints || bridgePlanningStatusHint
+        ? previousJob?.statusText
+        : undefined,
+    rateText: keepTransientHints ? previousJob?.rateText : undefined,
     currentStartedAt,
     bytesCompleted,
     bytesTotal: snapshotJob.work.bytesTotal ?? undefined,

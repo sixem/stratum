@@ -1,27 +1,16 @@
 // Windows-only helpers for interacting with the Recycle Bin.
 use super::RecycleEntry;
 use std::collections::{HashMap, HashSet};
-use std::ffi::OsStr;
 use std::fs;
 use std::io::Read;
-use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::HWND;
 use windows::Win32::Storage::FileSystem::GetDriveTypeW;
-use windows::Win32::UI::Shell::{
-    SHFileOperationW, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FO_DELETE,
-    SHFILEOPSTRUCTW,
-};
-use windows_core::BOOL;
 
 const DRIVE_FIXED: u32 = 3;
 
 fn to_wide_double_null(value: &str) -> Vec<u16> {
-    let mut wide: Vec<u16> = OsStr::new(value).encode_wide().collect();
-    wide.push(0);
-    wide.push(0);
-    wide
+    value.encode_utf16().chain([0, 0]).collect()
 }
 
 fn drive_root(path: &str) -> Option<String> {
@@ -37,7 +26,7 @@ fn drive_root(path: &str) -> Option<String> {
     None
 }
 
-pub(super) fn can_use_recycle_bin(path: &Path) -> bool {
+pub(crate) fn can_use_recycle_bin(path: &Path) -> bool {
     // Recycle Bin is only reliable on fixed local drives.
     let path_str = path.to_string_lossy();
     let root = match drive_root(&path_str) {
@@ -52,30 +41,6 @@ pub(super) fn can_use_recycle_bin(path: &Path) -> bool {
     drive_type == DRIVE_FIXED
 }
 
-pub(super) fn delete_to_recycle_bin(path: &Path) -> Result<(), String> {
-    let path_str = path.to_string_lossy();
-    let wide = to_wide_double_null(&path_str);
-    let flags = (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT).0 as u16;
-    let mut operation = SHFILEOPSTRUCTW {
-        hwnd: HWND(std::ptr::null_mut()),
-        wFunc: FO_DELETE,
-        pFrom: PCWSTR(wide.as_ptr()),
-        pTo: PCWSTR::null(),
-        fFlags: flags,
-        fAnyOperationsAborted: BOOL(0),
-        hNameMappings: std::ptr::null_mut(),
-        lpszProgressTitle: PCWSTR::null(),
-    };
-    let result = unsafe { SHFileOperationW(&mut operation) };
-    if result != 0 {
-        return Err(format!("Recycle bin delete failed ({})", result));
-    }
-    if operation.fAnyOperationsAborted.as_bool() {
-        return Err("Recycle bin delete canceled".to_string());
-    }
-    Ok(())
-}
-
 fn filetime_to_epoch_ms(filetime: u64) -> Option<u64> {
     const FILETIME_EPOCH: u64 = 116_444_736_000_000_000;
     if filetime < FILETIME_EPOCH {
@@ -84,7 +49,7 @@ fn filetime_to_epoch_ms(filetime: u64) -> Option<u64> {
     Some((filetime - FILETIME_EPOCH) / 10_000)
 }
 
-pub(super) fn normalize_path_ci(value: &str) -> String {
+pub(crate) fn normalize_path_ci(value: &str) -> String {
     let mut normalized = value.trim().replace('/', "\\");
     // Recycle metadata may use extended path prefixes while UI paths do not.
     if normalized.starts_with("\\\\?\\UNC\\") && normalized.len() > 8 {
@@ -103,6 +68,18 @@ pub(super) fn normalize_path_ci(value: &str) -> String {
         normalized.pop();
     }
     normalized.to_lowercase()
+}
+
+fn normalized_path_is_same_or_within(path: &str, root: &str) -> bool {
+    if path == root {
+        return true;
+    }
+
+    let mut prefix = root.to_string();
+    if !prefix.ends_with('\\') {
+        prefix.push('\\');
+    }
+    path.starts_with(&prefix)
 }
 
 fn parse_utf16_until_nul(bytes: &[u8]) -> Option<String> {
@@ -201,7 +178,7 @@ fn list_recycle_entries_for_drive(root: &Path) -> Vec<RecycleEntry> {
     entries
 }
 
-pub(super) fn find_recycle_entries_for_paths(
+pub(crate) fn find_recycle_entries_for_paths(
     paths: &[String],
     min_deleted_at: Option<u64>,
 ) -> Vec<RecycleEntry> {
@@ -254,4 +231,88 @@ pub(super) fn find_recycle_entries_for_paths(
         }
     }
     ordered
+}
+
+pub(crate) fn find_recycle_entries_within_paths(
+    paths: &[String],
+    min_deleted_at: Option<u64>,
+) -> Vec<RecycleEntry> {
+    let mut ordered_roots: Vec<String> = Vec::new();
+    let mut root_keys = HashSet::new();
+    let mut drive_roots = HashSet::new();
+    for path in paths {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let key = normalize_path_ci(trimmed);
+        if root_keys.insert(key.clone()) {
+            ordered_roots.push(key);
+        }
+        if let Some(root) = drive_root(trimmed) {
+            drive_roots.insert(root);
+        }
+    }
+
+    let mut matched: HashMap<String, RecycleEntry> = HashMap::new();
+    for root in drive_roots {
+        let entries = list_recycle_entries_for_drive(Path::new(&root));
+        for entry in entries {
+            let key = normalize_path_ci(&entry.original_path);
+            if !ordered_roots
+                .iter()
+                .any(|root_key| normalized_path_is_same_or_within(&key, root_key))
+            {
+                continue;
+            }
+            if let (Some(min), Some(deleted_at)) = (min_deleted_at, entry.deleted_at) {
+                if deleted_at < min {
+                    continue;
+                }
+            }
+            let replace = match matched.get(&key) {
+                None => true,
+                Some(existing) => match (existing.deleted_at, entry.deleted_at) {
+                    (Some(left), Some(right)) => right > left,
+                    (None, Some(_)) => true,
+                    _ => false,
+                },
+            };
+            if replace {
+                matched.insert(key, entry);
+            }
+        }
+    }
+
+    let mut ordered = Vec::new();
+    for root_key in ordered_roots {
+        let mut child_keys: Vec<String> = matched
+            .keys()
+            .filter(|key| normalized_path_is_same_or_within(key, &root_key))
+            .cloned()
+            .collect();
+        child_keys.sort();
+        for key in child_keys {
+            if let Some(entry) = matched.remove(&key) {
+                ordered.push(entry);
+            }
+        }
+    }
+    ordered
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_path_ci, normalized_path_is_same_or_within};
+
+    #[test]
+    fn normalized_path_matching_requires_separator_boundaries() {
+        let root = normalize_path_ci(r"C:\Data\Season 4");
+        let child = normalize_path_ci(r"C:\Data\Season 4\Episode 1.mkv");
+        let sibling = normalize_path_ci(r"C:\Data\Season 40\Episode 1.mkv");
+
+        assert!(normalized_path_is_same_or_within(&root, &root));
+        assert!(normalized_path_is_same_or_within(&child, &root));
+        assert!(!normalized_path_is_same_or_within(&sibling, &root));
+    }
 }

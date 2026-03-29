@@ -1,13 +1,16 @@
 // Trash/recycle helpers with Windows-specific recycle bin support.
+use super::transfer::delete_discovery::DeleteDiscoveryPlan;
 use super::{
     RecycleEntry, RestorePathsReport, RestoreReport, TransferControlCallback,
-    TransferProgressCallback, TransferProgressUpdate, TrashReport,
+    TransferProgressCallback, TrashReport,
 };
 
 #[cfg(target_os = "windows")]
 use super::fs_recycle_windows::{
-    can_use_recycle_bin, delete_to_recycle_bin, find_recycle_entries_for_paths, normalize_path_ci,
+    find_recycle_entries_for_paths, find_recycle_entries_within_paths, normalize_path_ci,
 };
+#[cfg(target_os = "windows")]
+use super::transfer::native_delete_windows::{shell_delete_entries, ShellDeleteMode};
 #[cfg(target_os = "windows")]
 use std::collections::HashSet;
 #[cfg(target_os = "windows")]
@@ -20,80 +23,44 @@ use std::time::SystemTime;
 #[cfg(target_os = "windows")]
 pub(crate) fn trash_entries(
     paths: Vec<String>,
+    discovery: Option<&DeleteDiscoveryPlan>,
     mut on_progress: Option<&mut TransferProgressCallback>,
     mut on_control: Option<&mut TransferControlCallback>,
 ) -> Result<TrashReport, String> {
-    let mut report = TrashReport {
-        deleted: 0,
-        skipped: 0,
-        cancelled: false,
-        failures: Vec::new(),
-        failed_paths: Vec::new(),
-        recycled: Vec::new(),
-    };
-    let mut recycled_paths: Vec<String> = Vec::new();
-    let total = paths.len();
-    for (index, path) in paths.into_iter().enumerate() {
-        if let Some(callback) = on_control.as_mut() {
-            if let Err(error) = callback() {
-                report.cancelled = true;
-                if error.trim() != "Transfer cancelled" {
-                    return Err(error);
-                }
-                break;
-            }
-        }
-
-        let processed = index;
-        let completed = index + 1;
-        let trimmed = path.trim();
-        if trimmed.is_empty() {
-            report.skipped += 1;
-            emit_trash_progress(&mut on_progress, completed, total, None);
-            continue;
-        }
-
-        emit_trash_progress(
-            &mut on_progress,
-            processed,
-            total,
-            Some(trimmed.to_string()),
-        );
-
-        let target = PathBuf::from(trimmed);
-        if !can_use_recycle_bin(&target) {
-            report
-                .failures
-                .push(format!("{}: Recycle Bin unavailable", trimmed));
-            report.failed_paths.push(trimmed.to_string());
-            emit_trash_progress(&mut on_progress, completed, total, None);
-            continue;
-        }
-        match delete_to_recycle_bin(&target) {
-            Ok(_) => {
-                report.deleted += 1;
-                recycled_paths.push(trimmed.to_string());
-            }
-            Err(err) => {
-                report.failures.push(format!("{}: {}", trimmed, err));
-                report.failed_paths.push(trimmed.to_string());
-            }
-        }
-        emit_trash_progress(&mut on_progress, completed, total, None);
-    }
+    let recycle_lookup_paths = paths.clone();
     let min_deleted_at =
-        super::to_epoch_ms(SystemTime::now()).map(|value| value.saturating_sub(300_000));
-    report.recycled = find_recycle_entries_for_paths(&recycled_paths, min_deleted_at);
-    Ok(report)
+        super::to_epoch_ms(SystemTime::now()).map(|value| value.saturating_sub(5_000));
+    let skipped = skipped_trash_paths(&paths);
+    let report = shell_delete_entries(
+        discovery,
+        paths,
+        ShellDeleteMode::Recycle,
+        &mut on_progress,
+        &mut on_control,
+    )?;
+
+    Ok(TrashReport {
+        deleted: report.completed_paths.len(),
+        skipped,
+        cancelled: report.cancelled,
+        failures: report.failures.clone(),
+        failed_paths: report.remaining_paths.clone(),
+        recycled: find_recycle_entries_within_paths(&recycle_lookup_paths, min_deleted_at),
+    })
 }
 
 #[cfg(not(target_os = "windows"))]
 pub(crate) fn trash_entries(
     _paths: Vec<String>,
+    _discovery: Option<&DeleteDiscoveryPlan>,
     _on_progress: Option<&mut TransferProgressCallback>,
     _on_control: Option<&mut TransferControlCallback>,
 ) -> Result<TrashReport, String> {
     Err("Native trash is only supported on Windows.".to_string())
+}
+
+fn skipped_trash_paths(paths: &[String]) -> usize {
+    paths.iter().filter(|path| path.trim().is_empty()).count()
 }
 
 #[cfg(target_os = "windows")]
@@ -255,25 +222,4 @@ pub fn restore_recycle_paths(
     _min_deleted_at: Option<u64>,
 ) -> Result<RestorePathsReport, String> {
     Err("Recycle restore is only supported on Windows.".to_string())
-}
-
-fn emit_trash_progress(
-    on_progress: &mut Option<&mut TransferProgressCallback>,
-    processed: usize,
-    total: usize,
-    current_path: Option<String>,
-) {
-    let Some(callback) = on_progress.as_mut() else {
-        return;
-    };
-    callback(TransferProgressUpdate {
-        processed,
-        total,
-        current_path,
-        current_bytes: None,
-        current_total_bytes: None,
-        progress_percent: None,
-        status_text: None,
-        rate_text: None,
-    });
 }

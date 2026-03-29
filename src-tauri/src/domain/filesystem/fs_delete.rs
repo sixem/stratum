@@ -1,11 +1,50 @@
 // Hard-delete helpers for permanently removing filesystem entries.
-use super::{
-    DeleteReport, TransferControlCallback, TransferProgressCallback, TransferProgressUpdate,
-};
+use super::transfer::delete_discovery::DeleteDiscoveryPlan;
+use super::{DeleteReport, TransferControlCallback, TransferProgressCallback};
+
+#[cfg(target_os = "windows")]
+use super::transfer::native_delete_windows::{shell_delete_entries, ShellDeleteMode};
+#[cfg(not(target_os = "windows"))]
 use std::fs;
+#[cfg(not(target_os = "windows"))]
 use std::path::PathBuf;
 
 pub(crate) fn delete_entries(
+    paths: Vec<String>,
+    discovery: Option<&DeleteDiscoveryPlan>,
+    mut on_progress: Option<&mut TransferProgressCallback>,
+    mut on_control: Option<&mut TransferControlCallback>,
+) -> Result<DeleteReport, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let skipped = skipped_delete_paths(&paths);
+        let report = shell_delete_entries(
+            discovery,
+            paths,
+            ShellDeleteMode::Permanent,
+            &mut on_progress,
+            &mut on_control,
+        )?;
+        return Ok(DeleteReport {
+            deleted: report.completed_paths.len(),
+            skipped,
+            cancelled: report.cancelled,
+            failures: report.failures,
+        });
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        legacy_delete_entries(paths, on_progress, on_control)
+    }
+}
+
+fn skipped_delete_paths(paths: &[String]) -> usize {
+    paths.iter().filter(|path| path.trim().is_empty()).count()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn legacy_delete_entries(
     paths: Vec<String>,
     mut on_progress: Option<&mut TransferProgressCallback>,
     mut on_control: Option<&mut TransferControlCallback>,
@@ -75,6 +114,7 @@ pub(crate) fn delete_entries(
     Ok(report)
 }
 
+#[cfg(not(target_os = "windows"))]
 fn emit_delete_progress(
     on_progress: &mut Option<&mut TransferProgressCallback>,
     processed: usize,
@@ -84,7 +124,7 @@ fn emit_delete_progress(
     let Some(callback) = on_progress.as_mut() else {
         return;
     };
-    callback(TransferProgressUpdate {
+    callback(super::TransferProgressUpdate {
         processed,
         total,
         current_path,

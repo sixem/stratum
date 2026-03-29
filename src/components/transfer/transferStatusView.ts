@@ -169,6 +169,13 @@ export const buildTransferItemView = (
     !isQueued &&
     Number.isFinite(job.progressPercent) &&
     (job.progressPercent ?? 0) >= 0;
+  const isExecutionWarmup =
+    job.status === "running" &&
+    !isPlanning &&
+    !hasGenericProgress &&
+    !hasByteProgress &&
+    processed === 0 &&
+    !!job.statusText;
   const progress = isQueued
     ? 0
     : hasGenericProgress
@@ -180,7 +187,7 @@ export const buildTransferItemView = (
       : 0;
   const progressDecimals = hasByteProgress || hasGenericProgress ? 1 : 0;
   const progressPercentValue =
-    !isQueued && (hasGenericProgress || hasByteProgress || total > 0)
+    !isQueued && !isPlanning && (hasGenericProgress || hasByteProgress || total > 0)
       ? Number((progress * 100).toFixed(progressDecimals))
       : null;
   const progressPercentText =
@@ -199,10 +206,10 @@ export const buildTransferItemView = (
         ? `Completed in ${formatDuration(elapsedMs)}`
         : job.status === "cancelled"
           ? "Cancelled"
-        : job.status === "failed"
+      : job.status === "failed"
         ? "Failed"
         : isPlanning
-          ? "Planning..."
+          ? job.statusText ?? "Planning..."
         : job.statusText
           ? job.statusText
         : hasByteProgress
@@ -214,15 +221,24 @@ export const buildTransferItemView = (
             : "Working...";
   const currentName = job.currentPath ? getPathName(job.currentPath) : "";
   const fileLabel = currentName
-    ? job.status === "completed" ||
+    ? isPlanning
+      ? "Scanning"
+      : job.status === "completed" ||
       job.status === "failed" ||
       job.status === "cancelled"
       ? "Last item"
       : "Item"
     : null;
-  const countLabel = total > 0 ? `${processed}/${total} items` : `${processed} items`;
+  const countLabel = isPlanning || isExecutionWarmup
+    ? total > 0
+      ? `${total.toLocaleString()} items`
+      : "Preparing..."
+    : total > 0
+      ? `${processed}/${total} items`
+      : `${processed} items`;
   const indeterminate =
-    job.status === "running" && !hasGenericProgress && !hasByteProgress && processed === 0;
+    isPlanning ||
+    (job.status === "running" && !hasGenericProgress && !hasByteProgress && processed === 0);
 
   return {
     id: job.id,

@@ -106,50 +106,60 @@ impl ActiveTransferRuntimeProgress {
         snapshot: &mut TransferJobSnapshot,
         update: &fs::TransferProgressUpdate,
     ) {
-        if self.progress_kind != Some(TransferProgressKind::Files) {
-            return;
-        }
+        match self.progress_kind {
+            Some(TransferProgressKind::Files) => {
+                if let Some(path) = update.current_path.as_ref() {
+                    if update.current_total_bytes.is_some()
+                        && self.current_file_path.as_deref() != Some(path.as_str())
+                    {
+                        self.commit_current_file(snapshot);
+                        self.current_file_path = Some(path.clone());
+                        self.current_file_total_bytes = update.current_total_bytes;
+                        self.current_file_copied_bytes = update.current_bytes.unwrap_or(0);
+                    }
+                }
 
-        if let Some(path) = update.current_path.as_ref() {
-            if update.current_total_bytes.is_some()
-                && self.current_file_path.as_deref() != Some(path.as_str())
-            {
-                self.commit_current_file(snapshot);
-                self.current_file_path = Some(path.clone());
-                self.current_file_total_bytes = update.current_total_bytes;
-                self.current_file_copied_bytes = update.current_bytes.unwrap_or(0);
+                if let Some(current_total_bytes) = update.current_total_bytes {
+                    if self.current_file_total_bytes != Some(current_total_bytes) {
+                        self.current_file_total_bytes = Some(current_total_bytes);
+                    }
+                }
+
+                if let Some(current_bytes) = update.current_bytes {
+                    self.current_file_copied_bytes = current_bytes;
+                }
+
+                if let Some(total_bytes) = self.current_file_total_bytes {
+                    snapshot.work.bytes_completed = self
+                        .committed_bytes
+                        .saturating_add(self.current_file_copied_bytes.min(total_bytes));
+                    if self.current_file_copied_bytes >= total_bytes {
+                        self.commit_current_file(snapshot);
+                    }
+                } else {
+                    snapshot.work.bytes_completed = self.committed_bytes;
+                }
             }
-        }
-
-        if let Some(current_total_bytes) = update.current_total_bytes {
-            if self.current_file_total_bytes != Some(current_total_bytes) {
-                self.current_file_total_bytes = Some(current_total_bytes);
+            Some(TransferProgressKind::Items) => {
+                snapshot.work.files_total = Some(update.total);
+                snapshot.work.files_completed = update.processed;
             }
-        }
-
-        if let Some(current_bytes) = update.current_bytes {
-            self.current_file_copied_bytes = current_bytes;
-        }
-
-        if let Some(total_bytes) = self.current_file_total_bytes {
-            snapshot.work.bytes_completed = self
-                .committed_bytes
-                .saturating_add(self.current_file_copied_bytes.min(total_bytes));
-            if self.current_file_copied_bytes >= total_bytes {
-                self.commit_current_file(snapshot);
-            }
-        } else {
-            snapshot.work.bytes_completed = self.committed_bytes;
+            _ => {}
         }
     }
 
     pub(super) fn finalize_success(&mut self, snapshot: &mut TransferJobSnapshot) {
-        if self.progress_kind != Some(TransferProgressKind::Files) {
-            return;
+        match self.progress_kind {
+            Some(TransferProgressKind::Files) => {
+                self.commit_current_file(snapshot);
+                snapshot.work.files_completed = snapshot.work.files_total.unwrap_or(0);
+                snapshot.work.bytes_completed = snapshot.work.bytes_total.unwrap_or(0);
+            }
+            Some(TransferProgressKind::Items) => {
+                snapshot.work.files_completed = snapshot.work.files_total.unwrap_or(0);
+            }
+            _ => {}
         }
-        self.commit_current_file(snapshot);
-        snapshot.work.files_completed = snapshot.work.files_total.unwrap_or(0);
-        snapshot.work.bytes_completed = snapshot.work.bytes_total.unwrap_or(0);
     }
 
     fn commit_current_file(&mut self, snapshot: &mut TransferJobSnapshot) {

@@ -5,7 +5,6 @@ import {
 import {
   buildDeleteReport,
   promptPermanentDeleteFallback,
-  resolveRecycledPaths,
   showDeleteError,
   showDeleteIssues,
 } from "./fileManagerDeleteShared";
@@ -44,13 +43,22 @@ export const runNativeRecycleDelete = async ({
     return null;
   }
 
-  const recycledPaths = resolveRecycledPaths(paths, report.failedPaths);
+  const recycledPaths = report.recycled.map((entry) => entry.originalPath);
   if (recycledPaths.length > 0) {
     context.pushUndo({
       type: "recyclePaths",
       paths: recycledPaths,
       deletedAfterMs: deleteStartedAtMs,
     });
+  } else if (report.deleted > 0) {
+    const recycledRoots = paths.filter((path) => !report.failedPaths.includes(path));
+    if (recycledRoots.length > 0) {
+      context.pushUndo({
+        type: "recyclePaths",
+        paths: recycledRoots,
+        deletedAfterMs: deleteStartedAtMs,
+      });
+    }
   }
   if (report.deleted > 0) {
     await context.refreshAfterChange();
