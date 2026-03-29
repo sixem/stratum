@@ -8,15 +8,18 @@ type CloseConfirmOptions = {
   enabled: boolean;
   confirmClose: boolean;
   onBeforeClose?: () => void;
+  onBeforePrompt?: () => boolean;
 };
 
 export const useCloseConfirm = ({
   enabled,
   confirmClose,
   onBeforeClose,
+  onBeforePrompt,
 }: CloseConfirmOptions) => {
   const confirmRef = useRef(confirmClose);
   const onBeforeCloseRef = useRef(onBeforeClose);
+  const onBeforePromptRef = useRef(onBeforePrompt);
   // Once the user confirms, let the next close request pass through.
   const allowCloseRef = useRef(false);
 
@@ -26,6 +29,9 @@ export const useCloseConfirm = ({
   useEffect(() => {
     onBeforeCloseRef.current = onBeforeClose;
   }, [onBeforeClose]);
+  useEffect(() => {
+    onBeforePromptRef.current = onBeforePrompt;
+  }, [onBeforePrompt]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -37,21 +43,36 @@ export const useCloseConfirm = ({
       if (!confirmRef.current) return;
       if (allowCloseRef.current) return;
       event.preventDefault();
+
       const promptStore = usePromptStore.getState();
       if (promptStore.prompt) return;
-      promptStore.showPrompt({
-        title: "Close Stratum?",
-        content: "Are you sure you want to close the window?",
-        confirmLabel: "Close",
-        cancelLabel: "Cancel",
-        onConfirm: () => {
-          allowCloseRef.current = true;
-          // Use destroy to bypass close-requested events and avoid double-close clicks.
-          void appWindow.destroy().catch(() => {
-            allowCloseRef.current = false;
-          });
-        },
-      });
+
+      const showClosePrompt = () => {
+        const activePromptStore = usePromptStore.getState();
+        if (activePromptStore.prompt) return;
+        activePromptStore.showPrompt({
+          title: "Close Stratum?",
+          content: "Are you sure you want to close the window?",
+          confirmLabel: "Close",
+          cancelLabel: "Cancel",
+          onConfirm: () => {
+            allowCloseRef.current = true;
+            // Use destroy to bypass close-requested events and avoid double-close clicks.
+            void appWindow.destroy().catch(() => {
+              allowCloseRef.current = false;
+            });
+          },
+        });
+      };
+
+      // Let overlays like quick preview close first so the prompt is not hidden behind them.
+      const delayedPrompt = onBeforePromptRef.current?.() ?? false;
+      if (delayedPrompt) {
+        window.setTimeout(showClosePrompt, 0);
+        return;
+      }
+
+      showClosePrompt();
     };
 
     const setup = async () => {

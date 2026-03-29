@@ -48,6 +48,7 @@ type AppEffectView = {
 
 type AppEffectActions = {
   clearSearchAndFocusView: () => void;
+  closePreviewIfOpen: () => boolean;
   setSearchValue: (value: string) => void;
   setTabSearch: (value: string) => void;
   flushWindowSize: () => void;
@@ -117,6 +118,7 @@ export const useAppEffects = ({
   } = view;
   const {
     clearSearchAndFocusView,
+    closePreviewIfOpen,
     setSearchValue,
     setTabSearch,
     flushWindowSize,
@@ -145,6 +147,7 @@ export const useAppEffects = ({
     enabled: isTauriEnv,
     confirmClose,
     onBeforeClose: flushWindowSize,
+    onBeforePrompt: closePreviewIfOpen,
   });
   useTransferProgress({ enabled: isTauriEnv });
   useDirWatch({

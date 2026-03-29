@@ -15,6 +15,7 @@ export { useAppOverlayController } from "./useAppOverlayController";
 export { useAppPreviewSection } from "./useAppPreviewSection";
 export { useAppRenameFlow } from "./useAppRenameFlow";
 export { useAppSelectionHandlers } from "./useAppSelectionHandlers";
+export { useAppShellModel } from "./useAppShellModel";
 export { useAppTopstackProps } from "./useAppTopstackProps";
 export { useAppViewState } from "./useAppViewState";
 export { useCloseConfirm } from "./useCloseConfirm";
