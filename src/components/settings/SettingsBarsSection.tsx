@@ -1,4 +1,5 @@
 // Header, navigation bar, and sidebar presentation controls.
+import { shallow } from "zustand/shallow";
 import type { SidebarSectionId } from "@/modules";
 import {
   SIDEBAR_RECENT_LIMIT_MAX,
@@ -6,39 +7,45 @@ import {
   SIDEBAR_SECTION_DEFINITIONS,
   normalizeSidebarHiddenSections,
   normalizeSidebarSectionOrder,
+  useSettingsStore,
 } from "@/modules";
 import { EyeIcon, EyeOffIcon } from "@/components";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useDeferredRange } from "./useDeferredRange";
-import type { SettingsUpdateHandler } from "./types";
 
 type SettingsBarsSectionProps = {
   sectionId: string;
-  showTabNumbers: boolean;
-  fixedWidthTabs: boolean;
-  sidebarRecentLimit: number;
-  sidebarSectionOrder: SidebarSectionId[];
-  sidebarHiddenSections: SidebarSectionId[];
-  onUpdate: SettingsUpdateHandler;
 };
 
 const RECENT_STEP = 1;
 
 export const SettingsBarsSection = ({
   sectionId,
-  showTabNumbers,
-  fixedWidthTabs,
-  sidebarRecentLimit,
-  sidebarSectionOrder,
-  sidebarHiddenSections,
-  onUpdate,
 }: SettingsBarsSectionProps) => {
+  const {
+    showTabNumbers,
+    fixedWidthTabs,
+    sidebarRecentLimit,
+    sidebarSectionOrder,
+    sidebarHiddenSections,
+    updateSettings,
+  } = useSettingsStore(
+    (state) => ({
+      showTabNumbers: state.showTabNumbers,
+      fixedWidthTabs: state.fixedWidthTabs,
+      sidebarRecentLimit: state.sidebarRecentLimit,
+      sidebarSectionOrder: state.sidebarSectionOrder,
+      sidebarHiddenSections: state.sidebarHiddenSections,
+      updateSettings: state.updateSettings,
+    }),
+    shallow,
+  );
   const normalizedSidebarOrder = normalizeSidebarSectionOrder(sidebarSectionOrder);
   const normalizedHiddenSections = normalizeSidebarHiddenSections(sidebarHiddenSections);
   const hiddenSet = new Set(normalizedHiddenSections);
   const recentRange = useDeferredRange({
     value: sidebarRecentLimit,
-    onCommit: (value) => onUpdate({ sidebarRecentLimit: value }),
+    onCommit: (value) => updateSettings({ sidebarRecentLimit: value }),
   });
   const buildHiddenList = (nextHidden: Set<SidebarSectionId>) =>
     SIDEBAR_SECTION_DEFINITIONS.filter((item) => nextHidden.has(item.id)).map(
@@ -53,7 +60,7 @@ export const SettingsBarsSection = ({
     const next = [...order];
     const [moved] = next.splice(index, 1);
     next.splice(target, 0, moved);
-    onUpdate({ sidebarSectionOrder: next });
+    updateSettings({ sidebarSectionOrder: next });
   };
   const handleToggleSection = (id: SidebarSectionId) => {
     const nextHidden = new Set(hiddenSet);
@@ -62,7 +69,7 @@ export const SettingsBarsSection = ({
     } else {
       nextHidden.add(id);
     }
-    onUpdate({ sidebarHiddenSections: buildHiddenList(nextHidden) });
+    updateSettings({ sidebarHiddenSections: buildHiddenList(nextHidden) });
   };
 
   return (
@@ -80,7 +87,7 @@ export const SettingsBarsSection = ({
             type="checkbox"
             checked={showTabNumbers}
             onChange={(event) =>
-              onUpdate({ showTabNumbers: event.currentTarget.checked })
+              updateSettings({ showTabNumbers: event.currentTarget.checked })
             }
           />
           <span />
@@ -98,7 +105,7 @@ export const SettingsBarsSection = ({
             type="checkbox"
             checked={fixedWidthTabs}
             onChange={(event) =>
-              onUpdate({ fixedWidthTabs: event.currentTarget.checked })
+              updateSettings({ fixedWidthTabs: event.currentTarget.checked })
             }
           />
           <span />

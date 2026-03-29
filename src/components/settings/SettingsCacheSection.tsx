@@ -1,18 +1,15 @@
 // Cache format and lifecycle controls.
 import { useCallback, useEffect, useState } from "react";
+import { shallow } from "zustand/shallow";
 import { getThumbCacheSize } from "@/api";
 import { formatBytes } from "@/lib";
 import { PressButton } from "@/components/primitives/PressButton";
+import { useSettingsStore } from "@/modules";
 import { useDeferredRange } from "./useDeferredRange";
-import type { SettingsUpdateHandler } from "./types";
 
 type SettingsCacheSectionProps = {
   sectionId: string;
   open: boolean;
-  thumbnailsEnabled: boolean;
-  thumbnailFormat: "webp" | "jpeg";
-  thumbnailCacheMb: number;
-  onUpdate: SettingsUpdateHandler;
   onOpenCacheLocation?: () => Promise<void>;
   onClearCache?: () => Promise<void>;
 };
@@ -24,19 +21,25 @@ const CACHE_STEP = 128;
 export const SettingsCacheSection = ({
   sectionId,
   open,
-  thumbnailsEnabled,
-  thumbnailFormat,
-  thumbnailCacheMb,
-  onUpdate,
   onOpenCacheLocation,
   onClearCache,
 }: SettingsCacheSectionProps) => {
+  const { thumbnailsEnabled, thumbnailFormat, thumbnailCacheMb, updateSettings } =
+    useSettingsStore(
+      (state) => ({
+        thumbnailsEnabled: state.thumbnailsEnabled,
+        thumbnailFormat: state.thumbnailFormat,
+        thumbnailCacheMb: state.thumbnailCacheMb,
+        updateSettings: state.updateSettings,
+      }),
+      shallow,
+    );
   const [cacheBusy, setCacheBusy] = useState(false);
   const [cacheUsageBytes, setCacheUsageBytes] = useState<number | null>(null);
   const isThumbsDisabled = !thumbnailsEnabled;
   const cacheRange = useDeferredRange({
     value: thumbnailCacheMb,
-    onCommit: (value) => onUpdate({ thumbnailCacheMb: value }),
+    onCommit: (value) => updateSettings({ thumbnailCacheMb: value }),
   });
 
   const refreshCacheUsage = useCallback(async () => {
@@ -89,7 +92,7 @@ export const SettingsCacheSection = ({
             type="button"
             className={`settings-pill${thumbnailFormat === "webp" ? " is-active" : ""}`}
             disabled={isThumbsDisabled}
-            onClick={() => onUpdate({ thumbnailFormat: "webp" })}
+            onClick={() => updateSettings({ thumbnailFormat: "webp" })}
           >
             WebP
           </PressButton>
@@ -97,7 +100,7 @@ export const SettingsCacheSection = ({
             type="button"
             className={`settings-pill${thumbnailFormat === "jpeg" ? " is-active" : ""}`}
             disabled={isThumbsDisabled}
-            onClick={() => onUpdate({ thumbnailFormat: "jpeg" })}
+            onClick={() => updateSettings({ thumbnailFormat: "jpeg" })}
           >
             JPEG
           </PressButton>

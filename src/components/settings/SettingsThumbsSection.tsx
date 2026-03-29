@@ -1,21 +1,11 @@
 // Thumbnail generation and preview tuning.
-import type { ThumbnailFit } from "@/modules";
+import { shallow } from "zustand/shallow";
 import { PressButton } from "@/components/primitives/PressButton";
+import { useSettingsStore } from "@/modules";
 import { useDeferredRange } from "./useDeferredRange";
-import type { SettingsUpdateHandler } from "./types";
 
 type SettingsThumbsSectionProps = {
   sectionId: string;
-  thumbnailsEnabled: boolean;
-  thumbnailSize: number;
-  thumbnailQuality: number;
-  thumbnailFormat: "webp" | "jpeg";
-  thumbnailFolders: boolean;
-  thumbnailVideos: boolean;
-  thumbnailSvgs: boolean;
-  thumbnailFit: ThumbnailFit;
-  thumbnailAppIcons: boolean;
-  onUpdate: SettingsUpdateHandler;
 };
 
 const SIZE_MIN = 96;
@@ -25,28 +15,42 @@ const QUALITY_MIN = 50;
 const QUALITY_MAX = 95;
 const QUALITY_STEP = 5;
 
-export const SettingsThumbsSection = ({
-  sectionId,
-  thumbnailsEnabled,
-  thumbnailSize,
-  thumbnailQuality,
-  thumbnailFormat,
-  thumbnailFolders,
-  thumbnailVideos,
-  thumbnailSvgs,
-  thumbnailFit,
-  thumbnailAppIcons,
-  onUpdate,
-}: SettingsThumbsSectionProps) => {
+export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps) => {
+  const {
+    thumbnailsEnabled,
+    thumbnailSize,
+    thumbnailQuality,
+    thumbnailFormat,
+    thumbnailFolders,
+    thumbnailVideos,
+    thumbnailSvgs,
+    thumbnailFit,
+    thumbnailAppIcons,
+    updateSettings,
+  } = useSettingsStore(
+    (state) => ({
+      thumbnailsEnabled: state.thumbnailsEnabled,
+      thumbnailSize: state.thumbnailSize,
+      thumbnailQuality: state.thumbnailQuality,
+      thumbnailFormat: state.thumbnailFormat,
+      thumbnailFolders: state.thumbnailFolders,
+      thumbnailVideos: state.thumbnailVideos,
+      thumbnailSvgs: state.thumbnailSvgs,
+      thumbnailFit: state.thumbnailFit,
+      thumbnailAppIcons: state.thumbnailAppIcons,
+      updateSettings: state.updateSettings,
+    }),
+    shallow,
+  );
   const isThumbsDisabled = !thumbnailsEnabled;
   const canAdjustQuality = !isThumbsDisabled && thumbnailFormat === "jpeg";
   const sizeRange = useDeferredRange({
     value: thumbnailSize,
-    onCommit: (value) => onUpdate({ thumbnailSize: value }),
+    onCommit: (value) => updateSettings({ thumbnailSize: value }),
   });
   const qualityRange = useDeferredRange({
     value: thumbnailQuality,
-    onCommit: (value) => onUpdate({ thumbnailQuality: value }),
+    onCommit: (value) => updateSettings({ thumbnailQuality: value }),
   });
   const qualityLabel =
     thumbnailFormat === "jpeg" ? `${qualityRange.draft}%` : "Lossless";
@@ -63,7 +67,9 @@ export const SettingsThumbsSection = ({
           <input
             type="checkbox"
             checked={thumbnailsEnabled}
-            onChange={(event) => onUpdate({ thumbnailsEnabled: event.currentTarget.checked })}
+            onChange={(event) =>
+              updateSettings({ thumbnailsEnabled: event.currentTarget.checked })
+            }
           />
           <span />
         </label>
@@ -116,7 +122,9 @@ export const SettingsThumbsSection = ({
             type="checkbox"
             checked={thumbnailFolders}
             disabled={isThumbsDisabled}
-            onChange={(event) => onUpdate({ thumbnailFolders: event.currentTarget.checked })}
+            onChange={(event) =>
+              updateSettings({ thumbnailFolders: event.currentTarget.checked })
+            }
           />
           <span />
         </label>
@@ -133,7 +141,9 @@ export const SettingsThumbsSection = ({
             type="checkbox"
             checked={thumbnailVideos}
             disabled={isThumbsDisabled}
-            onChange={(event) => onUpdate({ thumbnailVideos: event.currentTarget.checked })}
+            onChange={(event) =>
+              updateSettings({ thumbnailVideos: event.currentTarget.checked })
+            }
           />
           <span />
         </label>
@@ -150,7 +160,9 @@ export const SettingsThumbsSection = ({
             type="checkbox"
             checked={thumbnailSvgs}
             disabled={isThumbsDisabled}
-            onChange={(event) => onUpdate({ thumbnailSvgs: event.currentTarget.checked })}
+            onChange={(event) =>
+              updateSettings({ thumbnailSvgs: event.currentTarget.checked })
+            }
           />
           <span />
         </label>
@@ -167,7 +179,7 @@ export const SettingsThumbsSection = ({
             type="checkbox"
             checked={thumbnailAppIcons}
             onChange={(event) =>
-              onUpdate({ thumbnailAppIcons: event.currentTarget.checked })
+              updateSettings({ thumbnailAppIcons: event.currentTarget.checked })
             }
           />
           <span />
@@ -185,7 +197,7 @@ export const SettingsThumbsSection = ({
             type="button"
             disabled={isThumbsDisabled}
             className={`settings-pill${thumbnailFit === "cover" ? " is-active" : ""}`}
-            onClick={() => onUpdate({ thumbnailFit: "cover" })}
+            onClick={() => updateSettings({ thumbnailFit: "cover" })}
           >
             Cover
           </PressButton>
@@ -193,7 +205,7 @@ export const SettingsThumbsSection = ({
             type="button"
             disabled={isThumbsDisabled}
             className={`settings-pill${thumbnailFit === "contain" ? " is-active" : ""}`}
-            onClick={() => onUpdate({ thumbnailFit: "contain" })}
+            onClick={() => updateSettings({ thumbnailFit: "contain" })}
           >
             Fit
           </PressButton>

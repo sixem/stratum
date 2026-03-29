@@ -5,7 +5,7 @@ export const SIDEBAR_RECENT_LIMIT_MAX = 20;
 export const GRID_AUTO_COLUMNS_MIN = 3;
 export const GRID_AUTO_COLUMNS_MAX = 10;
 export const GRID_AUTO_COLUMNS_DEFAULT = 5;
-export const GRID_GAP_MIN = 6;
+export const GRID_GAP_MIN = 2;
 export const GRID_GAP_MAX = 24;
 export const GRID_GAP_DEFAULT = 8;
 

@@ -1,26 +1,18 @@
 // Grid-specific appearance and content controls.
+import { shallow } from "zustand/shallow";
 import {
   GRID_AUTO_COLUMNS_MAX,
   GRID_AUTO_COLUMNS_MIN,
   GRID_GAP_MAX,
   GRID_GAP_MIN,
+  useSettingsStore,
 } from "@/modules";
 import type { GridNameEllipsis, GridSize } from "@/modules";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useDeferredRange } from "./useDeferredRange";
-import type { SettingsUpdateHandler } from "./types";
 
 type SettingsGridSectionProps = {
   sectionId: string;
-  gridSize: GridSize;
-  gridAutoColumns: number;
-  gridGap: number;
-  gridRounded: boolean;
-  gridShowSize: boolean;
-  gridShowExtension: boolean;
-  gridNameEllipsis: GridNameEllipsis;
-  gridNameHideExtension: boolean;
-  onUpdate: SettingsUpdateHandler;
 };
 
 const GRID_SIZES: { id: GridSize; label: string }[] = [
@@ -34,25 +26,38 @@ const GRID_NAME_ELLIPSIS: { id: GridNameEllipsis; label: string }[] = [
   { id: "middle", label: "Middle" },
 ];
 
-export const SettingsGridSection = ({
-  sectionId,
-  gridSize,
-  gridAutoColumns,
-  gridGap,
-  gridRounded,
-  gridShowSize,
-  gridShowExtension,
-  gridNameEllipsis,
-  gridNameHideExtension,
-  onUpdate,
-}: SettingsGridSectionProps) => {
+export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => {
+  const {
+    gridSize,
+    gridAutoColumns,
+    gridGap,
+    gridRounded,
+    gridShowSize,
+    gridShowExtension,
+    gridNameEllipsis,
+    gridNameHideExtension,
+    updateSettings,
+  } = useSettingsStore(
+    (state) => ({
+      gridSize: state.gridSize,
+      gridAutoColumns: state.gridAutoColumns,
+      gridGap: state.gridGap,
+      gridRounded: state.gridRounded,
+      gridShowSize: state.gridShowSize,
+      gridShowExtension: state.gridShowExtension,
+      gridNameEllipsis: state.gridNameEllipsis,
+      gridNameHideExtension: state.gridNameHideExtension,
+      updateSettings: state.updateSettings,
+    }),
+    shallow,
+  );
   const autoColumnsRange = useDeferredRange({
     value: gridAutoColumns,
-    onCommit: (value) => onUpdate({ gridAutoColumns: value }),
+    onCommit: (value) => updateSettings({ gridAutoColumns: value }),
   });
   const gridGapRange = useDeferredRange({
     value: gridGap,
-    onCommit: (value) => onUpdate({ gridGap: value }),
+    onCommit: (value) => updateSettings({ gridGap: value }),
   });
 
   return (
@@ -71,7 +76,7 @@ export const SettingsGridSection = ({
               key={size.id}
               type="button"
               className={`settings-pill${gridSize === size.id ? " is-active" : ""}`}
-              onClick={() => onUpdate({ gridSize: size.id })}
+              onClick={() => updateSettings({ gridSize: size.id })}
             >
               {size.label}
             </PressButton>
@@ -125,14 +130,14 @@ export const SettingsGridSection = ({
           <PressButton
             type="button"
             className={`settings-pill${gridRounded ? " is-active" : ""}`}
-            onClick={() => onUpdate({ gridRounded: true })}
+            onClick={() => updateSettings({ gridRounded: true })}
           >
             Rounded
           </PressButton>
           <PressButton
             type="button"
             className={`settings-pill${gridRounded ? "" : " is-active"}`}
-            onClick={() => onUpdate({ gridRounded: false })}
+            onClick={() => updateSettings({ gridRounded: false })}
           >
             Straight
           </PressButton>
@@ -150,7 +155,9 @@ export const SettingsGridSection = ({
             <input
               type="checkbox"
               checked={gridShowSize}
-              onChange={(event) => onUpdate({ gridShowSize: event.currentTarget.checked })}
+              onChange={(event) =>
+                updateSettings({ gridShowSize: event.currentTarget.checked })
+              }
             />
             <span>File size</span>
           </label>
@@ -163,7 +170,7 @@ export const SettingsGridSection = ({
               type="checkbox"
               checked={gridShowExtension}
               onChange={(event) =>
-                onUpdate({ gridShowExtension: event.currentTarget.checked })
+                updateSettings({ gridShowExtension: event.currentTarget.checked })
               }
             />
             <span>Extension</span>
@@ -180,7 +187,7 @@ export const SettingsGridSection = ({
             type="checkbox"
             checked={gridNameHideExtension}
             onChange={(event) =>
-              onUpdate({ gridNameHideExtension: event.currentTarget.checked })
+              updateSettings({ gridNameHideExtension: event.currentTarget.checked })
             }
           />
           <span />
@@ -199,7 +206,7 @@ export const SettingsGridSection = ({
               key={mode.id}
               type="button"
               className={`settings-pill${gridNameEllipsis === mode.id ? " is-active" : ""}`}
-              onClick={() => onUpdate({ gridNameEllipsis: mode.id })}
+              onClick={() => updateSettings({ gridNameEllipsis: mode.id })}
             >
               {mode.label}
             </PressButton>

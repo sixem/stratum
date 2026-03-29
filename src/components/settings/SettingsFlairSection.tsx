@@ -1,15 +1,11 @@
 // Visual flair toggles (accent + ambient effects).
+import { shallow } from "zustand/shallow";
 import type { AccentTheme } from "@/modules";
 import { PressButton } from "@/components/primitives/PressButton";
-import type { SettingsUpdateHandler } from "./types";
+import { useSettingsStore } from "@/modules";
 
 type SettingsFlairSectionProps = {
   sectionId: string;
-  accentTheme: AccentTheme;
-  categoryTinting: boolean;
-  ambientBackground: boolean;
-  blurOverlays: boolean;
-  onUpdate: SettingsUpdateHandler;
 };
 
 const ACCENT_THEMES: { id: AccentTheme; label: string }[] = [
@@ -22,14 +18,24 @@ const ACCENT_THEMES: { id: AccentTheme; label: string }[] = [
   { id: "white", label: "White" },
 ];
 
-export const SettingsFlairSection = ({
-  sectionId,
-  accentTheme,
-  categoryTinting,
-  ambientBackground,
-  blurOverlays,
-  onUpdate,
-}: SettingsFlairSectionProps) => {
+export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) => {
+  const {
+    accentTheme,
+    categoryTinting,
+    ambientBackground,
+    blurOverlays,
+    updateSettings,
+  } = useSettingsStore(
+    (state) => ({
+      accentTheme: state.accentTheme,
+      categoryTinting: state.categoryTinting,
+      ambientBackground: state.ambientBackground,
+      blurOverlays: state.blurOverlays,
+      updateSettings: state.updateSettings,
+    }),
+    shallow,
+  );
+
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Flair</div>
@@ -45,7 +51,7 @@ export const SettingsFlairSection = ({
               type="button"
               data-accent={theme.id}
               className={`settings-pill${accentTheme === theme.id ? " is-active" : ""}`}
-              onClick={() => onUpdate({ accentTheme: theme.id })}
+              onClick={() => updateSettings({ accentTheme: theme.id })}
             >
               <span className="settings-swatch" aria-hidden="true" />
               {theme.label}
@@ -64,7 +70,9 @@ export const SettingsFlairSection = ({
           <input
             type="checkbox"
             checked={categoryTinting}
-            onChange={(event) => onUpdate({ categoryTinting: event.currentTarget.checked })}
+            onChange={(event) =>
+              updateSettings({ categoryTinting: event.currentTarget.checked })
+            }
           />
           <span />
         </label>
@@ -78,7 +86,9 @@ export const SettingsFlairSection = ({
           <input
             type="checkbox"
             checked={ambientBackground}
-            onChange={(event) => onUpdate({ ambientBackground: event.currentTarget.checked })}
+            onChange={(event) =>
+              updateSettings({ ambientBackground: event.currentTarget.checked })
+            }
           />
           <span />
         </label>
@@ -92,7 +102,7 @@ export const SettingsFlairSection = ({
           <input
             type="checkbox"
             checked={blurOverlays}
-            onChange={(event) => onUpdate({ blurOverlays: event.currentTarget.checked })}
+            onChange={(event) => updateSettings({ blurOverlays: event.currentTarget.checked })}
           />
           <span />
         </label>

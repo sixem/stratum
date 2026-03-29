@@ -1,6 +1,7 @@
 // Custom keybind capture and management UI.
 import { useCallback, useEffect, useState } from "react";
-import type { KeybindAction, KeybindMap } from "@/modules";
+import { shallow } from "zustand/shallow";
+import type { KeybindAction } from "@/modules";
 import {
   DEFAULT_KEYBINDS,
   KEYBIND_DEFINITIONS,
@@ -9,27 +10,29 @@ import {
   getReservedKeybindLabel,
   isBareCharacterKeybind,
   normalizeKeybind,
+  useSettingsStore,
 } from "@/modules";
 import { PressButton } from "@/components/primitives/PressButton";
-import type { SettingsUpdateHandler } from "./types";
 
 type SettingsKeybindsSectionProps = {
   sectionId: string;
   open: boolean;
-  keybinds: KeybindMap;
-  smartTabJump: boolean;
-  onUpdate: SettingsUpdateHandler;
   onCaptureChange?: (active: boolean) => void;
 };
 
 export const SettingsKeybindsSection = ({
   sectionId,
   open,
-  keybinds,
-  smartTabJump,
-  onUpdate,
   onCaptureChange,
 }: SettingsKeybindsSectionProps) => {
+  const { keybinds, smartTabJump, updateSettings } = useSettingsStore(
+    (state) => ({
+      keybinds: state.keybinds,
+      smartTabJump: state.smartTabJump,
+      updateSettings: state.updateSettings,
+    }),
+    shallow,
+  );
   const [captureAction, setCaptureAction] = useState<KeybindAction | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
 
@@ -52,7 +55,7 @@ export const SettingsKeybindsSection = ({
         setCaptureError(`Already used by ${conflict.label}.`);
         return false;
       }
-      onUpdate({
+      updateSettings({
         keybinds: {
           ...keybinds,
           [action]: normalized,
@@ -62,11 +65,14 @@ export const SettingsKeybindsSection = ({
       setCaptureError(null);
       return true;
     },
-    [keybinds, onUpdate],
+    [keybinds, updateSettings],
   );
 
   useEffect(() => {
     onCaptureChange?.(Boolean(captureAction));
+    return () => {
+      onCaptureChange?.(false);
+    };
   }, [captureAction, onCaptureChange]);
 
   useEffect(() => {
@@ -124,11 +130,11 @@ export const SettingsKeybindsSection = ({
   };
 
   const handleResetKeybind = (action: KeybindAction) => {
-    onUpdate({ keybinds: { ...keybinds, [action]: DEFAULT_KEYBINDS[action] } });
+    updateSettings({ keybinds: { ...keybinds, [action]: DEFAULT_KEYBINDS[action] } });
   };
 
   const handleResetKeybinds = () => {
-    onUpdate({ keybinds: { ...DEFAULT_KEYBINDS } });
+    updateSettings({ keybinds: { ...DEFAULT_KEYBINDS } });
   };
 
   return (
@@ -158,7 +164,9 @@ export const SettingsKeybindsSection = ({
           <input
             type="checkbox"
             checked={smartTabJump}
-            onChange={(event) => onUpdate({ smartTabJump: event.currentTarget.checked })}
+            onChange={(event) =>
+              updateSettings({ smartTabJump: event.currentTarget.checked })
+            }
           />
           <span />
         </label>

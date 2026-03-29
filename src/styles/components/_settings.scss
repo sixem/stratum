@@ -25,7 +25,8 @@
     1320px,
     calc(100vw - (var(--settings-edge-gap) + var(--settings-edge-gap)))
   );
-  max-height: min(90vh, 820px);
+  // Keep the shell height stable across tabs while still respecting the viewport.
+  height: min(860px, calc(100vh - (var(--settings-edge-gap) * 2)));
   background: linear-gradient(160deg, var(--surface-nav) 0%, var(--panel-deep) 100%);
   border: 1px solid var(--stroke);
   border-radius: 14px;
@@ -111,6 +112,21 @@
   text-align: center;
 }
 
+.btn {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--surface-control) 68%, black 32%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.btn:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--surface-control) 78%, black 22%);
+}
+
+.btn.ghost {
+  background: color-mix(in srgb, var(--surface-control-muted) 60%, black 40%);
+}
+
 .settings-nav-item {
   padding: 6px 10px;
   border-radius: 8px;
@@ -126,6 +142,19 @@
 .settings-nav-item:hover {
   color: var(--text);
   border-color: rgba(255, 255, 255, 0.15);
+}
+
+.settings-nav-item:focus-visible {
+  outline: none;
+  border-color: rgba(var(--accent-rgb), 0.56);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.14);
+}
+
+.settings-nav-item.is-active {
+  color: var(--text);
+  border-color: rgba(var(--accent-rgb), 0.22);
+  background: rgba(var(--accent-rgb), 0.12);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.08);
 }
 
 .settings-sidebar-footer {
@@ -194,6 +223,10 @@
   > .settings-section:not(:first-child) {
     margin-top: 14px;
   }
+}
+
+.settings-tab-panel {
+  min-height: 0;
 }
 
 .settings-nav::-webkit-scrollbar,
@@ -341,6 +374,20 @@
   width: 160px;
 }
 
+.settings-range .ui-range::-webkit-slider-runnable-track {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--surface-control-muted) 62%, black 38%);
+}
+
+.settings-range .ui-range::-moz-range-track {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--surface-control-muted) 62%, black 38%);
+}
+
+.settings-range .ui-range::-moz-range-progress {
+  background: rgba(var(--accent-rgb), 0.58);
+}
+
 .settings-range .ui-range:disabled {
   opacity: 0.5;
 }
@@ -437,8 +484,8 @@
   min-width: 120px;
   padding: 4px 10px;
   border-radius: 6px;
-  border: 1px solid var(--stroke);
-  background: var(--surface-card);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--surface-control-muted) 62%, black 38%);
   font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--text);
@@ -499,7 +546,7 @@
   color: var(--muted);
   border: 1px solid rgba(255, 255, 255, 0.03);
   cursor: pointer;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.14);
   display: inline-flex;
   align-items: center;
   gap: 6px;

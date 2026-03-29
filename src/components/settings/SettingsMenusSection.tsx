@@ -1,21 +1,22 @@
 // Context menu customization settings.
-import type { SettingsUpdateHandler } from "./types";
+import { shallow } from "zustand/shallow";
+import { useSettingsStore } from "@/modules";
 
 type SettingsMenusSectionProps = {
   sectionId: string;
-  menuOpenPwsh: boolean;
-  menuOpenWsl: boolean;
-  menuShowConvert: boolean;
-  onUpdate: SettingsUpdateHandler;
 };
 
-export const SettingsMenusSection = ({
-  sectionId,
-  menuOpenPwsh,
-  menuOpenWsl,
-  menuShowConvert,
-  onUpdate,
-}: SettingsMenusSectionProps) => {
+export const SettingsMenusSection = ({ sectionId }: SettingsMenusSectionProps) => {
+  const { menuOpenPwsh, menuOpenWsl, menuShowConvert, updateSettings } = useSettingsStore(
+    (state) => ({
+      menuOpenPwsh: state.menuOpenPwsh,
+      menuOpenWsl: state.menuOpenWsl,
+      menuShowConvert: state.menuShowConvert,
+      updateSettings: state.updateSettings,
+    }),
+    shallow,
+  );
+
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Menus</div>
@@ -30,7 +31,9 @@ export const SettingsMenusSection = ({
           <input
             type="checkbox"
             checked={menuShowConvert}
-            onChange={(event) => onUpdate({ menuShowConvert: event.currentTarget.checked })}
+            onChange={(event) =>
+              updateSettings({ menuShowConvert: event.currentTarget.checked })
+            }
           />
           <span />
         </label>
@@ -51,7 +54,9 @@ export const SettingsMenusSection = ({
             <input
               type="checkbox"
               checked={menuOpenPwsh}
-              onChange={(event) => onUpdate({ menuOpenPwsh: event.currentTarget.checked })}
+              onChange={(event) =>
+                updateSettings({ menuOpenPwsh: event.currentTarget.checked })
+              }
             />
             <span>Open in PowerShell</span>
           </label>
@@ -63,7 +68,9 @@ export const SettingsMenusSection = ({
             <input
               type="checkbox"
               checked={menuOpenWsl}
-              onChange={(event) => onUpdate({ menuOpenWsl: event.currentTarget.checked })}
+              onChange={(event) =>
+                updateSettings({ menuOpenWsl: event.currentTarget.checked })
+              }
             />
             <span>Open in WSL</span>
           </label>
