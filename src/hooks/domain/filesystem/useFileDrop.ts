@@ -2,37 +2,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { DragDropEvent } from "@tauri-apps/api/webview";
-import { statEntries, transferEntries } from "@/api";
 import {
-  getTransferErrorMessage,
-  isTransferCancelledError,
-} from "@/hooks/domain/filesystem/transferJobErrors";
-import {
-  buildDropCandidate,
-  formatFailures,
-  getDriveKey,
   getDropTargetFromPoint,
-  getParentPath,
-  joinPath,
   makeDebug,
-  normalizeDropPath,
   normalizePath,
 } from "@/lib";
 import { usePromptStore, useTransferStore } from "@/modules";
-import type { DropCandidate, DropTarget } from "@/lib";
+import type { DropTarget } from "@/lib";
+import {
+  planDropTransfer,
+  resolveDropTransferConflicts,
+} from "./dropTransferPlanning";
+import { runDropTransfer } from "./runDropTransfer";
 
 type UseFileDropOptions = {
   currentPath: string;
   onRefresh?: () => void;
   enabled?: boolean;
 };
-
-type MoveConflictDecision =
-  | "overwrite"
-  | "overwrite-all"
-  | "skip"
-  | "skip-all"
-  | "cancel";
 
 const log = makeDebug("drop");
 
@@ -92,239 +79,28 @@ export const useFileDrop = ({
   const performDrop = useCallback(
     async (paths: string[], targetPath: string | null) => {
       if (inFlightRef.current) return;
-      const trimmed = Array.from(
-        new Set(paths.map((path) => path.trim()).filter(Boolean)),
-      );
-      if (trimmed.length === 0) return;
-      const fallback = currentPathRef.current.trim();
-      const destination = (targetPath ?? fallback).trim();
-      if (!destination) return;
-      const destinationKey = normalizeDropPath(destination);
-      if (!destinationKey) return;
-      // Ignore drops that resolve to the same directory or folder itself.
-      const candidates = trimmed
-        .map((path) => buildDropCandidate(path, destinationKey))
-        .filter((candidate): candidate is DropCandidate => Boolean(candidate));
-      const meaningful = candidates.filter((candidate) => !candidate.isSameDirectory);
-      if (meaningful.length === 0) return;
+      const plan = planDropTransfer(paths, targetPath, currentPathRef.current);
+      if (!plan) return;
+
       if (log.enabled) {
-        log(
-          "drop-handle: count=%d destination=%s",
-          meaningful.length,
-          destination,
-        );
+        log("drop-handle: count=%d destination=%s", plan.items.length, plan.destination);
       }
 
-      const destinationDriveKey = getDriveKey(destination);
-      const destinationItems = meaningful
-        .map((candidate) => {
-          const sourceDriveKey = getDriveKey(candidate.path);
-          const shouldMove =
-            destinationDriveKey != null &&
-            sourceDriveKey != null &&
-            destinationDriveKey.toLowerCase() === sourceDriveKey.toLowerCase();
-          return {
-            candidate,
-            pathKey: normalizePath(candidate.path),
-            name: candidate.name,
-            destination: joinPath(destination, candidate.name),
-            shouldMove,
-          };
-        })
-        .filter((item) => item.name && item.destination);
+      const resolvedPlan = await resolveDropTransferConflicts(plan, promptStore);
+      if (!resolvedPlan) return;
 
-      const conflictingItems = new Map<string, (typeof destinationItems)[number]>();
-      if (destinationItems.length > 0) {
-        const metas = await statEntries(destinationItems.map((item) => item.destination));
-        metas.forEach((meta, index) => {
-          const exists = meta.size != null || meta.modified != null;
-          if (!exists) return;
-          const item = destinationItems[index];
-          if (!item) return;
-          conflictingItems.set(item.pathKey, item);
-        });
-      }
-
-      const copyConflicts = destinationItems.filter(
-        (item) => !item.shouldMove && conflictingItems.has(item.pathKey),
-      );
-      const moveConflicts = destinationItems.filter(
-        (item) => item.shouldMove && conflictingItems.has(item.pathKey),
-      );
-      const overwriteKeys = new Set<string>();
-      const skippedKeys = new Set<string>();
-      let overwriteAllMoveConflicts = false;
-
-      if (copyConflicts.length > 0) {
-        const samples = copyConflicts.slice(0, 4).map((item) => item.name);
-        const suffix =
-          copyConflicts.length > samples.length
-            ? `\n...and ${copyConflicts.length - samples.length} more`
-            : "";
-        const message = `Overwrite ${copyConflicts.length} item${
-          copyConflicts.length === 1 ? "" : "s"
-        } in ${destination}?\n\n${samples.join("\n")}${suffix}`;
-        const confirmed = await new Promise<boolean>((resolve) => {
-          promptStore.showPrompt({
-            title: "Overwrite items?",
-            content: message,
-            confirmLabel: "Overwrite",
-            cancelLabel: "Cancel",
-            onConfirm: () => resolve(true),
-            onCancel: () => resolve(false),
-          });
-        });
-        if (!confirmed) return;
-        copyConflicts.forEach((item) => overwriteKeys.add(item.pathKey));
-      }
-
-      for (let index = 0; index < moveConflicts.length; index += 1) {
-        const item = moveConflicts[index];
-        if (!item) continue;
-        if (skippedKeys.has(item.pathKey)) continue;
-        if (overwriteAllMoveConflicts) {
-          overwriteKeys.add(item.pathKey);
-          continue;
-        }
-        const remaining = moveConflicts.length - index;
-        const decision = await new Promise<MoveConflictDecision>((resolve) => {
-          const actions: {
-            label: string;
-            onClick: () => void;
-            variant: "ghost";
-          }[] = [
-            {
-              label: "Skip",
-              onClick: () => resolve("skip"),
-              variant: "ghost",
-            },
-          ];
-          if (remaining > 1) {
-            actions.push({
-              label: "Overwrite all",
-              onClick: () => resolve("overwrite-all"),
-              variant: "ghost",
-            });
-            actions.push({
-              label: "Skip all",
-              onClick: () => resolve("skip-all"),
-              variant: "ghost",
-            });
-          }
-          promptStore.showPrompt({
-            title: "Item already exists",
-            content: `A file or folder named "${item.name}" already exists in ${destination}.`,
-            confirmLabel: "Overwrite",
-            cancelLabel: "Cancel",
-            actions,
-            onConfirm: () => resolve("overwrite"),
-            onCancel: () => resolve("cancel"),
-          });
-        });
-        if (decision === "cancel") return;
-        if (decision === "overwrite") {
-          overwriteKeys.add(item.pathKey);
-          continue;
-        }
-        if (decision === "overwrite-all") {
-          overwriteAllMoveConflicts = true;
-          overwriteKeys.add(item.pathKey);
-          continue;
-        }
-        if (decision === "skip") {
-          skippedKeys.add(item.pathKey);
-          continue;
-        }
-        if (decision === "skip-all") {
-          for (let rest = index; rest < moveConflicts.length; rest += 1) {
-            const conflict = moveConflicts[rest];
-            if (!conflict) continue;
-            skippedKeys.add(conflict.pathKey);
-          }
-          break;
-        }
-      }
-
-      const transferCandidates = meaningful.filter(
-        (candidate) => !skippedKeys.has(normalizePath(candidate.path)),
-      );
-      if (transferCandidates.length === 0) {
-        return;
-      }
-      const skippedByPrompt = meaningful.length - transferCandidates.length;
-      const overwrite = transferCandidates.some((candidate) =>
-        overwriteKeys.has(normalizePath(candidate.path)),
-      );
-
-      const job = registerTransferJob({
-        label: "Transfer",
-        items: transferCandidates.map((candidate) => candidate.path),
-      });
       inFlightRef.current = true;
       try {
-        // Use auto mode so same-drive drops move and cross-drive drops copy.
-        const report = await transferEntries(
-          transferCandidates.map((candidate) => candidate.path),
-          destination,
-          { mode: "auto", overwrite },
-          job.id,
-        );
-        const label =
-          report.moved > 0 && report.copied > 0
-            ? "Transfer"
-            : report.moved > 0
-              ? "Move"
-              : "Copy";
-        updateTransferLabel(job.id, label);
-        recordTransferJobOutcome(job.id, {
-          copied: report.copied,
-          moved: report.moved,
-          skipped: report.skipped + skippedByPrompt,
-          failures: report.failures.length,
-        });
-        if (report.failures.length > 0) {
-          promptStore.showPrompt({
-            title: `${label} completed with issues`,
-            content: formatFailures(report.failures),
-            confirmLabel: "OK",
-            cancelLabel: null,
-          });
-        }
-        const movedCount = report.moved ?? 0;
-        const copiedCount = report.copied ?? 0;
-        const touchedCurrentDestination =
-          destinationKey === currentPathKeyRef.current && (movedCount > 0 || copiedCount > 0);
-        const touchedCurrentSource =
-          movedCount > 0 &&
-          transferCandidates.some((candidate) => {
-            const parent = getParentPath(candidate.path) ?? "";
-            return normalizePath(parent) === currentPathKeyRef.current;
-          });
-        if (touchedCurrentDestination || touchedCurrentSource) {
-          refreshRef.current?.();
-        }
-      } catch (error) {
-        if (isTransferCancelledError(error)) {
-          const touchedCurrentDestination = destinationKey === currentPathKeyRef.current;
-          const touchedCurrentSource = transferCandidates.some((candidate) => {
-            const parent = getParentPath(candidate.path) ?? "";
-            return normalizePath(parent) === currentPathKeyRef.current;
-          });
-          if (touchedCurrentDestination || touchedCurrentSource) {
-            refreshRef.current?.();
-          }
-          return;
-        }
-        recordTransferJobOutcome(job.id, { failures: 1 });
-        const message = getTransferErrorMessage(
-          error,
-          "Failed to transfer dropped items.",
-        );
-        promptStore.showPrompt({
-          title: "Transfer failed",
-          content: message,
-          confirmLabel: "OK",
-          cancelLabel: null,
+        await runDropTransfer({
+          plan: resolvedPlan,
+          promptStore,
+          currentPathKey: currentPathKeyRef.current,
+          onRefresh: refreshRef.current,
+          transferStore: {
+            registerTransferJob,
+            updateTransferLabel,
+            recordTransferJobOutcome,
+          },
         });
       } finally {
         inFlightRef.current = false;
