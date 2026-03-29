@@ -2,7 +2,6 @@
 .sidebar {
   // Tighten the sidebar density without affecting global layout tokens.
   --sidebar-padding: 12px;
-  --sidebar-scrollbar-gap: 4px;
   background: #0d0f14;
   border: 1px solid #1a2233;
   border-left: none;
@@ -18,19 +17,23 @@
 
 // Scope sidebar content to the panel without increasing specificity.
 :where(.sidebar) {
+  .sidebar-scroll {
+    flex: 1;
+    min-height: 0;
+    margin-inline: calc(var(--sidebar-padding) * -1);
+  }
+
+  .sidebar-viewport {
+    min-height: 0;
+    height: 100%;
+    padding: 0 12px 8px 8px;
+  }
+
   .sidebar-content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
     min-height: 0;
-    overflow-x: hidden;
-    overflow-y: scroll;
-    // Reserve a stable scrollbar gutter and align the scrollbar to the panel edge.
-    scrollbar-gutter: stable;
-    margin-right: calc(var(--sidebar-padding) * -1 + var(--sidebar-scrollbar-gap));
-    padding-right: calc(var(--sidebar-padding) + 4px - var(--sidebar-scrollbar-gap));
-    flex: 1;
-    scroll-behavior: auto;
   }
 
   .sidebar-empty {
@@ -54,7 +57,7 @@
   .places {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
   }
 
   .section-toggle {
@@ -62,7 +65,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 6px 8px;
+    padding: 0 2px 8px;
     font-size: var(--font-size-xs);
     font-weight: 600;
     text-transform: uppercase;
@@ -70,9 +73,9 @@
     color: var(--muted);
     cursor: pointer;
     width: 100%;
-    border-radius: 6px;
-    border: 1px solid #232d40;
-    background: #111723;
+    border: 0;
+    border-bottom: 1px solid #1c2537;
+    background: transparent;
     transition: none;
   }
 
@@ -82,8 +85,8 @@
 
   .section-toggle:hover {
     color: var(--text);
-    border-color: #30405d;
-    background: #151d2c;
+    border-color: #2b3650;
+    background: transparent;
   }
 
   .toggle-mark {
@@ -105,8 +108,8 @@
   }
 
   .sidebar-tips {
-    margin-top: 6px;
-    padding-top: 8px;
+    margin-top: 2px;
+    padding-top: 10px;
     border-top: 1px solid #1c2537;
   }
 
@@ -121,22 +124,20 @@
 
   .tip {
     appearance: none;
-    border: none;
-    background: #121a29;
-    padding: 6px 8px;
+    border: 0;
+    background: transparent;
+    padding: 8px 6px;
     margin: 0;
     text-align: left;
     color: inherit;
     font: inherit;
     cursor: pointer;
-    border-radius: 6px;
-    border: 1px solid transparent;
+    border-radius: 8px;
   }
 
   .tip:hover {
     color: var(--text);
-    border-color: #31415f;
-    background: #162132;
+    background: rgba(255, 255, 255, 0.03);
   }
 }
 
@@ -216,34 +217,53 @@
 
 // Sidebar-only density tweaks for shared place cards.
 :where(.sidebar) .place {
-  padding: 8px 10px;
+  padding: 7px 9px;
   border-radius: 6px;
   gap: 2px;
-  border-color: #1f293b;
-  background: #111825;
+  border: 0;
+  background: transparent;
 }
 
 :where(.sidebar) .place:hover {
-  border-color: #2c3a54;
-  background: #172031;
+  background: #161b29;
 }
 
 :where(.sidebar) .place.is-active {
-  border-color: rgba(var(--accent-rgb), 0.7);
-  box-shadow: inset 2px 0 0 rgba(var(--accent-rgb), 0.85);
+  background: #161b29;
+}
+
+:where(.sidebar) .place[data-drop-target="true"] {
+  background: #161b29;
+}
+
+:where(.sidebar) .place.is-recent {
+  border-style: solid;
+}
+
+:where(.sidebar) .place.is-empty {
+  padding-inline: 6px;
+  background: transparent;
 }
 
 :where(.sidebar) .place-name {
   font-size: var(--font-size-sm);
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 :where(.sidebar) .place-path {
-  line-height: 1.25;
+  line-height: 1.15;
   color: #96a3ba;
 }
 
-// Keep the collapse/expand icon readable over ambient transparency.
+:where(.sidebar) .place.is-active .place-path {
+  color: #b6c3d8;
+}
+
+:where(.sidebar) .place.is-active .place-name,
+:where(.sidebar) .place[data-drop-target="true"] .place-name {
+  color: rgba(var(--accent-rgb), 0.96);
+}
+
 :root[data-ambient="true"] :where(.sidebar) .toggle-mark {
   color: var(--text);
   box-shadow: none;
@@ -252,4 +272,3 @@
 :root[data-ambient="true"] :where(.sidebar) .section-toggle.is-open .toggle-mark {
   color: rgba(var(--accent-rgb), 0.95);
 }
-

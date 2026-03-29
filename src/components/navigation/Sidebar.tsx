@@ -13,6 +13,7 @@ import {
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PinIcon } from "@/components/icons";
 import { PressButton } from "@/components/primitives/PressButton";
+import { ScrollArea } from "@/components/primitives/ScrollArea";
 import { SidebarSection } from "./SidebarSection";
 import type { Place, PlaceContextTarget } from "@/types";
 
@@ -218,13 +219,18 @@ export const Sidebar = ({
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-content">
+      <ScrollArea
+        className="sidebar-scroll"
+        viewportClassName="sidebar-viewport"
+        contentClassName="sidebar-content"
+        scrollbarVariant="nav"
+      >
         {renderedSections.length === 0 ? (
           <div className="sidebar-empty">No sidebar sections visible.</div>
         ) : (
           renderedSections
         )}
-      </div>
+      </ScrollArea>
     </aside>
   );
 };
