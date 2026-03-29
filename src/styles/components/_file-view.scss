@@ -85,7 +85,8 @@
   .thumb-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, var(--thumb-column, 180px));
-    gap: var(--thumb-gap, 12px);
+    column-gap: var(--thumb-column-gap, var(--thumb-gap, 12px));
+    row-gap: var(--thumb-row-gap, var(--thumb-gap, 12px));
     grid-auto-rows: var(--thumb-row-height, 210px);
     align-items: start;
     justify-content: center;
@@ -169,6 +170,7 @@
 :where(.thumb-shell) {
   .thumb-card {
     position: relative;
+    box-sizing: border-box;
     border: 1px solid var(--stroke);
     border-radius: 6px;
     padding: 6px;
@@ -253,6 +255,12 @@
     justify-content: center;
     align-items: center;
     width: 100%;
+  }
+
+  .thumb-icon[data-has-thumb-preview="true"] {
+    border-radius: 0;
+    // Keep real thumbnail previews clipped to the card so tight grid gaps do not bleed across columns.
+    overflow: hidden;
   }
 
   .thumb-preview {
@@ -822,6 +830,12 @@
 }
 
 // Ambient mode keeps the base surfaces softer, but preserves the same state hierarchy.
+:root[data-ambient="true"] :where(.file-list, .thumb-shell) {
+  // Brighten the explorer scrollbar so it stays readable over the ambient backdrop.
+  --scrollbar-thumb: rgba(255, 255, 255, 0.72);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.9);
+}
+
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card {
   @include entry-state-surface(rgba(255, 255, 255, 0.040), rgba(255, 255, 255, 0.025));
 }
@@ -876,6 +890,51 @@
   @include entry-state-surface(rgba(var(--accent-rgb), 0.9), rgba(var(--accent-rgb), 0.18));
 }
 
+// In ambient mode, preserve the translucent look but let category-tinted files read a bit faster.
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="document"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include entry-state-surface(rgba(82, 132, 255, 0.24), rgba(82, 132, 255, 0.065));
+  --thumb-icon-color: rgba(110, 154, 255, 0.9);
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="image"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include entry-state-surface(rgba(56, 201, 198, 0.24), rgba(56, 201, 198, 0.065));
+  --thumb-icon-color: rgba(88, 223, 219, 0.9);
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="video"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include entry-state-surface(rgba(255, 140, 61, 0.26), rgba(255, 140, 61, 0.07));
+  --thumb-icon-color: rgba(255, 166, 103, 0.9);
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="executable"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include entry-state-surface(rgba(var(--accent-rgb), 0.24), rgba(var(--accent-rgb), 0.065));
+  --thumb-icon-color: rgba(var(--accent-rgb), 0.9);
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="document"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include entry-state-surface(rgba(82, 132, 255, 0.28), rgba(82, 132, 255, 0.09));
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="image"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include entry-state-surface(rgba(56, 201, 198, 0.28), rgba(56, 201, 198, 0.09));
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="video"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include entry-state-surface(rgba(255, 140, 61, 0.3), rgba(255, 140, 61, 0.1));
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="executable"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include entry-state-surface(rgba(var(--accent-rgb), 0.28), rgba(var(--accent-rgb), 0.09));
+}
+
 // Category tinting for list view dots.
 :where(.file-list) .list-shell[data-category-tint="true"] .row[data-kind="document"] {
   --list-dot-color: rgba(82, 132, 255, 0.85);
@@ -891,4 +950,49 @@
 
 :where(.file-list) .list-shell[data-category-tint="true"] .row[data-kind="executable"] {
   --list-dot-color: rgba(var(--accent-rgb), 0.85);
+}
+
+// Ambient mode lets list rows carry a slightly stronger tint as well, not just the dot.
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="document"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include entry-state-surface(rgba(82, 132, 255, 0.18), rgba(82, 132, 255, 0.055));
+  --list-dot-color: rgba(110, 154, 255, 0.9);
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="image"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include entry-state-surface(rgba(56, 201, 198, 0.18), rgba(56, 201, 198, 0.055));
+  --list-dot-color: rgba(88, 223, 219, 0.9);
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="video"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include entry-state-surface(rgba(255, 140, 61, 0.2), rgba(255, 140, 61, 0.06));
+  --list-dot-color: rgba(255, 166, 103, 0.9);
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="executable"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include entry-state-surface(rgba(var(--accent-rgb), 0.18), rgba(var(--accent-rgb), 0.055));
+  --list-dot-color: rgba(var(--accent-rgb), 0.9);
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="document"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include entry-state-surface(rgba(82, 132, 255, 0.22), rgba(82, 132, 255, 0.08));
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="image"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include entry-state-surface(rgba(56, 201, 198, 0.22), rgba(56, 201, 198, 0.08));
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="video"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include entry-state-surface(rgba(255, 140, 61, 0.24), rgba(255, 140, 61, 0.09));
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="executable"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include entry-state-surface(rgba(var(--accent-rgb), 0.22), rgba(var(--accent-rgb), 0.08));
 }

@@ -42,6 +42,7 @@ const GRID_CARD_BORDER = 1;
 // These gaps must match the CSS in components/_file-view.scss.
 const GRID_CARD_GAP = 6;
 const GRID_META_GAP = 6;
+const GRID_CARD_RENDER_PADDING = 6;
 const GRID_ICON_RATIO = 3 / 4;
 const GRID_NAME_LINE_HEIGHT = 14;
 const GRID_INFO_LINE_HEIGHT = 13;
@@ -56,6 +57,14 @@ const getGridIconHeight = (column: number, padding: number) => {
 const getGridMetaHeight = (showMeta: boolean) => {
   if (!showMeta) return GRID_NAME_LINE_HEIGHT;
   return GRID_NAME_LINE_HEIGHT + GRID_META_GAP + GRID_INFO_LINE_HEIGHT;
+};
+
+// The rendered card CSS always uses a fixed inner padding, while presets can reserve
+// a bit more vertical air. Mirror that same extra air into the horizontal gap math so
+// auto-fit calculations use the same effective gap that the CSS grid actually renders.
+const getVisibleColumnGap = (gap: number, padding: number) => {
+  const verticalGapBoost = Math.max(0, padding - GRID_CARD_RENDER_PADDING) * 2;
+  return gap + verticalGapBoost;
 };
 
 // Keep auto grid columns within the supported range for readability.
@@ -75,7 +84,8 @@ const buildAutoPreset = (
     return { ...base };
   }
   const contentWidth = Math.max(0, viewportWidth - viewportPadding * 2);
-  const totalGap = base.gap * Math.max(0, safeColumns - 1);
+  const visibleColumnGap = getVisibleColumnGap(base.gap, base.padding);
+  const totalGap = visibleColumnGap * Math.max(0, safeColumns - 1);
   const available = Math.max(0, contentWidth - totalGap);
   const column = Math.max(1, Math.floor(available / safeColumns));
   return { ...base, column };
@@ -124,6 +134,7 @@ export type GridSizingState = {
   viewportHeight: number;
   columnCount: number;
   columnWidth: number;
+  columnGap: number;
   rowCount: number;
   rowHeight: number;
   gridMetaEnabled: boolean;
@@ -192,27 +203,35 @@ export const useGridSizing = ({
   ]);
 
   const gridVars = useMemo(
-    () =>
-      ({
+    () => {
+      const visibleColumnGap = getVisibleColumnGap(gridSizing.gap, gridSizing.padding);
+
+      return {
         "--thumb-column": `${gridSizing.column}px`,
         "--thumb-gap": `${gridSizing.gap}px`,
+        "--thumb-column-gap": `${visibleColumnGap}px`,
+        "--thumb-row-gap": `${gridSizing.gap}px`,
         "--thumb-row-height": `${gridSizing.rowHeight}px`,
         "--thumb-padding": `${viewportPadding}px`,
         "--thumb-icon-height": `${gridSizing.iconHeight}px`,
         "--thumb-meta-height": `${gridSizing.metaHeight}px`,
         "--thumb-fit": thumbnailFit,
         "--thumb-preview-bg": "transparent",
-      }) as CSSProperties,
+      } as CSSProperties;
+    },
     [gridSizing, thumbnailFit, viewportPadding],
   );
 
+  const columnGap = useMemo(() => {
+    return getVisibleColumnGap(gridSizing.gap, gridSizing.padding);
+  }, [gridSizing.gap, gridSizing.padding]);
   const contentWidth = Math.max(0, layoutViewportWidth - viewportPadding * 2);
   const columnCount =
     gridSize === "auto"
       ? clampAutoColumns(gridAutoColumns)
       : Math.max(
           1,
-          Math.floor((contentWidth + gridSizing.gap) / (gridSizing.column + gridSizing.gap)),
+          Math.floor((contentWidth + columnGap) / (gridSizing.column + columnGap)),
         );
   const rowCount = Math.ceil(viewItemsLength / columnCount);
   const rowHeight = gridSizing.rowHeight + gridSizing.gap;
@@ -336,6 +355,7 @@ export const useGridSizing = ({
     viewportHeight,
     columnCount,
     columnWidth: gridSizing.column,
+    columnGap,
     rowCount,
     rowHeight,
     gridMetaEnabled,

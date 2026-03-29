@@ -27,7 +27,8 @@ export type SelectionLayout =
       columnCount: number;
       columnWidth: number;
       rowHeight: number;
-      gap: number;
+      columnGap: number;
+      rowGap: number;
       insetTop?: number;
     };
 
@@ -66,7 +67,8 @@ type GridLayoutSnapshot = {
   columnCount: number;
   columnWidth: number;
   rowHeight: number;
-  gap: number;
+  columnGap: number;
+  rowGap: number;
   insetTop: number;
   gridLeft: number;
   gridTop: number;
@@ -158,7 +160,8 @@ export const buildLayoutSnapshot = (
     0,
     gridMetrics.clientWidth - gridMetrics.paddingLeft - gridMetrics.paddingRight,
   );
-  const columnGap = Math.max(0, layout.gap);
+  const columnGap = Math.max(0, layout.columnGap);
+  const rowGap = Math.max(0, layout.rowGap);
   const columnWidth = Math.max(0, layout.columnWidth);
   const columnCount = layout.columnCount;
   const gridWidth =
@@ -168,7 +171,7 @@ export const buildLayoutSnapshot = (
     : 0;
   const insetTop = layout.insetTop ?? 0;
   const rowHeight = layout.rowHeight;
-  const cardHeight = Math.max(0, rowHeight - columnGap);
+  const cardHeight = Math.max(0, rowHeight - rowGap);
 
   return {
     kind: "grid",
@@ -176,7 +179,8 @@ export const buildLayoutSnapshot = (
     columnCount,
     columnWidth,
     rowHeight,
-    gap: columnGap,
+    columnGap,
+    rowGap,
     insetTop,
     gridLeft: gridMetrics.paddingLeft + extraLeft,
     gridTop: gridMetrics.paddingTop + insetTop,

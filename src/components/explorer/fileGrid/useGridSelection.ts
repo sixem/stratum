@@ -12,8 +12,9 @@ type UseGridSelectionOptions = {
   selectionItems: { path: string; selectable: boolean }[];
   columnCount: number;
   columnWidth: number;
+  columnGap: number;
   rowHeight: number;
-  gridGap: number;
+  rowGap: number;
   onSetSelection: (paths: string[], anchor?: string) => void;
   onClearSelection: () => void;
   onStartDragOut?: (paths: string[]) => void;
@@ -28,8 +29,9 @@ export const useGridSelection = ({
   selectionItems,
   columnCount,
   columnWidth,
+  columnGap,
   rowHeight,
-  gridGap,
+  rowGap,
   onSetSelection,
   onClearSelection,
   onStartDragOut,
@@ -48,7 +50,8 @@ export const useGridSelection = ({
       columnCount,
       columnWidth,
       rowHeight,
-      gap: gridGap,
+      columnGap,
+      rowGap,
       insetTop: VIEW_INSET,
     },
   });

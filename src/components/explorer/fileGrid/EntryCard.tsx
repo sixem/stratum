@@ -245,7 +245,7 @@ export const EntryCard = memo(({
       onPointerUp={isInteractive ? handleContextMenuUp : undefined}
       onContextMenu={(event) => event.preventDefault()}
     >
-      <div className="thumb-icon">
+      <div className="thumb-icon" data-has-thumb-preview={thumbUrl ? "true" : "false"}>
         <ThumbnailIcon
           isDir={entry.isDir}
           fileKind={fileKind}

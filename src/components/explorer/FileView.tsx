@@ -203,46 +203,83 @@ export const FileView = ({
       {viewMode === "thumbs" ? (
         <PerfProfiler id="file-grid">
           <FileGrid
-            {...viewProps}
-            currentPath={currentPath}
-            smoothScroll={smoothScroll}
-            pendingDeletePaths={pendingDeletePaths}
-            canGoUp={canGoUp}
-            onGoUp={onGoUp}
-            thumbnailsEnabled={thumbnailsEnabled}
-            thumbnails={thumbnails}
-            onRequestThumbs={onRequestThumbs}
-            thumbnailFit={thumbnailFit}
-            thumbnailAppIcons={thumbnailAppIcons}
-            thumbnailFolders={thumbnailFolders}
-            thumbnailVideos={thumbnailVideos}
-            thumbnailSvgs={thumbnailSvgs}
-            categoryTinting={categoryTinting}
-            gridSize={gridSize}
-            gridAutoColumns={gridAutoColumns}
-            gridGap={gridGap}
-            gridShowSize={gridShowSize}
-            gridShowExtension={gridShowExtension}
-            gridNameEllipsis={gridNameEllipsis}
-            gridNameHideExtension={gridNameHideExtension}
-            instantResizeKey={gridInstantResizeKey}
-            autoViewportWidth={autoGridViewportWidthRef.current ?? undefined}
-            onAutoViewportWidthChange={handleAutoGridViewportWidth}
-            thumbResetKey={thumbResetKey}
-            presenceEnabled={presenceEnabled}
-            onGridColumnsChange={onGridColumnsChange}
-            onContextMenuDown={onContextMenuDown}
-            dropTargetPath={dropTargetPath}
-            onStartDragOut={onStartDragOut}
-            onInternalDrop={onInternalDrop}
-            onInternalHover={onInternalHover}
-            onEntryContextMenu={onEntryContextMenu}
-            onEntryContextMenuDown={onEntryContextMenuDown}
-            onEntryPreviewPress={onEntryPreviewPress}
-            onEntryPreviewRelease={onEntryPreviewRelease}
-            onCreateFolder={onCreateFolder}
-            onCreateFolderAndGo={onCreateFolderAndGo}
-            onCreateFile={onCreateFile}
+            view={{
+              ...viewProps,
+              currentPath,
+              smoothScroll,
+              canGoUp,
+              onGoUp,
+            }}
+            selection={{
+              pendingDeletePaths,
+              selectedPaths: viewProps.selectedPaths,
+              onSetSelection: viewProps.onSetSelection,
+              onSelectItem: viewProps.onSelectItem,
+              onClearSelection: viewProps.onClearSelection,
+            }}
+            navigation={{
+              onOpenDir: viewProps.onOpenDir,
+              onOpenDirNewTab: viewProps.onOpenDirNewTab,
+              onOpenEntry: viewProps.onOpenEntry,
+            }}
+            rename={{
+              renameTargetPath: viewProps.renameTargetPath,
+              renameValue: viewProps.renameValue,
+              onRenameChange: viewProps.onRenameChange,
+              onRenameCommit: viewProps.onRenameCommit,
+              onRenameCancel: viewProps.onRenameCancel,
+            }}
+            metadata={{
+              entryMeta: viewProps.entryMeta,
+              onRequestMeta: viewProps.onRequestMeta,
+            }}
+            thumbs={{
+              thumbnailsEnabled,
+              thumbnails,
+              onRequestThumbs,
+              thumbnailFit,
+              thumbnailAppIcons,
+              thumbnailFolders,
+              thumbnailVideos,
+              thumbnailSvgs,
+              categoryTinting,
+              thumbResetKey,
+              presenceEnabled,
+            }}
+            grid={{
+              gridSize,
+              gridAutoColumns,
+              gridGap,
+              gridShowSize,
+              gridShowExtension,
+              gridNameEllipsis,
+              gridNameHideExtension,
+              instantResizeKey: gridInstantResizeKey,
+              autoViewportWidth: autoGridViewportWidthRef.current ?? undefined,
+              onAutoViewportWidthChange: handleAutoGridViewportWidth,
+              onGridColumnsChange,
+            }}
+            contextMenu={{
+              onContextMenu: viewProps.onContextMenu,
+              onContextMenuDown,
+              onEntryContextMenu,
+              onEntryContextMenuDown,
+            }}
+            preview={{
+              onEntryPreviewPress,
+              onEntryPreviewRelease,
+            }}
+            dragDrop={{
+              dropTargetPath,
+              onStartDragOut,
+              onInternalDrop,
+              onInternalHover,
+            }}
+            creation={{
+              onCreateFolder,
+              onCreateFolderAndGo,
+              onCreateFile,
+            }}
           />
         </PerfProfiler>
       ) : (
