@@ -275,28 +275,30 @@
 
 .settings-toggle {
   position: relative;
-  width: 40px;
-  height: 22px;
-  border-radius: 4px;
-  background: var(--surface-card);
-  border: 1px solid var(--stroke);
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface-control-muted);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   cursor: pointer;
   display: inline-block;
-  transition: background-color 0.16s ease, border-color 0.16s ease;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease;
 }
 
 .settings-toggle:has(input:checked) {
-  background: rgba(48, 92, 60, 0.42);
-  border-color: rgba(108, 194, 129, 0.38);
+  background: rgba(var(--accent-rgb), 0.22);
+  border-color: rgba(var(--accent-rgb), 0.22);
 }
 
 .settings-toggle:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .settings-toggle:has(input:focus-visible) {
-  border-color: rgba(108, 194, 129, 0.5);
-  box-shadow: 0 0 0 1px rgba(108, 194, 129, 0.14);
+  border-color: rgba(var(--accent-rgb), 0.56);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.14);
 }
 
 .settings-toggle input {
@@ -310,20 +312,21 @@
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-  background: rgba(229, 235, 246, 0.86);
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(232, 237, 246, 0.92);
   transition:
     transform 0.16s ease,
     background-color 0.16s ease,
-    box-shadow 0.16s ease;
+    border-color 0.16s ease;
 }
 
 .settings-toggle input:checked + span {
   transform: translateX(20px);
-  background: rgba(244, 247, 255, 0.96);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  border-color: rgba(var(--accent-rgb), 0.16);
+  background: rgba(244, 247, 255, 0.94);
 }
 
 .settings-range {
@@ -353,12 +356,12 @@
 .settings-pills {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 2px;
+  gap: 4px;
   align-items: center;
-  padding: 2px;
-  border: 1px solid var(--stroke);
-  border-radius: 4px;
-  background: var(--surface-card);
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  background: var(--surface-control-muted);
   justify-self: start;
 }
 
@@ -489,22 +492,27 @@
 }
 
 .settings-pill {
-  padding: 4px 10px;
-  border-radius: 3px;
+  padding: 5px 12px;
+  border-radius: 6px;
   font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--muted);
-  border: 1px solid transparent;
+  border: 1px solid rgba(255, 255, 255, 0.03);
   cursor: pointer;
   background: transparent;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  transition:
+    color 0.14s ease,
+    background-color 0.14s ease,
+    border-color 0.14s ease;
 }
 
 .settings-pill:hover:not(:disabled):not(.is-active) {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .settings-pill-check {
@@ -524,8 +532,9 @@
 
 .settings-pill.is-active {
   color: var(--text);
-  border-color: rgba(255, 255, 255, 0.08);
-  background: var(--surface-control);
+  border-color: rgba(var(--accent-rgb), 0.22);
+  background: rgba(var(--accent-rgb), 0.12);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.08);
 }
 
 .settings-pill:disabled {

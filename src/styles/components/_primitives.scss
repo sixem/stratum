@@ -128,10 +128,10 @@
 
 // Shared dark-surface range control used by settings and other sliders.
 :where(.ui-range) {
-  --ui-range-track-height: 6px;
-  --ui-range-thumb-size: 12px;
+  --ui-range-track-height: 8px;
+  --ui-range-thumb-size: 14px;
   width: 100%;
-  height: 24px;
+  height: 28px;
   margin: 0;
   -webkit-appearance: none;
   appearance: none;
@@ -151,8 +151,8 @@
 :where(.ui-range)::-webkit-slider-runnable-track {
   height: var(--ui-range-track-height);
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 14, 22, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--surface-control-muted) 92%, black);
 }
 
 :where(.ui-range)::-webkit-slider-thumb {
@@ -164,36 +164,32 @@
     (var(--ui-range-track-height) - var(--ui-range-thumb-size)) / 2
   );
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.46);
-  background: rgba(230, 236, 246, 0.92);
-  box-shadow:
-    0 0 0 2px rgba(8, 11, 18, 0.7),
-    0 4px 10px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(232, 237, 246, 0.94);
+  box-shadow: 0 0 0 2px rgba(8, 11, 18, 0.68);
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
 :where(.ui-range)::-moz-range-track {
   height: var(--ui-range-track-height);
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 14, 22, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--surface-control-muted) 92%, black);
 }
 
 :where(.ui-range)::-moz-range-progress {
   height: var(--ui-range-track-height);
   border-radius: 999px;
-  background: rgba(var(--accent-rgb), 0.46);
+  background: rgba(var(--accent-rgb), 0.52);
 }
 
 :where(.ui-range)::-moz-range-thumb {
   width: var(--ui-range-thumb-size);
   height: var(--ui-range-thumb-size);
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.46);
-  background: rgba(230, 236, 246, 0.92);
-  box-shadow:
-    0 0 0 2px rgba(8, 11, 18, 0.7),
-    0 4px 10px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(232, 237, 246, 0.94);
+  box-shadow: 0 0 0 2px rgba(8, 11, 18, 0.68);
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
@@ -202,9 +198,8 @@
 :where(.ui-range):active::-webkit-slider-thumb {
   transform: scale(1.04);
   box-shadow:
-    0 0 0 2px rgba(8, 11, 18, 0.7),
-    0 0 0 5px rgba(var(--accent-rgb), 0.12),
-    0 5px 11px rgba(0, 0, 0, 0.32);
+    0 0 0 2px rgba(8, 11, 18, 0.68),
+    0 0 0 5px rgba(var(--accent-rgb), 0.1);
 }
 
 :where(.ui-range):hover::-moz-range-thumb,
@@ -212,7 +207,6 @@
 :where(.ui-range):active::-moz-range-thumb {
   transform: scale(1.04);
   box-shadow:
-    0 0 0 2px rgba(8, 11, 18, 0.7),
-    0 0 0 5px rgba(var(--accent-rgb), 0.12),
-    0 5px 11px rgba(0, 0, 0, 0.32);
+    0 0 0 2px rgba(8, 11, 18, 0.68),
+    0 0 0 5px rgba(var(--accent-rgb), 0.1);
 }
