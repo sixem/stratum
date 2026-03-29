@@ -1,6 +1,12 @@
 // System-level command handlers (clipboard, shell, drag, open).
 use crate::platform::drag;
 use crate::services::{clipboard, opener, shells};
+#[cfg(target_os = "windows")]
+use windows::core::w;
+#[cfg(target_os = "windows")]
+use windows::Win32::Foundation::WIN32_ERROR;
+#[cfg(target_os = "windows")]
+use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
 
 #[tauri::command]
 pub async fn set_clipboard_paths(paths: Vec<String>) -> Result<(), String> {
@@ -92,4 +98,43 @@ pub async fn open_shell(kind: String, path: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || shells::open_shell(kind, path))
         .await
         .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub fn is_windows_11() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        return query_windows_build_number().is_some_and(|build| build >= 22000);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        false
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn query_windows_build_number() -> Option<u32> {
+    let mut buffer = [0u16; 32];
+    let mut buffer_size = std::mem::size_of_val(&buffer) as u32;
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_LOCAL_MACHINE,
+            w!("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"),
+            w!("CurrentBuildNumber"),
+            RRF_RT_REG_SZ,
+            None,
+            Some(buffer.as_mut_ptr().cast()),
+            Some(&mut buffer_size),
+        )
+    };
+    if status != WIN32_ERROR(0) {
+        return None;
+    }
+
+    let value_len = (buffer_size as usize / std::mem::size_of::<u16>()).saturating_sub(1);
+    String::from_utf16(&buffer[..value_len])
+        .ok()?
+        .parse::<u32>()
+        .ok()
 }

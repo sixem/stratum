@@ -9,3 +9,7 @@
   z-index: 2500;
   background: var(--window-frame-edge);
 }
+
+:root[data-windows-version="11"] .app-window-frame {
+  display: none;
+}

@@ -1,5 +1,6 @@
 // Centralizes app-wide side effects so App.tsx stays focused on data flow.
 import { useEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { RefObject } from "react";
 import type { EntryContextTarget, SortState, Tab, ViewMode } from "@/types";
@@ -306,6 +307,33 @@ export const useAppEffects = ({
       window.removeEventListener("blur", syncWindowFocus);
     };
   }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!isTauriEnv) {
+      delete root.dataset.windowsVersion;
+      return;
+    }
+
+    let mounted = true;
+    void invoke<boolean>("is_windows_11")
+      .then((isWindows11) => {
+        if (!mounted) return;
+        if (isWindows11) {
+          root.dataset.windowsVersion = "11";
+        } else {
+          delete root.dataset.windowsVersion;
+        }
+      })
+      .catch(() => {
+        if (!mounted) return;
+        delete root.dataset.windowsVersion;
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isTauriEnv]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
