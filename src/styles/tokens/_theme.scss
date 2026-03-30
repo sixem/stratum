@@ -60,14 +60,23 @@ $accent-themes: (
   --font-size-lg: 0.9375rem;
   --font-size-xl: 1.125rem;
   --font-size-2xl: 1.25rem;
+  // File-view sizing tokens keep virtualization math and card styles aligned.
+  --file-view-list-row-height: 36px;
+  --file-view-list-row-gap: 6px;
+  --file-view-grid-card-border: 1px;
+  --file-view-grid-card-padding: 6px;
+  --file-view-grid-card-gap: 6px;
+  --file-view-grid-meta-gap: 6px;
+  --file-view-grid-name-line-height: 14px;
+  --file-view-grid-info-line-height: 13px;
+  --file-view-grid-icon-width-ratio: 4;
+  --file-view-grid-icon-height-ratio: 3;
   // Layout sizing tokens for the default edge-to-edge shell.
   --layout-gap: 0;
   --layout-padding: 0;
   --panel-radius: 0;
   --sidebar-padding: 16px;
   --main-padding: 0;
-  --thumb-grid-margin: 0;
-  --content-edge-gap: 8px;
 }
 
 @each $name, $theme in $accent-themes {

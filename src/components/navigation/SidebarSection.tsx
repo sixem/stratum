@@ -1,7 +1,7 @@
 // Collapsible sidebar section wrapper.
 import type { ReactNode } from "react";
 import { PressButton } from "@/components/primitives/PressButton";
-import { SidebarCollapseIcon, SidebarExpandIcon } from "@/components/icons";
+import { SidebarExpandIcon } from "@/components/icons";
 
 type SidebarSectionProps = {
   title: string;
@@ -11,7 +11,7 @@ type SidebarSectionProps = {
 };
 
 export const SidebarSection = ({ title, isOpen, onToggle, children }: SidebarSectionProps) => {
-  const ToggleIcon = isOpen ? SidebarCollapseIcon : SidebarExpandIcon;
+  const ToggleIcon = SidebarExpandIcon;
   return (
     <>
       <PressButton
@@ -24,7 +24,7 @@ export const SidebarSection = ({ title, isOpen, onToggle, children }: SidebarSec
           event.stopPropagation();
         }}
       >
-        <span>{title}</span>
+        <span className="section-toggle-label">{title}</span>
         <span className="toggle-mark" aria-hidden="true">
           <ToggleIcon className="toggle-mark-icon" />
         </span>

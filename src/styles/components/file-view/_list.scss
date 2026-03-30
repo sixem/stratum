@@ -1,0 +1,352 @@
+// List layout, virtualization surfaces, and list-only variants.
+@use "./shared" as shared;
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+  padding: 0;
+  --list-columns: 1fr 90px 150px;
+}
+
+// Scope list internals to the list container.
+:where(.file-list) {
+  .list-shell {
+    position: relative;
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-left: 10px;
+  }
+
+  .list-content {
+    opacity: 0;
+    transition: none;
+  }
+
+  .list-content[data-ready="true"] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .list-content[data-ready="false"] {
+    pointer-events: none;
+    transition: none;
+  }
+
+  .list-content[data-ready="false"][data-animate="true"] {
+    transition: none;
+  }
+
+  .list-header {
+    display: grid;
+    grid-template-columns: var(--list-columns);
+    align-items: center;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--stroke);
+    background: rgba(12, 16, 24, 0.6);
+  }
+
+  .list-header-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    width: 100%;
+    padding: 3px 4px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: transparent;
+    font-size: var(--font-size-2xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-align: left;
+    transition: none;
+    cursor: pointer;
+  }
+
+  .list-header-button::after {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 6px solid currentColor;
+    opacity: 0;
+    transform: translateY(-1px);
+  }
+
+  .list-header-button.is-right {
+    justify-content: flex-end;
+    text-align: right;
+  }
+
+  .list-header-button:hover {
+    color: var(--text);
+  }
+
+  .list-header-button[data-sort-active="true"] {
+    color: var(--text);
+  }
+
+  .list-header-button[data-sort-active="true"]::after {
+    opacity: 0.7;
+  }
+
+  .list-header-button[data-sort-active="true"][data-sort-dir="asc"]::after {
+    transform: translateY(-1px) rotate(180deg);
+  }
+
+  .list-body {
+    position: relative;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 0;
+    min-width: 0;
+    flex: 1;
+    scroll-behavior: auto;
+    scrollbar-gutter: stable;
+    scrollbar-width: auto;
+    overflow-anchor: none;
+  }
+
+  .list-body::before,
+  .list-body::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 28px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    z-index: 3;
+  }
+
+  .list-body::before {
+    top: 0;
+    background: linear-gradient(
+      to bottom,
+      rgba(var(--accent-rgb), 0.18),
+      rgba(var(--accent-rgb), 0)
+    );
+  }
+
+  .list-body::after {
+    bottom: 0;
+    background: linear-gradient(
+      to top,
+      rgba(var(--accent-rgb), 0.18),
+      rgba(var(--accent-rgb), 0)
+    );
+  }
+
+  .list-body[data-drag-scroll="up"]::before,
+  .list-body[data-drag-scroll="both"]::before {
+    opacity: 1;
+  }
+
+  .list-body[data-drag-scroll="down"]::after,
+  .list-body[data-drag-scroll="both"]::after {
+    opacity: 1;
+  }
+
+  .list-spacer {
+    height: 0;
+  }
+
+  .list-virtual {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--list-row-gap, var(--file-view-list-row-gap));
+    will-change: transform;
+  }
+
+  .list-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    padding: 16px;
+  }
+
+  .row {
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--list-columns);
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    height: var(--list-row-height, var(--file-view-list-row-height));
+    border-radius: 6px;
+    background: var(--surface-control-muted);
+    --list-dot-color: var(--accent);
+    border: 1px solid transparent;
+    text-align: left;
+    cursor: pointer;
+    transition: none;
+  }
+
+  .row.is-renaming {
+    cursor: default;
+  }
+
+  // Keep rows visible while delete work is in-flight, but mark them as pending.
+  .row.is-deleting {
+    cursor: progress;
+  }
+
+  .row.is-deleting::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgba(7, 10, 16, 0.26);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .row.is-deleting::after {
+    content: "";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    width: 11px;
+    height: 11px;
+    margin-top: -5.5px;
+    border: 2px solid rgba(255, 255, 255, 0.34);
+    border-top-color: rgba(255, 255, 255, 0.95);
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 2;
+    animation: delete-pending-spin 0.8s linear infinite;
+  }
+
+  .row.is-deleting .name,
+  .row.is-deleting .size,
+  .row.is-deleting .modified {
+    opacity: 0.72;
+    position: relative;
+    z-index: 2;
+  }
+
+  .row.is-renaming .name {
+    overflow: visible;
+    gap: 6px;
+  }
+
+  .row.is-parent {
+    opacity: 0.7;
+  }
+
+  .row[aria-disabled="true"] {
+    opacity: 0.8;
+  }
+
+  .row .name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .row .name::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--list-dot-color);
+  }
+
+  .row .size,
+  .row .modified {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    font-size: var(--font-size-md);
+  }
+}
+
+// Category tinting for list view dots.
+:where(.file-list) .list-shell[data-category-tint="true"] .row[data-kind="document"] {
+  --list-dot-color: rgba(82, 132, 255, 0.85);
+}
+
+:where(.file-list) .list-shell[data-category-tint="true"] .row[data-kind="image"] {
+  --list-dot-color: rgba(56, 201, 198, 0.85);
+}
+
+:where(.file-list) .list-shell[data-category-tint="true"] .row[data-kind="video"] {
+  --list-dot-color: rgba(255, 140, 61, 0.85);
+}
+
+:where(.file-list) .list-shell[data-category-tint="true"] .row[data-kind="executable"] {
+  --list-dot-color: rgba(var(--accent-rgb), 0.85);
+}
+
+// Ambient mode lets list rows carry a slightly stronger tint as well, not just the dot.
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="document"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include shared.entry-state-surface(rgba(82, 132, 255, 0.18), rgba(82, 132, 255, 0.055));
+  --list-dot-color: rgba(110, 154, 255, 0.9);
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="image"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include shared.entry-state-surface(rgba(56, 201, 198, 0.18), rgba(56, 201, 198, 0.055));
+  --list-dot-color: rgba(88, 223, 219, 0.9);
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="video"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include shared.entry-state-surface(rgba(255, 140, 61, 0.2), rgba(255, 140, 61, 0.06));
+  --list-dot-color: rgba(255, 166, 103, 0.9);
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="executable"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include shared.entry-state-surface(
+    rgba(var(--accent-rgb), 0.18),
+    rgba(var(--accent-rgb), 0.055)
+  );
+  --list-dot-color: rgba(var(--accent-rgb), 0.9);
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="document"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include shared.entry-state-surface(rgba(82, 132, 255, 0.22), rgba(82, 132, 255, 0.08));
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="image"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include shared.entry-state-surface(rgba(56, 201, 198, 0.22), rgba(56, 201, 198, 0.08));
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="video"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include shared.entry-state-surface(rgba(255, 140, 61, 0.24), rgba(255, 140, 61, 0.09));
+}
+
+:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
+  .row[data-kind="executable"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include shared.entry-state-surface(
+    rgba(var(--accent-rgb), 0.22),
+    rgba(var(--accent-rgb), 0.08)
+  );
+}

@@ -5,12 +5,12 @@ import { useScrollRestore, useWheelSnap } from "@/hooks";
 import { makeDebug } from "@/lib";
 import { GRID_AUTO_COLUMNS_MAX, GRID_AUTO_COLUMNS_MIN } from "@/modules";
 import type { GridSize, ThumbnailFit } from "@/modules";
+import { getFileViewLayoutMetrics } from "../fileViewLayoutMetrics";
 import { useGridViewportLayout } from "./useGridViewportLayout";
 
 type GridPreset = {
   column: number;
   gap: number;
-  padding: number;
 };
 
 type GridSizing = GridPreset & {
@@ -23,48 +23,41 @@ const GRID_PRESETS: Record<Exclude<GridSize, "auto">, GridPreset> = {
   small: {
     column: 180,
     gap: 12,
-    padding: 6,
   },
   normal: {
     column: 220,
     gap: 14,
-    padding: 8,
   },
   large: {
     column: 260,
     gap: 16,
-    padding: 10,
   },
 };
 
-// Keep these layout numbers in sync with the grid card styles in components/_file-view.scss.
-const GRID_CARD_BORDER = 1;
-// These gaps must match the CSS in components/_file-view.scss.
-const GRID_CARD_GAP = 6;
-const GRID_META_GAP = 6;
-const GRID_CARD_RENDER_PADDING = 6;
-const GRID_ICON_RATIO = 3 / 4;
-const GRID_NAME_LINE_HEIGHT = 14;
-const GRID_INFO_LINE_HEIGHT = 13;
 const GRID_PERF_LOG_INTERVAL_MS = 120;
 const perf = makeDebug("perf:resize:grid");
 
-const getGridIconHeight = (column: number, padding: number) => {
-  const innerWidth = column - padding * 2 - GRID_CARD_BORDER * 2;
-  return Math.max(0, Math.round(innerWidth * GRID_ICON_RATIO));
+const getGridIconHeight = (
+  column: number,
+  layoutMetrics: ReturnType<typeof getFileViewLayoutMetrics>,
+) => {
+  const innerWidth =
+    column - layoutMetrics.gridCardPadding * 2 - layoutMetrics.gridCardBorder * 2;
+  const iconRatio =
+    layoutMetrics.gridIconHeightRatio / Math.max(1, layoutMetrics.gridIconWidthRatio);
+  return Math.max(0, Math.round(innerWidth * iconRatio));
 };
 
-const getGridMetaHeight = (showMeta: boolean) => {
-  if (!showMeta) return GRID_NAME_LINE_HEIGHT;
-  return GRID_NAME_LINE_HEIGHT + GRID_META_GAP + GRID_INFO_LINE_HEIGHT;
-};
-
-// The rendered card CSS always uses a fixed inner padding, while presets can reserve
-// a bit more vertical air. Mirror that same extra air into the horizontal gap math so
-// auto-fit calculations use the same effective gap that the CSS grid actually renders.
-const getVisibleColumnGap = (gap: number, padding: number) => {
-  const verticalGapBoost = Math.max(0, padding - GRID_CARD_RENDER_PADDING) * 2;
-  return gap + verticalGapBoost;
+const getGridMetaHeight = (
+  showMeta: boolean,
+  layoutMetrics: ReturnType<typeof getFileViewLayoutMetrics>,
+) => {
+  if (!showMeta) return layoutMetrics.gridNameLineHeight;
+  return (
+    layoutMetrics.gridNameLineHeight +
+    layoutMetrics.gridMetaGap +
+    layoutMetrics.gridInfoLineHeight
+  );
 };
 
 // Keep auto grid columns within the supported range for readability.
@@ -84,17 +77,20 @@ const buildAutoPreset = (
     return { ...base };
   }
   const contentWidth = Math.max(0, viewportWidth - viewportPadding * 2);
-  const visibleColumnGap = getVisibleColumnGap(base.gap, base.padding);
-  const totalGap = visibleColumnGap * Math.max(0, safeColumns - 1);
+  const totalGap = base.gap * Math.max(0, safeColumns - 1);
   const available = Math.max(0, contentWidth - totalGap);
   const column = Math.max(1, Math.floor(available / safeColumns));
   return { ...base, column };
 };
 
 // Derive the virtual row height from the card's real content sizing.
-const buildGridSizing = (preset: GridPreset, showMeta: boolean): GridSizing => {
-  const iconHeight = getGridIconHeight(preset.column, preset.padding);
-  const metaHeight = getGridMetaHeight(showMeta);
+const buildGridSizing = (
+  preset: GridPreset,
+  showMeta: boolean,
+  layoutMetrics: ReturnType<typeof getFileViewLayoutMetrics>,
+): GridSizing => {
+  const iconHeight = getGridIconHeight(preset.column, layoutMetrics);
+  const metaHeight = getGridMetaHeight(showMeta, layoutMetrics);
   return {
     ...preset,
     iconHeight,
@@ -102,9 +98,9 @@ const buildGridSizing = (preset: GridPreset, showMeta: boolean): GridSizing => {
     rowHeight:
       iconHeight +
       metaHeight +
-      GRID_CARD_GAP +
-      preset.padding * 2 +
-      GRID_CARD_BORDER * 2,
+      layoutMetrics.gridCardGap +
+      layoutMetrics.gridCardPadding * 2 +
+      layoutMetrics.gridCardBorder * 2,
   };
 };
 
@@ -160,6 +156,7 @@ export const useGridSizing = ({
   viewItemsLength,
 }: UseGridSizingOptions): GridSizingState => {
   const gridMetaEnabled = gridShowSize || gridShowExtension;
+  const layoutMetrics = useMemo(() => getFileViewLayoutMetrics(), []);
   const {
     viewportRef,
     viewportWidth,
@@ -183,7 +180,7 @@ export const useGridSizing = ({
   // not trigger a second correction pass after cards have already rendered.
   const gridSizing = useMemo(() => {
     const basePreset = GRID_PRESETS[gridSize === "auto" ? "normal" : gridSize] ?? GRID_PRESETS.small;
-    // Apply the user-configured gap while preserving preset padding/column sizing.
+    // Apply the user-configured gap while preserving the preset column width.
     const gapPreset = {
       ...basePreset,
       gap: gridGap,
@@ -192,39 +189,37 @@ export const useGridSizing = ({
       gridSize === "auto"
         ? buildAutoPreset(gapPreset, layoutViewportWidth, gridAutoColumns, viewportPadding)
         : gapPreset;
-    return buildGridSizing(preset, gridMetaEnabled);
+    return buildGridSizing(preset, gridMetaEnabled, layoutMetrics);
   }, [
     gridAutoColumns,
     gridGap,
     gridMetaEnabled,
     gridSize,
+    layoutMetrics,
     layoutViewportWidth,
     viewportPadding,
   ]);
 
   const gridVars = useMemo(
     () => {
-      const visibleColumnGap = getVisibleColumnGap(gridSizing.gap, gridSizing.padding);
-
       return {
         "--thumb-column": `${gridSizing.column}px`,
         "--thumb-gap": `${gridSizing.gap}px`,
-        "--thumb-column-gap": `${visibleColumnGap}px`,
+        "--thumb-column-gap": `${gridSizing.gap}px`,
         "--thumb-row-gap": `${gridSizing.gap}px`,
         "--thumb-row-height": `${gridSizing.rowHeight}px`,
-        "--thumb-padding": `${viewportPadding}px`,
         "--thumb-icon-height": `${gridSizing.iconHeight}px`,
         "--thumb-meta-height": `${gridSizing.metaHeight}px`,
         "--thumb-fit": thumbnailFit,
         "--thumb-preview-bg": "transparent",
       } as CSSProperties;
     },
-    [gridSizing, thumbnailFit, viewportPadding],
+    [gridSizing, thumbnailFit],
   );
 
   const columnGap = useMemo(() => {
-    return getVisibleColumnGap(gridSizing.gap, gridSizing.padding);
-  }, [gridSizing.gap, gridSizing.padding]);
+    return gridSizing.gap;
+  }, [gridSizing.gap]);
   const contentWidth = Math.max(0, layoutViewportWidth - viewportPadding * 2);
   const columnCount =
     gridSize === "auto"

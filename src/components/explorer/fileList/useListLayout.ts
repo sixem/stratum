@@ -2,9 +2,7 @@
 import type { CSSProperties, RefObject } from "react";
 import { useMemo, useRef } from "react";
 import { useScrollRestore, useWheelSnap } from "@/hooks";
-
-const ROW_HEIGHT = 36;
-const ROW_GAP = 6;
+import { getFileViewLayoutMetrics } from "../fileViewLayoutMetrics";
 
 type UseListLayoutOptions = {
   smoothScroll: boolean;
@@ -28,8 +26,9 @@ export const useListLayout = ({
   loading,
 }: UseListLayoutOptions): ListLayoutState => {
   const listRef = useRef<HTMLDivElement | null>(null);
-  const rowHeight = ROW_HEIGHT;
-  const rowGap = ROW_GAP;
+  const layoutMetrics = useMemo(() => getFileViewLayoutMetrics(), []);
+  const rowHeight = layoutMetrics.listRowHeight;
+  const rowGap = layoutMetrics.listRowGap;
   const itemHeight = rowHeight + rowGap;
 
   const listVars = useMemo(

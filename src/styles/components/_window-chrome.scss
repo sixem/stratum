@@ -5,7 +5,7 @@
   width: 100%;
   min-width: 0;
   min-height: var(--window-chrome-bar-height);
-  padding: 4px 2px 2px 2px;
+  padding: 4px 4px 2px 2px;
 }
 
 .window-chrome-bar-drag {
@@ -36,7 +36,7 @@
   width: 40px;
   min-height: var(--window-chrome-bar-height);
   border: none;
-  border-radius: 0;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted);
   display: grid;

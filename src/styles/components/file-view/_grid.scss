@@ -1,0 +1,405 @@
+// Thumbnail grid layout, card structure, and grid-only variants.
+@use "./shared" as shared;
+
+:where(.thumb-shell) {
+  --thumb-scrollbar-size: 10px;
+
+  .thumb-viewport {
+    position: relative;
+    overflow-x: hidden;
+    overflow-y: auto;
+    min-height: 0;
+    flex: 1;
+    padding: 0;
+    padding-right: 0;
+    scroll-behavior: auto;
+    scrollbar-gutter: stable;
+    scrollbar-width: auto;
+    overflow-anchor: none;
+  }
+
+  .thumb-spacer {
+    height: 0;
+  }
+
+  .thumb-content {
+    opacity: 0;
+    transition: none;
+  }
+
+  .thumb-content[data-ready="true"] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .thumb-content[data-ready="false"] {
+    pointer-events: none;
+    transition: none;
+  }
+
+  .thumb-content[data-ready="false"][data-animate="true"] {
+    transition: none;
+  }
+
+  .thumb-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, var(--thumb-column, 180px));
+    column-gap: var(--thumb-column-gap, var(--thumb-gap, 12px));
+    row-gap: var(--thumb-row-gap, var(--thumb-gap, 12px));
+    grid-auto-rows: var(--thumb-row-height, 210px);
+    align-items: start;
+    justify-content: center;
+    align-content: center;
+    width: 100%;
+    margin: 0;
+  }
+
+  .thumb-card {
+    position: relative;
+    box-sizing: border-box;
+    border: var(--file-view-grid-card-border) solid var(--stroke);
+    border-radius: 6px;
+    padding: var(--file-view-grid-card-padding);
+    background: var(--surface-control-muted);
+    text-align: left;
+    cursor: pointer;
+    display: grid;
+    // Keep the thumbnail + metadata snug; let extra space sit below the content.
+    align-content: start;
+    // Stretch the card grid so metadata can use the full width.
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--file-view-grid-card-gap);
+    transition: none;
+    justify-content: stretch;
+  }
+
+  .thumb-card.is-renaming {
+    cursor: default;
+  }
+
+  // Show immediate in-card delete progress without shifting layout.
+  .thumb-card.is-deleting {
+    cursor: progress;
+  }
+
+  .thumb-card.is-deleting::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgba(7, 10, 16, 0.28);
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  .thumb-card.is-deleting::after {
+    content: "";
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.34);
+    border-top-color: rgba(255, 255, 255, 0.95);
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 4;
+    animation: delete-pending-spin 0.8s linear infinite;
+  }
+
+  .thumb-card.is-deleting .thumb-icon {
+    filter: saturate(0.72) brightness(0.82);
+  }
+
+  .thumb-card.is-deleting .thumb-preview,
+  .thumb-card.is-deleting .thumb-app-icon,
+  .thumb-card.is-deleting .thumb-svg {
+    filter: blur(0.9px);
+  }
+
+  .thumb-card.is-deleting .thumb-meta {
+    opacity: 0.74;
+  }
+
+  .thumb-card[aria-disabled="true"] {
+    opacity: 0.85;
+  }
+
+  .thumb-card.is-parent {
+    border-style: dashed;
+  }
+
+  .thumb-icon {
+    position: relative;
+    border-radius: 8px;
+    background: var(--thumb-preview-bg, var(--surface-card));
+    aspect-ratio:
+      var(--file-view-grid-icon-width-ratio) / var(--file-view-grid-icon-height-ratio);
+    height: var(--thumb-icon-height, auto);
+    color: var(--thumb-icon-color, var(--muted));
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+  }
+
+  .thumb-icon[data-has-thumb-preview="true"] {
+    border-radius: 0;
+    // Keep real thumbnail previews clipped to the card so tight grid gaps do not bleed across columns.
+    overflow: hidden;
+  }
+
+  .thumb-preview {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: var(--thumb-fit, cover);
+    display: block;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    transition: none;
+  }
+
+  .thumb-preview[data-ready="true"] {
+    opacity: 1;
+  }
+
+  .thumb-app-icon {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: auto;
+    height: auto;
+    max-width: 70%;
+    max-height: 70%;
+    object-fit: contain;
+    display: block;
+    opacity: 0;
+    transition: none;
+    pointer-events: none;
+  }
+
+  .thumb-app-icon[data-ready="true"] {
+    opacity: 1;
+  }
+
+  .thumb-svg {
+    width: 56px;
+    height: 56px;
+    max-width: 70%;
+    max-height: 70%;
+    display: block;
+  }
+
+  .thumb-svg.is-dir {
+    color: var(--accent);
+  }
+
+  // Keep parent navigation icon neutral so it works with all accent themes.
+  .thumb-parent-icon {
+    width: 40px;
+    height: 40px;
+    color: rgba(210, 218, 232, 0.86);
+    opacity: 0.95;
+  }
+
+  .thumb-card.is-parent .thumb-icon {
+    color: rgba(210, 218, 232, 0.86);
+  }
+
+  .thumb-meta {
+    display: grid;
+    gap: var(--file-view-grid-meta-gap);
+    min-height: var(--thumb-meta-height, auto);
+    min-width: 0;
+  }
+
+  .thumb-name {
+    position: relative;
+    display: block;
+    min-width: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    line-height: var(--file-view-grid-name-line-height);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .thumb-name .thumb-name-measure {
+    position: absolute;
+    left: 0;
+    top: 0;
+    visibility: hidden;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .thumb-name[data-ellipsis="middle"] {
+    display: flex;
+    align-items: baseline;
+    min-width: 0;
+    text-overflow: clip;
+  }
+
+  .thumb-name[data-ellipsis="middle"] .thumb-name-start {
+    line-height: inherit;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: pre;
+    flex: 0 1 auto;
+  }
+
+  .thumb-name[data-ellipsis="middle"] .thumb-name-end {
+    line-height: inherit;
+    flex: 0 0 auto;
+    white-space: pre;
+  }
+
+  .thumb-info {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+    font-size: 0.7rem;
+    line-height: var(--file-view-grid-info-line-height);
+    color: var(--muted);
+    min-width: 0;
+    font-weight: 500;
+  }
+
+  .thumb-info-size {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .thumb-info-ext {
+    grid-column: 2;
+    text-align: right;
+  }
+
+  .thumb-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    padding: 24px;
+  }
+}
+
+.thumb-shell {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+:root[data-grid-center="false"] :where(.thumb-shell) .thumb-grid {
+  align-content: start;
+  justify-content: start;
+}
+
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-parent-icon {
+  color: rgba(220, 227, 238, 0.82);
+}
+
+:where(.thumb-shell)[data-category-tint="true"] .thumb-card[data-kind="document"] {
+  background: rgba(82, 132, 255, 0.08);
+  border-color: rgba(82, 132, 255, 0.22);
+  --thumb-icon-color: rgba(82, 132, 255, 0.85);
+}
+
+:where(.thumb-shell)[data-category-tint="true"] .thumb-card[data-kind="image"] {
+  background: rgba(56, 201, 198, 0.08);
+  border-color: rgba(56, 201, 198, 0.22);
+  --thumb-icon-color: rgba(56, 201, 198, 0.85);
+}
+
+:where(.thumb-shell)[data-category-tint="true"] .thumb-card[data-kind="video"] {
+  background: rgba(255, 140, 61, 0.08);
+  border-color: rgba(255, 140, 61, 0.22);
+  --thumb-icon-color: rgba(255, 140, 61, 0.85);
+}
+
+:where(.thumb-shell)[data-category-tint="true"] .thumb-card[data-kind="executable"] {
+  background: rgba(var(--accent-rgb), 0.08);
+  border-color: rgba(var(--accent-rgb), 0.22);
+  --thumb-icon-color: rgba(var(--accent-rgb), 0.85);
+}
+
+// When category tinting is active, keep selection/drop states visually dominant.
+:where(.thumb-shell)[data-category-tint="true"] .thumb-card.is-selected {
+  border-color: rgba(var(--accent-rgb), 0.7);
+  background: rgba(var(--accent-rgb), 0.18);
+}
+
+:where(.thumb-shell)[data-category-tint="true"] .thumb-card[data-drop-target="true"] {
+  border-color: rgba(var(--accent-rgb), 0.9);
+  background: rgba(var(--accent-rgb), 0.24);
+}
+
+:root[data-grid-corners="straight"] :where(.thumb-shell) .thumb-card,
+:root[data-grid-corners="straight"] :where(.thumb-shell) .thumb-icon {
+  border-radius: 0;
+}
+
+// In ambient mode, preserve the translucent look but let category-tinted files read a bit faster.
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="document"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include shared.entry-state-surface(rgba(82, 132, 255, 0.24), rgba(82, 132, 255, 0.065));
+  --thumb-icon-color: rgba(110, 154, 255, 0.9);
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="image"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include shared.entry-state-surface(rgba(56, 201, 198, 0.24), rgba(56, 201, 198, 0.065));
+  --thumb-icon-color: rgba(88, 223, 219, 0.9);
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="video"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include shared.entry-state-surface(rgba(255, 140, 61, 0.26), rgba(255, 140, 61, 0.07));
+  --thumb-icon-color: rgba(255, 166, 103, 0.9);
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="executable"]:not(.is-selected):not([data-drop-target="true"]) {
+  @include shared.entry-state-surface(
+    rgba(var(--accent-rgb), 0.24),
+    rgba(var(--accent-rgb), 0.065)
+  );
+  --thumb-icon-color: rgba(var(--accent-rgb), 0.9);
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="document"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include shared.entry-state-surface(rgba(82, 132, 255, 0.28), rgba(82, 132, 255, 0.09));
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="image"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include shared.entry-state-surface(rgba(56, 201, 198, 0.28), rgba(56, 201, 198, 0.09));
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="video"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include shared.entry-state-surface(rgba(255, 140, 61, 0.3), rgba(255, 140, 61, 0.1));
+}
+
+:root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
+  .thumb-card[data-kind="executable"]:not(.is-selected):not([data-drop-target="true"]):hover {
+  @include shared.entry-state-surface(
+    rgba(var(--accent-rgb), 0.28),
+    rgba(var(--accent-rgb), 0.09)
+  );
+}

@@ -1,0 +1,115 @@
+// Shared file-view primitives that both the grid and list variants use.
+
+:where(.list-shell, .thumb-shell) {
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    z-index: 2;
+    opacity: 0;
+    pointer-events: none;
+    transition: none;
+  }
+
+  .loading-overlay[data-visible="true"] {
+    opacity: 1;
+  }
+
+  .loading-overlay[data-solid="true"] {
+    background: rgba(10, 11, 16, 0.55);
+  }
+}
+
+.loading-indicator {
+  display: grid;
+  gap: 8px;
+  place-items: center;
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.loading-indicator img {
+  width: 28px;
+  height: 28px;
+  opacity: 0.85;
+}
+
+.loading-splash {
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+}
+
+@keyframes delete-pending-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Shared entry-state helpers keep grid cards and list rows visually aligned.
+@mixin entry-state-surface($border-color, $background) {
+  border-color: $border-color;
+  background: $background;
+}
+
+:where(.file-list, .thumb-shell) {
+  .rename-input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    padding: 2px 6px;
+    margin: -2px 0;
+    border: none;
+    border-radius: 2px;
+    background: rgba(8, 10, 16, 0.75);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+    user-select: text;
+    cursor: text;
+  }
+
+  .rename-input:focus {
+    outline: none;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.24),
+      0 0 0 2px rgba(var(--accent-rgb), 0.28);
+  }
+
+  .rename-input::selection {
+    background: #fff;
+    color: #000;
+  }
+
+  .rename-input::-moz-selection {
+    background: #fff;
+    color: #000;
+  }
+}
+
+// Keep grid rename typography aligned with the thumb name styles.
+:where(.thumb-shell) .rename-input.rename-input-grid {
+  font-size: var(--font-size-sm);
+  line-height: var(--file-view-grid-name-line-height);
+  font-weight: 600;
+}
+
+:where(.file-list) {
+  .row.is-renaming .rename-input {
+    flex: 1;
+  }
+}
+
+.selection-rect {
+  position: fixed;
+  z-index: 3;
+  border: 1px solid rgba(var(--accent-rgb), 0.9);
+  background: rgba(var(--accent-rgb), 0.18);
+  border-radius: 0;
+  pointer-events: none;
+}
