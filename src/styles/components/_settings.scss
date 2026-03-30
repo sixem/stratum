@@ -308,30 +308,31 @@
 
 .settings-toggle {
   position: relative;
-  width: 44px;
-  height: 24px;
+  width: 42px;
+  height: 22px;
   border-radius: 999px;
-  background: var(--surface-control-muted);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: #0f1420;
+  border: 1px solid #1d2434;
   cursor: pointer;
   display: inline-block;
   transition:
     background-color 0.16s ease,
-    border-color 0.16s ease;
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .settings-toggle:has(input:checked) {
-  background: rgba(var(--accent-rgb), 0.22);
-  border-color: rgba(var(--accent-rgb), 0.22);
+  background: #0f1420;
+  border-color: #273049;
 }
 
 .settings-toggle:hover {
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: #2a3449;
 }
 
 .settings-toggle:has(input:focus-visible) {
-  border-color: rgba(var(--accent-rgb), 0.56);
-  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.14);
+  border-color: rgba(var(--accent-rgb), 0.5);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.16);
 }
 
 .settings-toggle input {
@@ -345,11 +346,11 @@
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(232, 237, 246, 0.92);
+  border: 1px solid #313a4f;
+  background: #2a3142;
   transition:
     transform 0.16s ease,
     background-color 0.16s ease,
@@ -358,8 +359,8 @@
 
 .settings-toggle input:checked + span {
   transform: translateX(20px);
-  border-color: rgba(var(--accent-rgb), 0.16);
-  background: rgba(244, 247, 255, 0.94);
+  border-color: rgba(var(--accent-rgb), 0.72);
+  background: var(--accent);
 }
 
 .settings-range {
@@ -405,10 +406,10 @@
   flex-wrap: wrap;
   gap: 4px;
   align-items: center;
-  padding: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  background: var(--surface-control-muted);
+  padding: 3px;
+  border: 1px solid #1b2232;
+  border-radius: 999px;
+  background: #101521;
   justify-self: start;
 }
 
@@ -540,13 +541,13 @@
 
 .settings-pill {
   padding: 5px 12px;
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--muted);
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
   cursor: pointer;
-  background: rgba(0, 0, 0, 0.14);
+  background: transparent;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -558,8 +559,8 @@
 
 .settings-pill:hover:not(:disabled):not(.is-active) {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.06);
+  background: #141a28;
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
 .settings-pill-check {
@@ -579,9 +580,9 @@
 
 .settings-pill.is-active {
   color: var(--text);
-  border-color: rgba(var(--accent-rgb), 0.22);
-  background: rgba(var(--accent-rgb), 0.12);
-  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.08);
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #181f2e;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
 .settings-pill:disabled {
