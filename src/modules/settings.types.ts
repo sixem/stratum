@@ -24,6 +24,7 @@ export type Settings = {
   defaultViewMode: ViewMode;
   showTabNumbers: boolean;
   fixedWidthTabs: boolean;
+  showRecycleBinButton: boolean;
   smoothScroll: boolean;
   smartTabJump: boolean;
   accentTheme: AccentTheme;

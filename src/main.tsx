@@ -11,6 +11,7 @@ if (import.meta.hot) {
   const HMR_RELOAD_MATCHERS = [
     "useSelectionDrag",
     "useEntryDragOut",
+    "usePinnedPlaceDragDrop",
     "useTabDragDrop",
   ];
   // Fast Refresh can leave drag-related listeners in a bad state, so hard reload on those updates.

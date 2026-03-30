@@ -25,6 +25,7 @@ export const SettingsBarsSection = ({
   const {
     showTabNumbers,
     fixedWidthTabs,
+    showRecycleBinButton,
     sidebarRecentLimit,
     sidebarSectionOrder,
     sidebarHiddenSections,
@@ -33,6 +34,7 @@ export const SettingsBarsSection = ({
     (state) => ({
       showTabNumbers: state.showTabNumbers,
       fixedWidthTabs: state.fixedWidthTabs,
+      showRecycleBinButton: state.showRecycleBinButton,
       sidebarRecentLimit: state.sidebarRecentLimit,
       sidebarSectionOrder: state.sidebarSectionOrder,
       sidebarHiddenSections: state.sidebarHiddenSections,
@@ -106,6 +108,24 @@ export const SettingsBarsSection = ({
             checked={fixedWidthTabs}
             onChange={(event) =>
               updateSettings({ fixedWidthTabs: event.currentTarget.checked })
+            }
+          />
+          <span />
+        </label>
+      </div>
+      <div className="settings-item">
+        <div>
+          <div className="settings-label">Topbar Recycle Bin button</div>
+          <div className="settings-desc">
+            Show a shortcut button for opening the Windows Recycle Bin.
+          </div>
+        </div>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={showRecycleBinButton}
+            onChange={(event) =>
+              updateSettings({ showRecycleBinButton: event.currentTarget.checked })
             }
           />
           <span />

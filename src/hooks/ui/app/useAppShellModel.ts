@@ -54,6 +54,7 @@ export const useAppShellModel = () => {
   const addPlace = usePlacesStore((state) => state.addPlace);
   const pinPlace = usePlacesStore((state) => state.pinPlace);
   const unpinPlace = usePlacesStore((state) => state.unpinPlace);
+  const reorderPinnedPlace = usePlacesStore((state) => state.reorderPinnedPlace);
   const removePlace = usePlacesStore((state) => state.removePlace);
 
   useEffect(() => {
@@ -141,6 +142,7 @@ export const useAppShellModel = () => {
     navigationController,
     shellView,
     places,
+    reorderPinnedPlace,
   });
   const overlays = useShellOverlayModel({
     tauriEnv,

@@ -17,17 +17,20 @@ type PlacesStore = {
   addPlace: (path: string, name?: string, options?: { pinned?: boolean }) => void;
   pinPlace: (path: string) => void;
   unpinPlace: (path: string) => void;
+  reorderPinnedPlace: (fromPath: string, toPath: string, position: "before" | "after") => void;
   removePlace: (path: string) => void;
 };
 
 const STORAGE_KEY = PLACES_STORAGE_KEY;
 const STORAGE_VERSION = PLACES_STORAGE_VERSION;
 
-const DEFAULT_STATE: Omit<PlacesStore, "seedDefaults" | "addPlace" | "pinPlace" | "unpinPlace" | "removePlace"> =
-  {
-    initialized: false,
-    places: [],
-  };
+const DEFAULT_STATE: Omit<
+  PlacesStore,
+  "seedDefaults" | "addPlace" | "pinPlace" | "unpinPlace" | "reorderPinnedPlace" | "removePlace"
+> = {
+  initialized: false,
+  places: [],
+};
 
 const toPlaceKey = (path: string): string | null => {
   const trimmed = path.trim();
@@ -95,6 +98,34 @@ const insertPlace = (places: Place[], place: Place) => {
   }
   places.push(place);
   return places;
+};
+
+const reorderPinnedPlaces = (
+  places: Place[],
+  fromPath: string,
+  toPath: string,
+  position: "before" | "after",
+) => {
+  const fromKey = toPlaceKey(fromPath);
+  const toKey = toPlaceKey(toPath);
+  if (!fromKey || !toKey || fromKey === toKey) return places;
+
+  const pinned = places.filter((place) => place.pinned === true);
+  const normal = places.filter((place) => place.pinned !== true);
+  const fromIndex = pinned.findIndex((place) => toPlaceKey(place.path) === fromKey);
+  const toIndex = pinned.findIndex((place) => toPlaceKey(place.path) === toKey);
+  if (fromIndex < 0 || toIndex < 0) return places;
+
+  const nextPinned = [...pinned];
+  const [moved] = nextPinned.splice(fromIndex, 1);
+  if (!moved) return places;
+
+  const targetIndex = nextPinned.findIndex((place) => toPlaceKey(place.path) === toKey);
+  if (targetIndex < 0) return places;
+
+  const insertIndex = position === "after" ? targetIndex + 1 : targetIndex;
+  nextPinned.splice(insertIndex, 0, moved);
+  return [...nextPinned, ...normal];
 };
 
 const updatePlace = (
@@ -220,6 +251,11 @@ export const usePlacesStore = createWithEqualityFn<PlacesStore>((set) => ({
     set((state) => ({
       initialized: true,
       places: updatePlace(state.places, path, { pinned: false }),
+    })),
+  reorderPinnedPlace: (fromPath, toPath, position) =>
+    set((state) => ({
+      initialized: true,
+      places: reorderPinnedPlaces(state.places, fromPath, toPath, position),
     })),
   removePlace: (path) =>
     set((state) => {

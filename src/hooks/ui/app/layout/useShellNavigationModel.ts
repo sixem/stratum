@@ -34,6 +34,7 @@ type UseShellNavigationModelOptions = {
   navigationController: NavigationControllerModel;
   shellView: ShellViewModel;
   places: Place[];
+  reorderPinnedPlace: (fromPath: string, toPath: string, position: "before" | "after") => void;
 };
 
 export const useShellNavigationModel = ({
@@ -47,6 +48,7 @@ export const useShellNavigationModel = ({
   navigationController,
   shellView,
   places,
+  reorderPinnedPlace,
 }: UseShellNavigationModelOptions) => {
   const handleOpenRecycleBin = useCallback(() => {
     // Windows shell namespace target for the system Recycle Bin.
@@ -111,6 +113,7 @@ export const useShellNavigationModel = ({
     pathBarActions: {
       viewMode: resolvedView.viewMode,
       settingsOpen: menuState.settingsOpen,
+      showRecycleBinButton: settings.showRecycleBinButton,
       onViewChange: tabSession.setViewMode,
       onToggleSettings: menuState.toggleSettings,
       onOpenRecycleBin: handleOpenRecycleBin,
@@ -130,6 +133,7 @@ export const useShellNavigationModel = ({
       onSelect: navigationController.handleSelectPlace,
       onSelectRecent: tabSession.jumpTo,
       onSelectNewTab: navigationController.handleOpenInNewTab,
+      onReorderPinnedPlace: reorderPinnedPlace,
       onPlaceContextMenu: shellView.navigationContext.handlePlaceTargetContextMenu,
       onPlaceContextMenuDown: shellView.navigationContext.handlePlaceTargetContextMenuDown,
       onRecentContextMenu: shellView.navigationContext.handlePlaceTargetContextMenu,

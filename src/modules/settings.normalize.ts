@@ -142,6 +142,10 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.fixedWidthTabs === "boolean"
         ? value.fixedWidthTabs
         : DEFAULT_SETTINGS.fixedWidthTabs,
+    showRecycleBinButton:
+      typeof value?.showRecycleBinButton === "boolean"
+        ? value.showRecycleBinButton
+        : DEFAULT_SETTINGS.showRecycleBinButton,
     smoothScroll:
       typeof value?.smoothScroll === "boolean"
         ? value.smoothScroll

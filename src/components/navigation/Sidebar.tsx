@@ -1,7 +1,8 @@
 // Sidebar for ordered sections like places, recent jumps, and tips.
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
+import { usePinnedPlaceDragDrop } from "@/hooks";
 import { handleMiddleClick, normalizePath, tabLabel } from "@/lib";
 import type { SidebarSectionId } from "@/modules";
 import {
@@ -27,6 +28,7 @@ type SidebarProps = {
   onSelect: (path: string) => void;
   onSelectRecent: (path: string) => void;
   onSelectNewTab?: (path: string) => void;
+  onReorderPinnedPlace?: (fromPath: string, toPath: string, position: "before" | "after") => void;
   onPlaceContextMenu?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
   onPlaceContextMenuDown?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
   onRecentContextMenu?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
@@ -41,6 +43,10 @@ type SidebarItemProps = {
   isDropTarget: boolean;
   isRecent?: boolean;
   isPinned?: boolean;
+  isDragging?: boolean;
+  pinnedDropPosition?: "before" | "after" | null;
+  onReorderPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>, path: string) => void;
+  onSuppressClick?: (event: ReactMouseEvent) => void;
   onSelect: (path: string) => void;
   onSelectNewTab?: (path: string) => void;
   onContextMenu?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
@@ -55,6 +61,10 @@ const SidebarItem = ({
   isDropTarget,
   isRecent = false,
   isPinned = false,
+  isDragging = false,
+  pinnedDropPosition = null,
+  onReorderPointerDown,
+  onSuppressClick,
   onSelect,
   onSelectNewTab,
   onContextMenu,
@@ -70,21 +80,32 @@ const SidebarItem = ({
   };
   const source: PlaceContextTarget["source"] = isRecent ? "sidebar-recent" : "sidebar-place";
   const menuTarget: PlaceContextTarget = { name: title, path, source };
+  const canReorder = isPinned && !isRecent && Boolean(onReorderPointerDown);
 
   return (
     <PressButton
       type="button"
-      className={`place${isRecent ? " is-recent" : ""}${isActive ? " is-active" : ""}`}
+      className={`place${isRecent ? " is-recent" : ""}${isActive ? " is-active" : ""}${isDragging ? " is-dragging" : ""}${canReorder ? " is-reorderable" : ""}`}
       data-pinned={isPinned ? "true" : "false"}
+      data-place-kind={isPinned && !isRecent ? "pinned" : isRecent ? "recent" : "place"}
       data-is-dir="true"
       data-path={path}
       data-drop-target={isDropTarget ? "true" : "false"}
+      data-pinned-drop={pinnedDropPosition ? "true" : "false"}
+      data-pinned-drop-position={pinnedDropPosition ?? undefined}
+      pressOnPointerDown={!canReorder}
+      onClickCapture={onSuppressClick}
       onClick={() => onSelect(path)}
       onMouseDown={handleMiddle}
       onPointerDown={(event) => {
         if (event.button !== 2) return;
         onContextMenuDown?.(event, menuTarget);
       }}
+      onPointerDownCapture={(event) => {
+        if (!canReorder || event.button !== 0) return;
+        onReorderPointerDown?.(event, path);
+      }}
+      draggable={false}
       onPointerUp={(event) => {
         if (event.button !== 2) return;
         onContextMenu?.(event, menuTarget);
@@ -116,6 +137,7 @@ export const Sidebar = ({
   onSelect,
   onSelectRecent,
   onSelectNewTab,
+  onReorderPinnedPlace,
   onPlaceContextMenu,
   onPlaceContextMenuDown,
   onRecentContextMenu,
@@ -123,12 +145,20 @@ export const Sidebar = ({
 }: SidebarProps) => {
   const [placesOpen, setPlacesOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
+  const placesListRef = useRef<HTMLDivElement | null>(null);
   const activeKey = normalizePath(activePath);
   const dropTargetKey = dropTargetPath ? normalizePath(dropTargetPath) : null;
   const orderedSections = normalizeSidebarSectionOrder(sectionOrder);
   const hiddenSectionIds = normalizeSidebarHiddenSections(hiddenSections);
   const hiddenSectionSet = new Set(hiddenSectionIds);
   const [hint, setHint] = useState(() => getSessionHint());
+  const { draggingPath, dropTarget, handlePointerDown, handleSuppressClick } =
+    usePinnedPlaceDragDrop({
+      onReorder: (fromPath, toPath, position) => {
+        onReorderPinnedPlace?.(fromPath, toPath, position);
+      },
+      containerRef: placesListRef,
+    });
 
   const renderSection = (sectionId: SidebarSectionId) => {
     switch (sectionId) {
@@ -142,21 +172,37 @@ export const Sidebar = ({
             {places.length === 0 ? (
               <div className="place is-empty">No places found</div>
             ) : (
-              places.map((place) => (
-                <SidebarItem
-                  key={place.path}
-                  path={place.path}
-                  title={place.name}
-                  subtitle={place.path}
-                  isActive={activeKey === normalizePath(place.path)}
-                  isDropTarget={dropTargetKey === normalizePath(place.path)}
-                  isPinned={place.pinned === true}
-                  onSelect={onSelect}
-                  onSelectNewTab={onSelectNewTab}
-                  onContextMenu={onPlaceContextMenu}
-                  onContextMenuDown={onPlaceContextMenuDown}
-                />
-              ))
+              <div className="sidebar-places-list" ref={placesListRef}>
+                {places.map((place) => (
+                  <SidebarItem
+                    key={place.path}
+                    path={place.path}
+                    title={place.name}
+                    subtitle={place.path}
+                    isActive={activeKey === normalizePath(place.path)}
+                    isDropTarget={dropTargetKey === normalizePath(place.path)}
+                    isPinned={place.pinned === true}
+                    isDragging={draggingPath === place.path}
+                    pinnedDropPosition={
+                      dropTarget?.path === place.path ? dropTarget.position : null
+                    }
+                    onReorderPointerDown={
+                      place.pinned === true && onReorderPinnedPlace
+                        ? handlePointerDown
+                        : undefined
+                    }
+                    onSuppressClick={
+                      place.pinned === true && onReorderPinnedPlace
+                        ? handleSuppressClick
+                        : undefined
+                    }
+                    onSelect={onSelect}
+                    onSelectNewTab={onSelectNewTab}
+                    onContextMenu={onPlaceContextMenu}
+                    onContextMenuDown={onPlaceContextMenuDown}
+                  />
+                ))}
+              </div>
             )}
           </SidebarSection>
         );

@@ -8,6 +8,7 @@ import type { ViewMode } from "@/types";
 type PathBarActionsProps = {
   viewMode: ViewMode;
   settingsOpen: boolean;
+  showRecycleBinButton: boolean;
   onViewChange: (mode: ViewMode) => void;
   onToggleSettings: () => void;
   onOpenRecycleBin: () => void;
@@ -16,6 +17,7 @@ type PathBarActionsProps = {
 export const PathBarActions = ({
   viewMode,
   settingsOpen,
+  showRecycleBinButton,
   onViewChange,
   onToggleSettings,
   onOpenRecycleBin,
@@ -24,13 +26,15 @@ export const PathBarActions = ({
     <div className="pathbar-actions">
       <TransferStatusButton />
       <div className="view-switch">
-        <ToolbarIconButton
-          label="Recycle Bin"
-          tooltipDelayMs={PATHBAR_TOOLTIP_DELAY_MS}
-          onClick={onOpenRecycleBin}
-        >
-          <RecycleBinIcon />
-        </ToolbarIconButton>
+        {showRecycleBinButton ? (
+          <ToolbarIconButton
+            label="Recycle Bin"
+            tooltipDelayMs={PATHBAR_TOOLTIP_DELAY_MS}
+            onClick={onOpenRecycleBin}
+          >
+            <RecycleBinIcon />
+          </ToolbarIconButton>
+        ) : null}
         <ToolbarIconButton
           label="List view"
           active={viewMode === "list"}

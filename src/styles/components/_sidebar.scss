@@ -157,17 +157,18 @@
 
 // Places are shared between the sidebar and the start lander.
 :where(.sidebar, .lander-panel) {
-  .place {
-    display: grid;
-    gap: 4px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid var(--stroke);
-    background: var(--surface-control-muted);
-    text-align: left;
-    cursor: pointer;
-    transition: none;
-  }
+.place {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--stroke);
+  background: var(--surface-control-muted);
+  text-align: left;
+  cursor: pointer;
+  transition: none;
+  position: relative;
+}
 
   .place:hover {
     border-color: rgba(255, 255, 255, 0.2);
@@ -259,6 +260,12 @@
   background: transparent;
 }
 
+:where(.sidebar) .sidebar-places-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
 :where(.sidebar) .place-name {
   font-size: var(--font-size-sm);
   line-height: 1.15;
@@ -271,6 +278,39 @@
 
 :where(.sidebar) .place.is-active .place-path {
   color: #b6c3d8;
+}
+
+:where(.sidebar) .place.is-reorderable {
+  cursor: grab;
+}
+
+:where(.sidebar) .place.is-reorderable:active,
+:where(.sidebar) .place.is-dragging {
+  cursor: grabbing;
+}
+
+:where(.sidebar) .place.is-dragging {
+  opacity: 0.6;
+}
+
+:where(.sidebar) .place[data-pinned-drop="true"]::before,
+:where(.sidebar) .place[data-pinned-drop="true"]::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.82);
+  pointer-events: none;
+}
+
+:where(.sidebar) .place[data-pinned-drop-position="before"]::before {
+  top: -2px;
+}
+
+:where(.sidebar) .place[data-pinned-drop-position="after"]::after {
+  bottom: -2px;
 }
 
 :where(.sidebar) .place.is-active .place-name,
