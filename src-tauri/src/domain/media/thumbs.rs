@@ -9,6 +9,8 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, SystemTime};
 
 #[cfg(target_os = "windows")]
+use crate::platform::windows::com::StaComGuard;
+#[cfg(target_os = "windows")]
 use std::ffi::OsStr;
 #[cfg(target_os = "windows")]
 use std::iter::once;
@@ -24,8 +26,6 @@ use windows::Win32::Graphics::Gdi::{
     CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, SelectObject, BITMAP,
     BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP, HGDIOBJ,
 };
-#[cfg(target_os = "windows")]
-use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::Shell::{
     IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF_BIGGERSIZEOK, SIIGBF_THUMBNAILONLY,
@@ -243,7 +243,7 @@ pub fn set_paused(state: &ThumbnailState, paused: bool) {
 fn worker_loop(state: ThumbnailHandle) {
     #[cfg(target_os = "windows")]
     // Initialize COM once per worker thread so video thumbnail jobs avoid per-item setup.
-    let _com_guard = match ComGuard::new() {
+    let _com_guard = match StaComGuard::new() {
         Ok(guard) => Some(guard),
         Err(error) => {
             eprintln!("thumb worker COM init failed: {error}");
@@ -423,27 +423,6 @@ fn fit_svg_size(width: u32, height: u32, max_size: u32) -> (u32, u32) {
     let target_width = (width as f32 * scale).round().max(1.0) as u32;
     let target_height = (height as f32 * scale).round().max(1.0) as u32;
     (target_width, target_height)
-}
-
-#[cfg(target_os = "windows")]
-struct ComGuard;
-
-#[cfg(target_os = "windows")]
-impl ComGuard {
-    fn new() -> Result<Self, String> {
-        let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
-        hr.ok().map_err(|err| err.to_string())?;
-        Ok(Self)
-    }
-}
-
-#[cfg(target_os = "windows")]
-impl Drop for ComGuard {
-    fn drop(&mut self) {
-        unsafe {
-            CoUninitialize();
-        }
-    }
 }
 
 #[cfg(target_os = "windows")]

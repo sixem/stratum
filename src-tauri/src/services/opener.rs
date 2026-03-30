@@ -2,6 +2,8 @@
 use serde::Serialize;
 use std::collections::HashSet;
 #[cfg(target_os = "windows")]
+use crate::platform::windows::com::StaComGuard;
+#[cfg(target_os = "windows")]
 use std::ffi::OsStr;
 #[cfg(target_os = "windows")]
 use std::iter::once;
@@ -17,9 +19,7 @@ use windows::core::{BOOL, PCWSTR, PWSTR};
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::{CloseHandle, FALSE, HWND, LPARAM, TRUE};
 #[cfg(target_os = "windows")]
-use windows::Win32::System::Com::{
-    CoInitializeEx, CoTaskMemFree, CoUninitialize, IDataObject, COINIT_APARTMENTTHREADED,
-};
+use windows::Win32::System::Com::{CoTaskMemFree, IDataObject};
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::{GetProcessId, WaitForInputIdle};
 #[cfg(target_os = "windows")]
@@ -161,27 +161,6 @@ fn open_path_windows(path: &str) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
-struct ComGuard;
-
-#[cfg(target_os = "windows")]
-impl ComGuard {
-    fn new() -> Result<Self, String> {
-        let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
-        hr.ok().map_err(|err| err.to_string())?;
-        Ok(Self)
-    }
-}
-
-#[cfg(target_os = "windows")]
-impl Drop for ComGuard {
-    fn drop(&mut self) {
-        unsafe {
-            CoUninitialize();
-        }
-    }
-}
-
 fn normalize_property_paths(paths: Vec<String>) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut normalized = Vec::new();
@@ -202,7 +181,7 @@ fn normalize_property_paths(paths: Vec<String>) -> Vec<String> {
 
 #[cfg(target_os = "windows")]
 fn list_open_with_handlers_windows(path: &str) -> Result<Vec<OpenWithHandler>, String> {
-    let _com = ComGuard::new()?;
+    let _com = StaComGuard::new()?;
     let extension = path_to_extension(path);
     if extension.is_none() {
         return Ok(Vec::new());
@@ -212,7 +191,7 @@ fn list_open_with_handlers_windows(path: &str) -> Result<Vec<OpenWithHandler>, S
 
 #[cfg(target_os = "windows")]
 fn open_path_with_handler_windows(path: &str, handler_id: &str) -> Result<(), String> {
-    let _com = ComGuard::new()?;
+    let _com = StaComGuard::new()?;
     let extension = path_to_extension(path)
         .ok_or_else(|| "This file has no extension, so no app handlers were found.".to_string())?;
     let assoc_handler = find_open_with_handler(&extension, handler_id)?;
