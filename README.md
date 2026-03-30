@@ -6,7 +6,7 @@
 <p align="center">A simple yet powerful file manager designed to be beautiful, intuitive, and genuinely useful.</p>
 
 <p align="center">
-  <img width="1806" height="1025" alt="stratum" src="https://github.com/user-attachments/assets/c25f5505-4680-4d57-a420-60773db0faba" />
+  <img alt="stratum" src="https://github.com/user-attachments/assets/b9837fc9-fc18-41f5-84c1-f78749585541" />
 </p>
 
 ## Features
@@ -23,7 +23,7 @@
 
 Stratum is designed to make file management feel calm, fast, and dependable. It stays out of your way for everyday tasks, but gives you powerful tools when you need to move quickly. It’s open-source, free of bloat, and focused on doing one thing really well: managing files.
 
-<img width="1347" height="836" alt="stratum-settings" src="https://github.com/user-attachments/assets/4dd16caf-f02d-47e5-bd86-fcb869e75c9d" />
+<img alt="stratum-settings" src="https://github.com/user-attachments/assets/23a9d76f-3221-48d4-87dd-2b987ea970ac" />
 
 ## Status
 
