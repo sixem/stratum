@@ -5,7 +5,7 @@ export { usePromptStore } from "./promptStore";
 export { useSessionStore } from "./sessionStore";
 export { useShellStore } from "./shellStore";
 export { useSettingsStore } from "./settings";
-export { useTransferStore } from "./transferStore";
+export { useTransferJobs, useTransferStore } from "./transferStore";
 export { useTooltipStore } from "./tooltipStore";
 export {
   DEFAULT_KEYBINDS,

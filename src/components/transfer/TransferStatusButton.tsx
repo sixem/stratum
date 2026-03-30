@@ -2,7 +2,7 @@
 // Uses a small view-model layer so the UI stays readable.
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useNowTick } from "@/hooks";
-import { useTransferStore } from "@/modules";
+import { useTransferJobs, useTransferStore } from "@/modules";
 import { WorkLogClearIcon } from "@/components/icons";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { TransferStatusItem } from "@/components/transfer/TransferStatusItem";
@@ -13,7 +13,7 @@ import {
 import { PressButton } from "@/components/primitives/PressButton";
 
 export const TransferStatusButton = () => {
-  const jobs = useTransferStore((state) => state.jobs);
+  const jobs = useTransferJobs();
   const clearFinishedJobs = useTransferStore((state) => state.clearFinishedJobs);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
