@@ -1,4 +1,6 @@
 // Shared primitive controls used across overlays and settings.
+@use "./control-recipes" as control;
+
 :where(.ui-select) {
   position: relative;
   width: 100%;
@@ -6,9 +8,7 @@
   .ui-select-trigger {
     width: 100%;
     min-height: 30px;
-    border-radius: 4px;
-    border: 1px solid var(--stroke);
-    background: var(--surface-control);
+    @include control.control-surface(4px, var(--surface-control));
     color: var(--text);
     padding: 6px 8px;
     display: flex;
@@ -25,8 +25,7 @@
   }
 
   .ui-select-trigger:focus-visible {
-    border-color: rgba(var(--accent-rgb), 0.55);
-    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+    @include control.focus-ring(rgba(var(--accent-rgb), 0.55), rgba(var(--accent-rgb), 0.2));
   }
 
   .ui-select-value {
@@ -55,8 +54,7 @@
   }
 
   &.is-open .ui-select-trigger {
-    border-color: rgba(var(--accent-rgb), 0.55);
-    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+    @include control.focus-ring(rgba(var(--accent-rgb), 0.55), rgba(var(--accent-rgb), 0.2));
   }
 }
 
@@ -64,10 +62,7 @@
   position: fixed;
   max-height: min(300px, 40vh);
   overflow: auto;
-  border-radius: 4px;
-  border: 1px solid var(--stroke);
-  background: var(--panel);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  @include control.panel-card(4px, var(--panel), var(--stroke), 0 8px 20px rgba(0, 0, 0, 0.35));
   padding: 4px;
   display: grid;
   gap: 3px;
@@ -87,11 +82,7 @@
 
 .ui-select-group-label {
   padding: 2px 7px;
-  font-size: var(--font-size-2xs);
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: var(--muted);
-  font-weight: 650;
+  @include control.eyebrow-label(var(--font-size-2xs), 0.11em, 650);
 }
 
 .ui-select-option {
@@ -117,8 +108,7 @@
 }
 
 .ui-select-option.is-selected {
-  background: rgba(var(--accent-rgb), 0.18);
-  color: var(--text);
+  @include control.active-surface(rgba(var(--accent-rgb), 0.18));
 }
 
 .ui-select-option:disabled {

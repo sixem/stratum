@@ -1,4 +1,6 @@
 // Path bar shell, drive picker, and path/search inputs.
+@use "./control-recipes" as control;
+
 .pathbar-shell {
   --pathbar-hover-surface: rgba(255, 255, 255, 0.06);
   background: var(--panel-2);
@@ -117,9 +119,7 @@
     min-width: 0;
     max-width: 100%;
     height: 26px;
-    border-radius: 5px;
-    border: 1px solid var(--stroke);
-    background: var(--surface-control);
+    @include control.control-surface(5px, var(--surface-control));
     padding: 0;
     overflow: hidden;
     // Keep the picker chrome itself transparent to dragging.
@@ -140,11 +140,7 @@
     border-radius: 3px;
     border: 1px solid transparent;
     background: transparent;
-    font-size: var(--font-size-2xs);
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-    text-transform: uppercase;
+    @include control.eyebrow-label(var(--font-size-2xs), 0.08em);
     cursor: pointer;
     white-space: nowrap;
     height: 100%;
@@ -245,11 +241,7 @@
   .drive-picker-item {
     padding: 2px 12px;
     border-radius: 2px;
-    font-size: var(--font-size-xs);
-    letter-spacing: 0.08em;
-    font-weight: 600;
-    color: var(--text);
-    text-transform: uppercase;
+    @include control.eyebrow-label(var(--font-size-xs), 0.08em, 600, var(--text));
     white-space: nowrap;
     cursor: pointer;
   }
@@ -407,17 +399,14 @@
   .path-input {
     width: 100%;
     padding: 6px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--stroke);
-    background: var(--surface-control-strong);
+    @include control.control-surface(6px, var(--surface-control-strong));
     color: var(--text);
     font-size: var(--font-size-md);
     height: 30px;
   }
 
   .path-input:focus {
-    border-color: rgba(var(--accent-rgb), 0.5);
-    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+    @include control.focus-ring(rgba(var(--accent-rgb), 0.5), rgba(var(--accent-rgb), 0.2));
   }
 
   .search-field {
@@ -427,16 +416,13 @@
     min-width: 0;
     padding: 0 10px;
     border-left: none;
-    border-radius: 6px;
-    border: 1px solid var(--stroke);
-    background: var(--surface-control-strong);
+    @include control.control-surface(6px, var(--surface-control-strong));
     color: var(--muted);
     height: 30px;
   }
 
   .search-field:focus-within {
-    border-color: rgba(var(--accent-rgb), 0.5);
-    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+    @include control.focus-ring(rgba(var(--accent-rgb), 0.5), rgba(var(--accent-rgb), 0.2));
   }
 
   .search-input {
@@ -454,9 +440,7 @@
   .inputbar-refresh {
     width: 30px;
     height: 30px;
-    border-radius: 6px;
-    border: 1px solid var(--stroke);
-    background: var(--surface-control-strong);
+    @include control.control-surface(6px, var(--surface-control-strong));
     display: grid;
     place-items: center;
     color: var(--muted);
@@ -483,9 +467,7 @@
 
 .btn {
   padding: 4px 10px;
-  border-radius: 4px;
-  border: 1px solid var(--stroke);
-  background: var(--surface-control);
+  @include control.control-surface(4px, var(--surface-control));
   font-weight: 600;
   font-size: var(--font-size-sm);
   cursor: pointer;
@@ -509,4 +491,14 @@
   width: 16px;
   height: 16px;
   display: block;
+}
+
+@media (max-width: 720px) {
+  :where(.path-inputbar) {
+    grid-template-columns: 1fr;
+  }
+
+  :where(.path-inputbar) .inputbar-refresh {
+    width: 100%;
+  }
 }

@@ -1,4 +1,7 @@
 // Tooltips and context menus.
+@use "./control-recipes" as control;
+@use "./modals/shared" as shell;
+
 .tooltip {
   position: fixed;
   top: 0;
@@ -60,29 +63,36 @@
 // In blurred-overlay mode, apply `backdrop-filter` on a pseudo-element surface.
 // This avoids turning the menu shell itself into a backdrop root, which can clip
 // backdrop-filter effects for extended submenus in some webviews.
-:root[data-blur-overlays="true"] :where(.context-menu, .context-submenu) {
+:root[data-blur-overlays="true"] :where(
+    .context-menu[data-open="true"],
+    .context-item-group.is-open > .context-submenu
+  ) {
   background: transparent;
   border-color: rgba(255, 255, 255, 0.08);
   isolation: isolate;
 }
 
-:root[data-blur-overlays="true"] :where(.context-menu, .context-submenu) .context-divider {
+:root[data-blur-overlays="true"] :where(
+    .context-menu[data-open="true"],
+    .context-item-group.is-open > .context-submenu
+  ) .context-divider {
   background: rgba(255, 255, 255, 0.16);
 }
 
-:root[data-blur-overlays="true"] .tooltip {
+:root[data-blur-overlays="true"] .tooltip.is-visible {
   background: rgba(15, 18, 26, 0.9);
-  backdrop-filter: blur(3px) saturate(1.1);
-  -webkit-backdrop-filter: blur(3px) saturate(1.1);
+  @include shell.frosted-backdrop(
+    var(--overlay-backdrop-blur-soft),
+    var(--overlay-backdrop-saturate-soft)
+  );
   border-color: rgba(255, 255, 255, 0.08);
 }
 
-:root[data-blur-overlays="true"] .prompt-modal,
-:root[data-blur-overlays="true"] .about-modal,
-:root[data-blur-overlays="true"] .conversion-modal,
-:root[data-blur-overlays="true"] .settings-overlay {
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+:root[data-blur-overlays="true"] .prompt-modal[data-open="true"],
+:root[data-blur-overlays="true"] .about-modal[data-open="true"],
+:root[data-blur-overlays="true"] .conversion-modal[data-open="true"],
+:root[data-blur-overlays="true"] .settings-overlay[data-open="true"] {
+  @include shell.frosted-backdrop(var(--overlay-backdrop-blur-strong));
 }
 
 .context-menu[data-open="true"] {
@@ -119,19 +129,27 @@
   pointer-events: auto;
 }
 
-:root[data-blur-overlays="true"] :where(.context-menu, .context-submenu)::before {
+:root[data-blur-overlays="true"] :where(
+    .context-menu[data-open="true"],
+    .context-item-group.is-open > .context-submenu
+  )::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: rgba(15, 18, 26, 0.9);
-  backdrop-filter: blur(3px) saturate(1.1);
-  -webkit-backdrop-filter: blur(3px) saturate(1.1);
+  @include shell.frosted-backdrop(
+    var(--overlay-backdrop-blur-soft),
+    var(--overlay-backdrop-saturate-soft)
+  );
   pointer-events: none;
   z-index: 0;
 }
 
-:root[data-blur-overlays="true"] :where(.context-menu, .context-submenu) > * {
+:root[data-blur-overlays="true"] :where(
+    .context-menu[data-open="true"],
+    .context-item-group.is-open > .context-submenu
+  ) > * {
   position: relative;
   z-index: 1;
 }
@@ -247,9 +265,7 @@
 
   .context-hint {
     justify-self: end;
-    font-size: var(--font-size-2xs);
-    letter-spacing: 0.08em;
-    color: var(--muted);
+    @include control.eyebrow-label(var(--font-size-2xs), 0.08em, null);
     max-width: 12ch;
     min-width: 0;
     overflow: hidden;

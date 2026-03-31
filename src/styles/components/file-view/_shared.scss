@@ -1,4 +1,5 @@
 // Shared file-view primitives that both the grid and list variants use.
+@use "../control-recipes" as control;
 
 :where(.list-shell, .thumb-shell) {
   .loading-overlay {
@@ -26,10 +27,7 @@
   display: grid;
   gap: 8px;
   place-items: center;
-  font-size: var(--font-size-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--muted);
+  @include control.eyebrow-label(var(--font-size-sm), 0.12em, null);
 }
 
 .loading-indicator img {

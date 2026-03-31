@@ -131,6 +131,7 @@
 
   .thumb-icon {
     position: relative;
+    contain: paint;
     border-radius: 8px;
     background: var(--thumb-preview-bg, var(--surface-card));
     aspect-ratio:

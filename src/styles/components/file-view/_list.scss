@@ -1,4 +1,5 @@
 // List layout, virtualization surfaces, and list-only variants.
+@use "../control-recipes" as control;
 @use "./shared" as shared;
 
 .file-list {
@@ -61,11 +62,7 @@
     border-radius: 6px;
     border: 1px solid transparent;
     background: transparent;
-    font-size: var(--font-size-2xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--muted);
+    @include control.eyebrow-label(var(--font-size-2xs), 0.12em);
     text-align: left;
     transition: none;
     cursor: pointer;
@@ -349,4 +346,15 @@
     rgba(var(--accent-rgb), 0.22),
     rgba(var(--accent-rgb), 0.08)
   );
+}
+
+@media (max-width: 720px) {
+  :where(.file-list) {
+    --list-columns: 1fr;
+  }
+
+  :where(.file-list) .row .size,
+  :where(.file-list) .row .modified {
+    text-align: left;
+  }
 }

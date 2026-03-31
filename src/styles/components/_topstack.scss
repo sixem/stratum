@@ -1,4 +1,6 @@
 // Top stack, drive bar, view controls, and transfer status UI.
+@use "./control-recipes" as control;
+
 .topstack {
   position: relative;
   z-index: 2;
@@ -68,10 +70,7 @@
   }
 
   .brand-title {
-    font-size: var(--font-size-sm);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--muted);
+    @include control.eyebrow-label(var(--font-size-sm), 0.12em);
   }
 }
 

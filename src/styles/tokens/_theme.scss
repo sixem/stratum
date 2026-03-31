@@ -37,15 +37,23 @@ $accent-themes: (
   --panel: #10131a;
   --panel-2: #0d1016;
   --panel-deep: #0b0f16;
+  --overlay-scrim: rgba(6, 8, 12, 0.68);
   // Shared surface tokens for controls and cards.
   --surface-card: #0f131d;
   --surface-nav: #0f141d;
   --surface-control-muted: #121621;
   --surface-control: #151923;
   --surface-control-strong: #151a26;
+  --panel-shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.42);
   --stroke: #1b2130;
   --window-frame-edge: rgba(255, 255, 255, 0.08);
   --window-chrome-bar-height: 34px;
+  // Blur tiers keep frosted shells and overlay backdrops visually aligned.
+  --frosted-surface-blur: 2px;
+  --frosted-surface-saturate: 1.05;
+  --overlay-backdrop-blur-soft: 3px;
+  --overlay-backdrop-blur-strong: 6px;
+  --overlay-backdrop-saturate-soft: 1.1;
   --text: #e2e6f2;
   --muted: #8c95aa;
   --accent: #e14c4c;
@@ -60,6 +68,7 @@ $accent-themes: (
   --font-size-lg: 0.9375rem;
   --font-size-xl: 1.125rem;
   --font-size-2xl: 1.25rem;
+  --eyebrow-tracking: 0.1em;
   // File-view sizing tokens keep virtualization math and card styles aligned.
   --file-view-list-row-height: 36px;
   --file-view-list-row-gap: 6px;
@@ -90,7 +99,7 @@ $accent-themes: (
   // Keep ambient glow without making panels translucent.
   --panel: #10131a;
   --panel-2: #0d1016;
-  --ambient-glow-strong: rgba(var(--accent-rgb), 0.55);
-  --ambient-glow-mid: rgba(var(--accent-rgb), 0.32);
-  --ambient-glow-soft: rgba(var(--accent-rgb), 0.18);
+  --ambient-glow-strong: rgba(var(--accent-rgb), 0.42);
+  --ambient-glow-mid: rgba(var(--accent-rgb), 0.24);
+  --ambient-glow-soft: rgba(var(--accent-rgb), 0.12);
 }

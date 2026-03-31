@@ -1,4 +1,6 @@
 // Sidebar sections, places, and tips.
+@use "./control-recipes" as control;
+
 .sidebar {
   // Tighten the sidebar density without affecting global layout tokens.
   --sidebar-padding: 12px;
@@ -6,7 +8,7 @@
   border: 1px solid #1a2233;
   border-left: none;
   border-radius: var(--panel-radius);
-  padding: var(--sidebar-padding);
+  padding-inline: var(--sidebar-padding);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -26,7 +28,7 @@
   .sidebar-viewport {
     min-height: 0;
     height: 100%;
-    padding: 0 12px 8px 8px;
+    padding: 0 12px 0 8px;
   }
 
   .sidebar-content {
@@ -34,6 +36,7 @@
     flex-direction: column;
     gap: 14px;
     min-height: 0;
+    padding-block: var(--sidebar-padding);
   }
 
   .sidebar-empty {
@@ -47,11 +50,7 @@
   }
 
   .section-title {
-    font-size: var(--font-size-2xs);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.11em;
-    color: var(--muted);
+    @include control.eyebrow-label(var(--font-size-2xs), 0.11em, 700);
   }
 
   .places {
@@ -67,11 +66,7 @@
     justify-items: start;
     gap: 10px;
     padding: 0 2px 8px;
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--muted);
+    @include control.eyebrow-label(var(--font-size-xs), 0.12em);
     cursor: pointer;
     width: 100%;
     border: 0;

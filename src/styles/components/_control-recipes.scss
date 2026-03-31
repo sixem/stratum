@@ -1,0 +1,67 @@
+// Shared control and state recipes for repeated UI chrome.
+// These mixins keep repeated borders, focus rings, and active surfaces aligned.
+
+@mixin focus-ring($border-color, $shadow-color, $background: null) {
+  border-color: $border-color;
+
+  @if $background != null {
+    background: $background;
+  }
+
+  box-shadow: 0 0 0 1px $shadow-color;
+}
+
+@mixin control-surface(
+  $radius,
+  $background,
+  $border-color: var(--stroke),
+  $border-width: 1px
+) {
+  border-radius: $radius;
+  border: $border-width solid $border-color;
+  background: $background;
+}
+
+@mixin panel-card($radius, $background, $border-color: var(--stroke), $shadow: null) {
+  @include control-surface($radius, $background, $border-color);
+
+  @if $shadow != null {
+    box-shadow: $shadow;
+  }
+}
+
+@mixin active-surface(
+  $background,
+  $text-color: var(--text),
+  $border-color: null,
+  $shadow: null
+) {
+  color: $text-color;
+
+  @if $border-color != null {
+    border-color: $border-color;
+  }
+
+  background: $background;
+
+  @if $shadow != null {
+    box-shadow: $shadow;
+  }
+}
+
+@mixin eyebrow-label(
+  $size: var(--font-size-2xs),
+  $tracking: var(--eyebrow-tracking),
+  $weight: 600,
+  $color: var(--muted)
+) {
+  font-size: $size;
+
+  @if $weight != null {
+    font-weight: $weight;
+  }
+
+  letter-spacing: $tracking;
+  text-transform: uppercase;
+  color: $color;
+}

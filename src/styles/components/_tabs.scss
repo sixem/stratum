@@ -263,3 +263,9 @@
   height: 12px;
   display: block;
 }
+
+@media (max-width: 720px) {
+  :where(.tabs) .tab-main {
+    min-width: 120px;
+  }
+}

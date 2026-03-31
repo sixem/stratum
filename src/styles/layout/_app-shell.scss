@@ -23,6 +23,7 @@
 :where(.app-shell)::after {
   content: "";
   position: absolute;
+  contain: paint;
   pointer-events: none;
   z-index: -1;
   opacity: 0;
@@ -30,32 +31,49 @@
 }
 
 :root[data-ambient="true"] .app-shell::before {
-  inset: -35%;
+  // Keep ambient mode to a single animated glow layer so the effect reads
+  // softly without stacking extra blend work behind the shell.
+  inset: -28%;
   background:
-    radial-gradient(60% 50% at 18% 18%, var(--ambient-glow-strong), transparent 65%),
-    radial-gradient(55% 45% at 82% 12%, var(--ambient-glow-mid), transparent 68%),
-    radial-gradient(55% 50% at 12% 85%, var(--ambient-glow-mid), transparent 70%),
-    radial-gradient(60% 55% at 88% 82%, var(--ambient-glow-soft), transparent 72%);
-  opacity: 0.95;
-  filter: blur(80px) saturate(1.55);
-  transform: translate3d(-5%, -4%, 0) scale(1.06);
+    radial-gradient(58% 52% at 18% 20%, var(--ambient-glow-strong), transparent 66%),
+    radial-gradient(54% 48% at 82% 16%, var(--ambient-glow-mid), transparent 69%),
+    radial-gradient(56% 52% at 18% 82%, var(--ambient-glow-soft), transparent 71%);
+  opacity: 0.72;
+  filter: blur(92px) saturate(1.15);
+  transform: translate3d(-3%, -2%, 0) scale(1.04);
+  transform-origin: center;
+  will-change: transform;
+  animation: ambient-drift 10s ease-in-out infinite alternate;
 }
 
 :root[data-ambient="true"] .app-shell::after {
-  inset: -10%;
-  background:
-    radial-gradient(70% 60% at 50% 20%, rgba(var(--accent-rgb), 0.18), transparent 65%),
-    radial-gradient(80% 70% at 50% 80%, rgba(var(--accent-rgb), 0.12), transparent 70%);
-  opacity: 0.6;
-  filter: blur(110px);
-  transform: translate3d(0, -2%, 0) scale(1.02);
-  mix-blend-mode: screen;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(10, 11, 16, 0.16), rgba(10, 11, 16, 0.04));
+  opacity: 1;
+}
+
+@keyframes ambient-drift {
+  0% {
+    transform: translate3d(-3%, -2%, 0) scale(1.04);
+  }
+
+  50% {
+    transform: translate3d(2%, -1%, 0) scale(1.07);
+  }
+
+  100% {
+    transform: translate3d(-1%, 2%, 0) scale(1.05);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-ambient="true"] .app-shell::before,
   :root[data-ambient="true"] .app-shell::after {
     transition: none;
+  }
+
+  :root[data-ambient="true"] .app-shell::before {
+    animation: none;
   }
 }
 

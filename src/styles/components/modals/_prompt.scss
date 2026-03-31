@@ -1,5 +1,6 @@
 // Prompt modal overlay and simple prompt-form controls.
 
+@use "../control-recipes" as control;
 @use "./shared" as modal;
 
 .prompt-modal {
@@ -49,17 +50,12 @@
   }
 
   .prompt-label {
-    font-size: var(--font-size-2xs);
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: var(--muted);
+    @include control.eyebrow-label(var(--font-size-2xs), 0.16em, null);
   }
 
   .prompt-input {
     padding: 6px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--stroke);
-    background: var(--surface-card);
+    @include control.control-surface(6px, var(--surface-card));
     color: var(--text);
     font-size: var(--font-size-sm);
     user-select: text;
@@ -68,8 +64,7 @@
   }
 
   .prompt-input:focus {
-    border-color: rgba(var(--accent-rgb), 0.6);
-    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+    @include control.focus-ring(rgba(var(--accent-rgb), 0.6), rgba(var(--accent-rgb), 0.2));
   }
 
   .prompt-input::selection {

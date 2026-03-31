@@ -1,4 +1,6 @@
 // Empty states and new-tab lander content.
+@use "./control-recipes" as control;
+
 .empty-state {
   border: 1px dashed var(--stroke);
   border-radius: 8px;
@@ -194,10 +196,7 @@
   }
 
   .lander-section-title {
-    font-size: var(--font-size-2xs);
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: var(--muted);
+    @include control.eyebrow-label(var(--font-size-2xs), 0.16em, null);
     line-height: 1;
   }
 
@@ -251,10 +250,7 @@
   }
 
   .lander-storage-title {
-    font-size: 0.72rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
+    @include control.eyebrow-label(0.72rem, 0.08em, null);
   }
 
   .lander-storage-value {
@@ -392,10 +388,7 @@
   }
 
   .lander-place-drive {
-    font-size: 0.68rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    @include control.eyebrow-label(0.68rem, 0.06em, null);
     flex: 0 0 auto;
   }
 
