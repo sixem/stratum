@@ -147,6 +147,7 @@ export const useEntryDragOut = (
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerCancel);
+      window.removeEventListener("keydown", handleKeyDown);
     };
 
     const releasePointerCapture = (pointerId: number | null) => {
@@ -241,6 +242,19 @@ export const useEntryDragOut = (
       stopWindowTracking();
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const drag = dragRef.current;
+      if (!drag.active) return;
+      onSetSelectionRef.current([]);
+      clearHoverState();
+      clearSuppress();
+      setInternalDragCursor(false);
+      releasePointerCapture(drag.pointerId);
+      resetDrag();
+      stopWindowTracking();
+    };
+
     const handlePointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return;
       const target = event.target as HTMLElement | null;
@@ -265,6 +279,7 @@ export const useEntryDragOut = (
       window.addEventListener("pointermove", handlePointerMove);
       window.addEventListener("pointerup", handlePointerUp);
       window.addEventListener("pointercancel", handlePointerCancel);
+      window.addEventListener("keydown", handleKeyDown);
     };
 
     const handleClickCapture = (event: MouseEvent) => {

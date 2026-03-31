@@ -36,6 +36,7 @@ export const useAppShellModel = () => {
   const fileDrop = useFileDrop({
     currentPath: fileManager.currentPath,
     onRefresh: fileManager.refresh,
+    enableTabDropSubfolders: settings.tabDropSubfolders,
   });
   const scrollState = useScrollRequest();
   const { flushPersist: flushWindowSize } = useWindowSize();

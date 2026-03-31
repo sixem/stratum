@@ -14,11 +14,18 @@ import {
   resolveDropTransferConflicts,
 } from "./dropTransferPlanning";
 import { runDropTransfer } from "./runDropTransfer";
+import { useTabDropSubmenu } from "./useTabDropSubmenu";
 
 type UseFileDropOptions = {
   currentPath: string;
   onRefresh?: () => void;
   enabled?: boolean;
+  enableTabDropSubfolders?: boolean;
+};
+
+type ClientPoint = {
+  x: number;
+  y: number;
 };
 
 const log = makeDebug("drop");
@@ -33,14 +40,27 @@ const getDropTarget = (event: DragDropEvent): DropTarget | null => {
   return getDropTargetFromPoint(x, y);
 };
 
+const getClientPoint = (event: DragDropEvent): ClientPoint | null => {
+  if (!("position" in event)) {
+    return null;
+  }
+  const scale = window.devicePixelRatio || 1;
+  return {
+    x: event.position.x / scale,
+    y: event.position.y / scale,
+  };
+};
+
 
 export const useFileDrop = ({
   currentPath,
   onRefresh,
   enabled = true,
+  enableTabDropSubfolders = false,
 }: UseFileDropOptions) => {
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
   const [dropTargetTabId, setDropTargetTabId] = useState<string | null>(null);
+  const [dragPoint, setDragPoint] = useState<ClientPoint | null>(null);
   const currentPathRef = useRef(currentPath);
   // Cache the normalized path to keep drop comparisons cheap.
   const currentPathKeyRef = useRef(normalizePath(currentPath));
@@ -51,21 +71,44 @@ export const useFileDrop = ({
   const registerTransferJob = useTransferStore((state) => state.registerJob);
   const updateTransferLabel = useTransferStore((state) => state.updateJobLabel);
   const recordTransferJobOutcome = useTransferStore((state) => state.recordJobOutcome);
+  const {
+    submenu: tabDropSubmenu,
+    updateTarget: updateTabDropSubmenuTarget,
+    closeSubmenu: closeTabDropSubmenu,
+  } = useTabDropSubmenu({
+    enabled: enabled && enableTabDropSubfolders,
+  });
 
   const setDropTarget = useCallback((target: DropTarget | null) => {
     if (!target) {
       setDropTargetPath(null);
       setDropTargetTabId(null);
+      updateTabDropSubmenuTarget(null);
       return;
     }
     if (target.kind === "tab") {
       setDropTargetTabId((prev) => (prev === target.tabId ? prev : target.tabId ?? null));
       setDropTargetPath(null);
+      updateTabDropSubmenuTarget(target);
+      return;
+    }
+    if (target.kind === "tab-subfolder") {
+      setDropTargetPath((prev) => (prev === target.path ? prev : target.path));
+      setDropTargetTabId((prev) => (prev === target.tabId ? prev : target.tabId ?? null));
+      updateTabDropSubmenuTarget(target);
       return;
     }
     setDropTargetPath((prev) => (prev === target.path ? prev : target.path));
     setDropTargetTabId(null);
-  }, []);
+    updateTabDropSubmenuTarget(target);
+  }, [updateTabDropSubmenuTarget]);
+
+  const clearDragState = useCallback(() => {
+    lastHoverRef.current = null;
+    setDragPoint(null);
+    setDropTarget(null);
+    closeTabDropSubmenu();
+  }, [closeTabDropSubmenu, setDropTarget]);
 
   useEffect(() => {
     currentPathRef.current = currentPath;
@@ -125,6 +168,7 @@ export const useFileDrop = ({
         const payload = event.payload;
         if (payload.type === "enter" || payload.type === "over") {
           const target = getDropTarget(payload);
+          setDragPoint(getClientPoint(payload));
           const key = target ? `${target.kind}:${target.path}` : "none";
           if (lastHoverRef.current !== key && log.enabled) {
             log("hover: type=%s target=%s", payload.type, key);
@@ -137,8 +181,7 @@ export const useFileDrop = ({
           if (log.enabled) {
             log("leave");
           }
-          lastHoverRef.current = null;
-          setDropTarget(null);
+          clearDragState();
           return;
         }
         if (payload.type === "drop") {
@@ -148,8 +191,7 @@ export const useFileDrop = ({
             log("drop: paths=%o", payload.paths);
             log("drop: payload=%o", payload);
           }
-          lastHoverRef.current = null;
-          setDropTarget(null);
+          clearDragState();
           void performDrop(payload.paths, target?.path ?? null);
         }
       })
@@ -166,7 +208,15 @@ export const useFileDrop = ({
         unlisten();
       }
     };
-  }, [enabled, performDrop, setDropTarget]);
+  }, [clearDragState, enabled, performDrop, setDropTarget]);
 
-  return { dropTargetPath, dropTargetTabId, performDrop, setDropTarget };
+  return {
+    dropTargetPath,
+    dropTargetTabId,
+    dragPoint,
+    tabDropSubmenu,
+    performDrop,
+    setDropTarget,
+    clearDragState,
+  };
 };

@@ -25,6 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultViewMode: "thumbs",
   showTabNumbers: false,
   fixedWidthTabs: false,
+  tabDropSubfolders: false,
   showRecycleBinButton: false,
   smoothScroll: false,
   smartTabJump: true,

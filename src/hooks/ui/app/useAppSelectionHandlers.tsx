@@ -10,6 +10,7 @@ type UseAppSelectionHandlersOptions = {
   gridNameHideExtension: boolean;
   setSelection: (paths: string[], anchor?: string) => void;
   clearSelection: () => void;
+  onAfterClearSelection?: () => void;
   handleSelectItem: (path: string, index: number, event: ReactMouseEvent) => void;
   handleRenameCommit: (reason?: RenameCommitReason) => void;
   setRenameTarget: (target: EntryContextTarget | null) => void;
@@ -22,6 +23,7 @@ export const useAppSelectionHandlers = ({
   gridNameHideExtension,
   setSelection,
   clearSelection,
+  onAfterClearSelection,
   handleSelectItem,
   handleRenameCommit,
   setRenameTarget,
@@ -43,7 +45,8 @@ export const useAppSelectionHandlers = ({
       handleRenameCommit("blur");
     }
     clearSelection();
-  }, [clearSelection, handleRenameCommit, renameTarget]);
+    onAfterClearSelection?.();
+  }, [clearSelection, handleRenameCommit, onAfterClearSelection, renameTarget]);
 
   const handleSelectItemWithRename = useCallback(
     (path: string, index: number, event: ReactMouseEvent) => {

@@ -12,7 +12,12 @@ export { handleMiddleClick } from "./mouse";
 export { getPlatformLabel } from "./platform";
 export { buildPreviewUrl } from "./previewUrl";
 export { getDropTargetFromPoint, getDropTargetHit } from "./dropTarget";
-export type { DropTarget, DropTargetHit } from "./dropTarget";
+export type {
+  DropTarget,
+  DropTargetHit,
+  DropTargetSubmenuItem,
+  TabDropSubmenuState,
+} from "./dropTarget";
 export { buildDropCandidate, joinPath, normalizeDropPath, sanitizeDropPath } from "./dropPaths";
 export type { DropCandidate } from "./dropPaths";
 export {

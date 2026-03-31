@@ -141,6 +141,8 @@ export const useShellViewBindings = ({
     onSelectTab: navigationController.handleSelectTab,
     onRefresh: interactionModel.handleManualRefresh,
     onClearSelection: interactionModel.handleClearSelection,
+    hasTransientUi: interactionModel.hasTransientDragUi,
+    onCancelTransientUi: interactionModel.handleCancelTransientUi,
     onSelectAll: interactionModel.handleSelectAll,
   });
 };

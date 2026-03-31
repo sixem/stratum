@@ -159,11 +159,23 @@ export const useShellViewInteractions = ({
     gridNameHideExtension: settings.gridNameHideExtension,
     setSelection,
     clearSelection,
+    onAfterClearSelection: fileDrop.clearDragState,
     handleSelectItem,
     handleRenameCommit,
     setRenameTarget,
     setRenameValue,
   });
+
+  const hasTransientDragUi = Boolean(
+    fileDrop.dropTargetPath ||
+      fileDrop.dropTargetTabId ||
+      fileDrop.dragPoint ||
+      fileDrop.tabDropSubmenu.hostTabId,
+  );
+
+  const handleCancelTransientUi = useCallback(() => {
+    fileDrop.clearDragState();
+  }, [fileDrop]);
 
   const handleManualRefresh = useCallback(() => {
     handleClearSelection();
@@ -282,6 +294,8 @@ export const useShellViewInteractions = ({
     handleRenameCancel,
     handleSelectionChange,
     handleClearSelection,
+    hasTransientDragUi,
+    handleCancelTransientUi,
     handleSelectItemWithRename,
     handleManualRefresh,
     handleSelectAll,

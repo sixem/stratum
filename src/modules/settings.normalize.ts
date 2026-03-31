@@ -142,6 +142,10 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.fixedWidthTabs === "boolean"
         ? value.fixedWidthTabs
         : DEFAULT_SETTINGS.fixedWidthTabs,
+    tabDropSubfolders:
+      typeof value?.tabDropSubfolders === "boolean"
+        ? value.tabDropSubfolders
+        : DEFAULT_SETTINGS.tabDropSubfolders,
     showRecycleBinButton:
       typeof value?.showRecycleBinButton === "boolean"
         ? value.showRecycleBinButton

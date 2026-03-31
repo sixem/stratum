@@ -4,10 +4,14 @@ import {
   Fragment,
   startTransition,
   useEffect,
+  useLayoutEffect,
   useRef,
+  useState,
 } from "react";
+import type { DropTarget, TabDropSubmenuState } from "@/lib";
 import { handleMiddleClick, tabLabel } from "@/lib";
 import { useHorizontalOverflowScroll, useTabDragDrop } from "@/hooks";
+import { DropTargetSubmenu } from "@/components/overlay/DropTargetSubmenu";
 import type { PlaceContextTarget, Tab } from "@/types";
 import { PlusIcon, TabCloseIcon } from "@/components/icons";
 import { HorizontalChevronButton, PressButton } from "@/components/primitives";
@@ -17,12 +21,16 @@ type TabsBarProps = {
   tabs: Tab[];
   activeId: string | null;
   dropTargetId?: string | null;
+  dropTargetPath?: string | null;
+  tabDropSubmenu?: TabDropSubmenuState;
+  dragPoint?: { x: number; y: number } | null;
   showTabNumbers: boolean;
   fixedWidthTabs: boolean;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onNew: () => void;
   onReorder: (fromId: string, toIndex: number) => void;
+  onSubmenuHoverTargetChange?: (target: DropTarget | null) => void;
   onTabContextMenu?: (event: PointerEvent<HTMLDivElement>, target: PlaceContextTarget) => void;
   onTabContextMenuDown?: (
     event: PointerEvent<HTMLDivElement>,
@@ -144,17 +152,22 @@ export const TabsBar = ({
   tabs,
   activeId,
   dropTargetId,
+  dropTargetPath,
+  tabDropSubmenu,
+  dragPoint,
   showTabNumbers,
   fixedWidthTabs,
   onSelect,
   onClose,
   onNew,
   onReorder,
+  onSubmenuHoverTargetChange,
   onTabContextMenu,
   onTabContextMenuDown,
 }: TabsBarProps) => {
   // Container ref lets the reorder hook measure tab positions.
   const tabsRef = useRef<HTMLDivElement | null>(null);
+  const [submenuAnchorElement, setSubmenuAnchorElement] = useState<HTMLElement | null>(null);
   const {
     draggingId,
     dropIndex,
@@ -183,6 +196,24 @@ export const TabsBar = ({
     activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
     updateScrollState();
   }, [activeId, tabs.length, updateScrollState]);
+
+  useLayoutEffect(() => {
+    const hostTabId = tabDropSubmenu?.hostTabId ?? null;
+    if (!hostTabId) {
+      setSubmenuAnchorElement(null);
+      return;
+    }
+    const tabsEl = tabsRef.current;
+    if (!tabsEl) {
+      setSubmenuAnchorElement(null);
+      return;
+    }
+    const nextAnchor =
+      Array.from(tabsEl.querySelectorAll<HTMLElement>(".tab[data-tab-id]")).find(
+        (tab) => tab.dataset.tabId === hostTabId,
+      ) ?? null;
+    setSubmenuAnchorElement((previous) => (previous === nextAnchor ? previous : nextAnchor));
+  }, [tabDropSubmenu?.hostTabId, tabs]);
 
   return (
     <div className="tabsbar">
@@ -253,6 +284,18 @@ export const TabsBar = ({
       <PressButton type="button" className="tab-new" onClick={onNew} aria-label="New tab">
         <PlusIcon className="tab-new-icon" />
       </PressButton>
+      <DropTargetSubmenu
+        open={Boolean(tabDropSubmenu?.hostTabId && (tabDropSubmenu.loading || tabDropSubmenu.items.length > 0))}
+        anchorElement={submenuAnchorElement}
+        scrollElement={tabsRef.current}
+        hostTabId={tabDropSubmenu?.hostTabId ?? null}
+        hostPath={tabDropSubmenu?.hostPath ?? null}
+        items={tabDropSubmenu?.items ?? []}
+        loading={tabDropSubmenu?.loading ?? false}
+        activePath={dropTargetPath}
+        dragPoint={dragPoint}
+        onHoverTargetChange={onSubmenuHoverTargetChange}
+      />
     </div>
   );
 };

@@ -31,6 +31,8 @@ type UseAppKeybindsOptions = {
   onSelectTab: (id: string) => void;
   onRefresh: () => void;
   onClearSelection: () => void;
+  hasTransientUi?: boolean;
+  onCancelTransientUi?: () => void;
   onSelectAll: () => void;
 };
 
@@ -58,6 +60,8 @@ export const useAppKeybinds = ({
   onSelectTab,
   onRefresh,
   onClearSelection,
+  hasTransientUi = false,
+  onCancelTransientUi,
   onSelectAll,
 }: UseAppKeybindsOptions) => {
   const selectionTargets = useMemo(
@@ -153,10 +157,23 @@ export const useAppKeybinds = ({
 
   const handleClearSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
-    if (selected.size === 0) return false;
-    onClearSelection();
-    return true;
-  }, [canHandleViewKeybind, onClearSelection, selected.size]);
+    let handled = false;
+    if (selected.size > 0) {
+      onClearSelection();
+      handled = true;
+    }
+    if (hasTransientUi) {
+      onCancelTransientUi?.();
+      handled = true;
+    }
+    return handled;
+  }, [
+    canHandleViewKeybind,
+    hasTransientUi,
+    onCancelTransientUi,
+    onClearSelection,
+    selected.size,
+  ]);
 
   const handleSelectAllKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;

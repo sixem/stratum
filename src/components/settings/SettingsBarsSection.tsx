@@ -25,6 +25,7 @@ export const SettingsBarsSection = ({
   const {
     showTabNumbers,
     fixedWidthTabs,
+    tabDropSubfolders,
     showRecycleBinButton,
     sidebarRecentLimit,
     sidebarSectionOrder,
@@ -34,6 +35,7 @@ export const SettingsBarsSection = ({
     (state) => ({
       showTabNumbers: state.showTabNumbers,
       fixedWidthTabs: state.fixedWidthTabs,
+      tabDropSubfolders: state.tabDropSubfolders,
       showRecycleBinButton: state.showRecycleBinButton,
       sidebarRecentLimit: state.sidebarRecentLimit,
       sidebarSectionOrder: state.sidebarSectionOrder,
@@ -108,6 +110,24 @@ export const SettingsBarsSection = ({
             checked={fixedWidthTabs}
             onChange={(event) =>
               updateSettings({ fixedWidthTabs: event.currentTarget.checked })
+            }
+          />
+          <span />
+        </label>
+      </div>
+      <div className="settings-item">
+        <div>
+          <div className="settings-label">Tab drop subfolders</div>
+          <div className="settings-desc">
+            When dragging onto a tab, reveal its direct subfolders as extra drop targets.
+          </div>
+        </div>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={tabDropSubfolders}
+            onChange={(event) =>
+              updateSettings({ tabDropSubfolders: event.currentTarget.checked })
             }
           />
           <span />

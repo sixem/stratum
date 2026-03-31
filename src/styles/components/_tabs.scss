@@ -269,3 +269,111 @@
     min-width: 120px;
   }
 }
+
+.drop-submenu {
+  position: fixed;
+  z-index: 35;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 4px;
+  min-height: 0;
+  padding: 8px 8px 6px;
+  border-radius: 9px;
+  border: 1px solid #1a2233;
+  background: #0d0f14;
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.38);
+  overflow: hidden;
+}
+
+:where(.drop-submenu) {
+  .drop-submenu-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 2px 4px 6px;
+    border-bottom: 1px solid #1c2537;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .drop-submenu-title-icon {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    color: rgba(var(--accent-rgb), 0.92);
+  }
+
+  .drop-submenu-scroll {
+    min-height: 0;
+    height: 100%;
+    max-height: inherit;
+    overflow: hidden;
+  }
+
+  .drop-submenu-viewport {
+    min-height: 0;
+    height: 100%;
+    max-height: inherit;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+  }
+
+  .drop-submenu-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 100%;
+    padding-top: 1px;
+    padding-right: 8px;
+  }
+
+  .drop-submenu-scroll .scroll-area-thumb {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .drop-submenu-status,
+  .drop-submenu-item {
+    border-radius: 5px;
+    border: 0;
+    min-width: 0;
+  }
+
+  .drop-submenu-status {
+    padding: 8px 9px;
+    font-size: var(--font-size-sm);
+    color: var(--muted);
+    background: transparent;
+  }
+
+  .drop-submenu-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 9px;
+    background: transparent;
+    min-width: 0;
+  }
+
+  .drop-submenu-item[data-drop-target="true"] {
+    background: #161b29;
+  }
+
+  .drop-submenu-item-name {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .drop-submenu-item[data-drop-target="true"] .drop-submenu-item-name {
+    color: rgba(var(--accent-rgb), 0.96);
+  }
+}

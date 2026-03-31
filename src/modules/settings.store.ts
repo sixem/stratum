@@ -74,6 +74,7 @@ useSettingsStore.subscribe((state) => {
     defaultViewMode: state.defaultViewMode,
     showTabNumbers: state.showTabNumbers,
     fixedWidthTabs: state.fixedWidthTabs,
+    tabDropSubfolders: state.tabDropSubfolders,
     showRecycleBinButton: state.showRecycleBinButton,
     smoothScroll: state.smoothScroll,
     smartTabJump: state.smartTabJump,
