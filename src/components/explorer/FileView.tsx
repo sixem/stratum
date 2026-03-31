@@ -319,6 +319,8 @@ export const FileView = ({
               sortState,
               onSortChange,
               categoryTinting,
+              nameEllipsis: gridNameEllipsis,
+              hideExtension: gridNameHideExtension,
               presenceEnabled,
             }}
             contextMenu={{

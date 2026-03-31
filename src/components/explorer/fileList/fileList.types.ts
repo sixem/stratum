@@ -6,6 +6,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import type { DropTarget, EntryItem } from "@/lib";
+import type { GridNameEllipsis } from "@/modules";
 import type { EntryMeta, FileEntry, RenameCommitReason, SortState } from "@/types";
 
 export type FileListEntryContextTarget = {
@@ -61,6 +62,8 @@ export type FileListListProps = {
   sortState: SortState;
   onSortChange: (next: SortState) => void;
   categoryTinting: boolean;
+  nameEllipsis: GridNameEllipsis;
+  hideExtension: boolean;
   presenceEnabled?: boolean;
 };
 

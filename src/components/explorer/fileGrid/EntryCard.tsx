@@ -3,58 +3,12 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import { memo, useLayoutEffect, useRef, useState } from "react";
-import { makeDebug, splitNameExtension, stripNameExtension } from "@/lib";
+import { memo, useRef } from "react";
+import { stripNameExtension } from "@/lib";
 import { RenameField } from "@/components/primitives/RenameField";
+import { useOverflowEllipsis } from "../fileView/nameEllipsis";
 import type { EntryCardProps } from "./gridCard.types";
 import { ThumbnailIcon } from "./ThumbnailIcon";
-
-// Keep a chunk of the name tail visible when using middle-ellipsis truncation.
-const GRID_NAME_MIN_TAIL_CHARS = 8;
-const GRID_NAME_BASE_TAIL_CHARS = 9;
-const GRID_OVERFLOW_LOG_INTERVAL_MS = 1000;
-const perf = makeDebug("perf:resize:ellipsis");
-const overflowPerfState = {
-  activeObservers: 0,
-  measures: 0,
-  observerCallbacks: 0,
-  stateChanges: 0,
-  lastLogAt: 0,
-};
-
-const flushOverflowPerf = (force = false) => {
-  if (!perf.enabled) return;
-  const now = performance.now();
-  if (!force && now - overflowPerfState.lastLogAt < GRID_OVERFLOW_LOG_INTERVAL_MS) {
-    return;
-  }
-  overflowPerfState.lastLogAt = now;
-  perf(
-    "cards active=%d measures=%d callbacks=%d stateChanges=%d",
-    overflowPerfState.activeObservers,
-    overflowPerfState.measures,
-    overflowPerfState.observerCallbacks,
-    overflowPerfState.stateChanges,
-  );
-  overflowPerfState.measures = 0;
-  overflowPerfState.observerCallbacks = 0;
-  overflowPerfState.stateChanges = 0;
-};
-
-const buildMiddleEllipsisParts = (name: string) => {
-  const { dotExtension } = splitNameExtension(name);
-  const tailTarget = Math.max(
-    GRID_NAME_MIN_TAIL_CHARS,
-    (dotExtension?.length ?? 0) + GRID_NAME_BASE_TAIL_CHARS,
-  );
-  const tailLength = Math.min(name.length, tailTarget);
-  const headLength = Math.max(0, name.length - tailLength);
-
-  return {
-    head: name.slice(0, headLength),
-    tail: name.slice(headLength),
-  };
-};
 
 export const EntryCard = memo(({
   entry,
@@ -94,54 +48,8 @@ export const EntryCard = memo(({
     hideExtension && !entry.isDir ? stripNameExtension(entry.name) : entry.name;
   const nameRef = useRef<HTMLSpanElement | null>(null);
   const nameMeasureRef = useRef<HTMLSpanElement | null>(null);
-  const [isNameOverflowing, setIsNameOverflowing] = useState(false);
-
-  // Only enable middle-split rendering when the full name is actually wider than
-  // the label container. This avoids unnecessary splitting for names that fit.
-  useLayoutEffect(() => {
-    if (nameEllipsis !== "middle") {
-      setIsNameOverflowing(false);
-      return;
-    }
-
-    const nameEl = nameRef.current;
-    const measureEl = nameMeasureRef.current;
-    if (!nameEl || !measureEl) return;
-
-    const updateOverflow = () => {
-      overflowPerfState.measures += 1;
-      const nextOverflow = measureEl.offsetWidth > nameEl.clientWidth + 1;
-      setIsNameOverflowing((prev) => {
-        if (prev !== nextOverflow) {
-          overflowPerfState.stateChanges += 1;
-        }
-        return prev === nextOverflow ? prev : nextOverflow;
-      });
-      flushOverflowPerf();
-    };
-
-    updateOverflow();
-    if (typeof ResizeObserver === "undefined") return;
-
-    overflowPerfState.activeObservers += 1;
-    flushOverflowPerf(true);
-    const observer = new ResizeObserver(() => {
-      overflowPerfState.observerCallbacks += 1;
-      updateOverflow();
-    });
-    observer.observe(nameEl);
-    return () => {
-      observer.disconnect();
-      overflowPerfState.activeObservers = Math.max(0, overflowPerfState.activeObservers - 1);
-      flushOverflowPerf(true);
-    };
-  }, [displayName, nameEllipsis]);
-
-  const nameParts =
-    nameEllipsis === "middle" && isNameOverflowing
-      ? buildMiddleEllipsisParts(displayName)
-      : null;
-  const useMiddleEllipsis = Boolean(nameParts && nameParts.head.length > 0);
+  const { parts: nameParts, useMiddleEllipsis, renderMode: nameEllipsisMode } =
+    useOverflowEllipsis(displayName, nameEllipsis, nameRef, nameMeasureRef);
   const nameNodes = useMiddleEllipsis
     ? [
         <span key="head" className="thumb-name-start">
@@ -152,7 +60,6 @@ export const EntryCard = memo(({
         </span>,
       ]
     : displayName;
-  const nameEllipsisMode = useMiddleEllipsis ? "middle" : "end";
   // Keep the card element stable so thumbnail previews do not remount on rename.
   const isRemoved = presence === "removed";
   const isInteractive = !isRenaming && !isRemoved && !isDeleting;

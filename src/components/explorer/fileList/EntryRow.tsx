@@ -3,12 +3,15 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import { memo } from "react";
+import { memo, useRef } from "react";
 import type { FileEntry, RenameCommitReason } from "@/types";
 import type { EntryPresence, FileKind } from "@/lib";
+import { stripNameExtension } from "@/lib";
 import { FILE_TOOLTIP_DELAY_MS } from "@/constants";
+import type { GridNameEllipsis } from "@/modules";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { RenameField } from "@/components/primitives/RenameField";
+import { useOverflowEllipsis } from "../fileView/nameEllipsis";
 
 type EntryRowProps = {
   entry: FileEntry;
@@ -17,6 +20,8 @@ type EntryRowProps = {
   fileKind: FileKind;
   sizeLabel: string;
   modifiedLabel: string;
+  nameEllipsis: GridNameEllipsis;
+  hideExtension: boolean;
   selected: boolean;
   isDeleting: boolean;
   dropTarget: boolean;
@@ -42,6 +47,8 @@ export const EntryRow = memo(({
   fileKind,
   sizeLabel,
   modifiedLabel,
+  nameEllipsis,
+  hideExtension,
   selected,
   isDeleting,
   dropTarget,
@@ -59,6 +66,22 @@ export const EntryRow = memo(({
   onPreviewRelease,
   presence = "stable",
 }: EntryRowProps) => {
+  const displayName =
+    hideExtension && !entry.isDir ? stripNameExtension(entry.name) : entry.name;
+  const nameRef = useRef<HTMLSpanElement | null>(null);
+  const nameMeasureRef = useRef<HTMLSpanElement | null>(null);
+  const { parts: nameParts, useMiddleEllipsis, renderMode: nameEllipsisMode } =
+    useOverflowEllipsis(displayName, nameEllipsis, nameRef, nameMeasureRef);
+  const nameNodes = useMiddleEllipsis
+    ? [
+        <span key="head" className="name-label-start">
+          {nameParts?.head}
+        </span>,
+        <span key="tail" className="name-label-end">
+          {nameParts?.tail}
+        </span>,
+      ]
+    : displayName;
   const isRemoved = presence === "removed";
   const isInteractive = !isRenaming && !isRemoved && !isDeleting;
   const isSelectable = !isRemoved && !isDeleting;
@@ -136,6 +159,7 @@ export const EntryRow = memo(({
         aria-hidden={isRemoved ? "true" : "false"}
       >
         <span className="name">
+          <span className="name-marker" aria-hidden="true" />
           <RenameField
             value={renameValue}
             isDir={entry.isDir}
@@ -177,7 +201,17 @@ export const EntryRow = memo(({
         onPointerUp={isInteractive ? handleContextMenuUp : undefined}
         onContextMenu={(event) => event.preventDefault()}
       >
-        <span className="name">{entry.name}</span>
+        <span className="name">
+          <span className="name-marker" aria-hidden="true" />
+          <span className="name-label" data-ellipsis={nameEllipsisMode} ref={nameRef}>
+            {nameNodes}
+            {nameEllipsis === "middle" ? (
+              <span className="name-label-measure" ref={nameMeasureRef} aria-hidden="true">
+                {displayName}
+              </span>
+            ) : null}
+          </span>
+        </span>
         <span className="size">{sizeLabel}</span>
         <span className="modified">{modifiedLabel}</span>
       </button>

@@ -79,7 +79,12 @@ export const ParentRow = memo(({
         onPointerUp={handleContextMenuUp}
         onContextMenu={(event) => event.preventDefault()}
       >
-        <span className="name">..</span>
+        <span className="name">
+          <span className="name-marker" aria-hidden="true" />
+          <span className="name-label" data-ellipsis="end">
+            ..
+          </span>
+        </span>
         <span className="size">-</span>
         <span className="modified">-</span>
       </button>
