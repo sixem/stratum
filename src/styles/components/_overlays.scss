@@ -10,14 +10,17 @@
   z-index: 2600;
   max-width: min(420px, calc(100vw - 24px));
   max-height: calc(100vh - 24px);
-  padding: 6px 10px;
-  border-radius: 4px;
-  border: 1px solid var(--stroke);
-  background: #0b0e14;
+  @include control.floating-panel(
+    4px,
+    6px 10px,
+    #0b0e14,
+    var(--stroke),
+    0 6px 18px rgba(0, 0, 0, 0.28),
+    hidden
+  );
   color: var(--text);
   font-size: var(--font-size-xs);
   letter-spacing: 0.02em;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
@@ -42,22 +45,21 @@
   overflow-wrap: anywhere;
 }
 
-.context-menu {
+.context-menu,
+.context-submenu {
   position: fixed;
-  // Keep the context menu above other UI overlays (preview, tooltips) so it never "disappears"
-  // behind them in webview stacking edge-cases.
-  z-index: 2700;
   min-width: 190px;
   max-width: min(340px, calc(100vw - 24px));
-  padding: 6px;
-  border-radius: 0;
-  border: 1px solid var(--stroke);
-  background: #0f121a;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
-  overflow: visible;
+  @include control.floating-panel(0, 6px);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s ease;
+}
+
+.context-menu {
+  // Keep the context menu above other UI overlays (preview, tooltips) so it never "disappears"
+  // behind them in webview stacking edge-cases.
+  z-index: 2700;
 }
 
 :root:not([data-grid-corners="straight"]) :where(.context-menu, .context-submenu) {
@@ -107,15 +109,6 @@
 .context-submenu {
   position: absolute;
   min-width: 180px;
-  max-width: min(340px, calc(100vw - 24px));
-  padding: 6px;
-  border-radius: 0;
-  border: 1px solid var(--stroke);
-  background: #0f121a;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s ease;
   z-index: 2701;
 }
 

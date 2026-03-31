@@ -438,13 +438,13 @@
   }
 
   .inputbar-refresh {
-    width: 30px;
-    height: 30px;
-    @include control.control-surface(6px, var(--surface-control-strong));
-    display: grid;
-    place-items: center;
-    color: var(--muted);
-    cursor: pointer;
+    @include control.icon-button-shell(
+      30px,
+      6px,
+      var(--surface-control-strong),
+      var(--stroke),
+      var(--muted)
+    );
     transition: border-color 0.2s ease, color 0.2s ease;
   }
 
@@ -466,11 +466,17 @@
 }
 
 .btn {
-  padding: 4px 10px;
-  @include control.control-surface(4px, var(--surface-control));
-  font-weight: 600;
-  font-size: var(--font-size-sm);
-  cursor: pointer;
+  @include control.toolbar-control(
+    4px,
+    var(--surface-control),
+    var(--stroke),
+    4px 10px,
+    null,
+    var(--font-size-sm),
+    600,
+    0,
+    inherit
+  );
   transition: none;
 }
 

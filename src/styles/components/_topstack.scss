@@ -50,15 +50,9 @@
   }
 
   .brand-mark {
-    width: 28px;
-    height: 28px;
-    border-radius: 4px;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--stroke);
+    @include control.icon-button-shell(28px, 4px, transparent, var(--stroke), var(--accent));
     font-size: var(--font-size-xs);
     letter-spacing: 0.08em;
-    color: var(--accent);
     overflow: hidden;
 
     img {
@@ -84,14 +78,17 @@
   }
 
   .drive {
-    padding: 4px 10px;
-    border-radius: 4px;
-    border: 1px solid var(--stroke);
-    background: var(--panel);
-    font-weight: 600;
-    font-size: var(--font-size-sm);
-    letter-spacing: 0.04em;
-    cursor: pointer;
+    @include control.toolbar-control(
+      4px,
+      var(--panel),
+      var(--stroke),
+      4px 10px,
+      null,
+      var(--font-size-sm),
+      600,
+      0.04em,
+      inherit
+    );
     transition: none;
   }
 
@@ -128,19 +125,17 @@
 // Scope transfer UI pieces to the transfer status container.
 :where(.transfer-status) {
   .transfer-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    border-radius: 6px;
-    border: 1px solid var(--stroke);
-    background: var(--surface-control);
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: var(--muted);
-    cursor: pointer;
-    transition: border-color 250ms ease;
+    @include control.toolbar-control(
+      6px,
+      var(--surface-control),
+      var(--stroke),
+      4px 10px,
+      6px,
+      var(--font-size-xs),
+      600,
+      0.02em,
+      var(--muted)
+    );
   }
 
   .transfer-button:hover {
@@ -186,15 +181,17 @@
     width: min(356px, calc(100vw - 16px));
     max-height: min(432px, calc(100vh - 84px));
     min-height: 0;
-    padding: 10px 12px 12px;
-    border-radius: 10px;
-    border: 1px solid #1a2433;
-    background: #0b1119;
-    box-shadow: 0 18px 34px rgba(0, 0, 0, 0.42);
+    @include control.floating-panel(
+      10px,
+      10px 12px 12px,
+      #0b1119,
+      #1a2433,
+      0 18px 34px rgba(0, 0, 0, 0.42),
+      hidden
+    );
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 4px;
-    overflow: hidden;
     z-index: 30;
   }
 
@@ -218,16 +215,13 @@
   }
 
   .transfer-popover-clear {
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border-radius: 6px;
-    border: 1px solid #202c3d;
-    background: #111926;
-    color: rgba(234, 239, 248, 0.74);
-    display: grid;
-    place-items: center;
-    cursor: pointer;
+    @include control.icon-button-shell(
+      28px,
+      6px,
+      #111926,
+      #202c3d,
+      rgba(234, 239, 248, 0.74)
+    );
     transition:
       border-color 120ms ease,
       background-color 120ms ease,
@@ -401,16 +395,13 @@
   }
 
   .transfer-item-action {
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border-radius: 999px;
-    border: 1px solid #202c3d;
-    background: #111926;
-    color: rgba(234, 239, 248, 0.88);
-    display: grid;
-    place-items: center;
-    cursor: pointer;
+    @include control.icon-button-shell(
+      22px,
+      999px,
+      #111926,
+      #202c3d,
+      rgba(234, 239, 248, 0.88)
+    );
     transition:
       border-color 120ms ease,
       background-color 120ms ease,
@@ -462,14 +453,8 @@
 }
 
 .view-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
+  @include control.icon-button-shell(28px, 4px, transparent, transparent, var(--muted));
   transition: none;
-  color: var(--muted);
 }
 
 .view-btn svg {
