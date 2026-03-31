@@ -30,6 +30,71 @@
   }
 }
 
+// Shared chrome for compact controls that sit inside toolbars, headers, and action rows.
+@mixin toolbar-control(
+  $radius: 6px,
+  $background: var(--surface-control),
+  $border-color: var(--stroke),
+  $padding: 4px 10px,
+  $gap: null,
+  $font-size: var(--font-size-xs),
+  $font-weight: 600,
+  $letter-spacing: 0.02em,
+  $text-color: var(--muted),
+  $cursor: pointer,
+  $transition: border-color 250ms ease
+) {
+  display: inline-flex;
+  align-items: center;
+
+  @if $gap != null {
+    gap: $gap;
+  }
+
+  padding: $padding;
+  @include control-surface($radius, $background, $border-color);
+  font-size: $font-size;
+  font-weight: $font-weight;
+  letter-spacing: $letter-spacing;
+  color: $text-color;
+  cursor: $cursor;
+  transition: $transition;
+}
+
+// Compact square/round icon button shell used by toolbar actions and list-item controls.
+@mixin icon-button-shell(
+  $size,
+  $radius: 6px,
+  $background: transparent,
+  $border-color: transparent,
+  $color: var(--muted),
+  $transition: none
+) {
+  width: $size;
+  height: $size;
+  padding: 0;
+  @include control-surface($radius, $background, $border-color);
+  display: grid;
+  place-items: center;
+  color: $color;
+  cursor: pointer;
+  transition: $transition;
+}
+
+// Floating surface recipe for menus, popovers, and other detached panels.
+@mixin floating-panel(
+  $radius: 6px,
+  $padding: 6px,
+  $background: #0f121a,
+  $border-color: var(--stroke),
+  $shadow: 0 8px 22px rgba(0, 0, 0, 0.32),
+  $overflow: visible
+) {
+  @include panel-card($radius, $background, $border-color, $shadow);
+  padding: $padding;
+  overflow: $overflow;
+}
+
 @mixin active-surface(
   $background,
   $text-color: var(--text),

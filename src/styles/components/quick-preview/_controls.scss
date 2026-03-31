@@ -47,12 +47,17 @@
 }
 
 .quick-preview-control-button {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(16, 20, 30, 0.84);
-  @include control.eyebrow-label(var(--font-size-micro), 0.04em, 600, var(--text));
-  padding: 5px 9px;
-  border-radius: 5px;
-  cursor: pointer;
+  @include control.toolbar-control(
+    5px,
+    rgba(16, 20, 30, 0.84),
+    rgba(255, 255, 255, 0.14),
+    5px 9px,
+    null,
+    var(--font-size-micro),
+    600,
+    0.04em,
+    var(--text)
+  );
   transition: border-color 0.14s ease, background 0.14s ease;
 }
 
