@@ -1,0 +1,212 @@
+// Conversion override list, editors, and select-menu variants.
+@use "../../control-recipes" as control;
+
+:where(.conversion-panel) {
+  .conversion-override-shell {
+    display: grid;
+    min-width: 0;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 4px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0.01));
+    overflow: hidden;
+  }
+
+  .conversion-override-shell-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0.625rem 0.4375rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.012);
+  }
+
+  .conversion-override-count {
+    font-size: 0.6875rem;
+    color: rgba(217, 224, 236, 0.74);
+    letter-spacing: 0.02em;
+  }
+
+  .conversion-override-list {
+    display: grid;
+    gap: 0;
+    min-width: 0;
+    background: transparent;
+  }
+
+  .conversion-override-item {
+    display: grid;
+    gap: 0;
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    background: transparent;
+    scroll-margin-block: 0.5rem;
+  }
+
+  .conversion-override-item:last-child {
+    border-bottom: 0;
+  }
+
+  .conversion-override-item:hover {
+    background: transparent;
+  }
+
+  .conversion-override-item.is-overridden .conversion-override-summary {
+    color: rgba(228, 235, 247, 0.86);
+  }
+
+  .conversion-override-item:has(.conversion-override-trigger:focus-visible) {
+    position: relative;
+    z-index: 1;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  .conversion-override-item.is-active {
+    background: rgba(255, 255, 255, 0.01);
+  }
+
+  .conversion-override-trigger {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.8125rem;
+    text-align: left;
+    padding: 0.5rem 0.625rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  .conversion-override-item:not(.is-active) .conversion-override-trigger:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.01);
+  }
+
+  .conversion-override-item.is-active .conversion-override-trigger,
+  .conversion-override-item.is-active .conversion-override-trigger:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.01);
+  }
+
+  .conversion-override-trigger:disabled {
+    opacity: 0.58;
+    cursor: not-allowed;
+  }
+
+  .conversion-override-trigger:focus-visible {
+    outline: none;
+  }
+
+  .conversion-override-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .conversion-override-summary {
+    color: var(--muted);
+    font-size: 0.6875rem;
+    max-width: 144px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .conversion-override-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .conversion-override-editor {
+    padding: 0.625rem 0.625rem 0.6875rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(7, 10, 16, 0.28);
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .conversion-override-editor .ui-select-value {
+    color: rgba(228, 235, 247, 0.92);
+  }
+
+  .conversion-override-editor .ui-select-value.is-placeholder {
+    color: rgba(201, 211, 230, 0.62);
+  }
+
+  .conversion-override-editor .ui-select-caret {
+    color: rgba(190, 202, 225, 0.72);
+  }
+
+  .conversion-override-editor-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  .conversion-override-editor-label {
+    @include control.eyebrow-label(0.6875rem);
+  }
+
+  .conversion-clear-override {
+    flex-shrink: 0;
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(233, 239, 248, 0.9);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+  }
+
+  .conversion-clear-override:hover:not(:disabled),
+  .conversion-clear-override:focus-visible {
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(241, 245, 251, 0.96);
+  }
+}
+
+@media (max-width: 720px) {
+  :where(.conversion-panel) {
+    .conversion-override-editor-head {
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+  }
+}
+
+.conversion-override-select-menu {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(10, 14, 22, 0.98);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.34);
+}
+
+.conversion-override-select-menu .ui-select-group:not(:first-child) {
+  border-top-color: rgba(255, 255, 255, 0.04);
+}
+
+.conversion-override-select-menu .ui-select-group-label {
+  color: rgba(197, 208, 230, 0.5);
+}
+
+.conversion-override-select-menu .ui-select-option {
+  color: rgba(226, 233, 246, 0.92);
+}
+
+.conversion-override-select-menu .ui-select-option.is-active,
+.conversion-override-select-menu .ui-select-option:hover,
+.conversion-override-select-menu .ui-select-option:focus-visible {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.conversion-override-select-menu .ui-select-option.is-selected {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f0f4fd;
+}

@@ -1,0 +1,188 @@
+// Conversion modal layout, groups, and structural sections.
+@use "../../control-recipes" as control;
+
+:where(.conversion-panel) {
+  .conversion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.625rem;
+    border-bottom: 1px solid var(--stroke);
+    padding: 0.125rem 0.125rem 0.75rem;
+  }
+
+  .conversion-heading {
+    display: grid;
+    gap: 0.125rem;
+
+    h2 {
+      margin: 0;
+      font-size: 1.0625rem;
+      line-height: 1.2;
+      color: var(--text);
+    }
+
+    p {
+      margin: 0;
+      padding: 0.25rem 0 0;
+      font-size: 0.8125rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+  }
+
+  .conversion-selection-note {
+    margin: 0;
+    padding-top: 0.1875rem;
+    @include control.eyebrow-label(0.6875rem, 0.05em);
+  }
+
+  .conversion-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.625rem;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .conversion-left {
+    min-height: 0;
+    overflow: auto;
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--stroke);
+    border-radius: 4px;
+    background: var(--panel-deep);
+  }
+
+  .conversion-right {
+    // Keep text inputs and select triggers visually aligned inside the modal.
+    --conversion-field-surface: rgba(10, 14, 22, 0.72);
+    --conversion-field-surface-hover: rgba(10, 14, 22, 0.82);
+    --conversion-field-surface-focus: rgba(10, 14, 22, 0.84);
+    min-height: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 0.625rem;
+    overflow: hidden;
+    padding: 0.125rem 0.25rem 0;
+  }
+
+  .conversion-scroll-body {
+    min-height: 0;
+    overflow: auto;
+    display: grid;
+    align-content: start;
+    gap: 0.625rem;
+    padding: 0 0.25rem 0.25rem;
+    scrollbar-gutter: stable both-edges;
+  }
+
+  .conversion-right::-webkit-scrollbar,
+  .conversion-scroll-body::-webkit-scrollbar {
+    width: 7px;
+  }
+
+  .conversion-group {
+    display: grid;
+    gap: 0.375rem;
+  }
+
+  .conversion-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .conversion-group-title {
+    @include control.eyebrow-label(0.6875rem, 0.12em, 650);
+  }
+
+  .conversion-group-count {
+    font-size: 0.6875rem;
+    color: var(--muted);
+  }
+
+  .conversion-block {
+    display: grid;
+    gap: 0.375rem;
+    padding: 0;
+  }
+
+  .conversion-block + .conversion-block {
+    margin-top: 1px;
+    padding-top: 0.3rem;
+  }
+
+  .conversion-video-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    gap: 0.875rem;
+  }
+
+  .conversion-video-settings {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+    align-content: start;
+    min-width: 0;
+  }
+
+  .conversion-video-settings > .conversion-field:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .conversion-video-meta {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 0.6875rem;
+    align-content: stretch;
+    min-width: 0;
+    padding-left: 0.875rem;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .conversion-video-meta-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    align-self: end;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  .conversion-video-note-stack {
+    display: grid;
+    gap: 0.375rem;
+    min-width: 0;
+    align-self: end;
+  }
+
+  .conversion-video-quality-field {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  :where(.conversion-panel) {
+    .conversion-video-panel,
+    .conversion-video-settings,
+    .conversion-video-meta-footer {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .conversion-video-meta {
+      padding-left: 0;
+      border-left: 0;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .conversion-toggle-btn {
+      justify-self: start;
+    }
+  }
+}

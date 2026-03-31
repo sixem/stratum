@@ -1,0 +1,27 @@
+// Conversion modal shell and panel chrome.
+@use "../shared" as modal;
+
+.conversion-modal {
+  @include modal.overlay-shell(2420, 20px);
+}
+
+.conversion-modal[data-open="true"] {
+  @include modal.overlay-open();
+}
+
+.conversion-panel {
+  @include modal.panel-shell(
+    min(1080px, calc(100vw - 28px)),
+    min(84vh, 860px),
+    0.75rem,
+    0.75rem,
+    0.625rem,
+    linear-gradient(160deg, var(--surface-nav) 0%, var(--panel-deep) 100%),
+    0 18px 42px rgba(0, 0, 0, 0.38)
+  );
+  overflow: hidden;
+}
+
+.conversion-modal[data-open="true"] .conversion-panel {
+  @include modal.panel-open();
+}
