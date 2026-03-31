@@ -10,6 +10,7 @@
   flex: 1;
   padding: 0;
   --list-columns: 1fr 90px 150px;
+  --list-scrollbar-gap: 8px;
 }
 
 // Scope list internals to the list container.
@@ -167,7 +168,8 @@
     position: absolute;
     top: 0;
     left: 0;
-    right: 0;
+    // Leave a little breathing room so rows do not crowd the list scrollbar.
+    right: var(--list-scrollbar-gap);
     display: flex;
     flex-direction: column;
     gap: var(--list-row-gap, var(--file-view-list-row-gap));
@@ -263,17 +265,54 @@
     font-size: var(--font-size-md);
     font-weight: 600;
     min-width: 0;
+  }
+
+  .row .name-marker {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: var(--list-dot-color);
+  }
+
+  .row .name-label {
+    position: relative;
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .row .name::before {
-    content: "";
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    background: var(--list-dot-color);
+  .row .name-label-measure {
+    position: absolute;
+    left: 0;
+    top: 0;
+    visibility: hidden;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .row .name-label[data-ellipsis="middle"] {
+    display: flex;
+    align-items: baseline;
+    text-overflow: clip;
+  }
+
+  .row .name-label[data-ellipsis="middle"] .name-label-start {
+    line-height: inherit;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: pre;
+    flex: 0 1 auto;
+  }
+
+  .row .name-label[data-ellipsis="middle"] .name-label-end {
+    line-height: inherit;
+    flex: 0 0 auto;
+    white-space: pre;
   }
 
   .row .size,

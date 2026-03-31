@@ -470,8 +470,14 @@
 }
 
 .view-btn.is-active {
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--accent-rgb), 0.08);
   color: var(--accent);
+}
+
+.view-btn.is-active:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
 }
 
 @keyframes transfer-spin {

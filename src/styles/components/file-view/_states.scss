@@ -69,7 +69,13 @@
 }
 
 :root[data-ambient="true"] :where(.file-list) .row {
-  background: rgba(18, 22, 33, 0.82);
+  // Keep ambient list rows readable, but let more of the shell gradient show through.
+  @include shared.entry-state-surface(rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.03));
+}
+
+:root[data-ambient="true"] :where(.file-list) .row .size,
+:root[data-ambient="true"] :where(.file-list) .row .modified {
+  color: rgba(229, 235, 245, 0.82);
 }
 
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not(
@@ -81,7 +87,7 @@
 :root[data-ambient="true"] :where(.file-list) .row.is-dir:not(.is-selected):not(
     [data-drop-target="true"]
   ) {
-  @include shared.entry-state-surface(rgba(124, 157, 226, 0.26), rgba(58, 78, 126, 0.48));
+  @include shared.entry-state-surface(rgba(124, 157, 226, 0.26), rgba(92, 126, 196, 0.12));
 }
 
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not(
