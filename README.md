@@ -6,7 +6,7 @@
 <p align="center">A simple yet powerful file manager designed to be beautiful, intuitive, and genuinely useful.</p>
 
 <p align="center">
-  <img alt="stratum" src="https://github.com/user-attachments/assets/b9837fc9-fc18-41f5-84c1-f78749585541" />
+  <img width="1360" height="818" alt="stratum" src="https://github.com/user-attachments/assets/8cc014f0-0bd0-40a5-853a-7bffb0d12e3a" />
 </p>
 
 ## Features
