@@ -1,0 +1,208 @@
+// Settings layout, navigation, and section framing.
+@use "../control-recipes" as control;
+
+:where(.settings-panel) {
+  .settings-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--stroke);
+    background: rgba(8, 11, 16, 0.6);
+  }
+
+  .settings-title {
+    margin: 0 0 6px;
+    font-size: var(--font-size-2xl);
+    letter-spacing: 0.02em;
+  }
+
+  .settings-subtitle {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--muted);
+    max-width: 520px;
+    line-height: 1.4;
+  }
+
+  .settings-close {
+    align-self: start;
+  }
+
+  .settings-body {
+    display: grid;
+    grid-template-columns: 160px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 18px;
+    padding: 16px 18px 20px;
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .settings-sidebar {
+    position: sticky;
+    top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .settings-nav {
+    display: grid;
+    gap: 6px;
+    min-height: 0;
+    overflow: auto;
+    padding-right: 4px;
+  }
+
+  .settings-sidebar-actions {
+    border-top: 1px solid var(--stroke);
+    padding-top: 12px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .settings-reset {
+    width: 100%;
+    text-align: center;
+  }
+
+  .btn {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: color-mix(in srgb, var(--surface-control) 68%, black 32%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .btn:hover:not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: color-mix(in srgb, var(--surface-control) 78%, black 22%);
+  }
+
+  .btn.ghost {
+    background: color-mix(in srgb, var(--surface-control-muted) 60%, black 40%);
+  }
+
+  .settings-nav-item {
+    padding: 6px 10px;
+    @include control.panel-card(8px, var(--surface-nav));
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--muted);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .settings-nav-item:hover {
+    color: var(--text);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .settings-nav-item:focus-visible {
+    outline: none;
+    @include control.focus-ring(rgba(var(--accent-rgb), 0.56), rgba(var(--accent-rgb), 0.14));
+  }
+
+  .settings-nav-item.is-active {
+    @include control.active-surface(
+      rgba(var(--accent-rgb), 0.12),
+      var(--text),
+      rgba(var(--accent-rgb), 0.22),
+      inset 0 0 0 1px rgba(var(--accent-rgb), 0.08)
+    );
+  }
+
+  .settings-sidebar-footer {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--stroke);
+    display: grid;
+    gap: 8px;
+  }
+
+  .settings-vitals-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .settings-vitals-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .settings-stat .settings-stat-value.is-ok {
+    color: #6fe08a;
+  }
+
+  .settings-stat .settings-stat-value.is-missing {
+    color: #f28b8b;
+  }
+
+  .settings-sidebar-title {
+    @include control.eyebrow-label(var(--font-size-2xs), 0.16em);
+  }
+
+  .settings-stats {
+    display: grid;
+    gap: 6px;
+  }
+
+  .settings-stat {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: var(--font-size-xs);
+    color: var(--muted);
+  }
+
+  .settings-stat span:last-child {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 120px;
+  }
+
+  .settings-content {
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding-right: 6px;
+    scrollbar-gutter: stable;
+
+    > .settings-section:not(:first-child) {
+      margin-top: 14px;
+    }
+  }
+
+  .settings-tab-panel {
+    min-height: 0;
+  }
+
+  .settings-nav::-webkit-scrollbar,
+  .settings-content::-webkit-scrollbar {
+    width: 7px;
+  }
+
+  .settings-section {
+    @include control.panel-card(10px, var(--surface-nav));
+    padding: 14px;
+    display: grid;
+    gap: 12px;
+    min-height: 0;
+    scroll-margin-top: 1px;
+  }
+
+  .settings-section-title {
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: var(--text);
+  }
+}

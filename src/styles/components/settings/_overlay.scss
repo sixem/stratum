@@ -1,0 +1,31 @@
+// Settings overlay shell and panel chrome.
+@use "../modals/shared" as shell;
+
+.settings-overlay {
+  --settings-overlay-gutter: clamp(20px, 4vw, 44px);
+  @include shell.overlay-shell(2300, var(--settings-overlay-gutter));
+}
+
+.settings-overlay[data-open="true"] {
+  @include shell.overlay-open();
+}
+
+.settings-panel {
+  // Keep the shell height stable across tabs while still respecting the viewport.
+  @include shell.panel-shell(
+    min(
+      1320px,
+      calc(100vw - (var(--settings-overlay-gutter) + var(--settings-overlay-gutter)))
+    ),
+    null,
+    0,
+    0,
+    14px,
+    $height: min(860px, calc(100vh - (var(--settings-overlay-gutter) * 2))),
+    $overflow: hidden
+  );
+}
+
+.settings-overlay[data-open="true"] .settings-panel {
+  @include shell.panel-open();
+}

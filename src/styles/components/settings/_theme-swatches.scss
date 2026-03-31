@@ -1,0 +1,9 @@
+// Accent swatch mapping for the settings accent pills.
+@use "sass:map";
+@use "../../tokens/theme" as theme;
+
+@each $name, $theme-values in theme.$accent-themes {
+  :where(.settings-panel) .settings-pill[data-accent="#{$name}"] {
+    --swatch-color: #{map.get($theme-values, color)};
+  }
+}

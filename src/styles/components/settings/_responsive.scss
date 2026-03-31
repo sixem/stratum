@@ -1,0 +1,29 @@
+// Settings-specific responsive adjustments.
+@media (max-width: 720px) {
+  :where(.settings-panel) .settings-body {
+    grid-template-columns: 1fr;
+  }
+
+  :where(.settings-panel) .settings-sidebar {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: auto;
+    overflow: visible;
+  }
+
+  :where(.settings-panel) .settings-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  :where(.settings-panel) .settings-sidebar-footer {
+    margin-top: 8px;
+  }
+
+  :where(.settings-panel) .settings-nav-item {
+    flex: 0 0 auto;
+  }
+}
