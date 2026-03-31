@@ -1,4 +1,5 @@
 // Barrel exports for app-level UI hooks.
+export * from "./effects";
 export { useAppAppearance } from "./useAppAppearance";
 export { useAppCommands } from "./useAppCommands";
 export { useAppContextMenuSection } from "./useAppContextMenuSection";
