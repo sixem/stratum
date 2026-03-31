@@ -9,12 +9,14 @@ type UseFileManagerCreateOptions = {
   currentPathRef: RefObject<string>;
   createInFlightRef: RefObject<boolean>;
   refreshAfterChange: () => Promise<void>;
+  onDirectoryChildrenChanged?: (paths: string[]) => void;
 };
 
 export const useFileManagerCreate = ({
   currentPathRef,
   createInFlightRef,
   refreshAfterChange,
+  onDirectoryChildrenChanged,
 }: UseFileManagerCreateOptions) => {
   const createEntryInView = useCallback(
     async (parentPath: string, name: string, kind: "folder" | "file") => {
@@ -35,6 +37,7 @@ export const useFileManagerCreate = ({
         if (parentKey && currentKey && parentKey === currentKey) {
           await refreshAfterChange();
         }
+        onDirectoryChildrenChanged?.([parent]);
         return targetPath;
       } catch (error) {
         const message = toMessage(error, `Failed to create ${kind}.`);
@@ -49,7 +52,7 @@ export const useFileManagerCreate = ({
         createInFlightRef.current = false;
       }
     },
-    [createInFlightRef, currentPathRef, refreshAfterChange],
+    [createInFlightRef, currentPathRef, onDirectoryChildrenChanged, refreshAfterChange],
   );
 
   const createFolderInView = useCallback(

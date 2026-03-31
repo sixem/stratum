@@ -9,7 +9,7 @@ import {
   trashEntries,
 } from "@/api";
 import { isManagedJobCancelledError } from "@/hooks/domain/filesystem/transferJobErrors";
-import { getDriveKey, joinPath } from "@/lib";
+import { getDriveKey, getParentPath, joinPath } from "@/lib";
 import { usePromptStore, useTransferStore } from "@/modules";
 import type { DeleteReport, TransferReport, TrashReport } from "@/types";
 import type { UndoAction } from "./fileManagerUndo";
@@ -23,6 +23,7 @@ type UseFileManagerDeleteOptions = {
   homeDriveKeyRef: RefObject<string | null>;
   pushUndo: (action: UndoAction) => void;
   refreshAfterChange: () => Promise<void>;
+  onDirectoryChildrenChanged?: (paths: string[]) => void;
   log?: (...args: unknown[]) => void;
 };
 
@@ -44,6 +45,7 @@ export const useFileManagerDelete = ({
   homeDriveKeyRef,
   pushUndo,
   refreshAfterChange,
+  onDirectoryChildrenChanged,
   log,
 }: UseFileManagerDeleteOptions) => {
   // Track overlapping delete requests without blocking the backend queue from
@@ -249,7 +251,15 @@ export const useFileManagerDelete = ({
       deleteInFlightRef.current = true;
 
       try {
-        return await executeDeleteEntries(unique);
+        const result = await executeDeleteEntries(unique);
+        if (result && result.deleted > 0) {
+          onDirectoryChildrenChanged?.(
+            unique
+              .map((path) => getParentPath(path) ?? "")
+              .filter(Boolean),
+          );
+        }
+        return result;
       } finally {
         activeDeleteRequestCountRef.current = Math.max(
           activeDeleteRequestCountRef.current - 1,
@@ -258,7 +268,7 @@ export const useFileManagerDelete = ({
         deleteInFlightRef.current = activeDeleteRequestCountRef.current > 0;
       }
     },
-    [deleteInFlightRef, executeDeleteEntries],
+    [deleteInFlightRef, executeDeleteEntries, onDirectoryChildrenChanged],
   );
 
   return { deleteEntriesInView };

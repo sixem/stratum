@@ -1,5 +1,11 @@
 // Barrel exports for app state stores.
 export { useClipboardStore } from "./clipboardStore";
+export {
+  bumpDirectoryChildVersion,
+  bumpDirectoryChildVersions,
+  getDirectoryChildVersion,
+  useDirectoryChildStateRevision,
+} from "./directoryChildState";
 export { usePlacesStore } from "./placesStore";
 export { usePromptStore } from "./promptStore";
 export { useSessionStore } from "./sessionStore";

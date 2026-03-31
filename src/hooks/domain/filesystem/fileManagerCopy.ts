@@ -14,6 +14,7 @@ type UseFileManagerCopyOptions = {
   currentPathRef: RefObject<string>;
   copyInFlightRef: RefObject<boolean>;
   refreshAfterChange: () => Promise<void>;
+  onDirectoryChildrenChanged?: (paths: string[]) => void;
   log?: (...args: unknown[]) => void;
 };
 
@@ -21,6 +22,7 @@ export const useFileManagerCopy = ({
   currentPathRef,
   copyInFlightRef,
   refreshAfterChange,
+  onDirectoryChildrenChanged,
   log,
 }: UseFileManagerCopyOptions) => {
   // Track overlapping copy requests so the rest of the file manager can still
@@ -74,6 +76,9 @@ export const useFileManagerCopy = ({
         if (report.copied > 0 && currentPathRef.current.trim() === target) {
           await refreshAfterChange();
         }
+        if (report.copied > 0) {
+          onDirectoryChildrenChanged?.([target]);
+        }
         recordTransferJobOutcome(job.id, {
           copied: report.copied,
           skipped: report.skipped,
@@ -114,6 +119,7 @@ export const useFileManagerCopy = ({
       copyInFlightRef,
       currentPathRef,
       log,
+      onDirectoryChildrenChanged,
       recordTransferJobOutcome,
       registerTransferJob,
       refreshAfterChange,

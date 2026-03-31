@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef } from "react";
 import { startDirWatch, stopDirWatch } from "@/api";
 import { makeDebug, normalizePath } from "@/lib";
+import { bumpDirectoryChildVersions } from "@/modules";
 import type { DirChangedEvent, DirRenameEvent, ListDirOptions, SortState, Tab } from "@/types";
 import {
   consumePendingChanges,
@@ -209,6 +210,9 @@ export const useDirWatch = ({
     }
     const pending = Array.from(pendingPathsRef.current);
     pendingPathsRef.current.clear();
+    if (pending.length > 0) {
+      bumpDirectoryChildVersions(pending);
+    }
     const metaPaths = Array.from(pendingEntryPathsRef.current)
       .map((path) => path.trim())
       .filter(Boolean);

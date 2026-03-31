@@ -5,6 +5,7 @@ import {
   getParentPath,
   normalizePath,
 } from "@/lib";
+import { bumpDirectoryChildVersions } from "@/modules";
 import type { PromptConfig } from "@/modules";
 import {
   getTransferErrorMessage,
@@ -64,6 +65,22 @@ const shouldRefreshAfterCancellation = (
   return touchedCurrentDestination || touchedCurrentSource;
 };
 
+const bumpTransferDirectoryChildren = (
+  plan: ResolvedDropTransferPlan,
+  options: { includeSourceParents: boolean },
+) => {
+  const paths = [plan.destination];
+  if (options.includeSourceParents) {
+    plan.items.forEach((item) => {
+      const parent = getParentPath(item.candidate.path);
+      if (parent) {
+        paths.push(parent);
+      }
+    });
+  }
+  bumpDirectoryChildVersions(paths);
+};
+
 export const runDropTransfer = async ({
   plan,
   promptStore,
@@ -113,11 +130,17 @@ export const runDropTransfer = async ({
     ) {
       onRefresh?.();
     }
+    if ((report.moved ?? 0) > 0 || (report.copied ?? 0) > 0) {
+      bumpTransferDirectoryChildren(plan, {
+        includeSourceParents: (report.moved ?? 0) > 0,
+      });
+    }
   } catch (error) {
     if (isTransferCancelledError(error)) {
       if (shouldRefreshAfterCancellation(plan, currentPathKey)) {
         onRefresh?.();
       }
+      bumpTransferDirectoryChildren(plan, { includeSourceParents: true });
       return;
     }
 

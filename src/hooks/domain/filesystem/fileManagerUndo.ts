@@ -35,6 +35,7 @@ type UseFileManagerUndoOptions = {
   deleteInFlightRef: RefObject<boolean>;
   copyInFlightRef: RefObject<boolean>;
   onRenameUndoPresence?: (suppress: boolean) => void;
+  onDirectoryChildrenChanged?: (paths: string[]) => void;
   performRenameRequests: (
     renames: RenameRequest[],
     options?: { recordUndo?: boolean; failureTitle?: string },
@@ -48,6 +49,7 @@ export const useFileManagerUndo = ({
   deleteInFlightRef,
   copyInFlightRef,
   onRenameUndoPresence,
+  onDirectoryChildrenChanged,
   performRenameRequests,
   refreshAfterChange,
 }: UseFileManagerUndoOptions) => {
@@ -116,6 +118,9 @@ export const useFileManagerUndo = ({
 
       if (restored > 0) {
         await refreshAfterChange();
+        onDirectoryChildrenChanged?.(
+          entries.map((entry) => getParentPath(entry.originalPath) ?? "").filter(Boolean),
+        );
       }
 
       return { restored, remaining };
@@ -150,6 +155,9 @@ export const useFileManagerUndo = ({
       }
       if (report.restored > 0) {
         await refreshAfterChange();
+        onDirectoryChildrenChanged?.(
+          paths.map((path) => getParentPath(path) ?? "").filter(Boolean),
+        );
       }
       return { restored: report.restored, remaining: report.remainingPaths };
     },
@@ -197,6 +205,11 @@ export const useFileManagerUndo = ({
         if (remaining.length > 0) {
           undoStackRef.current.push({ type: "rename", entries: remaining });
         }
+        onDirectoryChildrenChanged?.(
+          action.entries
+            .flatMap((entry) => [getParentPath(entry.from) ?? "", getParentPath(entry.to) ?? ""])
+            .filter(Boolean),
+        );
         return true;
       } finally {
         onRenameUndoPresence?.(false);
@@ -230,6 +243,7 @@ export const useFileManagerUndo = ({
   }, [
     copyInFlightRef,
     deleteInFlightRef,
+    onDirectoryChildrenChanged,
     onRenameUndoPresence,
     performRenameRequests,
     renameInFlightRef,

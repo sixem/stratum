@@ -3,8 +3,8 @@ import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { renameEntry } from "@/api";
 import { UNDO_STACK_LIMIT } from "@/constants";
-import { normalizePath, tabLabel, toMessage } from "@/lib";
-import { usePromptStore } from "@/modules";
+import { getParentPath, normalizePath, tabLabel, toMessage } from "@/lib";
+import { bumpDirectoryChildVersions, usePromptStore } from "@/modules";
 import { useFileManagerCopy } from "./fileManagerCopy";
 import { useFileManagerCreate } from "./fileManagerCreate";
 import { useFileManagerDelete } from "./fileManagerDelete";
@@ -58,17 +58,22 @@ export const useFileMutations = ({
   }, []);
 
   const canUndo = useCallback(() => undoStackRef.current.length > 0, []);
+  const notifyDirectoryChildrenChanged = useCallback((paths: string[]) => {
+    bumpDirectoryChildVersions(paths);
+  }, []);
 
   const { createFolderInView, createFileInView } = useFileManagerCreate({
     currentPathRef,
     createInFlightRef,
     refreshAfterChange,
+    onDirectoryChildrenChanged: notifyDirectoryChildrenChanged,
   });
 
   const { duplicateEntriesInView, pasteEntriesInView } = useFileManagerCopy({
     currentPathRef,
     copyInFlightRef,
     refreshAfterChange,
+    onDirectoryChildrenChanged: notifyDirectoryChildrenChanged,
     log,
   });
 
@@ -79,6 +84,7 @@ export const useFileMutations = ({
     homeDriveKeyRef,
     pushUndo,
     refreshAfterChange,
+    onDirectoryChildrenChanged: notifyDirectoryChildrenChanged,
     log,
   });
 
@@ -166,6 +172,12 @@ export const useFileMutations = ({
         }
         if (renamed.size > 0) {
           await refreshAfterChange();
+          notifyDirectoryChildrenChanged(
+            Array.from(renamed).flatMap(([from, to]) => [
+              getParentPath(from) ?? "",
+              getParentPath(to) ?? "",
+            ]),
+          );
           if (options?.recordUndo !== false) {
             const undoEntries = Array.from(renamed).map(([from, to]) => ({
               from,
@@ -179,7 +191,7 @@ export const useFileMutations = ({
         renameInFlightRef.current = false;
       }
     },
-    [pushUndo, refreshAfterChange],
+    [notifyDirectoryChildrenChanged, pushUndo, refreshAfterChange],
   );
 
   const renameEntryInView = useCallback(
@@ -203,6 +215,7 @@ export const useFileMutations = ({
     renameInFlightRef,
     deleteInFlightRef,
     copyInFlightRef,
+    onDirectoryChildrenChanged: notifyDirectoryChildrenChanged,
     onRenameUndoPresence: setSuppressUndoPresence,
     performRenameRequests,
     refreshAfterChange,

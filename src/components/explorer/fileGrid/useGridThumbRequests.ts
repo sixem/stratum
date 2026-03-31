@@ -20,6 +20,10 @@ import {
 import type { FileKind } from "@/lib";
 import type { EntryItem } from "@/lib";
 import { THUMB_INTERACTION_COOLDOWN_MS, THUMB_TYPING_PAUSE_MS } from "@/constants";
+import {
+  getDirectoryChildVersion,
+  useDirectoryChildStateRevision,
+} from "@/modules";
 import type { EntryMeta, ThumbnailRequest } from "@/types";
 
 export type GridDisplayMeta = {
@@ -30,6 +34,11 @@ export type GridDisplayMeta = {
 
 type CachedGridDisplayMeta = GridDisplayMeta & {
   signature: string;
+};
+
+type CachedFolderSample = {
+  samplePath: string | null;
+  version: number;
 };
 
 type UseGridThumbRequestsOptions = {
@@ -64,15 +73,15 @@ const GRID_META_CACHE_LIMIT = 5000;
 const perf = makeDebug("perf:resize:enrich");
 
 const upsertFolderSample = (
-  cache: Map<string, string | null>,
+  cache: Map<string, CachedFolderSample>,
   folderKey: string,
-  samplePath: string | null,
+  sample: CachedFolderSample,
 ) => {
   // Refresh insertion order so pruning behaves like a simple LRU.
   if (cache.has(folderKey)) {
     cache.delete(folderKey);
   }
-  cache.set(folderKey, samplePath);
+  cache.set(folderKey, sample);
   if (cache.size <= FOLDER_SAMPLE_CACHE_LIMIT) return;
   const oldestKey = cache.keys().next().value as string | undefined;
   if (!oldestKey) return;
@@ -112,6 +121,7 @@ export const useGridThumbRequests = ({
   thumbnailSvgs,
   loading,
 }: UseGridThumbRequestsOptions): GridThumbRequestsState => {
+  const directoryChildRevision = useDirectoryChildStateRevision();
   const scrolling = useScrollSettled(viewportRef);
   const typingActive = useTypingActivity({ resetDelayMs: THUMB_TYPING_PAUSE_MS });
   // Treat resize like scroll/typing so enrichment yields while layout is hot.
@@ -234,7 +244,7 @@ export const useGridThumbRequests = ({
     thumbResetKey,
   );
 
-  const [folderSampleByPath, setFolderSampleByPath] = useState<Map<string, string | null>>(
+  const [folderSampleByPath, setFolderSampleByPath] = useState<Map<string, CachedFolderSample>>(
     new Map(),
   );
   const pendingFolderFetchesRef = useRef<Set<string>>(new Set());
@@ -249,12 +259,23 @@ export const useGridThumbRequests = ({
   }, [thumbResetKey, thumbnailFolders, thumbnailSvgs, thumbnailVideos]);
 
   useEffect(() => {
+    // Directory-child revisions mean a folder may now choose a different sample path.
+    requestedFolderSampleThumbsRef.current.clear();
+  }, [directoryChildRevision]);
+
+  useEffect(() => {
     if (!thumbnailsEnabled || !thumbnailFolders || loading || interactionActive) return;
     if (folderPaths.length === 0) return;
     const pendingPaths = folderPaths.filter((folderPath) => {
       const key = normalizePath(folderPath);
       if (!key) return false;
-      if (folderSampleByPath.has(key)) return false;
+      const cachedSample = folderSampleByPath.get(key) ?? null;
+      if (
+        cachedSample &&
+        cachedSample.version === getDirectoryChildVersion(folderPath)
+      ) {
+        return false;
+      }
       if (pendingFolderFetchesRef.current.has(key)) return false;
       return true;
     });
@@ -272,7 +293,10 @@ export const useGridThumbRequests = ({
           results.forEach((result) => {
             const folderKey = normalizePath(result.folderPath);
             if (!folderKey) return;
-            upsertFolderSample(next, folderKey, result.samplePath?.trim() || null);
+            upsertFolderSample(next, folderKey, {
+              samplePath: result.samplePath?.trim() || null,
+              version: getDirectoryChildVersion(result.folderPath),
+            });
           });
           return next;
         });
@@ -284,7 +308,10 @@ export const useGridThumbRequests = ({
           pendingPaths.forEach((folderPath) => {
             const folderKey = normalizePath(folderPath);
             if (!folderKey) return;
-            upsertFolderSample(next, folderKey, null);
+            upsertFolderSample(next, folderKey, {
+              samplePath: null,
+              version: getDirectoryChildVersion(folderPath),
+            });
           });
           return next;
         });
@@ -303,12 +330,15 @@ export const useGridThumbRequests = ({
     thumbnailSvgs,
     thumbnailVideos,
     thumbnailsEnabled,
+    directoryChildRevision,
   ]);
 
   const folderThumbRequests = useMemo(() => {
     if (!thumbnailsEnabled || !thumbnailFolders || loading || interactionActive) return [];
     const requests: ThumbnailRequest[] = [];
-    folderSampleByPath.forEach((samplePath) => {
+    folderSampleByPath.forEach((sample, folderKey) => {
+      if (sample.version !== getDirectoryChildVersion(folderKey)) return;
+      const samplePath = sample.samplePath;
       if (!samplePath) return;
       // Sample paths are requested verbatim, so direct map lookup avoids
       // rebuilding a normalized index of the full thumbnail cache.
@@ -338,7 +368,10 @@ export const useGridThumbRequests = ({
     folderPaths.forEach((folderPath) => {
       const folderKey = normalizePath(folderPath);
       if (!folderKey) return;
-      const samplePath = folderSampleByPath.get(folderKey);
+      const sample = folderSampleByPath.get(folderKey);
+      if (!sample) return;
+      if (sample.version !== getDirectoryChildVersion(folderPath)) return;
+      const samplePath = sample.samplePath;
       if (!samplePath) return;
       const sampleThumb = thumbSource.get(samplePath);
       if (!sampleThumb) return;
