@@ -128,40 +128,127 @@ export const useConversionModalModel = ({
     [onDraftChange],
   );
 
-  const commitImageQuality = useCallback(
-    (quality: number) => {
+  const updateImageOptions = useCallback(
+    (updater: (imageOptions: ConversionModalDraft["imageOptions"]) => ConversionModalDraft["imageOptions"]) => {
       const currentDraft = draftRef.current;
       if (!currentDraft) return;
-      const clamped = Math.min(100, Math.max(1, Math.round(quality)));
       updateDraft({
         ...currentDraft,
-        imageOptions: {
-          ...currentDraft.imageOptions,
-          quality: clamped,
-        },
+        imageOptions: updater(currentDraft.imageOptions),
       });
     },
     [updateDraft],
   );
 
-  const commitVideoQuality = useCallback(
-    (value: number) => {
+  const updateRules = useCallback(
+    (updater: (rules: ConversionModalDraft["rules"]) => ConversionModalDraft["rules"]) => {
       const currentDraft = draftRef.current;
       if (!currentDraft) return;
-      const clamped = clampVideoQuality(currentDraft.videoOptions.encoder, value);
       updateDraft({
         ...currentDraft,
-        videoOptions: {
-          ...currentDraft.videoOptions,
-          presetId: "custom",
-          quality: clamped,
-        },
-        rules: currentDraft.rules.map((rule) =>
-          rule.kind === "video" ? { ...rule, presetId: "custom" } : rule,
+        rules: updater(currentDraft.rules),
+      });
+    },
+    [updateDraft],
+  );
+
+  const updateVideoOptions = useCallback(
+    (
+      updater: (
+        videoOptions: ConversionModalDraft["videoOptions"],
+      ) => ConversionModalDraft["videoOptions"],
+      options?: {
+        rules?: (
+          rules: ConversionModalDraft["rules"],
+          nextVideoOptions: ConversionModalDraft["videoOptions"],
+        ) => ConversionModalDraft["rules"];
+      },
+    ) => {
+      const currentDraft = draftRef.current;
+      if (!currentDraft) return;
+      const nextVideoOptions = updater(currentDraft.videoOptions);
+      updateDraft({
+        ...currentDraft,
+        videoOptions: nextVideoOptions,
+        rules: options?.rules
+          ? options.rules(currentDraft.rules, nextVideoOptions)
+          : currentDraft.rules,
+      });
+    },
+    [updateDraft],
+  );
+
+  const updateItemOverride = useCallback(
+    (itemPath: string, targetFormat: string | null) => {
+      const currentDraft = draftRef.current;
+      if (!currentDraft) return;
+      updateDraft({
+        ...currentDraft,
+        items: currentDraft.items.map((item) =>
+          item.path === itemPath
+            ? {
+                ...item,
+                override: targetFormat ? { targetFormat, presetId: null } : null,
+              }
+            : item,
         ),
       });
     },
     [updateDraft],
+  );
+
+  const markVideoRuleCustom = useCallback(
+    (rules: ConversionModalDraft["rules"]) =>
+      rules.map((rule) =>
+        rule.kind === "video" ? { ...rule, presetId: "custom" } : rule,
+      ),
+    [],
+  );
+
+  const syncVideoRule = useCallback(
+    (
+      rules: ConversionModalDraft["rules"],
+      patch: Partial<ConversionModalDraft["rules"][number]>,
+    ) =>
+      rules.map((rule) =>
+        rule.kind === "video"
+          ? {
+              ...rule,
+              ...patch,
+            }
+          : rule,
+      ),
+    [],
+  );
+
+  const commitImageQuality = useCallback(
+    (quality: number) => {
+      const clamped = Math.min(100, Math.max(1, Math.round(quality)));
+      updateImageOptions((imageOptions) => ({
+        ...imageOptions,
+        quality: clamped,
+      }));
+    },
+    [updateImageOptions],
+  );
+
+  const commitVideoQuality = useCallback(
+    (value: number) => {
+      updateVideoOptions(
+        (videoOptions) => {
+          const clamped = clampVideoQuality(videoOptions.encoder, value);
+          return {
+            ...videoOptions,
+            presetId: "custom",
+            quality: clamped,
+          };
+        },
+        {
+          rules: (rules) => markVideoRuleCustom(rules),
+        },
+      );
+    },
+    [markVideoRuleCustom, updateVideoOptions],
   );
 
   const imageQualityControl = useBufferedRangeValue(
@@ -200,55 +287,58 @@ export const useConversionModalModel = ({
   const setRuleFormat = useCallback(
     (kind: ConversionMediaKind, targetFormat: string | null) => {
       if (!draft) return;
-      let nextVideoOptions = draft.videoOptions;
-      if (kind === "video") {
-        const videoFormat = asVideoFormat(targetFormat);
-        const nextEncoder = videoFormat
-          ? resolveVideoEncoderForFormat(videoFormat, draft.videoOptions.encoder)
-          : draft.videoOptions.encoder;
-        nextVideoOptions = {
-          ...draft.videoOptions,
-          presetId: "custom",
-          encoder: nextEncoder,
-          quality: clampVideoQuality(nextEncoder, draft.videoOptions.quality),
-        };
+
+      if (kind !== "video") {
+        updateRules((rules) =>
+          rules.map((rule) =>
+            rule.kind === kind
+              ? {
+                  ...rule,
+                  targetFormat,
+                  presetId: rule.presetId ?? null,
+                }
+              : rule,
+          ),
+        );
+        return;
       }
-      updateDraft({
-        ...draft,
-        videoOptions: nextVideoOptions,
-        rules: draft.rules.map((rule) =>
-          rule.kind === kind
-            ? {
-                ...rule,
-                targetFormat,
-                presetId:
-                  kind === "video"
-                    ? nextVideoOptions.presetId
-                    : rule.presetId ?? null,
-              }
-            : rule,
-        ),
-      });
+
+      updateVideoOptions(
+        (videoOptions) => {
+          const videoFormat = asVideoFormat(targetFormat);
+          const nextEncoder = videoFormat
+            ? resolveVideoEncoderForFormat(videoFormat, videoOptions.encoder)
+            : videoOptions.encoder;
+          return {
+            ...videoOptions,
+            presetId: "custom",
+            encoder: nextEncoder,
+            quality: clampVideoQuality(nextEncoder, videoOptions.quality),
+          };
+        },
+        {
+          rules: (rules, nextVideoOptions) =>
+            rules.map((rule) =>
+              rule.kind === kind
+                ? {
+                    ...rule,
+                    targetFormat,
+                    presetId: nextVideoOptions.presetId,
+                  }
+                : rule,
+            ),
+        },
+      );
     },
-    [draft, updateDraft],
+    [draft, updateRules, updateVideoOptions],
   );
 
   const setItemOverrideFormat = useCallback(
     (itemPath: string, targetFormat: string | null) => {
       if (!draft) return;
-      updateDraft({
-        ...draft,
-        items: draft.items.map((item) =>
-          item.path === itemPath
-            ? {
-                ...item,
-                override: targetFormat ? { targetFormat, presetId: null } : null,
-              }
-            : item,
-        ),
-      });
+      updateItemOverride(itemPath, targetFormat);
     },
-    [draft, updateDraft],
+    [draft, updateItemOverride],
   );
 
   const handleOverrideTargetSelect = useCallback((itemPath: string) => {
@@ -259,98 +349,95 @@ export const useConversionModalModel = ({
     (presetValue: string | null) => {
       if (!draft || !presetValue) return;
       if (presetValue === "custom") {
-        updateDraft({
-          ...draft,
-          videoOptions: {
-            ...draft.videoOptions,
+        updateVideoOptions(
+          (videoOptions) => ({
+            ...videoOptions,
             presetId: "custom",
+          }),
+          {
+            rules: (rules) => markVideoRuleCustom(rules),
           },
-          rules: draft.rules.map((rule) =>
-            rule.kind === "video" ? { ...rule, presetId: "custom" } : rule,
-          ),
-        });
+        );
         return;
       }
+
       const preset = getVideoConvertPreset(presetValue);
       if (!preset) return;
-      updateDraft({
-        ...draft,
-        videoOptions: {
+
+      updateVideoOptions(
+        () => ({
           presetId: preset.id,
           encoder: preset.encoder,
           speed: preset.speed,
           quality: preset.quality,
           audioEnabled: preset.audioEnabled,
+        }),
+        {
+          rules: (rules) =>
+            syncVideoRule(rules, {
+              targetFormat: preset.format,
+              presetId: preset.id,
+            }),
         },
-        rules: draft.rules.map((rule) =>
-          rule.kind === "video"
-            ? {
-                ...rule,
-                targetFormat: preset.format,
-                presetId: preset.id,
-              }
-            : rule,
-        ),
-      });
+      );
     },
-    [draft, updateDraft],
+    [draft, markVideoRuleCustom, syncVideoRule, updateVideoOptions],
   );
 
   const setVideoEncoder = useCallback(
     (encoderValue: string | null) => {
       if (!draft || !encoderValue) return;
       const requestedEncoder = encoderValue as ConversionVideoEncoder;
-      const nextEncoder = selectedVideoFormat
-        ? resolveVideoEncoderForFormat(selectedVideoFormat, requestedEncoder)
-        : requestedEncoder;
-      updateDraft({
-        ...draft,
-        videoOptions: {
-          ...draft.videoOptions,
-          presetId: "custom",
-          encoder: nextEncoder,
-          quality: clampVideoQuality(nextEncoder, draft.videoOptions.quality),
+      updateVideoOptions(
+        (videoOptions) => {
+          const nextEncoder = selectedVideoFormat
+            ? resolveVideoEncoderForFormat(selectedVideoFormat, requestedEncoder)
+            : requestedEncoder;
+          return {
+            ...videoOptions,
+            presetId: "custom",
+            encoder: nextEncoder,
+            quality: clampVideoQuality(nextEncoder, videoOptions.quality),
+          };
         },
-        rules: draft.rules.map((rule) =>
-          rule.kind === "video" ? { ...rule, presetId: "custom" } : rule,
-        ),
-      });
+        {
+          rules: (rules) => markVideoRuleCustom(rules),
+        },
+      );
     },
-    [draft, selectedVideoFormat, updateDraft],
+    [draft, markVideoRuleCustom, selectedVideoFormat, updateVideoOptions],
   );
 
   const setVideoSpeed = useCallback(
     (speedValue: string | null) => {
       if (!draft || !speedValue) return;
-      updateDraft({
-        ...draft,
-        videoOptions: {
-          ...draft.videoOptions,
+      updateVideoOptions(
+        (videoOptions) => ({
+          ...videoOptions,
           presetId: "custom",
           speed: speedValue as ConversionVideoSpeed,
+        }),
+        {
+          rules: (rules) => markVideoRuleCustom(rules),
         },
-        rules: draft.rules.map((rule) =>
-          rule.kind === "video" ? { ...rule, presetId: "custom" } : rule,
-        ),
-      });
+      );
     },
-    [draft, updateDraft],
+    [draft, markVideoRuleCustom, updateVideoOptions],
   );
 
   const toggleVideoAudio = useCallback(() => {
     if (!draft) return;
-    updateDraft({
-      ...draft,
-      videoOptions: {
-        ...draft.videoOptions,
+    updateVideoOptions(
+      (videoOptions) => ({
+        ...videoOptions,
         presetId: "custom",
-        audioEnabled: !draft.videoOptions.audioEnabled,
+        audioEnabled: !videoOptions.audioEnabled,
+      }),
+      {
+        rules: (rules) => markVideoRuleCustom(rules),
       },
-      rules: draft.rules.map((rule) =>
-        rule.kind === "video" ? { ...rule, presetId: "custom" } : rule,
-      ),
-    });
-  }, [draft, updateDraft]);
+    );
+  }, [draft, markVideoRuleCustom, updateVideoOptions]);
 
   const runPhase = runState?.phase ?? "idle";
   const runInProgress = runPhase === "running";
