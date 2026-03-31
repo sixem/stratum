@@ -32,9 +32,11 @@ pub async fn get_thumb_cache_dir(app: tauri::AppHandle) -> String {
 }
 
 #[tauri::command]
-pub async fn clear_thumb_cache(app: tauri::AppHandle) -> Result<(), String> {
-    let handle = app.clone();
-    tauri::async_runtime::spawn_blocking(move || thumbs::clear_cache_dir(&handle))
+pub async fn clear_thumb_cache(
+    state: tauri::State<'_, thumbs::ThumbnailHandle>,
+) -> Result<(), String> {
+    let handle = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || thumbs::clear_cache(handle.as_ref()))
         .await
         .map_err(|err| err.to_string())?
 }
