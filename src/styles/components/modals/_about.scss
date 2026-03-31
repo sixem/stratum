@@ -1,5 +1,6 @@
 // About modal overlay and app metadata presentation.
 
+@use "../control-recipes" as control;
 @use "./shared" as modal;
 
 .about-modal {
@@ -27,7 +28,14 @@
 :where(.about-panel) {
   .about-header {
     display: grid;
-    gap: 4px;
+    gap: 10px;
+  }
+
+  .about-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
   }
 
   .about-title {
@@ -61,10 +69,7 @@
   }
 
   .about-label {
-    color: var(--muted);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    font-size: var(--font-size-2xs);
+    @include control.eyebrow-label(var(--font-size-2xs), 0.08em, null);
   }
 
   .about-value {
@@ -91,10 +96,5 @@
   .about-footer {
     font-size: var(--font-size-xs);
     color: var(--muted);
-  }
-
-  .about-actions {
-    display: flex;
-    justify-content: flex-end;
   }
 }

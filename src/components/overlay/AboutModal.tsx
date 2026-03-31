@@ -102,8 +102,18 @@ export const AboutModal = ({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="about-header">
-          <div className="about-title" id="about-title">
-            {appName}
+          <div className="about-header-top">
+            <div className="about-title" id="about-title">
+              {appName}
+            </div>
+            <PressButton
+              ref={closeButtonRef}
+              type="button"
+              className="btn"
+              onClick={onClose}
+            >
+              Close
+            </PressButton>
           </div>
           <div className="about-subtitle">{description}</div>
         </header>
@@ -158,16 +168,6 @@ export const AboutModal = ({
           </div>
         </div>
 
-        <div className="about-actions">
-          <PressButton
-            ref={closeButtonRef}
-            type="button"
-            className="btn"
-            onClick={onClose}
-          >
-            Close
-          </PressButton>
-        </div>
       </div>
     </div>
   );
