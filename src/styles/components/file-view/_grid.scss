@@ -2,7 +2,7 @@
 @use "./shared" as shared;
 
 :where(.thumb-shell) {
-  --thumb-scrollbar-size: 10px;
+  --thumb-scrollbar-size: 7px;
 
   .thumb-viewport {
     position: relative;
@@ -14,7 +14,7 @@
     padding-right: 0;
     scroll-behavior: auto;
     scrollbar-gutter: stable;
-    scrollbar-width: auto;
+    scrollbar-width: thin;
     overflow-anchor: none;
   }
 

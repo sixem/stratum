@@ -109,8 +109,12 @@
     flex: 1;
     scroll-behavior: auto;
     scrollbar-gutter: stable;
-    scrollbar-width: auto;
+    scrollbar-width: thin;
     overflow-anchor: none;
+  }
+
+  .list-body::-webkit-scrollbar {
+    width: 7px;
   }
 
   .list-body::before,

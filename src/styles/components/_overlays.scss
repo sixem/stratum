@@ -60,6 +60,10 @@
   transition: opacity 0.12s ease;
 }
 
+:root:not([data-grid-corners="straight"]) :where(.context-menu, .context-submenu) {
+  border-radius: 6px;
+}
+
 // In blurred-overlay mode, apply `backdrop-filter` on a pseudo-element surface.
 // This avoids turning the menu shell itself into a backdrop root, which can clip
 // backdrop-filter effects for extended submenus in some webviews.
@@ -122,6 +126,10 @@
 .context-submenu.is-left {
   right: calc(100% + 6px);
   left: auto;
+}
+
+:root:not([data-grid-corners="straight"]) :where(.context-menu, .context-submenu) .context-item {
+  border-radius: 6px;
 }
 
 :where(.context-menu, .context-submenu) .context-item-group.is-open > .context-submenu {
