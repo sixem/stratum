@@ -28,6 +28,7 @@ const MAX_ZOOM = 8;
 const ZOOM_SPEED = 0.0014;
 const TAB_DOUBLE_TAP_MS = 280;
 const VIDEO_SHORT_SEEK_SECONDS = 5;
+const WHEEL_TRANSFORM_SETTLE_MS = 140;
 
 const clamp = (value: number, min: number, max: number) => {
   if (value < min) return min;
@@ -57,11 +58,13 @@ export const useQuickPreviewInput = ({
     originY: 0,
   });
   const frameRef = useRef<number | null>(null);
+  const wheelTransformTimerRef = useRef<number | null>(null);
   const offsetRef = useRef({ x: 0, y: 0 });
   const lastTabTapRef = useRef(0);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
+  const [transforming, setTransforming] = useState(false);
   const previewItems = useMemo(
     () =>
       items.filter((entry) => {
@@ -105,8 +108,23 @@ export const useQuickPreviewInput = ({
       if (frameRef.current != null) {
         window.cancelAnimationFrame(frameRef.current);
       }
+      if (wheelTransformTimerRef.current != null) {
+        window.clearTimeout(wheelTransformTimerRef.current);
+      }
     };
   }, []);
+
+  const scheduleWheelTransformSettle = () => {
+    if (wheelTransformTimerRef.current != null) {
+      window.clearTimeout(wheelTransformTimerRef.current);
+    }
+    wheelTransformTimerRef.current = window.setTimeout(() => {
+      wheelTransformTimerRef.current = null;
+      if (!dragRef.current.active) {
+        setTransforming(false);
+      }
+    }, WHEEL_TRANSFORM_SETTLE_MS);
+  };
 
   // Keep timeline shortcuts intentionally minimal: Shift+Arrow seeks by +/-5s.
   useEffect(() => {
@@ -253,6 +271,8 @@ export const useQuickPreviewInput = ({
   const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
     if (!open) return;
     event.preventDefault();
+    setTransforming(true);
+    scheduleWheelTransformSettle();
     const factor = Math.exp(-event.deltaY * ZOOM_SPEED);
     setZoom((value) => clamp(value * factor, MIN_ZOOM, MAX_ZOOM));
   };
@@ -273,6 +293,7 @@ export const useQuickPreviewInput = ({
       originX: offsetRef.current.x,
       originY: offsetRef.current.y,
     };
+    setTransforming(true);
     setDragging(true);
   };
 
@@ -298,6 +319,9 @@ export const useQuickPreviewInput = ({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    if (wheelTransformTimerRef.current == null) {
+      setTransforming(false);
+    }
     setDragging(false);
   };
 
@@ -308,6 +332,9 @@ export const useQuickPreviewInput = ({
     dragRef.current.pointerId = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (wheelTransformTimerRef.current == null) {
+      setTransforming(false);
     }
     setDragging(false);
   };
@@ -320,6 +347,7 @@ export const useQuickPreviewInput = ({
     zoom,
     offset,
     dragging,
+    transforming,
     resetViewport,
     fitMediaToViewport,
     handleWheel,

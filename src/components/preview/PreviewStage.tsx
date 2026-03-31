@@ -14,6 +14,7 @@ type PreviewStageProps = {
   isVideo: boolean;
   isReady: boolean;
   dragging: boolean;
+  transforming: boolean;
   videoPoster?: string;
   mediaStyle: CSSProperties;
   offset: { x: number; y: number };
@@ -38,6 +39,7 @@ export const PreviewStage = ({
   isVideo,
   isReady,
   dragging,
+  transforming,
   videoPoster,
   mediaStyle,
   offset,
@@ -57,7 +59,9 @@ export const PreviewStage = ({
 }: PreviewStageProps) => {
   return (
     <div
-      className={`quick-preview-stage${dragging ? " is-dragging" : ""}`}
+      className={`quick-preview-stage${dragging ? " is-dragging" : ""}${
+        transforming ? " is-transforming" : ""
+      }`}
       ref={stageRef}
       onWheel={onWheel}
       onPointerDown={onPointerDown}

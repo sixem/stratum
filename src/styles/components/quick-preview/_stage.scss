@@ -1,0 +1,149 @@
+// Quick preview stage, loading/error states, and preview media.
+@use "../control-recipes" as control;
+@use "../modals/shared" as shell;
+
+.quick-preview-stage {
+  position: relative;
+  min-height: 0;
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  contain: paint;
+}
+
+.quick-preview-stage.is-dragging {
+  cursor: grabbing;
+}
+
+.quick-preview-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.quick-preview-loading::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(12, 16, 24, 0.55), rgba(6, 8, 12, 0));
+}
+
+.quick-preview-loading[data-visible="true"] {
+  opacity: 1;
+}
+
+.quick-preview-loading-card {
+  position: relative;
+  z-index: 1;
+}
+
+.quick-preview-error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  pointer-events: auto;
+}
+
+.quick-preview-error-card {
+  width: min(520px, calc(100% - 24px));
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 12, 18, 0.86);
+  @include shell.frosted-backdrop(
+    var(--overlay-backdrop-blur-strong),
+    var(--frosted-surface-saturate)
+  );
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  cursor: default;
+  user-select: text;
+  touch-action: auto;
+}
+
+.quick-preview-error-title {
+  font-size: var(--font-size-md);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.quick-preview-error-desc {
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.quick-preview-error-meta {
+  display: grid;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.quick-preview-error-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  @include control.eyebrow-label(var(--font-size-2xs), 0.06em, null);
+}
+
+.quick-preview-error-meta-value {
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+.quick-preview-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+  pointer-events: auto;
+}
+
+.quick-preview-error-hint {
+  font-size: var(--font-size-xs);
+  color: var(--muted);
+}
+
+.quick-preview-media {
+  max-width: 100%;
+  max-height: 100%;
+  user-select: none;
+  display: block;
+  transform-origin: center;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.quick-preview-stage.is-transforming .quick-preview-pan,
+.quick-preview-stage.is-transforming .quick-preview-media {
+  will-change: transform;
+}
+
+.quick-preview-media.is-image {
+  pointer-events: none;
+}
+
+.quick-preview-media.is-video {
+  pointer-events: auto;
+  background: #000;
+}
+
+.quick-preview-media[data-ready="true"] {
+  opacity: 1;
+}

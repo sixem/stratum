@@ -61,6 +61,7 @@ const QuickPreviewOverlayContent = ({
     zoom,
     offset,
     dragging,
+    transforming,
     resetViewport,
     fitMediaToViewport,
     handleWheel,
@@ -140,6 +141,7 @@ const QuickPreviewOverlayContent = ({
         isVideo={preview.isVideo}
         isReady={preview.isReady}
         dragging={dragging}
+        transforming={transforming}
         videoPoster={preview.videoPoster}
         mediaStyle={preview.mediaStyle}
         offset={offset}

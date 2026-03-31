@@ -1,0 +1,120 @@
+// Quick preview shell, top bar, and app-shell visibility handling.
+@use "../modals/shared" as shell;
+
+.app-shell {
+  .topstack,
+  .layout,
+  .statusbar-shell {
+    transition: opacity 0.12s ease;
+  }
+
+  .layout {
+    transition: opacity 0.12s ease, filter 0.2s ease;
+  }
+}
+
+.app-shell[data-preview="true"] {
+  .topstack,
+  .statusbar-shell {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .layout {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.quick-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 2450;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  // Keep the preview fully isolated from the app shell behind it.
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.quick-preview-topbar-shell {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  background: linear-gradient(180deg, rgba(8, 10, 16, 0.82), rgba(8, 10, 16, 0.58));
+  border-bottom: 2px solid #1b213061;
+  @include shell.frosted-backdrop(var(--frosted-surface-blur), var(--frosted-surface-saturate));
+}
+
+:root[data-window-focus="false"] .quick-preview-topbar-shell {
+  background: linear-gradient(180deg, rgba(12, 15, 22, 0.83), rgba(12, 15, 22, 0.6));
+}
+
+.quick-preview-topbar-window-controls {
+  min-height: var(--window-chrome-bar-height);
+}
+
+.quick-preview-topbar {
+  gap: 8px;
+}
+
+.quick-preview-topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.quick-preview-topbar-nav > .btn {
+  border: none;
+}
+
+.quick-preview-topbar-nav > .btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.quick-preview-topbar-nav .btn-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.quick-preview-topbar-nav .nav-arrow {
+  transform-origin: center;
+}
+
+.quick-preview-topbar-nav .nav-arrow.is-back {
+  transform: rotate(180deg);
+}
+
+.quick-preview-topbar-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+}
+
+.quick-preview-topbar-position {
+  flex: 0 0 auto;
+  min-width: 44px;
+  text-align: right;
+  color: var(--muted);
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.quick-preview[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
