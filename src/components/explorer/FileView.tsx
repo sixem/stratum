@@ -285,28 +285,63 @@ export const FileView = ({
       ) : (
         <PerfProfiler id="file-list">
           <FileList
-            {...viewProps}
-            currentPath={currentPath}
-            smoothScroll={smoothScroll}
-            pendingDeletePaths={pendingDeletePaths}
-            sortState={sortState}
-            onSortChange={onSortChange}
-            categoryTinting={categoryTinting}
-            presenceEnabled={presenceEnabled}
-            canGoUp={canGoUp}
-            onGoUp={onGoUp}
-            onContextMenuDown={onContextMenuDown}
-            dropTargetPath={dropTargetPath}
-            onStartDragOut={onStartDragOut}
-            onInternalDrop={onInternalDrop}
-            onInternalHover={onInternalHover}
-            onEntryContextMenu={onEntryContextMenu}
-            onEntryContextMenuDown={onEntryContextMenuDown}
-            onEntryPreviewPress={onEntryPreviewPress}
-            onEntryPreviewRelease={onEntryPreviewRelease}
-            onCreateFolder={onCreateFolder}
-            onCreateFolderAndGo={onCreateFolderAndGo}
-            onCreateFile={onCreateFile}
+            view={{
+              ...viewProps,
+              currentPath,
+              smoothScroll,
+              canGoUp,
+              onGoUp,
+            }}
+            selection={{
+              pendingDeletePaths,
+              selectedPaths: viewProps.selectedPaths,
+              onSetSelection: viewProps.onSetSelection,
+              onSelectItem: viewProps.onSelectItem,
+              onClearSelection: viewProps.onClearSelection,
+            }}
+            navigation={{
+              onOpenDir: viewProps.onOpenDir,
+              onOpenDirNewTab: viewProps.onOpenDirNewTab,
+              onOpenEntry: viewProps.onOpenEntry,
+            }}
+            rename={{
+              renameTargetPath: viewProps.renameTargetPath,
+              renameValue: viewProps.renameValue,
+              onRenameChange: viewProps.onRenameChange,
+              onRenameCommit: viewProps.onRenameCommit,
+              onRenameCancel: viewProps.onRenameCancel,
+            }}
+            metadata={{
+              entryMeta: viewProps.entryMeta,
+              onRequestMeta: viewProps.onRequestMeta,
+            }}
+            list={{
+              sortState,
+              onSortChange,
+              categoryTinting,
+              presenceEnabled,
+            }}
+            contextMenu={{
+              onContextMenu: viewProps.onContextMenu,
+              onContextMenuDown,
+              onEntryContextMenu,
+              onEntryContextMenuDown,
+            }}
+            preview={{
+              onEntryPreviewPress,
+              onEntryPreviewRelease,
+            }}
+            dragDrop={{
+              dropTargetPath,
+              onStartDragOut,
+              onInternalDrop,
+              onInternalHover,
+            }}
+            creation={{
+              onCreateFolder,
+              onCreateFolderAndGo,
+              onCreateFile,
+            }}
           />
         </PerfProfiler>
       )}
