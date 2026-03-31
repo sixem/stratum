@@ -3,9 +3,13 @@ use crate::domain::filesystem as fs;
 use serde::Deserialize;
 use std::fs as std_fs;
 use std::io::{BufRead, BufReader, Read};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::thread;
+#[cfg(target_os = "windows")]
+use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -135,6 +139,7 @@ pub fn convert_video(
         command.arg("-movflags").arg("+faststart");
     }
     command.arg(destination_path);
+    configure_media_command(&mut command);
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
 
     let mut child = command
@@ -369,16 +374,17 @@ fn ffprobe_binary_name() -> &'static str {
 }
 
 fn probe_input_duration(source_path: &str, explicit_ffmpeg_path: Option<&str>) -> Option<f64> {
-    let output = Command::new(resolve_ffprobe_binary(explicit_ffmpeg_path))
+    let mut command = Command::new(resolve_ffprobe_binary(explicit_ffmpeg_path));
+    command
         .arg("-v")
         .arg("error")
         .arg("-show_entries")
         .arg("format=duration")
         .arg("-of")
         .arg("default=noprint_wrappers=1:nokey=1")
-        .arg(source_path)
-        .output()
-        .ok()?;
+        .arg(source_path);
+    configure_media_command(&mut command);
+    let output = command.output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -466,6 +472,15 @@ fn emit_completion_progress(
         speed_text: None,
     };
     emit_conversion_progress(callback, context, source_path, duration_seconds, &snapshot, true);
+}
+
+fn configure_media_command(command: &mut Command) {
+    #[cfg(target_os = "windows")]
+    {
+        // Keep ffmpeg/ffprobe from flashing a transient console window when the
+        // GUI app launches them as background helpers.
+        command.creation_flags(CREATE_NO_WINDOW.0);
+    }
 }
 
 fn build_status_text(
