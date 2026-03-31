@@ -4,26 +4,8 @@ import { Children, cloneElement, useEffect, useRef } from "react";
 import { shallow } from "zustand/shallow";
 import { useTooltipStore } from "@/modules";
 import { TOOLTIP_EDGE_PADDING, TOOLTIP_GAP } from "@/constants";
-
-const clamp = (value: number, min: number, max: number) => {
-  if (value < min) return min;
-  if (value > max) return max;
-  return value;
-};
-
-const alignAxis = (anchor: number, size: number, viewport: number) => {
-  const maxStart = viewport - TOOLTIP_EDGE_PADDING - size;
-  const minStart = TOOLTIP_EDGE_PADDING;
-
-  if (anchor + TOOLTIP_GAP + size <= viewport - TOOLTIP_EDGE_PADDING) {
-    return anchor + TOOLTIP_GAP;
-  }
-  if (anchor - TOOLTIP_GAP - size >= TOOLTIP_EDGE_PADDING) {
-    return anchor - TOOLTIP_GAP - size;
-  }
-
-  return clamp(anchor - size / 2, minStart, maxStart);
-};
+import { alignFloatingAxis, getViewportSize } from "./overlayUtils";
+import { useOverlayDismiss } from "./useOverlayDismiss";
 
 const isContextMenuOpen = () =>
   Boolean(document.querySelector(".context-menu[data-open=\"true\"]"));
@@ -53,17 +35,22 @@ export const TooltipDisplay = () => {
     };
   }, [setTooltipElement]);
 
-  useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        hideTooltip();
-      }
-    };
+  const handleTooltipViewportDismiss = () => {
+    hideTooltip();
+    blockTooltips();
+  };
 
-    const handleScroll = () => {
-      hideTooltip();
-      blockTooltips();
-    };
+  useOverlayDismiss({
+    enabled: true,
+    onEscape: hideTooltip,
+    onScroll: handleTooltipViewportDismiss,
+    onResize: hideTooltip,
+    onPointerDown: hideTooltip,
+    keydownCapture: false,
+    pointerDownCapture: true,
+  });
+
+  useEffect(() => {
     const handleWindowBlur = () => {
       hideTooltip();
       blockTooltips();
@@ -81,25 +68,14 @@ export const TooltipDisplay = () => {
         bumpHoverSession();
       }
     };
-    const handleResize = () => hideTooltip();
-    const handlePointer = () => hideTooltip();
-
-    window.addEventListener("keydown", handleKey);
-    window.addEventListener("scroll", handleScroll, true);
     window.addEventListener("blur", handleWindowBlur);
     window.addEventListener("focus", handleWindowFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("resize", handleResize);
-    window.addEventListener("pointerdown", handlePointer, true);
 
     return () => {
-      window.removeEventListener("keydown", handleKey);
-      window.removeEventListener("scroll", handleScroll, true);
       window.removeEventListener("blur", handleWindowBlur);
       window.removeEventListener("focus", handleWindowFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("resize", handleResize);
-      window.removeEventListener("pointerdown", handlePointer, true);
     };
   }, [blockTooltips, bumpHoverSession, hideTooltip]);
 
@@ -180,12 +156,23 @@ export const TooltipWrapper = ({
       const tooltipRect = tooltipEl
         ? tooltipEl.getBoundingClientRect()
         : ({ width: 0, height: 0 } as DOMRect);
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
+      const viewport = getViewportSize();
 
       // Align to cursor, flipping when close to edges.
-      const left = alignAxis(anchorX, tooltipRect.width, viewportWidth);
-      const top = alignAxis(anchorY, tooltipRect.height, viewportHeight);
+      const left = alignFloatingAxis(
+        anchorX,
+        tooltipRect.width,
+        viewport.width,
+        TOOLTIP_EDGE_PADDING,
+        TOOLTIP_GAP,
+      );
+      const top = alignFloatingAxis(
+        anchorY,
+        tooltipRect.height,
+        viewport.height,
+        TOOLTIP_EDGE_PADDING,
+        TOOLTIP_GAP,
+      );
 
       if (useTooltipStore.getState().nonce !== requestId) return;
       tooltipApi.showTooltip({ text, x: left, y: top });

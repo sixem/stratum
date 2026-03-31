@@ -3,6 +3,12 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDownIcon } from "@/components/icons";
+import {
+  clampOverlayStart,
+  resolvePopoverVerticalPlacement,
+} from "@/components/overlay/overlayUtils";
+import { useOverlayAutoUpdate } from "@/components/overlay/useOverlayAutoUpdate";
+import { useOverlayDismiss } from "@/components/overlay/useOverlayDismiss";
 import { PressButton } from "./PressButton";
 
 export type DropdownOption = {
@@ -35,6 +41,7 @@ type FlattenedOption = DropdownOption & {
 const isSameValue = (left: string | null, right: string | null) => left === right;
 const MENU_EDGE = 8;
 const MENU_GAP = 6;
+const MENU_MIN_HEIGHT = 120;
 const POSITION_EPSILON_PX = 0.5;
 
 const getNextEnabledIndex = (
@@ -126,28 +133,14 @@ export const DropdownSelect = ({
     setActiveIndex(-1);
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    const handlePointerDown = (event: PointerEvent) => {
-      const root = rootRef.current;
-      const menu = menuRef.current;
-      const target = event.target as Node;
-      if (!root) return;
-      if (root.contains(target)) return;
-      if (menu?.contains(target)) return;
-      closeMenu();
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      closeMenu();
-    };
-    window.addEventListener("pointerdown", handlePointerDown, { capture: true });
-    window.addEventListener("keydown", handleEscape, { capture: true });
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown, { capture: true });
-      window.removeEventListener("keydown", handleEscape, { capture: true });
-    };
-  }, [closeMenu, open]);
+  useOverlayDismiss({
+    enabled: open,
+    refs: [rootRef, menuRef],
+    onEscape: closeMenu,
+    onPointerDownOutside: closeMenu,
+    keydownCapture: true,
+    pointerDownCapture: true,
+  });
 
   const updateMenuPosition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -156,20 +149,16 @@ export const DropdownSelect = ({
     const viewportWidth = document.documentElement.clientWidth;
     const viewportHeight = document.documentElement.clientHeight;
     const measuredHeight = menuRef.current?.offsetHeight ?? 260;
-    const spaceBelow = viewportHeight - rect.bottom - MENU_EDGE;
-    const spaceAbove = rect.top - MENU_EDGE;
-    const dropUp = measuredHeight > spaceBelow && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(120, (dropUp ? spaceAbove : spaceBelow) - MENU_GAP);
-    const usedHeight = Math.min(measuredHeight, maxHeight);
-    const unclampedLeft = rect.left;
-    const maxLeft = Math.max(MENU_EDGE, viewportWidth - MENU_EDGE - rect.width);
-    const left = Math.min(Math.max(MENU_EDGE, unclampedLeft), maxLeft);
-    const top = dropUp
-      ? Math.max(MENU_EDGE, rect.top - MENU_GAP - usedHeight)
-      : Math.min(
-          viewportHeight - MENU_EDGE - usedHeight,
-          rect.bottom + MENU_GAP,
-        );
+    const { dropUp, maxHeight, top } = resolvePopoverVerticalPlacement({
+      anchorTop: rect.top,
+      anchorBottom: rect.bottom,
+      overlayHeight: measuredHeight,
+      viewportHeight,
+      edge: MENU_EDGE,
+      gap: MENU_GAP,
+      minHeight: MENU_MIN_HEIGHT,
+    });
+    const left = clampOverlayStart(rect.left, rect.width, viewportWidth, MENU_EDGE);
     setMenuPosition((previous) => {
       const topChanged = Math.abs(previous.top - top) > POSITION_EPSILON_PX;
       const leftChanged = Math.abs(previous.left - left) > POSITION_EPSILON_PX;
@@ -237,32 +226,12 @@ export const DropdownSelect = ({
     updateMenuPosition,
   ]);
 
-  useEffect(() => {
-    if (!open) return;
-    const handleViewport = () => {
-      updateMenuPosition();
-    };
-    window.addEventListener("resize", handleViewport);
-    window.addEventListener("scroll", handleViewport, true);
-    return () => {
-      window.removeEventListener("resize", handleViewport);
-      window.removeEventListener("scroll", handleViewport, true);
-    };
-  }, [open, updateMenuPosition]);
-
-  useEffect(() => {
-    if (!open || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      updateMenuPosition();
-    });
-    if (triggerRef.current) {
-      observer.observe(triggerRef.current);
-    }
-    if (menuRef.current) {
-      observer.observe(menuRef.current);
-    }
-    return () => observer.disconnect();
-  }, [open, updateMenuPosition]);
+  useOverlayAutoUpdate({
+    enabled: open,
+    onUpdate: updateMenuPosition,
+    observeRefs: [triggerRef, menuRef],
+    watchScroll: true,
+  });
 
   useEffect(() => cancelScheduledPositionRefresh, [cancelScheduledPositionRefresh]);
 

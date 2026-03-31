@@ -1,8 +1,9 @@
 // Compact drive selector used in the path bar.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { activeDrive, buildDriveTooltip, handleMiddleClick, normalizePath } from "@/lib";
+import { useHorizontalOverflowScroll } from "@/hooks";
 import type { DriveInfo } from "@/types";
-import { PressButton } from "@/components/primitives/PressButton";
+import { HorizontalChevronButton, PressButton } from "@/components/primitives";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 
 type DrivePickerProps = {
@@ -11,26 +12,6 @@ type DrivePickerProps = {
   driveInfo: DriveInfo[];
   onSelect: (path: string) => void;
   onSelectNewTab?: (path: string) => void;
-};
-
-const ChevronIcon = ({ direction }: { direction: "left" | "right" }) => {
-  const d = direction === "left" ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6";
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className="drive-picker-chevron"
-      fill="none"
-    >
-      <path
-        d={d}
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 };
 
 const formatDriveLabel = (drive: string) => {
@@ -55,8 +36,6 @@ export const DrivePicker = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
   const driveInfoMap = useMemo(() => {
     const map = new Map<string, DriveInfo>();
     driveInfo.forEach((info) => {
@@ -86,19 +65,11 @@ export const DrivePicker = ({
     : hasLoadedDrives
       ? "Drives"
       : "";
-
-  // Track overflow so we only show navigation affordances when needed.
-  const updateScrollState = useCallback(() => {
-    const list = listRef.current;
-    if (!list) {
-      setCanScrollLeft(false);
-      setCanScrollRight(false);
-      return;
-    }
-    const { scrollLeft, scrollWidth, clientWidth } = list;
-    setCanScrollLeft(scrollLeft > 0);
-    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 1);
-  }, []);
+  const { canScrollLeft, canScrollRight, scrollByDirection, updateScrollState } =
+    useHorizontalOverflowScroll(listRef, {
+      enabled: expanded,
+      refreshKey: drives,
+    });
 
   useEffect(() => {
     if (!expanded) return;
@@ -127,18 +98,9 @@ export const DrivePicker = ({
     };
     window.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("keydown", handleKeyDown, { capture: true });
-    window.addEventListener("resize", updateScrollState);
-    list?.addEventListener("scroll", updateScrollState, { passive: true });
-    const observer = list ? new ResizeObserver(updateScrollState) : null;
-    if (observer && list) {
-      observer.observe(list);
-    }
     return () => {
       window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown, { capture: true });
-      window.removeEventListener("resize", updateScrollState);
-      list?.removeEventListener("scroll", updateScrollState);
-      observer?.disconnect();
     };
   }, [expanded, updateScrollState, drives]);
 
@@ -179,22 +141,15 @@ export const DrivePicker = ({
               data-can-left={canScrollLeft ? "true" : "false"}
               data-can-right={canScrollRight ? "true" : "false"}
             >
-              <PressButton
+              <HorizontalChevronButton
                 type="button"
                 className="drive-picker-scroll-button is-left"
-                onClick={() => {
-                  const list = listRef.current;
-                  if (!list) return;
-                  list.scrollBy({
-                    left: -Math.max(220, list.clientWidth * 0.6),
-                    behavior: "smooth",
-                  });
-                }}
+                iconClassName="drive-picker-chevron"
+                direction="left"
+                onClick={() => scrollByDirection("left")}
                 aria-label="Scroll drives left"
                 disabled={!canScrollLeft}
-              >
-                <ChevronIcon direction="left" />
-              </PressButton>
+              />
               <div className="drive-picker-list" role="presentation" ref={listRef}>
                 {drives.map((drive) => {
                   const driveLabel = formatDriveLabel(drive);
@@ -227,22 +182,15 @@ export const DrivePicker = ({
                   );
                 })}
               </div>
-              <PressButton
+              <HorizontalChevronButton
                 type="button"
                 className="drive-picker-scroll-button is-right"
-                onClick={() => {
-                  const list = listRef.current;
-                  if (!list) return;
-                  list.scrollBy({
-                    left: Math.max(220, list.clientWidth * 0.6),
-                    behavior: "smooth",
-                  });
-                }}
+                iconClassName="drive-picker-chevron"
+                direction="right"
+                onClick={() => scrollByDirection("right")}
                 aria-label="Scroll drives right"
                 disabled={!canScrollRight}
-              >
-                <ChevronIcon direction="right" />
-              </PressButton>
+              />
             </div>
           </div>
         </div>

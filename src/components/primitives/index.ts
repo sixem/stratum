@@ -2,6 +2,7 @@
 export { EmptyState } from "./EmptyState";
 export { DropdownSelect } from "./DropdownSelect";
 export type { DropdownGroup, DropdownOption } from "./DropdownSelect";
+export { HorizontalChevronButton } from "./HorizontalChevronButton";
 export { LoadingIndicator } from "./LoadingIndicator";
 export { LoadingState } from "./LoadingState";
 export { PressButton } from "./PressButton";

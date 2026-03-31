@@ -3,16 +3,14 @@ import type { MouseEvent as ReactMouseEvent, PointerEvent } from "react";
 import {
   Fragment,
   startTransition,
-  useCallback,
   useEffect,
   useRef,
-  useState,
 } from "react";
 import { handleMiddleClick, tabLabel } from "@/lib";
-import { useTabDragDrop } from "@/hooks";
+import { useHorizontalOverflowScroll, useTabDragDrop } from "@/hooks";
 import type { PlaceContextTarget, Tab } from "@/types";
 import { PlusIcon, TabCloseIcon } from "@/components/icons";
-import { PressButton } from "@/components/primitives/PressButton";
+import { HorizontalChevronButton, PressButton } from "@/components/primitives";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 
 type TabsBarProps = {
@@ -30,26 +28,6 @@ type TabsBarProps = {
     event: PointerEvent<HTMLDivElement>,
     target: PlaceContextTarget,
   ) => void;
-};
-
-const TabScrollChevron = ({ direction }: { direction: "left" | "right" }) => {
-  const d = direction === "left" ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6";
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className="tab-scroll-chevron"
-      fill="none"
-    >
-      <path
-        d={d}
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 };
 
 type TabItemProps = {
@@ -177,9 +155,6 @@ export const TabsBar = ({
 }: TabsBarProps) => {
   // Container ref lets the reorder hook measure tab positions.
   const tabsRef = useRef<HTMLDivElement | null>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-  const [overflowed, setOverflowed] = useState(false);
   const {
     draggingId,
     dropIndex,
@@ -190,46 +165,11 @@ export const TabsBar = ({
     onReorder,
     containerRef: tabsRef,
   });
-
-  const updateScrollState = useCallback(() => {
-    const tabsEl = tabsRef.current;
-    if (!tabsEl) {
-      setCanScrollLeft(false);
-      setCanScrollRight(false);
-      setOverflowed(false);
-      return;
-    }
-    const { scrollLeft, scrollWidth, clientWidth } = tabsEl;
-    const hasOverflow = scrollWidth > clientWidth + 1;
-    setOverflowed(hasOverflow);
-    setCanScrollLeft(hasOverflow && scrollLeft > 0);
-    setCanScrollRight(hasOverflow && scrollLeft + clientWidth < scrollWidth - 1);
-  }, []);
-
-  useEffect(() => {
-    updateScrollState();
-  }, [tabs.length, fixedWidthTabs, updateScrollState]);
-
-  useEffect(() => {
-    const tabsEl = tabsRef.current;
-    if (!tabsEl) return;
-
-    const handleScroll = () => updateScrollState();
-    tabsEl.addEventListener("scroll", handleScroll, { passive: true });
-
-    const resizeObserver = new ResizeObserver(() => updateScrollState());
-    resizeObserver.observe(tabsEl);
-    Array.from(tabsEl.querySelectorAll<HTMLElement>(".tab[data-tab-id]")).forEach((tab) => {
-      resizeObserver.observe(tab);
+  const { canScrollLeft, canScrollRight, overflowed, scrollByDirection, updateScrollState } =
+    useHorizontalOverflowScroll(tabsRef, {
+      observeSelector: ".tab[data-tab-id]",
+      refreshKey: tabs,
     });
-
-    window.addEventListener("resize", updateScrollState);
-    return () => {
-      tabsEl.removeEventListener("scroll", handleScroll);
-      resizeObserver.disconnect();
-      window.removeEventListener("resize", updateScrollState);
-    };
-  }, [tabs, updateScrollState]);
 
   useEffect(() => {
     if (!activeId) return;
@@ -244,31 +184,21 @@ export const TabsBar = ({
     updateScrollState();
   }, [activeId, tabs.length, updateScrollState]);
 
-  const scrollTabs = useCallback((direction: "left" | "right") => {
-    const tabsEl = tabsRef.current;
-    if (!tabsEl) return;
-    const amount = Math.max(220, tabsEl.clientWidth * 0.6);
-    tabsEl.scrollBy({
-      left: direction === "left" ? -amount : amount,
-      behavior: "smooth",
-    });
-  }, []);
-
   return (
     <div className="tabsbar">
       <div
         className="tabs-scroll-wrap"
         data-overflowed={overflowed ? "true" : "false"}
       >
-        <PressButton
+        <HorizontalChevronButton
           type="button"
           className="tab-scroll-button is-left"
-          onClick={() => scrollTabs("left")}
+          iconClassName="tab-scroll-chevron"
+          direction="left"
+          onClick={() => scrollByDirection("left")}
           aria-label="Scroll tabs left"
           disabled={!canScrollLeft}
-        >
-          <TabScrollChevron direction="left" />
-        </PressButton>
+        />
         <div
           className="tabs"
           data-fixed-tabs={fixedWidthTabs ? "true" : "false"}
@@ -310,15 +240,15 @@ export const TabsBar = ({
             />
           ) : null}
         </div>
-        <PressButton
+        <HorizontalChevronButton
           type="button"
           className="tab-scroll-button is-right"
-          onClick={() => scrollTabs("right")}
+          iconClassName="tab-scroll-chevron"
+          direction="right"
+          onClick={() => scrollByDirection("right")}
           aria-label="Scroll tabs right"
           disabled={!canScrollRight}
-        >
-          <TabScrollChevron direction="right" />
-        </PressButton>
+        />
       </div>
       <PressButton type="button" className="tab-new" onClick={onNew} aria-label="New tab">
         <PlusIcon className="tab-new-icon" />

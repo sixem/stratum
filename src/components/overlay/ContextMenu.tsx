@@ -12,6 +12,8 @@ import {
 import type { ContextMenuIcon, ContextMenuItem } from "@/types";
 import { CONTEXT_MENU_EDGE, CONTEXT_MENU_GAP, CONTEXT_SUBMENU_GAP } from "@/constants";
 import { PressButton } from "@/components/primitives/PressButton";
+import { alignFloatingAxis, clamp, getViewportSize } from "./overlayUtils";
+import { useOverlayDismiss } from "./useOverlayDismiss";
 
 type ContextMenuProps = {
   open: boolean;
@@ -24,38 +26,6 @@ type ContextMenuProps = {
 const MENU_EDGE = CONTEXT_MENU_EDGE;
 const MENU_GAP = CONTEXT_MENU_GAP;
 const SUBMENU_GAP = CONTEXT_SUBMENU_GAP;
-
-const clamp = (value: number, min: number, max: number) => {
-  if (value < min) return min;
-  if (value > max) return max;
-  return value;
-};
-
-const alignAxis = (anchor: number, size: number, viewport: number) => {
-  const available = viewport - MENU_EDGE * 2;
-  if (available <= 0 || size >= available) {
-    return MENU_EDGE;
-  }
-  const maxStart = viewport - MENU_EDGE - size;
-  const minStart = MENU_EDGE;
-
-  if (anchor + size + MENU_GAP <= viewport - MENU_EDGE) {
-    return anchor + MENU_GAP;
-  }
-  if (anchor - size - MENU_GAP >= MENU_EDGE) {
-    return anchor - size - MENU_GAP;
-  }
-
-  return clamp(anchor - size / 2, minStart, maxStart);
-};
-
-const getViewportSize = () => {
-  const root = document.documentElement;
-  return {
-    width: root.clientWidth,
-    height: root.clientHeight,
-  };
-};
 
 const renderContextIcon = (icon: ContextMenuIcon) => {
   if (icon === "copy") {
@@ -84,6 +54,15 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
   const [submenuSide, setSubmenuSide] = useState<"left" | "right">("right");
   const [submenuOffset, setSubmenuOffset] = useState(0);
   const lastOpenItemsRef = useRef<ContextMenuItem[]>(items);
+
+  useOverlayDismiss({
+    enabled: open,
+    refs: [menuRef],
+    onEscape: onClose,
+    onPointerDownOutside: onClose,
+    onScroll: onClose,
+    onResize: onClose,
+  });
 
   const closeSubmenu = useCallback(() => {
     setOpenSubmenuId(null);
@@ -120,8 +99,8 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
     const rect = menu.getBoundingClientRect();
     const viewport = getViewportSize();
     // Align toward the cursor, flipping when space runs out.
-    const nextX = alignAxis(x, rect.width, viewport.width);
-    const nextY = alignAxis(y, rect.height, viewport.height);
+    const nextX = alignFloatingAxis(x, rect.width, viewport.width, MENU_EDGE, MENU_GAP);
+    const nextY = alignFloatingAxis(y, rect.height, viewport.height, MENU_EDGE, MENU_GAP);
     setPosition({ x: nextX, y: nextY });
   }, [items, open, x, y]);
 
@@ -149,32 +128,6 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
     const clampedTop = clamp(anchorRect.top, minTop, safeMax);
     setSubmenuOffset(clampedTop - anchorRect.top);
   }, [items.length, open, openSubmenuId]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handlePointer = (event: PointerEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) return;
-      onClose();
-    };
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-    const handleScroll = () => onClose();
-
-    window.addEventListener("pointerdown", handlePointer);
-    window.addEventListener("keydown", handleKey);
-    window.addEventListener("scroll", handleScroll, true);
-    window.addEventListener("resize", handleScroll);
-
-    return () => {
-      window.removeEventListener("pointerdown", handlePointer);
-      window.removeEventListener("keydown", handleKey);
-      window.removeEventListener("scroll", handleScroll, true);
-      window.removeEventListener("resize", handleScroll);
-    };
-  }, [onClose, open]);
 
   const renderMenuItems = (menuItems: ContextMenuItem[], depth = 0) =>
     menuItems.map((item) => {
