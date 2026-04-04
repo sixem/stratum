@@ -1,10 +1,11 @@
-// Background directory change detection with silent refresh + tab dirty tracking.
-import { listen } from "@tauri-apps/api/event";
+// Background directory change detection with silent refresh + tab dirty
+// tracking. Native watcher payloads are normalized before they enter the
+// debounce queue so the refresh path only deals with one change shape.
 import { useCallback, useEffect, useRef } from "react";
 import { startDirWatch, stopDirWatch } from "@/api";
 import { makeDebug, normalizePath } from "@/lib";
 import { bumpDirectoryChildVersions } from "@/modules";
-import type { DirChangedEvent, DirRenameEvent, ListDirOptions, SortState, Tab } from "@/types";
+import type { ListDirOptions, SortState, Tab } from "@/types";
 import {
   consumePendingChanges,
   consumeQueuedRefreshWhenIdle,
@@ -15,6 +16,12 @@ import {
   pruneSchedulerTabs,
   shouldRefreshOnTabSwitch,
 } from "./watchRefreshScheduler";
+import {
+  normalizeDirChangedEvent,
+  normalizeDirRenameEvent,
+  subscribeToWatchEvent,
+  type QueuedWatchChange,
+} from "./watchEventSubscriptions";
 
 type MetaRequestOptions = {
   force?: boolean;
@@ -247,84 +254,43 @@ export const useDirWatch = ({
     }, DIR_CHANGE_DEBOUNCE_MS);
   }, [flushPendingChanges]);
 
-  useEffect(() => {
-    if (!enabled) return;
-    let unlisten: (() => void) | null = null;
-    let active = true;
-    const setup = async () => {
-      try {
-        const stop = await listen<DirChangedEvent>("dir_changed", (event) => {
-          const payload = event.payload;
-          if (!payload?.path) return;
-          pendingPathsRef.current.add(payload.path);
-          payload.paths?.forEach((path) => {
-            if (path?.trim()) {
-              pendingEntryPathsRef.current.add(path);
-            }
-          });
-          scheduleFlush();
-        });
-        if (!active) {
-          stop();
-          return;
-        }
-        unlisten = stop;
-      } catch (error) {
-        log("listen failed: %o", error);
-      }
-    };
-    void setup();
-    return () => {
-      active = false;
-      if (unlisten) {
-        unlisten();
-      }
-    };
-  }, [enabled, scheduleFlush]);
+  const queueWatchChange = useCallback(
+    (change: QueuedWatchChange) => {
+      pendingPathsRef.current.add(change.watchedPath);
+      change.renamePaths.forEach((path) => {
+        pendingRenamePathsRef.current.add(path);
+      });
+      change.entryPaths.forEach((path) => {
+        pendingEntryPathsRef.current.add(path);
+      });
+      scheduleFlush();
+    },
+    [scheduleFlush],
+  );
 
   useEffect(() => {
     if (!enabled) return;
-    let unlisten: (() => void) | null = null;
-    let active = true;
-    const setup = async () => {
-      try {
-        const stop = await listen<DirRenameEvent>("dir_rename", (event) => {
-          const payload = event.payload;
-          if (!payload?.path) return;
-          pendingPathsRef.current.add(payload.path);
-          pendingRenamePathsRef.current.add(payload.path);
-          if (payload.paths && payload.paths.length > 0) {
-            payload.paths.forEach((path) => {
-              if (path?.trim()) {
-                pendingEntryPathsRef.current.add(path);
-              }
-            });
-          } else {
-            [payload.from, payload.to].forEach((path) => {
-              if (path?.trim()) {
-                pendingEntryPathsRef.current.add(path);
-              }
-            });
-          }
-          scheduleFlush();
-        });
-        if (!active) {
-          stop();
-          return;
-        }
-        unlisten = stop;
-      } catch (error) {
+    return subscribeToWatchEvent({
+      eventName: "dir_changed",
+      normalizePayload: normalizeDirChangedEvent,
+      onChange: queueWatchChange,
+      onError: (error) => {
+        log("listen failed: %o", error);
+      },
+    });
+  }, [enabled, queueWatchChange]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    return subscribeToWatchEvent({
+      eventName: "dir_rename",
+      normalizePayload: normalizeDirRenameEvent,
+      onChange: queueWatchChange,
+      onError: (error) => {
         log("rename listen failed: %o", error);
-      }
-    };
-    void setup();
-    return () => {
-      active = false;
-      if (unlisten) {
-        unlisten();
-      }
-    };
-  }, [enabled, scheduleFlush]);
+      },
+    });
+  }, [enabled, queueWatchChange]);
 
   useEffect(() => {
     if (!enabled) return;

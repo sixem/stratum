@@ -4,6 +4,10 @@ import { normalizePath } from "@/lib";
 
 type Listener = () => void;
 
+// Keep the directory-version table bounded so long sessions do not retain
+// every path the user has ever touched.
+const DIRECTORY_CHILD_VERSION_LIMIT = 4096;
+
 const versionsByPath = new Map<string, number>();
 const listeners = new Set<Listener>();
 let revision = 0;
@@ -22,6 +26,19 @@ const emit = () => {
 
 const normalizeDirectoryKey = (path: string) => normalizePath(path.trim());
 
+const upsertDirectoryChildVersion = (key: string, version: number) => {
+  // Refresh insertion order so pruning behaves like a simple LRU.
+  if (versionsByPath.has(key)) {
+    versionsByPath.delete(key);
+  }
+  versionsByPath.set(key, version);
+  while (versionsByPath.size > DIRECTORY_CHILD_VERSION_LIMIT) {
+    const oldestKey = versionsByPath.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    versionsByPath.delete(oldestKey);
+  }
+};
+
 export const getDirectoryChildVersion = (path: string) => {
   const key = normalizeDirectoryKey(path);
   if (!key) return 0;
@@ -31,7 +48,7 @@ export const getDirectoryChildVersion = (path: string) => {
 export const bumpDirectoryChildVersion = (path: string) => {
   const key = normalizeDirectoryKey(path);
   if (!key) return;
-  versionsByPath.set(key, (versionsByPath.get(key) ?? 0) + 1);
+  upsertDirectoryChildVersion(key, (versionsByPath.get(key) ?? 0) + 1);
   emit();
 };
 
@@ -40,7 +57,7 @@ export const bumpDirectoryChildVersions = (paths: Iterable<string>) => {
   for (const path of paths) {
     const key = normalizeDirectoryKey(path);
     if (!key) continue;
-    versionsByPath.set(key, (versionsByPath.get(key) ?? 0) + 1);
+    upsertDirectoryChildVersion(key, (versionsByPath.get(key) ?? 0) + 1);
     changed = true;
   }
   if (changed) {
