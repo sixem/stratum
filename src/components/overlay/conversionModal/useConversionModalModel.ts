@@ -1,34 +1,27 @@
-// Centralizes conversion modal state, derived values, and draft mutation
-// handlers so the top-level modal component can stay mostly presentational.
+// React-facing coordinator for the conversion modal. The hook keeps modal-only
+// refs and effects local, while draft mutations and view shaping live in pure
+// helpers beside it.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  VIDEO_ENCODER_LABELS,
-  VIDEO_QUALITY_RANGES,
-  clampVideoQuality,
-  getAllowedVideoEncoders,
-  getVideoConvertPreset,
-  resolveVideoEncoderForFormat,
-} from "@/constants";
 import type {
-  ConversionItemDraft,
   ConversionMediaKind,
   ConversionModalDraft,
   ConversionModalRequest,
   ConversionOutputMode,
   ConversionRunState,
-  ConversionVideoEncoder,
-  ConversionVideoSpeed,
 } from "@/types";
+import { buildConversionModalDerivedState } from "./conversionModalDerivedState";
 import {
-  asVideoFormat,
-  buildValidationMessage,
-  describeImageQuality,
-  describeVideoQuality,
-  findRuleFormat,
-  formatQualityNormalized,
-  formatVideoQualityLabel,
-  sortConversionOverrideItems,
-} from "./conversionModalConfig";
+  setConversionImageQuality,
+  setConversionItemOverrideFormat,
+  setConversionOutputMode,
+  setConversionRuleFormat,
+  setConversionSuffix,
+  setConversionVideoEncoder,
+  setConversionVideoPreset,
+  setConversionVideoQuality,
+  setConversionVideoSpeed,
+  toggleConversionVideoAudio,
+} from "./conversionModalDraftMutators";
 import { useBufferedRangeValue } from "./useBufferedRangeValue";
 
 type UseConversionModalModelParams = {
@@ -40,8 +33,6 @@ type UseConversionModalModelParams = {
   onConvert: () => void;
   onClose: () => void;
 };
-
-type ConversionProgressTone = "idle" | "running" | "completed" | "failed" | "warning";
 
 export const useConversionModalModel = ({
   open,
@@ -60,195 +51,38 @@ export const useConversionModalModel = ({
     draftRef.current = draft;
   }, [draft]);
 
-  const requestKey = request?.paths.join("|") ?? "";
-  const sortedOverrideItems = useMemo(() => {
-    if (!draft) return [] as ConversionItemDraft[];
-    return sortConversionOverrideItems(draft.items);
-  }, [draft]);
-  const itemPathsKey = sortedOverrideItems.map((item) => item.path).join("|");
+  const commitDraftMutation = useCallback(
+    (mutateDraft: (draftValue: ConversionModalDraft) => ConversionModalDraft) => {
+      const currentDraft = draftRef.current;
+      if (!currentDraft) return;
 
-  useEffect(() => {
-    if (!open || !draft) return;
-    setExpandedOverridePath((current) => {
-      if (current && sortedOverrideItems.some((item) => item.path === current)) {
-        return current;
+      const nextDraft = mutateDraft(currentDraft);
+      if (nextDraft === currentDraft) {
+        return;
       }
-      return null;
-    });
-  }, [draft, itemPathsKey, open, requestKey, sortedOverrideItems]);
 
-  useEffect(() => {
-    if (!open || !expandedOverridePath) return;
-    const frame = window.requestAnimationFrame(() => {
-      overrideItemRefs.current
-        .get(expandedOverridePath)
-        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [expandedOverridePath, open]);
-
-  const selectedVideoFormat = asVideoFormat(draft ? findRuleFormat(draft, "video") : null);
-  const availableVideoEncoders = useMemo(() => {
-    if (selectedVideoFormat) {
-      const fromFormat = getAllowedVideoEncoders(selectedVideoFormat);
-      if (fromFormat.length > 0) {
-        return fromFormat;
-      }
-    }
-    if (!draft) return ["libx264"] as ConversionVideoEncoder[];
-    return [draft.videoOptions.encoder];
-  }, [draft, selectedVideoFormat]);
-
-  const videoEncoderGroups = useMemo(
-    () => [
-      {
-        id: "video-encoder",
-        options: availableVideoEncoders.map((encoder) => ({
-          value: encoder,
-          label: VIDEO_ENCODER_LABELS[encoder],
-        })),
-      },
-    ],
-    [availableVideoEncoders],
-  );
-
-  const selectedVideoPreset = draft ? getVideoConvertPreset(draft.videoOptions.presetId) : null;
-  const videoQualityRange = draft
-    ? VIDEO_QUALITY_RANGES[draft.videoOptions.encoder]
-    : VIDEO_QUALITY_RANGES.libx264;
-  const videoQualityLabel = draft
-    ? formatVideoQualityLabel(draft.videoOptions.encoder)
-    : "CRF";
-
-  const updateDraft = useCallback(
-    (next: ConversionModalDraft) => {
-      draftRef.current = next;
-      onDraftChange(next);
+      draftRef.current = nextDraft;
+      onDraftChange(nextDraft);
     },
     [onDraftChange],
   );
 
-  const updateImageOptions = useCallback(
-    (updater: (imageOptions: ConversionModalDraft["imageOptions"]) => ConversionModalDraft["imageOptions"]) => {
-      const currentDraft = draftRef.current;
-      if (!currentDraft) return;
-      updateDraft({
-        ...currentDraft,
-        imageOptions: updater(currentDraft.imageOptions),
-      });
-    },
-    [updateDraft],
-  );
-
-  const updateRules = useCallback(
-    (updater: (rules: ConversionModalDraft["rules"]) => ConversionModalDraft["rules"]) => {
-      const currentDraft = draftRef.current;
-      if (!currentDraft) return;
-      updateDraft({
-        ...currentDraft,
-        rules: updater(currentDraft.rules),
-      });
-    },
-    [updateDraft],
-  );
-
-  const updateVideoOptions = useCallback(
-    (
-      updater: (
-        videoOptions: ConversionModalDraft["videoOptions"],
-      ) => ConversionModalDraft["videoOptions"],
-      options?: {
-        rules?: (
-          rules: ConversionModalDraft["rules"],
-          nextVideoOptions: ConversionModalDraft["videoOptions"],
-        ) => ConversionModalDraft["rules"];
-      },
-    ) => {
-      const currentDraft = draftRef.current;
-      if (!currentDraft) return;
-      const nextVideoOptions = updater(currentDraft.videoOptions);
-      updateDraft({
-        ...currentDraft,
-        videoOptions: nextVideoOptions,
-        rules: options?.rules
-          ? options.rules(currentDraft.rules, nextVideoOptions)
-          : currentDraft.rules,
-      });
-    },
-    [updateDraft],
-  );
-
-  const updateItemOverride = useCallback(
-    (itemPath: string, targetFormat: string | null) => {
-      const currentDraft = draftRef.current;
-      if (!currentDraft) return;
-      updateDraft({
-        ...currentDraft,
-        items: currentDraft.items.map((item) =>
-          item.path === itemPath
-            ? {
-                ...item,
-                override: targetFormat ? { targetFormat, presetId: null } : null,
-              }
-            : item,
-        ),
-      });
-    },
-    [updateDraft],
-  );
-
-  const markVideoRuleCustom = useCallback(
-    (rules: ConversionModalDraft["rules"]) =>
-      rules.map((rule) =>
-        rule.kind === "video" ? { ...rule, presetId: "custom" } : rule,
-      ),
-    [],
-  );
-
-  const syncVideoRule = useCallback(
-    (
-      rules: ConversionModalDraft["rules"],
-      patch: Partial<ConversionModalDraft["rules"][number]>,
-    ) =>
-      rules.map((rule) =>
-        rule.kind === "video"
-          ? {
-              ...rule,
-              ...patch,
-            }
-          : rule,
-      ),
-    [],
-  );
-
   const commitImageQuality = useCallback(
     (quality: number) => {
-      const clamped = Math.min(100, Math.max(1, Math.round(quality)));
-      updateImageOptions((imageOptions) => ({
-        ...imageOptions,
-        quality: clamped,
-      }));
+      commitDraftMutation((currentDraft) =>
+        setConversionImageQuality(currentDraft, quality),
+      );
     },
-    [updateImageOptions],
+    [commitDraftMutation],
   );
 
   const commitVideoQuality = useCallback(
-    (value: number) => {
-      updateVideoOptions(
-        (videoOptions) => {
-          const clamped = clampVideoQuality(videoOptions.encoder, value);
-          return {
-            ...videoOptions,
-            presetId: "custom",
-            quality: clamped,
-          };
-        },
-        {
-          rules: (rules) => markVideoRuleCustom(rules),
-        },
+    (quality: number) => {
+      commitDraftMutation((currentDraft) =>
+        setConversionVideoQuality(currentDraft, quality),
       );
     },
-    [markVideoRuleCustom, updateVideoOptions],
+    [commitDraftMutation],
   );
 
   const imageQualityControl = useBufferedRangeValue(
@@ -261,84 +95,78 @@ export const useConversionModalModel = ({
   );
 
   const imageQualityValue = imageQualityControl.value;
-  const videoQualityValue = draft
-    ? clampVideoQuality(draft.videoOptions.encoder, videoQualityControl.value)
-    : videoQualityControl.value;
-  const videoQualityHint = draft
-    ? describeVideoQuality(draft.videoOptions.encoder, videoQualityValue)
-    : null;
+  const derivedState = useMemo(
+    () =>
+      buildConversionModalDerivedState({
+        request,
+        draft,
+        runState,
+        imageQualityValue,
+        videoQualityInputValue: videoQualityControl.value,
+      }),
+    [draft, imageQualityValue, request, runState, videoQualityControl.value],
+  );
+  const requestKey = request?.paths.join("|") ?? "";
+  const itemPathsKey = derivedState.sortedOverrideItems.map((item) => item.path).join("|");
+
+  useEffect(() => {
+    if (!open || !draft) return;
+
+    setExpandedOverridePath((current) => {
+      if (
+        current &&
+        derivedState.sortedOverrideItems.some((item) => item.path === current)
+      ) {
+        return current;
+      }
+      return null;
+    });
+  }, [derivedState.sortedOverrideItems, draft, itemPathsKey, open, requestKey]);
+
+  useEffect(() => {
+    if (!open || !expandedOverridePath) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      overrideItemRefs.current
+        .get(expandedOverridePath)
+        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [expandedOverridePath, open]);
 
   const setOutputMode = useCallback(
     (outputMode: ConversionOutputMode) => {
-      if (!draft || draft.outputMode === outputMode) return;
-      updateDraft({ ...draft, outputMode });
+      commitDraftMutation((currentDraft) =>
+        setConversionOutputMode(currentDraft, outputMode),
+      );
     },
-    [draft, updateDraft],
+    [commitDraftMutation],
   );
 
   const setSuffix = useCallback(
     (suffix: string) => {
-      if (!draft) return;
-      updateDraft({ ...draft, suffix });
+      commitDraftMutation((currentDraft) => setConversionSuffix(currentDraft, suffix));
     },
-    [draft, updateDraft],
+    [commitDraftMutation],
   );
 
   const setRuleFormat = useCallback(
     (kind: ConversionMediaKind, targetFormat: string | null) => {
-      if (!draft) return;
-
-      if (kind !== "video") {
-        updateRules((rules) =>
-          rules.map((rule) =>
-            rule.kind === kind
-              ? {
-                  ...rule,
-                  targetFormat,
-                  presetId: rule.presetId ?? null,
-                }
-              : rule,
-          ),
-        );
-        return;
-      }
-
-      updateVideoOptions(
-        (videoOptions) => {
-          const videoFormat = asVideoFormat(targetFormat);
-          const nextEncoder = videoFormat
-            ? resolveVideoEncoderForFormat(videoFormat, videoOptions.encoder)
-            : videoOptions.encoder;
-          return {
-            ...videoOptions,
-            presetId: "custom",
-            encoder: nextEncoder,
-            quality: clampVideoQuality(nextEncoder, videoOptions.quality),
-          };
-        },
-        {
-          rules: (rules, nextVideoOptions) =>
-            rules.map((rule) =>
-              rule.kind === kind
-                ? {
-                    ...rule,
-                    targetFormat,
-                    presetId: nextVideoOptions.presetId,
-                  }
-                : rule,
-            ),
-        },
+      commitDraftMutation((currentDraft) =>
+        setConversionRuleFormat(currentDraft, kind, targetFormat),
       );
     },
-    [draft, updateRules, updateVideoOptions],
+    [commitDraftMutation],
   );
 
   const setItemOverrideFormat = useCallback(
     (itemPath: string, targetFormat: string | null) => {
-      if (!draft) return;
-      updateItemOverride(itemPath, targetFormat);
+      commitDraftMutation((currentDraft) =>
+        setConversionItemOverrideFormat(currentDraft, itemPath, targetFormat),
+      );
     },
-    [draft, updateItemOverride],
+    [commitDraftMutation],
   );
 
   const handleOverrideTargetSelect = useCallback((itemPath: string) => {
@@ -347,171 +175,60 @@ export const useConversionModalModel = ({
 
   const setVideoPreset = useCallback(
     (presetValue: string | null) => {
-      if (!draft || !presetValue) return;
-      if (presetValue === "custom") {
-        updateVideoOptions(
-          (videoOptions) => ({
-            ...videoOptions,
-            presetId: "custom",
-          }),
-          {
-            rules: (rules) => markVideoRuleCustom(rules),
-          },
-        );
-        return;
-      }
-
-      const preset = getVideoConvertPreset(presetValue);
-      if (!preset) return;
-
-      updateVideoOptions(
-        () => ({
-          presetId: preset.id,
-          encoder: preset.encoder,
-          speed: preset.speed,
-          quality: preset.quality,
-          audioEnabled: preset.audioEnabled,
-        }),
-        {
-          rules: (rules) =>
-            syncVideoRule(rules, {
-              targetFormat: preset.format,
-              presetId: preset.id,
-            }),
-        },
+      commitDraftMutation((currentDraft) =>
+        setConversionVideoPreset(currentDraft, presetValue),
       );
     },
-    [draft, markVideoRuleCustom, syncVideoRule, updateVideoOptions],
+    [commitDraftMutation],
   );
 
   const setVideoEncoder = useCallback(
     (encoderValue: string | null) => {
-      if (!draft || !encoderValue) return;
-      const requestedEncoder = encoderValue as ConversionVideoEncoder;
-      updateVideoOptions(
-        (videoOptions) => {
-          const nextEncoder = selectedVideoFormat
-            ? resolveVideoEncoderForFormat(selectedVideoFormat, requestedEncoder)
-            : requestedEncoder;
-          return {
-            ...videoOptions,
-            presetId: "custom",
-            encoder: nextEncoder,
-            quality: clampVideoQuality(nextEncoder, videoOptions.quality),
-          };
-        },
-        {
-          rules: (rules) => markVideoRuleCustom(rules),
-        },
+      commitDraftMutation((currentDraft) =>
+        setConversionVideoEncoder(currentDraft, encoderValue),
       );
     },
-    [draft, markVideoRuleCustom, selectedVideoFormat, updateVideoOptions],
+    [commitDraftMutation],
   );
 
   const setVideoSpeed = useCallback(
     (speedValue: string | null) => {
-      if (!draft || !speedValue) return;
-      updateVideoOptions(
-        (videoOptions) => ({
-          ...videoOptions,
-          presetId: "custom",
-          speed: speedValue as ConversionVideoSpeed,
-        }),
-        {
-          rules: (rules) => markVideoRuleCustom(rules),
-        },
+      commitDraftMutation((currentDraft) =>
+        setConversionVideoSpeed(currentDraft, speedValue),
       );
     },
-    [draft, markVideoRuleCustom, updateVideoOptions],
+    [commitDraftMutation],
   );
 
   const toggleVideoAudio = useCallback(() => {
-    if (!draft) return;
-    updateVideoOptions(
-      (videoOptions) => ({
-        ...videoOptions,
-        presetId: "custom",
-        audioEnabled: !videoOptions.audioEnabled,
-      }),
-      {
-        rules: (rules) => markVideoRuleCustom(rules),
-      },
-    );
-  }, [draft, markVideoRuleCustom, updateVideoOptions]);
+    commitDraftMutation((currentDraft) => toggleConversionVideoAudio(currentDraft));
+  }, [commitDraftMutation]);
 
-  const runPhase = runState?.phase ?? "idle";
-  const runInProgress = runPhase === "running";
-  const queueFailed = runPhase === "failed";
-  const queueCompleted = runPhase === "completed";
-  const hasImageItems = request?.sourceKinds.includes("image") ?? false;
-  const hasVideoItems = request?.sourceKinds.includes("video") ?? false;
-  const totalItems = runState?.total ?? request?.items.length ?? 0;
-  const hasQuickPrefill =
-    Boolean(request?.quickTargetKind) && Boolean(request?.quickTargetFormat);
-  const sampleItem = draft?.items[0] ?? null;
-  const videoCount = sortedOverrideItems.filter((item) => item.kind === "video").length;
-  const imageCount = sortedOverrideItems.filter((item) => item.kind === "image").length;
-  const qualityNormalized = formatQualityNormalized(imageQualityValue);
-  const imageQualityLabel = describeImageQuality(imageQualityValue);
-  const itemCountLabel = `${totalItems} item${totalItems === 1 ? "" : "s"}`;
-  const validationMessage =
-    request && draft ? buildValidationMessage(request, draft) : null;
-  const activeMessage = validationMessage
-    ? validationMessage
-    : runState?.message ??
-      (queueCompleted
-        ? `Queued ${itemCountLabel}`
-        : queueFailed
-          ? "Couldn't queue the current conversion request."
-          : `Queues ${itemCountLabel}`
-      );
-  const progressTone: ConversionProgressTone =
-    validationMessage && runPhase === "idle"
-      ? "warning"
-      : queueFailed
-        ? "failed"
-        : queueCompleted
-          ? "completed"
-          : runInProgress
-            ? "running"
-            : "idle";
-  const primaryActionLabel = runInProgress
-    ? "Queueing..."
-    : queueCompleted
-      ? "Dismiss"
-      : queueFailed
-        ? "Try again"
-        : "Queue";
-  const handlePrimaryAction = queueCompleted ? onClose : onConvert;
-  const primaryActionDisabled = runInProgress || (queueCompleted ? false : Boolean(validationMessage));
-  const secondaryActionLabel = runInProgress
-    ? "Hide"
-    : queueFailed || queueCompleted
-      ? "Close"
-      : "Cancel";
+  const handlePrimaryAction =
+    derivedState.primaryActionIntent === "close" ? onClose : onConvert;
 
   return {
-    activeMessage,
+    activeMessage: derivedState.activeMessage,
     expandedOverridePath,
     handleOverrideTargetSelect,
     handlePrimaryAction,
-    hasImageItems,
-    hasQuickPrefill,
-    hasVideoItems,
-    imageCount,
+    hasImageItems: derivedState.hasImageItems,
+    hasQuickPrefill: derivedState.hasQuickPrefill,
+    hasVideoItems: derivedState.hasVideoItems,
+    imageCount: derivedState.imageCount,
     imageQualityControl,
-    imageQualityLabel,
+    imageQualityLabel: derivedState.imageQualityLabel,
     imageQualityValue,
     overrideItemRefs,
-    primaryActionDisabled,
-    primaryActionLabel,
-    progressTone,
-    qualityNormalized,
-    runInProgress,
-    runPhase,
-    sampleItem,
-    secondaryActionLabel,
-    selectedVideoPreset,
+    primaryActionDisabled: derivedState.primaryActionDisabled,
+    primaryActionLabel: derivedState.primaryActionLabel,
+    progressTone: derivedState.progressTone,
+    qualityNormalized: derivedState.qualityNormalized,
+    runInProgress: derivedState.runInProgress,
+    runPhase: derivedState.runPhase,
+    sampleItem: derivedState.sampleItem,
+    secondaryActionLabel: derivedState.secondaryActionLabel,
+    selectedVideoPreset: derivedState.selectedVideoPreset,
     setItemOverrideFormat,
     setOutputMode,
     setRuleFormat,
@@ -519,17 +236,17 @@ export const useConversionModalModel = ({
     setVideoEncoder,
     setVideoPreset,
     setVideoSpeed,
-    sortedOverrideItems,
+    sortedOverrideItems: derivedState.sortedOverrideItems,
     toggleVideoAudio,
-    totalItems,
-    validationMessage,
-    videoCount,
-    videoEncoderGroups,
+    totalItems: derivedState.totalItems,
+    validationMessage: derivedState.validationMessage,
+    videoCount: derivedState.videoCount,
+    videoEncoderGroups: derivedState.videoEncoderGroups,
     videoQualityControl,
-    videoQualityHint,
-    videoQualityLabel,
-    videoQualityRange,
-    videoQualityValue,
+    videoQualityHint: derivedState.videoQualityHint,
+    videoQualityLabel: derivedState.videoQualityLabel,
+    videoQualityRange: derivedState.videoQualityRange,
+    videoQualityValue: derivedState.videoQualityValue,
   };
 };
 
