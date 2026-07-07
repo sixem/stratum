@@ -8,14 +8,15 @@ mod progress;
 mod transfer;
 
 use self::copy::execute_copy_manifest_root;
-use self::manifest_roots::{build_copy_manifest_for_path, build_transfer_manifest_for_path};
+use self::manifest_roots::build_copy_manifest_for_path;
 use self::progress::emit_root_completion;
-use self::transfer::execute_transfer_root;
-use super::common::{build_copy_decision_sets, check_transfer_control, same_drive};
-use super::manifest::{requested_roots, validate_destination};
+use self::transfer::{execute_fast_move_root, execute_transfer_root};
+use super::common::{build_copy_decision_sets, check_transfer_control};
+use super::manifest::{build_manifest_root, requested_roots, validate_destination};
+use super::strategy::classify_transfer_root;
 use crate::domain::filesystem::{
-    CopyOptions, CopyReport, TransferControlCallback, TransferMode, TransferOptions,
-    TransferProgressCallback, TransferReport,
+    CopyOptions, CopyReport, MovedTransferEntry, TransferControlCallback, TransferMode,
+    TransferOptions, TransferProgressCallback, TransferReport,
 };
 
 pub fn copy_entries(
@@ -110,6 +111,7 @@ pub fn transfer_entries(
         moved: 0,
         skipped: 0,
         failures: Vec::new(),
+        moved_entries: Vec::new(),
     };
 
     let requested = paths
@@ -131,8 +133,47 @@ pub fn transfer_entries(
         let processed = index;
         let completed = index + 1;
 
+        let strategy =
+            match classify_transfer_root(&raw_path, &target_path, mode, overwrite, &mut on_control)
+            {
+                Ok(Some(strategy)) => strategy,
+                Ok(None) => {
+                    emit_root_completion(&mut on_progress, completed, total);
+                    continue;
+                }
+                Err(error) => {
+                    report.failures.push(format!("{}: {}", raw_path, error));
+                    emit_root_completion(&mut on_progress, completed, total);
+                    continue;
+                }
+            };
+
+        if strategy.use_fast_move {
+            match execute_fast_move_root(
+                &strategy.source,
+                &strategy.destination,
+                processed,
+                total,
+                &mut on_progress,
+                &mut on_control,
+            ) {
+                Ok(()) => {
+                    report.moved = report.moved.saturating_add(1);
+                    report.moved_entries.push(MovedTransferEntry {
+                        source_path: strategy.source.to_string_lossy().to_string(),
+                        destination_path: strategy.destination.to_string_lossy().to_string(),
+                    });
+                }
+                Err(error) => {
+                    report.failures.push(format!("{}: {}", raw_path, error));
+                }
+            }
+            emit_root_completion(&mut on_progress, completed, total);
+            continue;
+        }
+
         let manifest =
-            match build_transfer_manifest_for_path(&raw_path, &target_path, &mut on_control) {
+            match build_manifest_root(&strategy.source, &strategy.destination, &mut on_control) {
                 Ok(manifest) => manifest,
                 Err(error) => {
                     report.failures.push(format!("{}: {}", raw_path, error));
@@ -141,22 +182,22 @@ pub fn transfer_entries(
                 }
             };
 
-        let should_move = match mode {
-            TransferMode::Copy => false,
-            TransferMode::Move => true,
-            TransferMode::Auto => same_drive(&manifest.source, &target_path),
-        };
-
         match execute_transfer_root(
             &manifest,
             overwrite,
-            should_move,
+            strategy.should_move,
             processed,
             total,
             &mut on_progress,
             &mut on_control,
         ) {
-            Ok(true) => report.moved = report.moved.saturating_add(1),
+            Ok(true) => {
+                report.moved = report.moved.saturating_add(1);
+                report.moved_entries.push(MovedTransferEntry {
+                    source_path: strategy.source.to_string_lossy().to_string(),
+                    destination_path: strategy.destination.to_string_lossy().to_string(),
+                });
+            }
             Ok(false) => report.copied = report.copied.saturating_add(1),
             Err(error) => report.failures.push(format!("{}: {}", raw_path, error)),
         }

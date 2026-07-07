@@ -8,8 +8,11 @@ mod manifest;
 #[cfg(target_os = "windows")]
 pub(crate) mod native_delete_windows;
 #[cfg(target_os = "windows")]
+mod native_transfer_windows;
+#[cfg(target_os = "windows")]
 mod native_windows;
 mod plan;
+mod strategy;
 pub(crate) mod types;
 
 pub use execute::{copy_entries, transfer_entries};

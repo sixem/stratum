@@ -26,6 +26,7 @@ export const EntryCard = memo(({
   hideExtension,
   selected,
   isDeleting,
+  isTransferring,
   dropTarget,
   isRenaming,
   renameValue,
@@ -62,14 +63,15 @@ export const EntryCard = memo(({
     : displayName;
   // Keep the card element stable so thumbnail previews do not remount on rename.
   const isRemoved = presence === "removed";
-  const isInteractive = !isRenaming && !isRemoved && !isDeleting;
+  const isBusy = isDeleting || isTransferring;
+  const isInteractive = !isRenaming && !isRemoved && !isBusy;
   const tooltipDisabled =
-    isRenaming || isDeleting || entry.isDir || disableTooltip || !isInteractive;
+    isRenaming || isBusy || entry.isDir || disableTooltip || !isInteractive;
   const cardClass = `thumb-card${isRenaming ? " is-renaming" : ""}${
     entry.isDir ? " is-dir" : ""
   }${selected ? " is-selected" : ""}${isRemoved ? " is-removed" : ""}${
     isDeleting ? " is-deleting" : ""
-  }`;
+  }${isTransferring ? " is-transferring" : ""}`;
   const handleMouseDown = (event: ReactMouseEvent) => {
     if (!isInteractive) return;
     if (event.button === 1) {
@@ -141,6 +143,7 @@ export const EntryCard = memo(({
       data-kind={fileKind}
       data-drop-target={dropTarget ? "true" : "false"}
       data-delete-pending={isDeleting ? "true" : "false"}
+      data-transfer-pending={isTransferring ? "true" : "false"}
       data-presence={presence}
       aria-selected={selected}
       aria-hidden={isRemoved ? "true" : "false"}

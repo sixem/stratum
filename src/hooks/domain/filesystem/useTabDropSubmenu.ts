@@ -46,6 +46,11 @@ const toSubmenuItems = (entries: { isDir: boolean; name: string; path: string }[
       })),
   );
 
+const itemBelongsToSubmenu = (items: DropTargetSubmenuItem[], path: string) => {
+  const pathKey = normalizePath(path);
+  return items.some((item) => normalizePath(item.path) === pathKey);
+};
+
 export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
   const directoryChildRevision = useDirectoryChildStateRevision();
   const [submenu, setSubmenu] = useState<TabDropSubmenuState>(EMPTY_SUBMENU_STATE);
@@ -197,14 +202,20 @@ export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
       }
 
       if (target.kind === "tab-subfolder") {
+        if (
+          !target.tabId ||
+          target.tabId !== submenu.hostTabId ||
+          !itemBelongsToSubmenu(submenu.items, target.path)
+        ) {
+          closeSubmenu();
+          return;
+        }
         clearOpenTimer();
         clearCloseTimer();
         pendingHostRef.current = null;
-        if (target.tabId) {
-          activeHostKeyRef.current = `${target.tabId}\u0000${normalizePath(
-            submenu.hostPath ?? "",
-          )}`;
-        }
+        activeHostKeyRef.current = `${target.tabId}\u0000${normalizePath(
+          submenu.hostPath ?? "",
+        )}`;
         return;
       }
 
@@ -221,7 +232,10 @@ export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
       }
 
       clearCloseTimer();
-      if (submenu.hostTabId === tabId && normalizePath(submenu.hostPath ?? "") === normalizePath(path)) {
+      if (
+        submenu.hostTabId === tabId &&
+        normalizePath(submenu.hostPath ?? "") === normalizePath(path)
+      ) {
         clearOpenTimer();
         pendingHostRef.current = null;
         return;
@@ -253,6 +267,7 @@ export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
       scheduleClose,
       submenu.hostPath,
       submenu.hostTabId,
+      submenu.items,
     ],
   );
 

@@ -15,7 +15,7 @@ use windows::Win32::Foundation::E_ABORT;
 use windows::Win32::UI::Shell::{
     IFileOperationProgressSink, IFileOperationProgressSink_Impl, IShellItem,
 };
-use windows_core::{HRESULT, Result as WinResult};
+use windows_core::{Result as WinResult, HRESULT};
 
 pub(super) struct DeleteOperationState {
     pub total_items: usize,

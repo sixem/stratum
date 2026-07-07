@@ -3,6 +3,7 @@
 // focused on wiring, while the imperative bindings stay isolated in one file.
 import { APP_NAME, APP_VERSION } from "@/constants";
 import { useSelectionShortcuts } from "@/hooks/ui/selection";
+import { useIndexedSearchUiStore } from "@/modules";
 import { useAppEffects } from "../useAppEffects";
 import { useAppKeybinds } from "../useAppKeybinds";
 import type { UseShellViewModelOptions } from "./shellViewModel.types";
@@ -46,6 +47,8 @@ export const useShellViewBindings = ({
   dataPipeline,
   interactionModel,
 }: UseShellViewBindingsOptions) => {
+  const indexedSearchOpen = useIndexedSearchUiStore((state) => state.open);
+
   useAppEffects({
     isTauriEnv: tauriEnv,
     appName: APP_NAME,
@@ -103,6 +106,7 @@ export const useShellViewBindings = ({
     contextMenuOpen: dataPipeline.contextMenuActive,
     loading: resolvedView.viewLoading,
     settingsOpen: menuState.settingsOpen,
+    indexedSearchOpen,
     smartTabBlocked: dataPipeline.smartTabBlocked,
     viewMode: resolvedView.viewMode,
     smartTabJump: settings.smartTabJump,
@@ -119,6 +123,7 @@ export const useShellViewBindings = ({
 
   useAppKeybinds({
     keybinds: settings.keybinds,
+    indexedSearchEnabled: settings.indexedSearchEnabled,
     confirmDelete: settings.confirmDelete,
     settingsOpen: menuState.settingsOpen,
     conversionModalOpen: dataPipeline.conversionModalOpen,

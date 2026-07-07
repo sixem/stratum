@@ -16,6 +16,7 @@ type UseSelectionShortcutsOptions = {
   contextMenuOpen: boolean;
   loading: boolean;
   settingsOpen: boolean;
+  indexedSearchOpen: boolean;
   smartTabBlocked: boolean;
   viewMode: ViewMode;
   smartTabJump: boolean;
@@ -40,6 +41,7 @@ export const useSelectionShortcuts = ({
   contextMenuOpen,
   loading,
   settingsOpen,
+  indexedSearchOpen,
   smartTabBlocked,
   viewMode,
   smartTabJump,
@@ -92,7 +94,7 @@ export const useSelectionShortcuts = ({
       if (event.defaultPrevented) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.isComposing) return;
-      if (settingsOpen || contextMenuOpen) return;
+      if (settingsOpen || contextMenuOpen || indexedSearchOpen) return;
       if (previewOpen) return;
       if (loading || blockReveal) return;
 
@@ -139,6 +141,7 @@ export const useSelectionShortcuts = ({
     mainRef,
     moveSelectionBy,
     settingsOpen,
+    indexedSearchOpen,
     viewMode,
   ]);
 
@@ -149,7 +152,7 @@ export const useSelectionShortcuts = ({
       if (event.key !== "Tab") return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.isComposing || event.repeat) return;
-      if (settingsOpen || contextMenuOpen || smartTabBlocked) return;
+      if (settingsOpen || contextMenuOpen || indexedSearchOpen || smartTabBlocked) return;
       if (previewOpen) return;
       if (loading || blockReveal) return;
 
@@ -196,6 +199,7 @@ export const useSelectionShortcuts = ({
     mainRef,
     previewOpen,
     settingsOpen,
+    indexedSearchOpen,
     smartTabBlocked,
     smartTabJump,
   ]);
@@ -206,7 +210,7 @@ export const useSelectionShortcuts = ({
       if (event.key !== "Enter") return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.repeat || event.isComposing) return;
-      if (settingsOpen || contextMenuOpen) return;
+      if (settingsOpen || contextMenuOpen || indexedSearchOpen) return;
       if (previewOpen) return;
       if (loading) return;
 
@@ -243,5 +247,6 @@ export const useSelectionShortcuts = ({
     onOpenEntry,
     previewOpen,
     settingsOpen,
+    indexedSearchOpen,
   ]);
 };

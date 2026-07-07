@@ -9,7 +9,7 @@ import { useFileManagerCopy } from "./fileManagerCopy";
 import { useFileManagerCreate } from "./fileManagerCreate";
 import { useFileManagerDelete } from "./fileManagerDelete";
 import { useFileManagerUndo } from "./fileManagerUndo";
-import type { UndoAction } from "./fileManagerUndo";
+import type { UndoAction, UndoMoveEntry } from "./fileManagerUndo";
 import type {
   FileManagerDebug,
   RenameBatchResult,
@@ -32,6 +32,7 @@ export const useFileMutations = ({
   const copyInFlightRef = useRef(false);
   const renameInFlightRef = useRef(false);
   const createInFlightRef = useRef(false);
+  const transferInFlightRef = useRef(false);
   // In-memory undo stack for the current session.
   const undoStackRef = useRef<UndoAction[]>([]);
   // Lazily resolved trash locations for soft deletes (keyed by drive root).
@@ -58,6 +59,14 @@ export const useFileMutations = ({
   }, []);
 
   const canUndo = useCallback(() => undoStackRef.current.length > 0, []);
+  const recordMoveUndo = useCallback((entries: UndoMoveEntry[]) => {
+    const filtered = entries.filter((entry) => entry.from.trim() && entry.to.trim());
+    if (filtered.length === 0) return;
+    pushUndo({ type: "move", entries: filtered });
+  }, [pushUndo]);
+  const setTransferInFlight = useCallback((active: boolean) => {
+    transferInFlightRef.current = active;
+  }, []);
   const notifyDirectoryChildrenChanged = useCallback((paths: string[]) => {
     bumpDirectoryChildVersions(paths);
   }, []);
@@ -215,6 +224,7 @@ export const useFileMutations = ({
     renameInFlightRef,
     deleteInFlightRef,
     copyInFlightRef,
+    transferInFlightRef,
     onDirectoryChildrenChanged: notifyDirectoryChildrenChanged,
     onRenameUndoPresence: setSuppressUndoPresence,
     performRenameRequests,
@@ -231,6 +241,8 @@ export const useFileMutations = ({
     createFileInView,
     renameEntryInView,
     renameEntriesInView,
+    recordMoveUndo,
+    setTransferInFlight,
     undoLastAction,
     canUndo,
   };

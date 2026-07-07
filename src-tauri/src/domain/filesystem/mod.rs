@@ -20,8 +20,8 @@ pub use fs_list::{
 pub(crate) use fs_trash::trash_entries;
 pub use fs_trash::{restore_recycle_entries, restore_recycle_paths};
 pub use reports::{
-    CopyConflict, CopyConflictKind, CopyPlan, CopyReport, DeleteReport, RecycleEntry,
-    RestorePathsReport, RestoreReport, TransferProgress, TransferReport, TrashReport,
+    CopyConflict, CopyConflictKind, CopyPlan, CopyReport, DeleteReport, MovedTransferEntry,
+    RecycleEntry, RestorePathsReport, RestoreReport, TransferProgress, TransferReport, TrashReport,
 };
 pub(crate) use reports::{
     TransferControlCallback, TransferProgressCallback, TransferProgressUpdate,
@@ -32,6 +32,5 @@ pub use transfer::{copy_entries, plan_copy_entries, transfer_entries};
 pub use types::{
     CopyOptions, DriveInfo, EntryMeta, FileEntry, FolderThumbSampleBatchOptions,
     FolderThumbSampleBatchResult, FolderThumbSampleStatus, ListDirOptions, ListDirResult,
-    ListDirWithParentResult, Place, SortDir, SortKey, SortState, TransferMode,
-    TransferOptions,
+    ListDirWithParentResult, Place, SortDir, SortKey, SortState, TransferMode, TransferOptions,
 };

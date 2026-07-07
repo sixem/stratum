@@ -35,11 +35,19 @@ pub struct CopyPlan {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MovedTransferEntry {
+    pub source_path: String,
+    pub destination_path: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TransferReport {
     pub copied: usize,
     pub moved: usize,
     pub skipped: usize,
     pub failures: Vec<String>,
+    pub moved_entries: Vec<MovedTransferEntry>,
 }
 
 #[derive(Clone, Serialize)]

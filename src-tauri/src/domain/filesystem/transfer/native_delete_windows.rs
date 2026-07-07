@@ -4,9 +4,7 @@
 // getting Explorer-like delete semantics.
 use super::delete_discovery::{DeleteDiscoveryPlan, DeleteDiscoveryRoot};
 use crate::domain::filesystem::fs_recycle_windows::can_use_recycle_bin;
-use crate::domain::filesystem::{
-    TransferControlCallback, TransferProgressCallback,
-};
+use crate::domain::filesystem::{TransferControlCallback, TransferProgressCallback};
 use crate::platform::windows::com::StaComGuard;
 use std::collections::HashMap;
 use std::path::Path;
@@ -19,9 +17,7 @@ use self::file_operation::{create_file_operation, file_operation_flags};
 use self::progress_sink::{create_progress_sink, DeleteOperationState};
 use self::shell_items::shell_item_from_path;
 use windows::Win32::Foundation::{E_ABORT, HWND};
-use windows::Win32::UI::Shell::{
-    IFileOperationProgressSink,
-};
+use windows::Win32::UI::Shell::IFileOperationProgressSink;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ShellDeleteMode {

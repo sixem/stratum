@@ -72,6 +72,13 @@ export const useFileListController = ({
     },
     [selection.pendingDeletePaths],
   );
+  const isTransferPending = useCallback(
+    (path: string) => {
+      const key = normalizePath(path) ?? path.trim();
+      return key ? selection.pendingTransferPaths.has(key) : false;
+    },
+    [selection.pendingTransferPaths],
+  );
 
   const emptyMessage = useMemo(() => getEmptyMessage(view.searchQuery), [view.searchQuery]);
   const resolvedIndexMap = useMemo(() => {
@@ -182,6 +189,7 @@ export const useFileListController = ({
 
   return {
     isDeletePending,
+    isTransferPending,
     emptyMessage,
     emptyActions,
     resolvedIndexMap,

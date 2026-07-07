@@ -13,6 +13,7 @@ type UseAppCommandsOptions = {
   createFolder: (parentPath: string, name: string) => Promise<string | null>;
   performDrop: (paths: string[], targetPath: string) => Promise<unknown>;
   setDropTarget: (target: DropTarget | null) => void;
+  clearDragState: () => void;
   setThumbResetNonce: Dispatch<SetStateAction<number>>;
 };
 
@@ -23,6 +24,7 @@ export const useAppCommands = ({
   createFolder,
   performDrop,
   setDropTarget,
+  clearDragState,
   setThumbResetNonce,
 }: UseAppCommandsOptions) => {
   const handleCreateFile = useCallback(
@@ -76,10 +78,11 @@ export const useAppCommands = ({
 
   const handleInternalDrop = useCallback(
     (paths: string[], target: DropTarget | null) => {
+      clearDragState();
       if (!target) return;
       void performDrop(paths, target.path);
     },
-    [performDrop],
+    [clearDragState, performDrop],
   );
 
   const handleInternalHover = useCallback(

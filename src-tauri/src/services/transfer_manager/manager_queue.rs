@@ -1,13 +1,12 @@
 // Public handle methods and queue-control operations for the transfer manager.
 use super::control::{TransferJobControlHandle, TRANSFER_CANCELLED_MESSAGE};
 use super::manager_events::build_event_emitter;
-use super::manager_run::start_worker;
+use super::manager_run::start_workers;
 use super::manager_state::{
-    build_initial_snapshot, describe_copy_job, describe_delete_job, describe_transfer_job,
-    describe_trash_job, describe_conversion_job, snapshot_from_state, TransferJobRequest,
-    TransferManagerInner,
-    TransferManagerState, TransferOperation, TransferOperationResult,
-    COMPLETED_JOB_HISTORY_LIMIT,
+    build_initial_snapshot, describe_conversion_job, describe_copy_job, describe_delete_job,
+    describe_transfer_job, describe_trash_job, snapshot_from_state, QueuedTransferJobState,
+    QueuedTransferPlanningState, TransferJobRequest, TransferManagerInner, TransferManagerState,
+    TransferOperation, TransferOperationResult,
 };
 use super::TransferManagerHandle;
 use crate::domain::filesystem as fs;
@@ -25,7 +24,7 @@ impl TransferManagerHandle {
             queue_signal: Condvar::new(),
             next_job_id: AtomicU64::new(1),
         });
-        start_worker(Arc::clone(&inner));
+        start_workers(Arc::clone(&inner));
         Self { inner }
     }
 
@@ -256,35 +255,31 @@ impl TransferManagerHandle {
     }
 
     pub fn cancel_job(&self, job_id: &str) -> Result<bool, String> {
-        let queued_index = {
+        let queued_exists = {
             let guard = self
                 .inner
                 .state
                 .lock()
                 .map_err(|_| "transfer manager state unavailable".to_string())?;
-            guard
-                .queued_jobs
-                .iter()
-                .position(|job| job.snapshot.id == job_id)
+            guard.queued_jobs.iter().any(|job| job.job_id() == job_id)
         };
 
-        if let Some(index) = queued_index {
+        if queued_exists {
             let (request, snapshot) = {
                 let mut guard = self
                     .inner
                     .state
                     .lock()
                     .map_err(|_| "transfer manager state unavailable".to_string())?;
-                let Some(request) = guard.queued_jobs.remove(index) else {
+                let Some(queued) = guard.remove_queued_job(job_id) else {
                     return Ok(false);
                 };
+                let request = queued.request;
+                let _ = request.control.cancel();
                 let mut cancelled = request.snapshot.clone();
                 cancelled.status = TransferJobStatus::Cancelled;
                 cancelled.phase = TransferJobPhase::Finalizing;
-                guard.completed_jobs.push_back(cancelled);
-                while guard.completed_jobs.len() > COMPLETED_JOB_HISTORY_LIMIT {
-                    guard.completed_jobs.pop_front();
-                }
+                guard.push_completed_job(cancelled);
                 let snapshot = snapshot_from_state(&guard);
                 (request, snapshot)
             };
@@ -321,12 +316,15 @@ impl TransferManagerHandle {
                 .state
                 .lock()
                 .map_err(|_| "transfer manager state unavailable".to_string())?;
-            guard.queued_jobs.push_back(job);
+            guard.queued_jobs.push_back(QueuedTransferJobState {
+                request: job,
+                planning_state: QueuedTransferPlanningState::Pending,
+            });
             snapshot_from_state(&guard)
         };
 
         event_emitter.emit_snapshot(&snapshot);
-        self.inner.queue_signal.notify_one();
+        self.inner.queue_signal.notify_all();
         Ok(())
     }
 }

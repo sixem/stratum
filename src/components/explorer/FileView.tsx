@@ -52,6 +52,7 @@ type FileViewProps = {
   scrollRequest?: { index: number; nonce: number } | null;
   smoothScroll: boolean;
   pendingDeletePaths: Set<string>;
+  pendingTransferPaths: Set<string>;
   sortState: SortState;
   onSortChange: (next: SortState) => void;
   selectedPaths: Set<string>;
@@ -155,6 +156,7 @@ export const FileView = ({
   onEntryPreviewRelease,
   smoothScroll,
   pendingDeletePaths,
+  pendingTransferPaths,
   sortState,
   onSortChange,
   onContextMenuDown,
@@ -212,6 +214,7 @@ export const FileView = ({
             }}
             selection={{
               pendingDeletePaths,
+              pendingTransferPaths,
               selectedPaths: viewProps.selectedPaths,
               onSetSelection: viewProps.onSetSelection,
               onSelectItem: viewProps.onSelectItem,
@@ -294,6 +297,7 @@ export const FileView = ({
             }}
             selection={{
               pendingDeletePaths,
+              pendingTransferPaths,
               selectedPaths: viewProps.selectedPaths,
               onSetSelection: viewProps.onSetSelection,
               onSelectItem: viewProps.onSelectItem,

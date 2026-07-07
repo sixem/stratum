@@ -1,15 +1,48 @@
 // Move and cross-drive transfer execution.
 // This layer coordinates overwrite handling and move-vs-copy policy once the
 // manifest has already been built.
+use super::super::common::{check_transfer_control, same_drive, TransferEntryKind};
+use super::super::manifest::TransferManifestRoot;
+#[cfg(target_os = "windows")]
+use super::super::native_transfer_windows::{shell_transfer_entry, ShellTransferMode};
 use super::copy::copy_manifest_file_entry;
 use super::paths::{
     create_manifest_directory, ensure_parent_directory, existing_entry_kind,
     remove_existing_destination_root, remove_manifest_source,
 };
-use super::super::common::{check_transfer_control, same_drive, TransferEntryKind};
-use super::super::manifest::TransferManifestRoot;
 use crate::domain::filesystem::{TransferControlCallback, TransferProgressCallback};
 use std::fs;
+use std::path::Path;
+
+pub(super) fn execute_fast_move_root(
+    source: &Path,
+    destination: &Path,
+    processed: usize,
+    total: usize,
+    on_progress: &mut Option<&mut TransferProgressCallback>,
+    on_control: &mut Option<&mut TransferControlCallback>,
+) -> Result<(), String> {
+    check_transfer_control(on_control)?;
+
+    #[cfg(target_os = "windows")]
+    {
+        return shell_transfer_entry(
+            source,
+            destination,
+            ShellTransferMode::Move,
+            processed,
+            total,
+            on_progress,
+            on_control,
+        );
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        ensure_parent_directory(destination)?;
+        fs::rename(source, destination).map_err(|err| err.to_string())
+    }
+}
 
 fn execute_transfer_manifest_root(
     root: &TransferManifestRoot,

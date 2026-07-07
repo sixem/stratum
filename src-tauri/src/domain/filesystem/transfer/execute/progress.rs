@@ -1,11 +1,9 @@
 // Progress emitters for manifest-driven copy and move execution.
 // Keeping these payload builders together makes the orchestration code easier
 // to scan and keeps the hot loops focused on filesystem work.
-use super::super::manifest::TransferManifestEntry;
-use crate::domain::filesystem::{
-    TransferProgressCallback, TransferProgressUpdate,
-};
 use super::super::common::emit_transfer_progress;
+use super::super::manifest::TransferManifestEntry;
+use crate::domain::filesystem::{TransferProgressCallback, TransferProgressUpdate};
 
 pub(super) fn emit_root_completion(
     on_progress: &mut Option<&mut TransferProgressCallback>,

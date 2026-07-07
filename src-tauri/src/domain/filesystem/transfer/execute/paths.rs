@@ -1,11 +1,9 @@
 // Shared path and cleanup helpers for manifest execution.
 // Copy and move flows both need these operations, so we keep them in one
 // place instead of threading small filesystem details through multiple files.
-use super::progress::emit_directory_progress;
-use super::super::common::{
-    inspect_path, path_exists, remove_path_by_kind, TransferEntryKind,
-};
+use super::super::common::{inspect_path, path_exists, remove_path_by_kind, TransferEntryKind};
 use super::super::manifest::{build_manifest_root, TransferManifestEntry, TransferManifestRoot};
+use super::progress::emit_directory_progress;
 use crate::domain::filesystem::{TransferControlCallback, TransferProgressCallback};
 use std::fs;
 use std::io::ErrorKind;

@@ -158,9 +158,10 @@ pub(super) fn compare_entry_fields(
     }
 
     match sort.key {
-        SortKey::Name => {
-            apply_sort_dir(compare_normalized_names(left.normalized_name, right.normalized_name), sort.dir)
-        }
+        SortKey::Name => apply_sort_dir(
+            compare_normalized_names(left.normalized_name, right.normalized_name),
+            sort.dir,
+        ),
         SortKey::Size => {
             let size_order = compare_numbers(left.size, right.size);
             if size_order != Ordering::Equal {

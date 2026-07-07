@@ -3,6 +3,7 @@
 export type KeybindAction =
   | "newTab"
   | "closeTab"
+  | "openIndexedSearch"
   | "undo"
   | "deleteSelection"
   | "duplicateSelection"
@@ -31,6 +32,12 @@ export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
     label: "Close tab",
     description: "Close the current tab.",
     default: "Control+w",
+  },
+  {
+    id: "openIndexedSearch",
+    label: "Indexed search",
+    description: "Open the indexed path search modal.",
+    default: "Control+p",
   },
   {
     id: "undo",

@@ -1,17 +1,16 @@
 // Copy-specific manifest execution.
 // This module owns overwrite handling and per-entry copy work so the public
 // entrypoint can stay focused on report assembly.
+use super::super::common::{
+    check_transfer_control, path_exists, path_is_same_or_within, should_overwrite_copy_destination,
+    should_skip_copy_destination, CopyDecisionSets, CopyExecution, TransferEntryKind,
+};
+use super::super::manifest::{TransferManifestEntry, TransferManifestRoot};
 use super::paths::{
     create_manifest_directory, ensure_parent_directory, existing_entry_kind,
     remove_existing_destination_root,
 };
 use super::progress::{emit_file_bytes, emit_file_start};
-use super::super::common::{
-    check_transfer_control, path_exists, path_is_same_or_within,
-    should_overwrite_copy_destination, should_skip_copy_destination, CopyDecisionSets,
-    CopyExecution, TransferEntryKind,
-};
-use super::super::manifest::{TransferManifestEntry, TransferManifestRoot};
 use crate::domain::filesystem::{TransferControlCallback, TransferProgressCallback};
 #[cfg(not(target_os = "windows"))]
 use std::fs;

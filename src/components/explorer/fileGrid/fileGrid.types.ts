@@ -33,6 +33,7 @@ export type FileGridViewProps = {
 
 export type FileGridSelectionProps = {
   pendingDeletePaths: Set<string>;
+  pendingTransferPaths: Set<string>;
   selectedPaths: Set<string>;
   onSetSelection: (paths: string[], anchor?: string) => void;
   onSelectItem: (path: string, index: number, event: ReactMouseEvent) => void;

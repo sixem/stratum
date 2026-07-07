@@ -1,4 +1,5 @@
 import type { SortState } from "./sort";
+import type { IndexedDriveStatus } from "./indexedSearch";
 
 export type FileEntry = {
   name: string;
@@ -56,6 +57,8 @@ export type DriveInfo = {
   free: number | null;
   total: number | null;
   label?: string | null;
+  // Frontend-only joined state from the indexed-search service.
+  indexStatus?: IndexedDriveStatus | null;
 };
 
 export type CopyReport = {
@@ -86,11 +89,17 @@ export type CopyOptions = {
 
 export type TransferMode = "copy" | "move" | "auto";
 
+export type MovedTransferEntry = {
+  sourcePath: string;
+  destinationPath: string;
+};
+
 export type TransferReport = {
   copied: number;
   moved: number;
   skipped: number;
   failures: string[];
+  movedEntries: MovedTransferEntry[];
 };
 
 export type TransferJobStatus =
@@ -109,7 +118,7 @@ export type TransferJobKind =
   | "trash"
   | "conversion";
 
-export type TransferJobPhase = "planning" | "executing" | "finalizing";
+export type TransferJobPhase = "planning" | "ready" | "executing" | "finalizing";
 
 export type TransferJobCapabilities = {
   canPause: boolean;

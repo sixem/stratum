@@ -27,6 +27,7 @@ const FileList = ({
 }: FileListProps) => {
   const {
     isDeletePending,
+    isTransferPending,
     emptyMessage,
     emptyActions,
     resolvedIndexMap,
@@ -55,9 +56,10 @@ const FileList = ({
         path: row.type === "parent" ? row.path : row.entry.path,
         selectable:
           row.presence !== "removed" &&
-          (row.type === "parent" || !isDeletePending(row.entry.path)),
+          (row.type === "parent" ||
+            (!isDeletePending(row.entry.path) && !isTransferPending(row.entry.path))),
       })),
-    [isDeletePending, rows],
+    [isDeletePending, isTransferPending, rows],
   );
 
   const { listRef, itemHeight, rowHeight, listVars } = useListLayout({
@@ -184,6 +186,7 @@ const FileList = ({
                     hideExtension={list.hideExtension}
                     selected={selection.selectedPaths.has(row.entry.path)}
                     isDeleting={isDeletePending(row.entry.path)}
+                    isTransferring={isTransferPending(row.entry.path)}
                     dropTarget={isDropTarget}
                     isRenaming={rename.renameTargetPath === row.entry.path}
                     renameValue={rename.renameValue}

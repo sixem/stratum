@@ -1,5 +1,5 @@
 // Filesystem facade: composes focused hooks for loading, metadata, mutations, and bootstrap.
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { openPath } from "@/api";
 import { makeDebug, toMessage } from "@/lib";
 import { usePromptStore } from "@/modules";
@@ -80,6 +80,25 @@ export function useFileManager() {
     }
   }, [directoryLoader.currentPathRef, directoryLoader.loadDir, fsBootstrap.refreshDriveInfo]);
 
+  const status = useMemo(() => {
+    const baseStatus = directoryLoader.status;
+    const activityLabel = fsBootstrap.indexedSearchStatus?.activityLabel?.trim();
+    const indexedSearchState = fsBootstrap.indexedSearchStatus?.state;
+    if (baseStatus.level !== "idle") {
+      return baseStatus;
+    }
+    if (!activityLabel) {
+      return baseStatus;
+    }
+    return {
+      level:
+        indexedSearchState === "starting" || indexedSearchState === "scanning"
+          ? ("loading" as const)
+          : ("idle" as const),
+      message: activityLabel,
+    };
+  }, [directoryLoader.status, fsBootstrap.indexedSearchStatus]);
+
   return {
     currentPath: directoryLoader.currentPath,
     parentPath: directoryLoader.parentPath,
@@ -89,15 +108,17 @@ export function useFileManager() {
     placesLoaded: fsBootstrap.placesLoaded,
     drives: fsBootstrap.drives,
     driveInfo: fsBootstrap.driveInfo,
+    indexedSearchStatus: fsBootstrap.indexedSearchStatus,
     entryMeta: metaCache.entryMeta,
     loading: directoryLoader.loading,
     suppressUndoPresence: fileMutations.suppressUndoPresence,
     pendingDeletePaths: fileMutations.pendingDeletePaths,
-    status: directoryLoader.status,
+    status,
     loadDir: directoryLoader.loadDir,
     clearDir: directoryLoader.clearDir,
     openEntry: openEntryInView,
     refresh,
+    refreshDriveInfo: fsBootstrap.refreshDriveInfo,
     peekDirCache: directoryLoader.peekDirCache,
     requestEntryMeta: metaCache.requestEntryMeta,
     flushEntryMeta: metaCache.flushEntryMeta,
@@ -108,6 +129,8 @@ export function useFileManager() {
     createFile: fileMutations.createFileInView,
     renameEntry: fileMutations.renameEntryInView,
     renameEntries: fileMutations.renameEntriesInView,
+    recordMoveUndo: fileMutations.recordMoveUndo,
+    setTransferInFlight: fileMutations.setTransferInFlight,
     undo: fileMutations.undoLastAction,
     canUndo: fileMutations.canUndo,
   };

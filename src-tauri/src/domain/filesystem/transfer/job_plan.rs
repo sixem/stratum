@@ -1,14 +1,14 @@
 // Backend planning for managed transfer jobs.
 // The queue uses these manifests to compute stable work estimates before
 // execution starts, without following Windows reparse points by accident.
-use super::common::{check_transfer_control, same_drive};
+use super::common::check_transfer_control;
 use super::delete_discovery::{
     discover_delete_plan, DeleteDiscoveryPlan, DeleteDiscoveryProgressCallback,
 };
 use super::manifest::{
-    build_copy_destination, build_manifest_root, build_transfer_destination, requested_roots,
-    validate_destination,
+    build_copy_destination, build_manifest_root, requested_roots, validate_destination,
 };
+use super::strategy::classify_transfer_root;
 use super::types::TransferWorkEstimate;
 use crate::domain::filesystem::{
     CopyOptions, TransferControlCallback, TransferMode, TransferOptions,
@@ -97,37 +97,39 @@ pub(crate) fn plan_transfer_job(
     let requested_mode = options
         .and_then(|value| value.mode)
         .unwrap_or(TransferMode::Auto);
+    let overwrite = options.and_then(|value| value.overwrite).unwrap_or(false);
     let mut files_total = 0usize;
     let mut bytes_total = 0u64;
-    let mut progress_kind = TransferProgressKind::Files;
+    let mut used_manifest_fallback = false;
 
     for raw_path in paths {
-        check_transfer_control(&mut on_control)?;
-        let trimmed = raw_path.trim();
-        if trimmed.is_empty() {
+        let Some(strategy) = classify_transfer_root(
+            raw_path,
+            &target_path,
+            requested_mode,
+            overwrite,
+            &mut on_control,
+        )?
+        else {
+            continue;
+        };
+
+        if strategy.use_fast_move {
             continue;
         }
 
-        let source = PathBuf::from(trimmed);
-        let destination = match build_transfer_destination(&source, &target_path) {
-            Some(destination) => destination,
-            None => continue,
-        };
-        let manifest = build_manifest_root(&source, &destination, &mut on_control)?;
-
-        let should_move = match requested_mode {
-            TransferMode::Copy => false,
-            TransferMode::Move => true,
-            TransferMode::Auto => same_drive(&source, &target_path),
-        };
-        if should_move && same_drive(&source, &target_path) {
-            progress_kind = TransferProgressKind::Roots;
-        }
-
+        let manifest =
+            build_manifest_root(&strategy.source, &strategy.destination, &mut on_control)?;
+        used_manifest_fallback = true;
         files_total = files_total.saturating_add(manifest.file_count);
         bytes_total = bytes_total.saturating_add(manifest.byte_count);
     }
 
+    let progress_kind = if used_manifest_fallback {
+        TransferProgressKind::Files
+    } else {
+        TransferProgressKind::Roots
+    };
     let (files_total, bytes_total) = match progress_kind {
         TransferProgressKind::Roots => (None, None),
         TransferProgressKind::Files => (Some(files_total), Some(bytes_total)),

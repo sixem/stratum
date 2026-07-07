@@ -7,6 +7,7 @@ import {
 } from "@/lib";
 import { bumpDirectoryChildVersions } from "@/modules";
 import type { PromptConfig } from "@/modules";
+import type { UndoMoveEntry } from "./fileManagerUndo";
 import {
   getTransferErrorMessage,
   isTransferCancelledError,
@@ -31,6 +32,7 @@ type RunDropTransferOptions = {
   promptStore: PromptStoreLike;
   currentPathKey: string;
   onRefresh?: () => void;
+  onRecordMoveUndo?: (entries: UndoMoveEntry[]) => void;
   transferStore: TransferJobStoreLike;
 };
 
@@ -86,6 +88,7 @@ export const runDropTransfer = async ({
   promptStore,
   currentPathKey,
   onRefresh,
+  onRecordMoveUndo,
   transferStore,
 }: RunDropTransferOptions) => {
   const job = transferStore.registerTransferJob({
@@ -115,6 +118,14 @@ export const runDropTransfer = async ({
       skipped: report.skipped + plan.skippedByPrompt,
       failures: report.failures.length,
     });
+    if (report.movedEntries.length > 0) {
+      onRecordMoveUndo?.(
+        report.movedEntries.map((entry) => ({
+          from: entry.sourcePath,
+          to: entry.destinationPath,
+        })),
+      );
+    }
 
     if (report.failures.length > 0) {
       promptStore.showPrompt({

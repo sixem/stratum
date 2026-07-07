@@ -207,6 +207,7 @@ export const useShellViewInteractions = ({
     createFolder: fileManager.createFolder,
     performDrop: fileDrop.performDrop,
     setDropTarget: fileDrop.setDropTarget,
+    clearDragState: fileDrop.clearDragState,
     setThumbResetNonce,
   });
 

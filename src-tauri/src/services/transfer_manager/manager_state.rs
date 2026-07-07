@@ -22,8 +22,10 @@ pub(super) struct TransferManagerInner {
 
 #[derive(Default)]
 pub(super) struct TransferManagerState {
+    // The single execution slot stays separate so we can keep filesystem writes serialized.
     pub(super) active_job: Option<ActiveTransferJobState>,
-    pub(super) queued_jobs: VecDeque<TransferJobRequest>,
+    // Queued jobs remain in arrival order even while their planning work happens elsewhere.
+    pub(super) queued_jobs: VecDeque<QueuedTransferJobState>,
     pub(super) completed_jobs: VecDeque<TransferJobSnapshot>,
 }
 
@@ -44,6 +46,18 @@ pub(super) struct ActiveTransferRuntimeProgress {
     pub(super) current_file_copied_bytes: u64,
 }
 
+pub(super) struct QueuedTransferJobState {
+    pub(super) request: TransferJobRequest,
+    pub(super) planning_state: QueuedTransferPlanningState,
+}
+
+pub(super) enum QueuedTransferPlanningState {
+    Pending,
+    Planning,
+    Ready(PlannedTransferJob),
+}
+
+#[derive(Clone)]
 pub(super) enum TransferOperation {
     Copy {
         paths: Vec<String>,
@@ -79,6 +93,7 @@ pub(super) struct TransferOperationOutcome {
     pub(super) terminal_status: TransferJobStatus,
 }
 
+#[derive(Clone)]
 pub(super) struct TransferJobRequest {
     pub(super) snapshot: TransferJobSnapshot,
     pub(super) event_emitter: TransferEventEmitter,
@@ -91,6 +106,81 @@ pub(super) struct TransferJobRequest {
 pub(super) struct TransferJobDescriptor {
     pub(super) kind: TransferJobKind,
     pub(super) capabilities: TransferJobCapabilities,
+}
+
+impl QueuedTransferPlanningState {
+    pub(super) fn is_pending(&self) -> bool {
+        matches!(self, Self::Pending)
+    }
+
+    pub(super) fn is_ready(&self) -> bool {
+        matches!(self, Self::Ready(_))
+    }
+}
+
+impl QueuedTransferJobState {
+    pub(super) fn job_id(&self) -> &str {
+        &self.request.snapshot.id
+    }
+
+    pub(super) fn claim_for_planning(&mut self) -> Option<TransferJobRequest> {
+        if !self.planning_state.is_pending() {
+            return None;
+        }
+
+        self.planning_state = QueuedTransferPlanningState::Planning;
+        Some(self.request.clone())
+    }
+
+    pub(super) fn take_ready_plan(self) -> Option<(TransferJobRequest, PlannedTransferJob)> {
+        let QueuedTransferPlanningState::Ready(plan) = self.planning_state else {
+            return None;
+        };
+        Some((self.request, plan))
+    }
+}
+
+impl TransferManagerState {
+    // Planning workers claim the earliest still-pending job so queue order remains stable.
+    pub(super) fn claim_next_planning_job(&mut self) -> Option<TransferJobRequest> {
+        self.queued_jobs
+            .iter_mut()
+            .find_map(QueuedTransferJobState::claim_for_planning)
+    }
+
+    // The single executor takes the earliest ready job, which lets ready work bypass
+    // still-planning jobs while preserving arrival order among ready jobs themselves.
+    pub(super) fn take_next_ready_job(
+        &mut self,
+    ) -> Option<(TransferJobRequest, PlannedTransferJob)> {
+        let ready_index = self
+            .queued_jobs
+            .iter()
+            .position(|job| job.planning_state.is_ready())?;
+        let queued = self.queued_jobs.remove(ready_index)?;
+        queued.take_ready_plan()
+    }
+
+    pub(super) fn queued_job_mut(&mut self, job_id: &str) -> Option<&mut QueuedTransferJobState> {
+        self.queued_jobs
+            .iter_mut()
+            .find(|job| job.job_id() == job_id)
+    }
+
+    pub(super) fn remove_queued_job(&mut self, job_id: &str) -> Option<QueuedTransferJobState> {
+        let index = self
+            .queued_jobs
+            .iter()
+            .position(|job| job.job_id() == job_id)?;
+        self.queued_jobs.remove(index)
+    }
+
+    pub(super) fn push_completed_job(&mut self, snapshot: TransferJobSnapshot) {
+        self.completed_jobs.push_back(snapshot);
+        while self.completed_jobs.len() > COMPLETED_JOB_HISTORY_LIMIT {
+            self.completed_jobs.pop_front();
+        }
+    }
 }
 
 impl ActiveTransferRuntimeProgress {
@@ -275,7 +365,7 @@ pub(super) fn snapshot_from_state(state: &TransferManagerState) -> TransferQueue
         queued_jobs: state
             .queued_jobs
             .iter()
-            .map(|job| job.snapshot.clone())
+            .map(|job| job.request.snapshot.clone())
             .collect(),
         completed_jobs: state.completed_jobs.iter().cloned().collect(),
     }

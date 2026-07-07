@@ -13,12 +13,15 @@ import {
   planDropTransfer,
   resolveDropTransferConflicts,
 } from "./dropTransferPlanning";
+import type { UndoMoveEntry } from "./fileManagerUndo";
 import { runDropTransfer } from "./runDropTransfer";
 import { useTabDropSubmenu } from "./useTabDropSubmenu";
 
 type UseFileDropOptions = {
   currentPath: string;
   onRefresh?: () => void;
+  onRecordMoveUndo?: (entries: UndoMoveEntry[]) => void;
+  onTransferInFlightChange?: (active: boolean) => void;
   enabled?: boolean;
   enableTabDropSubfolders?: boolean;
 };
@@ -55,12 +58,17 @@ const getClientPoint = (event: DragDropEvent): ClientPoint | null => {
 export const useFileDrop = ({
   currentPath,
   onRefresh,
+  onRecordMoveUndo,
+  onTransferInFlightChange,
   enabled = true,
   enableTabDropSubfolders = false,
 }: UseFileDropOptions) => {
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
   const [dropTargetTabId, setDropTargetTabId] = useState<string | null>(null);
   const [dragPoint, setDragPoint] = useState<ClientPoint | null>(null);
+  // Track source entries that are currently being moved or copied so the
+  // explorer can show immediate busy feedback before backend progress arrives.
+  const [pendingTransferPaths, setPendingTransferPaths] = useState<Set<string>>(new Set());
   const currentPathRef = useRef(currentPath);
   // Cache the normalized path to keep drop comparisons cheap.
   const currentPathKeyRef = useRef(normalizePath(currentPath));
@@ -132,13 +140,29 @@ export const useFileDrop = ({
       const resolvedPlan = await resolveDropTransferConflicts(plan, promptStore);
       if (!resolvedPlan) return;
 
+      const pendingPathKeys = new Set(
+        resolvedPlan.items
+          .map((item) => normalizePath(item.candidate.path))
+          .filter((value): value is string => Boolean(value)),
+      );
+
       inFlightRef.current = true;
+      onTransferInFlightChange?.(true);
+      if (pendingPathKeys.size > 0) {
+        setPendingTransferPaths((previous) => {
+          if (previous.size === 0) return new Set(pendingPathKeys);
+          const merged = new Set(previous);
+          pendingPathKeys.forEach((pathKey) => merged.add(pathKey));
+          return merged;
+        });
+      }
       try {
         await runDropTransfer({
           plan: resolvedPlan,
           promptStore,
           currentPathKey: currentPathKeyRef.current,
           onRefresh: refreshRef.current,
+          onRecordMoveUndo,
           transferStore: {
             registerTransferJob,
             updateTransferLabel,
@@ -146,10 +170,21 @@ export const useFileDrop = ({
           },
         });
       } finally {
+        if (pendingPathKeys.size > 0) {
+          setPendingTransferPaths((previous) => {
+            if (previous.size === 0) return previous;
+            const next = new Set(previous);
+            pendingPathKeys.forEach((pathKey) => next.delete(pathKey));
+            return next;
+          });
+        }
         inFlightRef.current = false;
+        onTransferInFlightChange?.(false);
       }
     },
     [
+      onRecordMoveUndo,
+      onTransferInFlightChange,
       promptStore,
       recordTransferJobOutcome,
       registerTransferJob,
@@ -214,6 +249,7 @@ export const useFileDrop = ({
     dropTargetPath,
     dropTargetTabId,
     dragPoint,
+    pendingTransferPaths,
     tabDropSubmenu,
     performDrop,
     setDropTarget,

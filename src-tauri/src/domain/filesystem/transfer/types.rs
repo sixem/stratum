@@ -17,6 +17,7 @@ pub enum TransferJobStatus {
 #[serde(rename_all = "camelCase")]
 pub enum TransferJobPhase {
     Planning,
+    Ready,
     Executing,
     Finalizing,
 }

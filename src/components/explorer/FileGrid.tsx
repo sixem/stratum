@@ -28,6 +28,7 @@ const FileGrid = ({
 }: FileGridProps) => {
   const {
     isDeletePending,
+    isTransferPending,
     emptyMessage,
     emptyActions,
     resolvedIndexMap,
@@ -59,9 +60,10 @@ const FileGrid = ({
         selectable:
           item.type !== "parent" &&
           item.presence !== "removed" &&
-          !isDeletePending(item.entry.path),
+          !isDeletePending(item.entry.path) &&
+          !isTransferPending(item.entry.path),
       })),
-    [isDeletePending, viewItems],
+    [isDeletePending, isTransferPending, viewItems],
   );
 
   const {
@@ -234,6 +236,7 @@ const FileGrid = ({
                 hideExtension={grid.gridNameHideExtension}
                 selected={selection.selectedPaths.has(item.entry.path)}
                 isDeleting={isDeletePending(item.entry.path)}
+                isTransferring={isTransferPending(item.entry.path)}
                 dropTarget={isDropTarget}
                 isRenaming={rename.renameTargetPath === item.entry.path}
                 renameValue={rename.renameValue}

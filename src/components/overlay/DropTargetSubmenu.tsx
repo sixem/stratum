@@ -1,7 +1,6 @@
 // Anchored drag-drop submenu for revealing secondary destinations near a host target.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { TurnDownRightIcon } from "@/components/icons";
 import { ScrollArea } from "@/components/primitives";
 import { getDropTargetFromPoint } from "@/lib";
 import type { DropTarget, DropTargetSubmenuItem } from "@/lib";
@@ -19,6 +18,7 @@ type DropTargetSubmenuProps = {
   activePath?: string | null;
   dragPoint?: { x: number; y: number } | null;
   onHoverTargetChange?: (target: DropTarget | null) => void;
+  onRequestClose?: () => void;
 };
 
 const MENU_EDGE = 10;
@@ -43,6 +43,7 @@ export const DropTargetSubmenu = ({
   activePath = null,
   dragPoint = null,
   onHoverTargetChange,
+  onRequestClose,
 }: DropTargetSubmenuProps) => {
   const anchorRef = useRef<HTMLElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -314,6 +315,37 @@ export const DropTargetSubmenu = ({
     updateAutoScrollFromPoint(dragPoint);
   }, [dragPoint, menuReady, open, updateAutoScrollFromPoint]);
 
+  useEffect(() => {
+    if (!open || !onRequestClose) return;
+
+    const closeAfterDragEnds = () => {
+      onRequestClose();
+    };
+
+    const closeWhenDocumentIsHidden = () => {
+      if (document.visibilityState === "visible") return;
+      onRequestClose();
+    };
+
+    // Drag completion is a hard boundary for this transient menu. Closing here
+    // prevents stale hover state from keeping the submenu visible after a drop.
+    window.addEventListener("pointerup", closeAfterDragEnds, { capture: true });
+    window.addEventListener("pointercancel", closeAfterDragEnds, { capture: true });
+    window.addEventListener("drop", closeAfterDragEnds, { capture: true });
+    window.addEventListener("dragend", closeAfterDragEnds, { capture: true });
+    window.addEventListener("blur", closeAfterDragEnds);
+    document.addEventListener("visibilitychange", closeWhenDocumentIsHidden);
+
+    return () => {
+      window.removeEventListener("pointerup", closeAfterDragEnds, { capture: true });
+      window.removeEventListener("pointercancel", closeAfterDragEnds, { capture: true });
+      window.removeEventListener("drop", closeAfterDragEnds, { capture: true });
+      window.removeEventListener("dragend", closeAfterDragEnds, { capture: true });
+      window.removeEventListener("blur", closeAfterDragEnds);
+      document.removeEventListener("visibilitychange", closeWhenDocumentIsHidden);
+    };
+  }, [onRequestClose, open]);
+
   if (!open || !anchorElement || !hostTabId || !hostPath) {
     return null;
   }
@@ -323,9 +355,6 @@ export const DropTargetSubmenu = ({
       ref={menuRef}
       className={`drop-submenu${menuPosition.dropUp ? " is-drop-up" : " is-drop-down"}`}
       data-open="true"
-      data-drop-kind="tab"
-      data-drop-id={hostTabId}
-      data-drop-path={hostPath}
       onContextMenu={(event) => event.preventDefault()}
       style={{
         top: `${menuPosition.top}px`,
@@ -337,7 +366,6 @@ export const DropTargetSubmenu = ({
       }}
     >
       <div className="drop-submenu-title">
-        <TurnDownRightIcon className="drop-submenu-title-icon" />
         <span>Subfolders</span>
       </div>
       <ScrollArea

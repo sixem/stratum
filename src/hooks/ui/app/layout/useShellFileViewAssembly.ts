@@ -67,6 +67,7 @@ export const useShellFileViewAssembly = ({
           scrollRequest: scrollState.scrollRequest,
           smoothScroll: settings.smoothScroll,
           pendingDeletePaths: fileManager.pendingDeletePaths,
+          pendingTransferPaths: fileDrop.pendingTransferPaths,
           sortState: resolvedView.sortState,
           canGoUp: resolvedView.canGoUp,
         },

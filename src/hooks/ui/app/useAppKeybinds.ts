@@ -3,12 +3,13 @@ import { useCallback, useMemo } from "react";
 import { copyPathsToClipboard } from "@/api";
 import { formatDeleteLabel, getSelectionTargets, isEditableElement } from "@/lib";
 import { useKeybinds } from "../inputs/useKeybinds";
-import { useClipboardStore, usePromptStore } from "@/modules";
+import { useClipboardStore, useIndexedSearchUiStore, usePromptStore } from "@/modules";
 import type { KeybindMap } from "@/modules/keybinds";
 import type { Tab } from "@/types";
 
 type UseAppKeybindsOptions = {
   keybinds: KeybindMap;
+  indexedSearchEnabled: boolean;
   confirmDelete: boolean;
   settingsOpen: boolean;
   conversionModalOpen: boolean;
@@ -38,6 +39,7 @@ type UseAppKeybindsOptions = {
 
 export const useAppKeybinds = ({
   keybinds,
+  indexedSearchEnabled,
   confirmDelete,
   settingsOpen,
   conversionModalOpen,
@@ -64,6 +66,7 @@ export const useAppKeybinds = ({
   onCancelTransientUi,
   onSelectAll,
 }: UseAppKeybindsOptions) => {
+  const indexedSearchOpen = useIndexedSearchUiStore((state) => state.open);
   const selectionTargets = useMemo(
     () => getSelectionTargets(selected, viewParentPath),
     [selected, viewParentPath],
@@ -71,8 +74,20 @@ export const useAppKeybinds = ({
 
   // Keybind gating helpers: protect interactions during modal states.
   const canHandleGlobalKeybind = useCallback(() => {
-    return !settingsOpen && !conversionModalOpen && !contextMenuOpen && !promptOpen && !previewOpen;
-  }, [contextMenuOpen, conversionModalOpen, previewOpen, promptOpen, settingsOpen]);
+    return !settingsOpen &&
+      !conversionModalOpen &&
+      !contextMenuOpen &&
+      !promptOpen &&
+      !previewOpen &&
+      !indexedSearchOpen;
+  }, [
+    contextMenuOpen,
+    conversionModalOpen,
+    indexedSearchOpen,
+    previewOpen,
+    promptOpen,
+    settingsOpen,
+  ]);
 
   const canHandleViewKeybind = useCallback(() => {
     if (!canHandleGlobalKeybind()) return false;
@@ -220,11 +235,34 @@ export const useAppKeybinds = ({
     return true;
   }, [canHandleGlobalKeybind, onRefresh]);
 
+  const handleOpenIndexedSearchKeybind = useCallback((_event: KeyboardEvent) => {
+    if (!indexedSearchEnabled) {
+      return false;
+    }
+    if (indexedSearchOpen) {
+      return true;
+    }
+    if (settingsOpen || conversionModalOpen || contextMenuOpen || promptOpen || previewOpen) {
+      return true;
+    }
+    useIndexedSearchUiStore.getState().openModal();
+    return true;
+  }, [
+    contextMenuOpen,
+    conversionModalOpen,
+    indexedSearchOpen,
+    indexedSearchEnabled,
+    previewOpen,
+    promptOpen,
+    settingsOpen,
+  ]);
+
   const keybindHandlers = useMemo(
     () => ({
       undo: handleUndoKeybind,
       newTab: handleNewTabKeybind,
       closeTab: handleCloseTabKeybind,
+      openIndexedSearch: handleOpenIndexedSearchKeybind,
       deleteSelection: handleDeleteSelectionKeybind,
       duplicateSelection: handleDuplicateSelectionKeybind,
       previewItem: handlePreviewItemKeybind,
@@ -237,6 +275,7 @@ export const useAppKeybinds = ({
       handleDeleteSelectionKeybind,
       handleDuplicateSelectionKeybind,
       handleNewTabKeybind,
+      handleOpenIndexedSearchKeybind,
       handlePreviewItemKeybind,
       handleUndoKeybind,
     ],

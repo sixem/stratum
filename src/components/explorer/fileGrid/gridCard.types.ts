@@ -49,6 +49,7 @@ export type EntryCardProps = {
   hideExtension: boolean;
   selected: boolean;
   isDeleting: boolean;
+  isTransferring: boolean;
   dropTarget: boolean;
   isRenaming: boolean;
   renameValue: string;

@@ -156,9 +156,8 @@ export const buildTransferItemView = (
   const total = job.total || 0;
   const processed = job.processed || 0;
   const isQueued = job.status === "queued";
-  const isPlanning =
-    (job.status === "running" || job.status === "paused") &&
-    job.phase === "planning";
+  const isPlanning = job.phase === "planning" && job.status !== "completed";
+  const isReadyToExecute = isQueued && job.phase === "ready";
   const hasByteProgress =
     !isQueued &&
     !isPlanning &&
@@ -199,7 +198,11 @@ export const buildTransferItemView = (
   const recentRate = buildRecentThroughputLabel(job, now);
   const statusLabel =
     job.status === "queued"
-      ? "Queued"
+      ? isReadyToExecute
+        ? "Ready to start"
+        : isPlanning
+          ? job.statusText ?? "Planning..."
+          : "Queued"
       : job.status === "paused"
         ? "Paused"
       : job.status === "completed"
@@ -223,6 +226,8 @@ export const buildTransferItemView = (
   const fileLabel = currentName
     ? isPlanning
       ? "Scanning"
+      : isReadyToExecute
+        ? "Next item"
       : job.status === "completed" ||
       job.status === "failed" ||
       job.status === "cancelled"
@@ -233,6 +238,10 @@ export const buildTransferItemView = (
     ? total > 0
       ? `${total.toLocaleString()} items`
       : "Preparing..."
+    : isReadyToExecute
+      ? total > 0
+        ? `${total.toLocaleString()} items ready`
+        : "Ready to start"
     : total > 0
       ? `${processed}/${total} items`
       : `${processed} items`;

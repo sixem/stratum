@@ -1,4 +1,4 @@
-// Handles undo stack operations for delete/rename actions.
+// Handles undo stack operations for delete, rename, and move actions.
 import { useCallback } from "react";
 import type { RefObject } from "react";
 import { restoreRecyclePaths, statEntries, transferEntries } from "@/api";
@@ -15,8 +15,14 @@ export type UndoTrashEntry = {
   trashPath: string;
 };
 
+export type UndoMoveEntry = {
+  from: string;
+  to: string;
+};
+
 export type UndoAction =
   | { type: "rename"; entries: UndoRenameEntry[] }
+  | { type: "move"; entries: UndoMoveEntry[] }
   | { type: "trash"; entries: UndoTrashEntry[] }
   | { type: "recyclePaths"; paths: string[]; deletedAfterMs: number };
 
@@ -34,6 +40,7 @@ type UseFileManagerUndoOptions = {
   renameInFlightRef: RefObject<boolean>;
   deleteInFlightRef: RefObject<boolean>;
   copyInFlightRef: RefObject<boolean>;
+  transferInFlightRef: RefObject<boolean>;
   onRenameUndoPresence?: (suppress: boolean) => void;
   onDirectoryChildrenChanged?: (paths: string[]) => void;
   performRenameRequests: (
@@ -48,11 +55,89 @@ export const useFileManagerUndo = ({
   renameInFlightRef,
   deleteInFlightRef,
   copyInFlightRef,
+  transferInFlightRef,
   onRenameUndoPresence,
   onDirectoryChildrenChanged,
   performRenameRequests,
   refreshAfterChange,
 }: UseFileManagerUndoOptions) => {
+  const restoreMovedEntries = useCallback(
+    async (entries: UndoMoveEntry[]) => {
+      if (entries.length === 0) {
+        return { restored: 0, remaining: [] as UndoMoveEntry[] };
+      }
+
+      const currentPaths = entries.map((entry) => entry.to);
+      const currentMeta = await statEntries(currentPaths);
+      const existingDestinations = await statEntries(entries.map((entry) => entry.from));
+      const grouped = new Map<string, string[]>();
+      const failures: string[] = [];
+
+      entries.forEach((entry, index) => {
+        if (!entry.from || !entry.to) return;
+        if (!entryExists(currentMeta[index])) {
+          failures.push(`${entry.to}: item no longer exists`);
+          return;
+        }
+        if (entryExists(existingDestinations[index])) {
+          failures.push(`${entry.from}: destination already exists`);
+          return;
+        }
+        const destination = getParentPath(entry.from);
+        if (!destination) {
+          failures.push(`${entry.from}: missing parent folder`);
+          return;
+        }
+        const list = grouped.get(destination) ?? [];
+        list.push(entry.to);
+        grouped.set(destination, list);
+      });
+
+      let restored = 0;
+      for (const [destination, paths] of grouped) {
+        const report = await transferEntries(paths, destination, {
+          mode: "move",
+          overwrite: false,
+        });
+        restored += report.moved;
+        if (report.failures.length > 0) {
+          failures.push(...report.failures);
+        }
+      }
+
+      const remainingMeta = await statEntries(entries.map((entry) => entry.to));
+      const remaining: UndoMoveEntry[] = [];
+      remainingMeta.forEach((meta, index) => {
+        if (!entryExists(meta)) return;
+        const entry = entries[index];
+        if (entry) {
+          remaining.push(entry);
+        }
+      });
+
+      if (failures.length > 0) {
+        usePromptStore.getState().showPrompt({
+          title: "Undo completed with issues",
+          content: formatFailures(failures),
+          confirmLabel: "OK",
+          cancelLabel: null,
+        });
+      }
+
+      if (restored > 0) {
+        await refreshAfterChange();
+        onDirectoryChildrenChanged?.(
+          entries
+            .flatMap((entry) => [getParentPath(entry.from) ?? "", getParentPath(entry.to) ?? ""])
+            .filter(Boolean),
+        );
+      }
+
+      return { restored, remaining };
+    },
+    [onDirectoryChildrenChanged, refreshAfterChange],
+  );
+
   const restoreTrashedEntries = useCallback(
     async (entries: UndoTrashEntry[]) => {
       if (entries.length === 0) {
@@ -168,7 +253,8 @@ export const useFileManagerUndo = ({
     if (
       renameInFlightRef.current ||
       deleteInFlightRef.current ||
-      copyInFlightRef.current
+      copyInFlightRef.current ||
+      transferInFlightRef.current
     ) {
       return false;
     }
@@ -224,6 +310,14 @@ export const useFileManagerUndo = ({
       return restored > 0;
     }
 
+    if (action.type === "move") {
+      const { restored, remaining } = await restoreMovedEntries(action.entries);
+      if (remaining.length > 0) {
+        undoStackRef.current.push({ type: "move", entries: remaining });
+      }
+      return restored > 0;
+    }
+
     if (action.type === "recyclePaths") {
       const { restored, remaining } = await restoreRecycledPaths(
         action.paths,
@@ -248,7 +342,9 @@ export const useFileManagerUndo = ({
     performRenameRequests,
     renameInFlightRef,
     restoreRecycledPaths,
+    restoreMovedEntries,
     restoreTrashedEntries,
+    transferInFlightRef,
     undoStackRef,
   ]);
 

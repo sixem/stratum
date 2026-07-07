@@ -53,8 +53,14 @@ export const TransferStatusItemActions = ({
     return null;
   }
 
-  const showPause = job.capabilities.canPause && job.status === "running";
-  const showResume = job.capabilities.canPause && job.status === "paused";
+  const showPause =
+    job.capabilities.canPause &&
+    job.status === "running" &&
+    job.phase === "executing";
+  const showResume =
+    job.capabilities.canPause &&
+    job.status === "paused" &&
+    job.phase === "executing";
   const showCancel =
     job.capabilities.canCancel &&
     (job.status === "queued" ||

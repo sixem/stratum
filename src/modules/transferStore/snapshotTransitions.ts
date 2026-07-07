@@ -22,8 +22,9 @@ import {
 
 const TRANSFER_PHASE_ORDER: Record<TransferJobPhase, number> = {
   planning: 0,
-  executing: 1,
-  finalizing: 2,
+  ready: 1,
+  executing: 2,
+  finalizing: 3,
 };
 
 const orderedSnapshotJobs = (snapshot: TransferQueueSnapshot): TransferJobSnapshot[] => {
@@ -38,13 +39,23 @@ const orderedSnapshotJobs = (snapshot: TransferQueueSnapshot): TransferJobSnapsh
 
 const resolveSnapshotStatus = (
   snapshotStatus: TransferStatus,
+  snapshotPhase: TransferJobPhase,
   previousStatus?: TransferStatus,
+  previousPhase?: TransferJobPhase,
 ): TransferStatus => {
   if (!previousStatus) {
     return snapshotStatus;
   }
   if (isTerminalStatus(previousStatus)) {
     return previousStatus;
+  }
+  const queuedReadyTransition =
+    snapshotStatus === "queued" &&
+    snapshotPhase === "ready" &&
+    previousStatus === "running" &&
+    previousPhase === "planning";
+  if (queuedReadyTransition) {
+    return snapshotStatus;
   }
   if (snapshotStatus === "queued" && previousStatus !== "queued") {
     return previousStatus;
@@ -88,7 +99,12 @@ const buildTransferJobFromSnapshot = (
   const currentPathChanged =
     snapshotJob.currentPath !== undefined &&
     snapshotJob.currentPath !== previousJob?.currentPath;
-  const nextStatus = resolveSnapshotStatus(snapshotJob.status, previousJob?.status);
+  const nextStatus = resolveSnapshotStatus(
+    snapshotJob.status,
+    snapshotJob.phase,
+    previousJob?.status,
+    previousJob?.phase,
+  );
   const nextPhase = resolveSnapshotPhase(
     snapshotJob.phase,
     nextStatus,
@@ -111,7 +127,7 @@ const buildTransferJobFromSnapshot = (
   const keepTransientHints = keepByteHints && nextPhase === previousJob?.phase;
   const bridgePlanningStatusHint =
     keepByteHints &&
-    previousJob?.phase === "planning" &&
+    (previousJob?.phase === "planning" || previousJob?.phase === "ready") &&
     nextPhase === "executing";
   const currentBytes =
     keepByteHints && !currentPathChanged ? previousJob?.currentBytes : undefined;

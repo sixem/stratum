@@ -3,7 +3,7 @@
 use super::manager_events::TransferEventEmitter;
 use super::manager_state::{
     snapshot_from_state, ActiveTransferJobState, ActiveTransferRuntimeProgress,
-    TransferJobRequest, TransferManagerInner, COMPLETED_JOB_HISTORY_LIMIT,
+    QueuedTransferPlanningState, TransferJobRequest, TransferManagerInner,
 };
 use crate::domain::filesystem as fs;
 use crate::domain::filesystem::transfer::delete_discovery::DeleteDiscoveryProgress;
@@ -13,27 +13,29 @@ use crate::domain::filesystem::transfer::types::{
 };
 use std::sync::Arc;
 
-pub(super) fn activate_job(inner: &Arc<TransferManagerInner>, job: &TransferJobRequest) {
+pub(super) fn mark_job_planning(
+    inner: &Arc<TransferManagerInner>,
+    job_id: &str,
+    event_emitter: &TransferEventEmitter,
+) {
     let snapshot = {
         let mut guard = match inner.state.lock() {
             Ok(guard) => guard,
             Err(_) => return,
         };
-        let mut snapshot = job.snapshot.clone();
-        snapshot.status = TransferJobStatus::Running;
-        snapshot.phase = TransferJobPhase::Planning;
-        guard.active_job = Some(ActiveTransferJobState {
-            snapshot,
-            runtime: None,
-            control: job.control.clone(),
-            event_emitter: job.event_emitter.clone(),
-        });
+        let Some(queued) = guard.queued_job_mut(job_id) else {
+            return;
+        };
+
+        queued.request.snapshot.status = TransferJobStatus::Running;
+        queued.request.snapshot.phase = TransferJobPhase::Planning;
+        queued.request.snapshot.current_path = None;
         snapshot_from_state(&guard)
     };
-    job.event_emitter.emit_snapshot(&snapshot);
+    event_emitter.emit_snapshot(&snapshot);
 }
 
-pub(super) fn apply_job_plan(
+pub(super) fn mark_job_ready(
     inner: &Arc<TransferManagerInner>,
     job_id: &str,
     plan: &PlannedTransferJob,
@@ -44,42 +46,44 @@ pub(super) fn apply_job_plan(
             Ok(guard) => guard,
             Err(_) => return,
         };
-        let Some(active) = guard.active_job.as_mut() else {
+        let Some(queued) = guard.queued_job_mut(job_id) else {
             return;
         };
-        if active.snapshot.id != job_id {
-            return;
-        }
 
-        active.snapshot.work = plan.work.clone();
-        active.runtime = Some(ActiveTransferRuntimeProgress::from_plan(plan));
+        queued.request.snapshot.status = TransferJobStatus::Queued;
+        queued.request.snapshot.phase = TransferJobPhase::Ready;
+        queued.request.snapshot.current_path = None;
+        queued.request.snapshot.work = plan.work.clone();
+        queued.planning_state = QueuedTransferPlanningState::Ready(plan.clone());
         snapshot_from_state(&guard)
     };
     event_emitter.emit_snapshot(&snapshot);
 }
 
-pub(super) fn mark_job_executing(
+pub(super) fn activate_job(
     inner: &Arc<TransferManagerInner>,
-    job_id: &str,
-    event_emitter: &TransferEventEmitter,
+    job: &TransferJobRequest,
+    plan: &PlannedTransferJob,
 ) {
     let snapshot = {
         let mut guard = match inner.state.lock() {
             Ok(guard) => guard,
             Err(_) => return,
         };
-        let Some(active) = guard.active_job.as_mut() else {
-            return;
-        };
-        if active.snapshot.id != job_id {
-            return;
-        }
-
-        active.snapshot.phase = TransferJobPhase::Executing;
-        active.snapshot.current_path = None;
+        let mut snapshot = job.snapshot.clone();
+        snapshot.status = TransferJobStatus::Running;
+        snapshot.phase = TransferJobPhase::Executing;
+        snapshot.current_path = None;
+        snapshot.work = plan.work.clone();
+        guard.active_job = Some(ActiveTransferJobState {
+            snapshot,
+            runtime: Some(ActiveTransferRuntimeProgress::from_plan(plan)),
+            control: job.control.clone(),
+            event_emitter: job.event_emitter.clone(),
+        });
         snapshot_from_state(&guard)
     };
-    event_emitter.emit_snapshot(&snapshot);
+    job.event_emitter.emit_snapshot(&snapshot);
 }
 
 pub(super) fn apply_running_progress(
@@ -132,6 +136,18 @@ pub(super) fn apply_planning_progress(
     update: &DeleteDiscoveryProgress,
 ) -> Option<TransferQueueSnapshot> {
     let mut guard = inner.state.lock().ok()?;
+
+    if let Some(queued) = guard.queued_job_mut(job_id) {
+        queued.request.snapshot.status = TransferJobStatus::Running;
+        queued.request.snapshot.phase = TransferJobPhase::Planning;
+        queued.request.snapshot.current_path = update.current_path.clone();
+        queued.request.snapshot.work.files_total = Some(update.discovered_items);
+        queued.request.snapshot.work.files_completed = 0;
+        queued.request.snapshot.work.bytes_total = Some(update.discovered_bytes);
+        queued.request.snapshot.work.bytes_completed = 0;
+        return Some(snapshot_from_state(&guard));
+    }
+
     let active = guard.active_job.as_mut()?;
     if active.snapshot.id != job_id {
         return None;
@@ -144,6 +160,25 @@ pub(super) fn apply_planning_progress(
     active.snapshot.work.bytes_completed = 0;
 
     Some(snapshot_from_state(&guard))
+}
+
+pub(super) fn mark_queued_job_finished(
+    inner: &Arc<TransferManagerInner>,
+    job_id: &str,
+    status: TransferJobStatus,
+    event_emitter: &TransferEventEmitter,
+) -> Option<TransferJobRequest> {
+    let (request, snapshot) = {
+        let mut guard = inner.state.lock().ok()?;
+        let mut queued = guard.remove_queued_job(job_id)?;
+        queued.request.snapshot.status = status;
+        queued.request.snapshot.phase = TransferJobPhase::Finalizing;
+        guard.push_completed_job(queued.request.snapshot.clone());
+        let snapshot = snapshot_from_state(&guard);
+        (queued.request, snapshot)
+    };
+    event_emitter.emit_snapshot(&snapshot);
+    Some(request)
 }
 
 pub(super) fn mark_job_finished(
@@ -174,10 +209,7 @@ pub(super) fn mark_job_finished(
 
         active.snapshot.status = status;
         active.snapshot.phase = TransferJobPhase::Finalizing;
-        guard.completed_jobs.push_back(active.snapshot);
-        while guard.completed_jobs.len() > COMPLETED_JOB_HISTORY_LIMIT {
-            guard.completed_jobs.pop_front();
-        }
+        guard.push_completed_job(active.snapshot);
         snapshot_from_state(&guard)
     };
     event_emitter.emit_snapshot(&snapshot);
