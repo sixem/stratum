@@ -1,6 +1,12 @@
 // Compact drive selector used in the path bar.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { activeDrive, buildDriveTooltip, handleMiddleClick, normalizePath } from "@/lib";
+import {
+  activeDrive,
+  buildDriveTooltip,
+  formatIndexedDriveState,
+  handleMiddleClick,
+  normalizePath,
+} from "@/lib";
 import { useHorizontalOverflowScroll } from "@/hooks";
 import type { DriveInfo } from "@/types";
 import { HorizontalChevronButton, PressButton } from "@/components/primitives";
@@ -24,6 +30,14 @@ const formatDriveLabel = (drive: string) => {
     return trimmed.toUpperCase();
   }
   return trimmed;
+};
+
+const buildDriveAriaLabel = (driveLabel: string, info?: DriveInfo) => {
+  const indexedState = info?.indexStatus?.state;
+  if (!indexedState) {
+    return driveLabel;
+  }
+  return `${driveLabel}. Indexed search ${formatIndexedDriveState(indexedState)}.`;
 };
 
 export const DrivePicker = ({
@@ -50,6 +64,7 @@ export const DrivePicker = ({
   const hasLoadedDrives = drives.length > 0;
   const active = activeDrive(activePath, drives);
   const activeKey = active ? normalizePath(active) : "";
+  const activeInfo = activeKey ? driveInfoMap.get(activeKey) : undefined;
   const activeIndex = activeKey ? normalizedDrives.indexOf(activeKey) : -1;
   const label = active ? formatDriveLabel(active) : hasLoadedDrives ? "Drives" : "";
   const extraCount =
@@ -61,7 +76,7 @@ export const DrivePicker = ({
     : "";
   const canOpen = drives.length > 1;
   const activeTooltip = active
-    ? buildDriveTooltip(label, driveInfoMap.get(activeKey))
+    ? buildDriveTooltip(label, activeInfo)
     : hasLoadedDrives
       ? "Drives"
       : "";
@@ -126,12 +141,22 @@ export const DrivePicker = ({
               aria-disabled={!canOpen}
               aria-haspopup="menu"
               aria-expanded={expanded}
+              aria-label={buildDriveAriaLabel(displayLabel || label || "Drives", activeInfo)}
             >
-              <span
-                className="drive-picker-button-label"
-                data-loaded={hasLoadedDrives ? "true" : "false"}
-              >
-                {displayLabel}
+              <span className="drive-picker-button-content">
+                {activeInfo?.indexStatus ? (
+                  <span
+                    className="drive-picker-status"
+                    data-state={activeInfo.indexStatus.state}
+                    aria-hidden="true"
+                  />
+                ) : null}
+                <span
+                  className="drive-picker-button-label"
+                  data-loaded={hasLoadedDrives ? "true" : "false"}
+                >
+                  {displayLabel}
+                </span>
               </span>
             </PressButton>
           </TooltipWrapper>
@@ -152,18 +177,18 @@ export const DrivePicker = ({
               />
               <div className="drive-picker-list" role="presentation" ref={listRef}>
                 {drives.map((drive) => {
+                  const driveKey = normalizePath(drive);
+                  const info = driveInfoMap.get(driveKey);
                   const driveLabel = formatDriveLabel(drive);
-                  const isActive = normalizePath(drive) === activeKey;
-                  const tooltipText = buildDriveTooltip(
-                    driveLabel,
-                    driveInfoMap.get(normalizePath(drive)),
-                  );
+                  const isActive = driveKey === activeKey;
+                  const tooltipText = buildDriveTooltip(driveLabel, info);
                   return (
                     <TooltipWrapper key={drive} text={tooltipText}>
                       <PressButton
                         type="button"
                         role="menuitem"
                         className={`drive-picker-item${isActive ? " is-active" : ""}`}
+                        aria-label={buildDriveAriaLabel(driveLabel, info)}
                         onClick={() => {
                           setExpanded(false);
                           onSelect(drive);
@@ -176,7 +201,16 @@ export const DrivePicker = ({
                           });
                         }}
                       >
-                        {driveLabel}
+                        <span className="drive-picker-item-content">
+                          {info?.indexStatus ? (
+                            <span
+                              className="drive-picker-status"
+                              data-state={info.indexStatus.state}
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                          <span>{driveLabel}</span>
+                        </span>
                       </PressButton>
                     </TooltipWrapper>
                   );

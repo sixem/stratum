@@ -1,0 +1,94 @@
+// Path bar outer shell, brand mark, and primary layout regions.
+
+.pathbar-shell {
+  --pathbar-hover-surface: rgba(255, 255, 255, 0.06);
+  background: var(--panel-2);
+  border-bottom: 2px solid #1b213061;
+}
+
+:root[data-window-focus="false"] .pathbar-shell {
+  background: color-mix(in srgb, var(--panel-2) 97%, white);
+}
+
+.pathbar {
+  gap: 6px;
+  background: transparent;
+}
+
+// Scope path bar internals to the bar without increasing specificity.
+:where(.pathbar) {
+  .pathbar-left,
+  .pathbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+  }
+
+  .pathbar-drive {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    flex: 1 1 auto;
+    // Let the drag host receive pointer events anywhere the picker has no live controls.
+    pointer-events: none;
+  }
+
+  .pathbar-right {
+    margin-left: auto;
+  }
+
+  .pathbar-brand {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: inherit;
+  }
+
+  .brand-mark {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border: none;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--accent);
+    overflow: visible;
+
+    .brand-mark-icon {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  }
+
+  .pathbar-brand:focus-visible {
+    outline: 2px solid rgba(var(--accent-rgb), 0.5);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  .pathbar-brand:hover {
+    background: var(--pathbar-hover-surface);
+    border-radius: 5px;
+  }
+}
+
+.pathbar-window-controls {
+  min-height: var(--window-chrome-bar-height);
+}
+
+.path-tabs {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-bottom: 2px solid #1b213061;
+}

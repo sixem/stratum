@@ -1,0 +1,263 @@
+// Drive picker control and drive-status list inside the path bar.
+
+@use "../control-recipes" as control;
+
+:root[data-window-focus="false"] .pathbar-shell .drive-toggle-body {
+  background: color-mix(in srgb, var(--surface-control) 96%, white);
+  border-color: color-mix(in srgb, var(--stroke) 92%, white);
+}
+
+:where(.pathbar) {
+  .drive-picker {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1 1 auto;
+    pointer-events: none;
+  }
+
+  .drive-toggle {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    flex: 1 1 auto;
+    // Let unused width fall through to the path bar drag region.
+    pointer-events: none;
+  }
+
+  .drive-toggle-body {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    min-width: 0;
+    max-width: 100%;
+    height: 26px;
+    @include control.control-surface(5px, var(--surface-control));
+    padding: 0;
+    overflow: hidden;
+    // Keep the picker chrome itself transparent to dragging.
+    // Only the real controls inside should capture input.
+    pointer-events: none;
+    transition: border-color 250ms ease;
+  }
+
+  .drive-toggle-body:has(.drive-picker-button:hover) {
+    border-color: color-mix(in srgb, var(--stroke) 78%, white);
+  }
+
+  .drive-picker-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 9px;
+    border-radius: 3px;
+    border: 1px solid transparent;
+    background: transparent;
+    @include control.eyebrow-label(var(--font-size-2xs), 0.08em);
+    cursor: pointer;
+    white-space: nowrap;
+    height: 100%;
+    flex: 0 0 auto;
+    align-self: stretch;
+    min-height: 100%;
+    pointer-events: auto;
+  }
+
+  .drive-picker-button-content,
+  .drive-picker-item-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .drive-picker-button-label {
+    opacity: 0;
+    transition: opacity 250ms ease;
+  }
+
+  .drive-picker-button-label[data-loaded="true"] {
+    opacity: 1;
+  }
+
+  .drive-picker-button:disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+
+  .drive-picker-extend {
+    max-width: 0;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-6px);
+    transition: none;
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .drive-picker[data-expanded="true"] .drive-picker-extend {
+    max-width: 100%;
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+  }
+
+  .drive-picker[data-expanded="true"] .drive-picker-button {
+    border-radius: 3px 0 0 3px;
+  }
+
+  .drive-picker-scroll {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    padding: 0 6px 0 2px;
+    height: 100%;
+  }
+
+  .drive-picker[data-expanded="true"] .drive-picker-scroll {
+    margin-left: 2px;
+    padding-left: 6px;
+  }
+
+  .drive-picker-scroll::before,
+  .drive-picker-scroll::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 28px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .drive-picker-scroll::before {
+    left: 0;
+    background: linear-gradient(90deg, rgba(10, 11, 16, 0.95), rgba(10, 11, 16, 0));
+  }
+
+  .drive-picker-scroll::after {
+    right: 0;
+    background: linear-gradient(270deg, rgba(10, 11, 16, 0.95), rgba(10, 11, 16, 0));
+  }
+
+  .drive-picker-scroll[data-can-left="true"]::before,
+  .drive-picker-scroll[data-can-right="true"]::after {
+    opacity: 1;
+  }
+
+  .drive-picker-list {
+    display: flex;
+    overflow: hidden;
+    scroll-behavior: smooth;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .drive-picker-item {
+    padding: 2px 12px;
+    border-radius: 2px;
+    @include control.eyebrow-label(var(--font-size-xs), 0.08em, 600, var(--text));
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .drive-picker-status {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    flex: 0 0 auto;
+    background: rgba(140, 149, 170, 0.72);
+    box-shadow: 0 0 0 1px rgba(10, 11, 16, 0.45);
+  }
+
+  .drive-picker-status[data-state="queued"] {
+    background: rgba(226, 230, 242, 0.78);
+  }
+
+  .drive-picker-status[data-state="scanning"] {
+    background: #60c4d6;
+  }
+
+  .drive-picker-status[data-state="ready"] {
+    background: #71d6a2;
+  }
+
+  .drive-picker-status[data-state="stale"],
+  .drive-picker-status[data-state="rescanrequired"] {
+    background: #f0c96b;
+  }
+
+  .drive-picker-status[data-state="error"] {
+    background: #e14c4c;
+  }
+
+  .drive-picker-item:hover {
+    background-color: var(--pathbar-hover-surface);
+  }
+
+  .drive-picker-item.is-active {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+  }
+
+  .drive-picker-button:has(.drive-picker-status) {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .drive-picker[data-expanded="true"] .drive-picker-button,
+  .drive-picker-button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .drive-picker-scroll-button {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 20px;
+    border-radius: 999px;
+    background: rgba(47, 54, 70, 0.7);
+    color: var(--muted);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    z-index: 2;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+
+  .drive-picker-chevron {
+    height: 16px;
+    display: block;
+  }
+
+  .drive-picker-scroll-button.is-left {
+    left: 2px;
+  }
+
+  .drive-picker-scroll-button.is-right {
+    right: 2px;
+  }
+
+  .drive-picker-scroll[data-can-left="true"] .drive-picker-scroll-button.is-left,
+  .drive-picker-scroll[data-can-right="true"] .drive-picker-scroll-button.is-right {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .drive-picker-scroll-button:disabled {
+    opacity: 0;
+    pointer-events: none;
+  }
+}

@@ -1,11 +1,13 @@
 // Dedicated bar for the path and search inputs.
 import type { FormEvent, KeyboardEvent, RefObject } from "react";
 import { PressButton } from "@/components/primitives/PressButton";
-import { FilterIcon, RefreshIcon } from "@/components/icons";
+import { BinocularsIcon, FilterIcon, RefreshIcon } from "@/components/icons";
+import { useIndexedSearchUiStore } from "@/modules";
 
 type PathInputsBarProps = {
   path: string;
   search: string;
+  indexedSearchEnabled: boolean;
   onPathChange: (value: string) => void;
   onSearchChange: (value: string) => void;
   onSubmit: () => void;
@@ -17,6 +19,7 @@ type PathInputsBarProps = {
 export const PathInputsBar = ({
   path,
   search,
+  indexedSearchEnabled,
   onPathChange,
   onSearchChange,
   onSubmit,
@@ -24,6 +27,8 @@ export const PathInputsBar = ({
   loading,
   searchInputRef,
 }: PathInputsBarProps) => {
+  const openIndexedSearch = useIndexedSearchUiStore((state) => state.openModal);
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (loading) return;
@@ -76,6 +81,16 @@ export const PathInputsBar = ({
           spellCheck={false}
           autoComplete="off"
         />
+        {indexedSearchEnabled ? (
+          <PressButton
+            type="button"
+            className="inputbar-indexed-search"
+            onClick={openIndexedSearch}
+            aria-label="Open indexed search"
+          >
+            <BinocularsIcon className="inputbar-indexed-icon" />
+          </PressButton>
+        ) : null}
       </div>
     </form>
   );

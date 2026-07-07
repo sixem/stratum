@@ -1,0 +1,37 @@
+// Shared toolbar button primitives used by path bar controls.
+
+@use "../control-recipes" as control;
+
+.btn {
+  @include control.toolbar-control(
+    4px,
+    var(--surface-control),
+    var(--stroke),
+    4px 10px,
+    null,
+    var(--font-size-sm),
+    600,
+    0,
+    inherit
+  );
+  transition: none;
+}
+
+.btn:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.btn.ghost {
+  background: transparent;
+}
+
+.btn-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}

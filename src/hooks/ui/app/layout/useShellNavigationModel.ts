@@ -71,6 +71,7 @@ export const useShellNavigationModel = ({
     pathInputsBar: {
       path: viewState.pathValue,
       search: viewState.searchValue,
+      indexedSearchEnabled: settings.indexedSearchEnabled,
       onPathChange: viewState.setPathValue,
       onSearchChange: viewState.setSearchValue,
       onSubmit: viewState.handleGo,
@@ -90,6 +91,7 @@ export const useShellNavigationModel = ({
       onNew: navigationController.handleNewTab,
       onReorder: tabSession.reorderTabs,
       onSubmenuHoverTargetChange: fileDrop.setDropTarget,
+      onSubmenuCloseRequest: fileDrop.clearDragState,
       showTabNumbers: settings.showTabNumbers,
       fixedWidthTabs: settings.fixedWidthTabs,
       onTabContextMenu: shellView.navigationContext.handlePlaceTargetContextMenu,

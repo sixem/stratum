@@ -2,6 +2,20 @@
 export type { DragOutcome } from "./drag";
 export { startDrag } from "./drag";
 export { copyPathsToClipboard, getClipboardPaths } from "./clipboard";
+export {
+  getIndexedSearchCatalogPath,
+  setIndexedSearchEnabled,
+  getIndexedSearchStatus,
+  listIndexedDriveStatuses,
+  queryIndexedPaths,
+  rebuildIndexedDrive,
+} from "./indexedSearch";
+export {
+  getIndexingLaunchPreferences,
+  getIndexingRuntimeMode,
+  restartAsAdministrator,
+  setIndexingLaunchPreferences,
+} from "./system";
 export { getShellAvailability, openShell } from "./shells";
 export {
   copyEntries,

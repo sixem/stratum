@@ -1,5 +1,6 @@
 // Barrel exports for app state stores.
 export { useClipboardStore } from "./clipboardStore";
+export { useIndexedSearchUiStore } from "./indexedSearchUiStore";
 export {
   bumpDirectoryChildVersion,
   bumpDirectoryChildVersions,

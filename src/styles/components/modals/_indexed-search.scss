@@ -1,0 +1,6 @@
+// Indexed-search modal styles, split by visible UI region.
+
+@use "./indexed-search-shell";
+@use "./indexed-search-results";
+@use "./indexed-search-drives";
+@use "./indexed-search-detail";

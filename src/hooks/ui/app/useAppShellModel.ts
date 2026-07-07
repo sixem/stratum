@@ -2,12 +2,13 @@
 // The section-level hooks keep navigation, view orchestration, and overlays
 // in dedicated files so this hook stays a thin assembler.
 import { useEffect, useRef, useState } from "react";
+import { getIndexingLaunchPreferences, setIndexedSearchEnabled, setIndexingLaunchPreferences } from "@/api";
 import { useFileDrop, useFileManager } from "@/hooks/domain/filesystem";
 import { useSettings, useTabSession } from "@/hooks/domain/session";
 import { useWindowSize } from "@/hooks/perf/resize";
 import { useScrollRequest } from "@/hooks/perf/scroll";
 import { makeDebug } from "@/lib";
-import { usePlacesStore, usePromptStore } from "@/modules";
+import { useIndexedSearchUiStore, usePlacesStore, usePromptStore } from "@/modules";
 import { useAppMenuState } from "./useAppMenuState";
 import { useAppNavigationController } from "./useAppNavigationController";
 import { useAppViewState } from "./useAppViewState";
@@ -36,11 +37,14 @@ export const useAppShellModel = () => {
   const fileDrop = useFileDrop({
     currentPath: fileManager.currentPath,
     onRefresh: fileManager.refresh,
+    onRecordMoveUndo: fileManager.recordMoveUndo,
+    onTransferInFlightChange: fileManager.setTransferInFlight,
     enableTabDropSubfolders: settings.tabDropSubfolders,
   });
   const scrollState = useScrollRequest();
   const { flushPersist: flushWindowSize } = useWindowSize();
   const lastViewRef = useRef<{ tabId: string | null; pathKey: string } | null>(null);
+  const launchPreferencesHydratedRef = useRef(false);
 
   // Menu and overlay state stays local to the shell model so App only renders slices.
   const menuState = useAppMenuState();
@@ -49,6 +53,7 @@ export const useAppShellModel = () => {
   const [, setSuppressExternalPresence] = useState(false);
   const [thumbResetNonce, setThumbResetNonce] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [launchPreferencesReady, setLaunchPreferencesReady] = useState(!tauriEnv);
   const places = usePlacesStore((state) => state.places);
   const placesInitialized = usePlacesStore((state) => state.initialized);
   const seedDefaultPlaces = usePlacesStore((state) => state.seedDefaults);
@@ -63,6 +68,82 @@ export const useAppShellModel = () => {
     if (!fileManager.placesLoaded) return;
     seedDefaultPlaces(fileManager.places);
   }, [fileManager.places, fileManager.placesLoaded, placesInitialized, seedDefaultPlaces]);
+
+  useEffect(() => {
+    if (!launchPreferencesReady) return;
+    if (!tauriEnv) return;
+    if (!settings.indexedSearchEnabled) {
+      useIndexedSearchUiStore.getState().closeModal();
+    }
+
+    let canceled = false;
+
+    const syncIndexedSearchState = async () => {
+      await setIndexedSearchEnabled(settings.indexedSearchEnabled);
+      await setIndexingLaunchPreferences({
+        indexedSearchEnabled: settings.indexedSearchEnabled,
+        acceleratedNtfsIndexing: settings.acceleratedNtfsIndexing,
+      });
+      if (canceled) return;
+      await fileManager.refreshDriveInfo();
+    };
+
+    void syncIndexedSearchState();
+
+    return () => {
+      canceled = true;
+    };
+  }, [
+    fileManager.refreshDriveInfo,
+    launchPreferencesReady,
+    settings.acceleratedNtfsIndexing,
+    settings.indexedSearchEnabled,
+    tauriEnv,
+  ]);
+
+  useEffect(() => {
+    if (!tauriEnv) return;
+    if (launchPreferencesHydratedRef.current) {
+      setLaunchPreferencesReady(true);
+      return;
+    }
+    let canceled = false;
+
+    const reconcileLaunchPreferences = async () => {
+      const launchPreferences = await getIndexingLaunchPreferences();
+      if (canceled) return;
+
+      if (
+        launchPreferences.indexedSearchEnabled === settings.indexedSearchEnabled &&
+        launchPreferences.acceleratedNtfsIndexing === settings.acceleratedNtfsIndexing
+      ) {
+        return;
+      }
+
+      settings.updateSettings({
+        indexedSearchEnabled: launchPreferences.indexedSearchEnabled,
+        acceleratedNtfsIndexing: launchPreferences.acceleratedNtfsIndexing,
+      });
+    };
+
+    void reconcileLaunchPreferences().finally(() => {
+      if (!canceled) {
+        launchPreferencesHydratedRef.current = true;
+        setLaunchPreferencesReady(true);
+      }
+    });
+
+    return () => {
+      canceled = true;
+    };
+  }, [settings.updateSettings, tauriEnv]);
+
+  useEffect(() => {
+    useIndexedSearchUiStore.getState().setOpenFolderInApp(tabSession.jumpTo);
+    return () => {
+      useIndexedSearchUiStore.getState().setOpenFolderInApp(null);
+    };
+  }, [tabSession.jumpTo]);
 
   const resolvedView = resolveShellViewState({
     fileManager,

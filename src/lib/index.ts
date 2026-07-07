@@ -8,6 +8,16 @@ export { splitNameExtension, stripNameExtension } from "./fileName";
 export { getExtension, getFileKind, isPdfLikeExtension, isSvgLikeExtension } from "./fileKind";
 export { initDebug, makeDebug, measure, measureAsync } from "./debug";
 export { formatBytes, formatCount, formatDate, formatPercent } from "./format";
+export {
+  filterVisibleIndexedDriveStatuses,
+  formatIndexedDriveSummary,
+  formatIndexedDriveState,
+  formatIndexedSearchServiceState,
+  isVisibleDriveInfo,
+  isIndexedDriveActiveState,
+  shouldPollIndexedSearch,
+} from "./indexedSearch";
+export { readIndexingRuntimeMode, requestAcceleratedIndexingRelaunch } from "./indexingLaunch";
 export { handleMiddleClick } from "./mouse";
 export { getPlatformLabel } from "./platform";
 export { buildPreviewUrl } from "./previewUrl";

@@ -5,12 +5,14 @@ import { SettingsBarsSection } from "@/components/settings/SettingsBarsSection";
 import { SettingsFlairSection } from "@/components/settings/SettingsFlairSection";
 import { SettingsGeneralSection } from "@/components/settings/SettingsGeneralSection";
 import { SettingsGridSection } from "@/components/settings/SettingsGridSection";
+import { SettingsIndexingSection } from "@/components/settings/SettingsIndexingSection";
 import { SettingsKeybindsSection } from "@/components/settings/SettingsKeybindsSection";
 import { SettingsMenusSection } from "@/components/settings/SettingsMenusSection";
 import { SettingsThumbsSection } from "@/components/settings/SettingsThumbsSection";
 
 export type SettingsSectionId =
   | "settings-general"
+  | "settings-indexing"
   | "settings-bars"
   | "settings-grid"
   | "settings-menus"
@@ -37,6 +39,13 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
     id: "settings-general",
     label: "General",
     render: () => <SettingsGeneralSection sectionId="settings-general" />,
+  },
+  {
+    id: "settings-indexing",
+    label: "Indexing",
+    render: ({ open }) => (
+      <SettingsIndexingSection sectionId="settings-indexing" open={open} />
+    ),
   },
   {
     id: "settings-bars",

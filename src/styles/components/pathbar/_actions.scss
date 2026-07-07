@@ -1,0 +1,82 @@
+// Path bar navigation, view, and transfer action controls.
+
+:root[data-window-focus="false"] .pathbar-shell .transfer-button {
+  background: color-mix(in srgb, var(--surface-control) 96%, white);
+  border-color: color-mix(in srgb, var(--stroke) 92%, white);
+}
+
+:where(.pathbar) {
+  .pathbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .view-btn:hover {
+      background: var(--pathbar-hover-surface);
+    }
+  }
+
+  .path-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+
+    > .btn {
+      border: none;
+    }
+
+    > .btn:hover:not(:disabled) {
+      background: var(--pathbar-hover-surface);
+    }
+  }
+
+  .transfer-button {
+    height: 26px;
+    padding: 0 8px;
+    gap: 5px;
+  }
+
+  .transfer-label {
+    font-size: var(--font-size-2xs);
+  }
+
+  .transfer-count {
+    font-size: var(--font-size-2xs);
+  }
+
+  .transfer-indicator {
+    width: 12px;
+    height: 12px;
+  }
+
+  .view-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 5px;
+  }
+
+  .view-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .btn {
+    min-height: 26px;
+    padding: 2px 8px;
+    border-radius: 5px;
+  }
+
+  .btn-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .nav-arrow {
+    transform-origin: center;
+  }
+
+  .nav-arrow.is-back {
+    transform: rotate(180deg);
+  }
+}

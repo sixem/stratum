@@ -49,6 +49,8 @@ export const DEFAULT_SETTINGS: Settings = {
   menuOpenPwsh: true,
   menuOpenWsl: false,
   menuShowConvert: true,
+  indexedSearchEnabled: false,
+  acceleratedNtfsIndexing: false,
   thumbnailsEnabled: true,
   thumbnailSize: 224,
   thumbnailQuality: 80,

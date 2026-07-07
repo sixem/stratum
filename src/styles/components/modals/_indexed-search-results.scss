@@ -1,0 +1,123 @@
+// Result column, empty state, and result rows for indexed search.
+
+@use "../control-recipes" as control;
+
+:where(.indexed-search-panel) {
+  .indexed-search-results {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 8px;
+    padding-right: 16px;
+  }
+
+  .indexed-search-result-list {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .indexed-search-empty {
+    min-height: 0;
+    flex: 1 1 auto;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+  }
+
+  .indexed-search-empty .empty-state {
+    width: min(100%, 420px);
+    padding: 14px 16px;
+    border-style: solid;
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    text-align: center;
+  }
+
+  .indexed-search-empty .empty-title,
+  .indexed-search-empty .empty-subtitle {
+    text-align: center;
+  }
+
+  .indexed-search-empty .empty-title {
+    font-size: var(--font-size-sm);
+  }
+
+  .indexed-search-empty .empty-subtitle {
+    font-size: var(--font-size-sm);
+    line-height: 1.45;
+  }
+
+  .indexed-search-result {
+    width: 100%;
+    min-width: 0;
+    cursor: pointer;
+    text-align: left;
+    display: grid;
+    gap: 4px;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+  }
+
+  .indexed-search-result:hover {
+    background: #161b29;
+  }
+
+  .indexed-search-result[data-selected="true"] {
+    @include control.active-surface(
+      #161b29,
+      inherit,
+      rgba(255, 255, 255, 0.04),
+      none
+    );
+  }
+
+  .indexed-search-result-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .indexed-search-result-name {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+  }
+
+  .indexed-search-result-kind {
+    flex: 0 0 auto;
+    color: color-mix(in srgb, var(--accent) 72%, white 28%);
+    font-size: var(--font-size-2xs);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .indexed-search-result-path {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--muted);
+    font-size: var(--font-size-xs);
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 840px) {
+  :where(.indexed-search-panel) {
+    .indexed-search-results {
+      padding-right: 0;
+    }
+  }
+}

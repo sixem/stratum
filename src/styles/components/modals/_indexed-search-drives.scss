@@ -1,0 +1,171 @@
+// Drive column, drive rows, and drive status markers for indexed search.
+
+:where(.indexed-search-panel) {
+  .indexed-search-drives {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 8px;
+    padding-left: 16px;
+    border-left: 1px solid #1c2537;
+  }
+
+  .indexed-search-section-note {
+    color: var(--muted);
+    font-size: var(--font-size-xs);
+    line-height: 1.4;
+    padding-bottom: 2px;
+  }
+
+  .indexed-search-drives .indexed-search-section-body {
+    gap: 14px;
+  }
+
+  .indexed-search-subsection-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 2px;
+  }
+
+  .indexed-search-drive-list {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .indexed-search-drive {
+    width: 100%;
+    cursor: pointer;
+    display: block;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    text-align: left;
+  }
+
+  .indexed-search-drive:hover {
+    background: #161b29;
+  }
+
+  .indexed-search-drive.is-selected {
+    background: #161b29;
+  }
+
+  .indexed-search-drive.is-selected .indexed-search-drive-meta {
+    color: #b6c3d8;
+  }
+
+  .indexed-search-drive-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .indexed-search-drive-path {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+  }
+
+  .indexed-search-drive-copy {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: var(--indexed-search-drive-label-width, max-content) minmax(0, 1fr);
+    align-items: baseline;
+    column-gap: 8px;
+  }
+
+  .indexed-search-drive-copy .indexed-search-drive-path {
+    width: auto;
+  }
+
+  .indexed-search-drive-meta,
+  .indexed-search-drive-note {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--muted);
+    font-size: var(--font-size-xs);
+    line-height: 1.4;
+  }
+
+  .indexed-search-drive-meta {
+    white-space: nowrap;
+  }
+
+  .indexed-search-drive-copy .indexed-search-drive-meta {
+    min-width: 0;
+  }
+
+  .indexed-search-drive-state {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(226, 230, 242, 0.78);
+  }
+
+  .indexed-search-drive-state-icon {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 auto;
+    display: block;
+  }
+
+  .indexed-search-drive-state-loader {
+    width: 13px;
+    height: 13px;
+  }
+
+  .indexed-search-drive-state[data-state="queued"] {
+    color: rgba(226, 230, 242, 0.78);
+  }
+
+  .indexed-search-drive-state[data-state="scanning"],
+  .indexed-search-drive-state[data-state="starting"] {
+    color: #60c4d6;
+  }
+
+  .indexed-search-drive-state[data-state="ready"] {
+    color: #71d6a2;
+  }
+
+  .indexed-search-drive-state[data-state="stale"],
+  .indexed-search-drive-state[data-state="rescanrequired"] {
+    color: #f0c96b;
+  }
+
+  .indexed-search-drive-state[data-state="error"] {
+    color: #e14c4c;
+  }
+
+  .indexed-search-drive-state[data-state="unsupported"],
+  .indexed-search-drive-state[data-state="unavailable"],
+  .indexed-search-drive-state[data-state="unknown"] {
+    color: #96a3ba;
+  }
+}
+
+@media (max-width: 840px) {
+  :where(.indexed-search-panel) {
+    .indexed-search-drives {
+      padding-left: 0;
+      border-left: 0;
+      border-top: 1px solid #1c2537;
+      padding-top: 18px;
+    }
+  }
+}

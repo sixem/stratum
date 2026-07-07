@@ -1,0 +1,112 @@
+// Path text input, search input, refresh, and indexed-search launcher row.
+
+@use "../control-recipes" as control;
+
+.path-inputbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(160px, 220px);
+  gap: 10px;
+  align-items: center;
+  padding: 6px 10px 0 10px;
+  background: transparent;
+}
+
+// Scope input bar internals to the bar without increasing specificity.
+:where(.path-inputbar) {
+  .path-input {
+    width: 100%;
+    padding: 6px 8px;
+    @include control.control-surface(6px, var(--surface-control-strong));
+    color: var(--text);
+    font-size: var(--font-size-md);
+    height: 30px;
+  }
+
+  .path-input:focus {
+    @include control.focus-ring(rgba(var(--accent-rgb), 0.5), rgba(var(--accent-rgb), 0.2));
+  }
+
+  .search-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 0 10px;
+    border-left: none;
+    @include control.control-surface(6px, var(--surface-control-strong));
+    color: var(--muted);
+    height: 30px;
+  }
+
+  .search-field:focus-within {
+    @include control.focus-ring(rgba(var(--accent-rgb), 0.5), rgba(var(--accent-rgb), 0.2));
+  }
+
+  .search-input {
+    padding: 6px 0;
+    min-width: 0;
+    width: 100%;
+    color: var(--text);
+    font-size: var(--font-size-md);
+  }
+
+  .search-input::placeholder {
+    color: var(--muted);
+  }
+
+  .inputbar-indexed-search {
+    @include control.icon-button-shell(24px, 5px, transparent, transparent, var(--muted));
+    flex: 0 0 auto;
+    margin-left: 2px;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+  }
+
+  .inputbar-indexed-search:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .inputbar-indexed-icon {
+    width: 15px;
+    height: 15px;
+    display: block;
+  }
+
+  .inputbar-refresh {
+    @include control.icon-button-shell(
+      30px,
+      6px,
+      var(--surface-control-strong),
+      var(--stroke),
+      var(--muted)
+    );
+    transition: border-color 0.2s ease, color 0.2s ease;
+  }
+
+  .inputbar-refresh:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    color: var(--text);
+  }
+
+  .inputbar-refresh:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .search-icon {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 720px) {
+  :where(.path-inputbar) {
+    grid-template-columns: 1fr;
+  }
+
+  :where(.path-inputbar) .inputbar-refresh {
+    width: 100%;
+  }
+}

@@ -1,0 +1,55 @@
+// Shared header chrome for large overlays and modal panels.
+//
+// The title row doubles as a Tauri drag surface so the window can still be
+// moved while fullscreen overlays blur the normal top bar behind them.
+
+.overlay-panel-header {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--stroke);
+  background: rgba(8, 11, 16, 0.6);
+}
+
+.overlay-panel-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.overlay-panel-header-drag {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 56px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.overlay-panel-header-title {
+  margin: 0;
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  pointer-events: none;
+}
+
+.overlay-panel-header-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.overlay-panel-header-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  position: relative;
+  z-index: 1;
+}

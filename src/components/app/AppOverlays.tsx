@@ -2,6 +2,7 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { AboutModal } from "@/components/overlay/AboutModal";
 import { ContextMenu } from "@/components/overlay/ContextMenu";
+import { IndexedSearchModal } from "@/components/overlay/IndexedSearchModal";
 import { PromptModal } from "@/components/overlay/PromptModal";
 import { TooltipDisplay } from "@/components/overlay/Tooltip";
 import type { ConversionModalProps } from "@/components/overlay/conversionModal";
@@ -111,6 +112,7 @@ export const AppOverlays = ({
           <LazySettingsOverlay {...settings} />
         </Suspense>
       ) : null}
+      <IndexedSearchModal />
       <TooltipDisplay />
       {quickPreviewMounted ? (
         <Suspense fallback={null}>

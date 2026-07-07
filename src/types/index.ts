@@ -1,11 +1,22 @@
 // Barrel exports for shared type definitions.
 export type {
+  IndexedDriveState,
+  IndexedDriveStatus,
+  IndexedEntryKind,
+  IndexedPathMatch,
+  IndexedPathQuery,
+  IndexedSearchServiceState,
+  IndexedSearchServiceStatus,
+} from "./indexedSearch";
+export type { IndexingRuntimeMode } from "./indexing";
+export type {
   CopyConflict,
   CopyConflictKind,
   CopyOptions,
   CopyPlan,
   CopyReport,
   DeleteReport,
+  MovedTransferEntry,
   DriveInfo,
   RecycleEntry,
   EntryMeta,
