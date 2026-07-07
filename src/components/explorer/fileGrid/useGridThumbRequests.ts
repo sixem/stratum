@@ -1,7 +1,6 @@
 // Metadata + thumbnail request pipeline for the file grid.
 import type { RefObject } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { listFolderThumbSamplesBatch } from "@/api";
 import {
   useEntryMetaRequest,
   useFileIcons,
@@ -10,36 +9,14 @@ import {
   useThumbnailRequest,
   useTypingActivity,
 } from "@/hooks";
-import {
-  formatBytes,
-  getExtension,
-  getFileKind,
-  makeDebug,
-  normalizePath,
-} from "@/lib";
-import type { FileKind } from "@/lib";
+import { getExtension, makeDebug } from "@/lib";
 import type { EntryItem } from "@/lib";
 import { THUMB_INTERACTION_COOLDOWN_MS, THUMB_TYPING_PAUSE_MS } from "@/constants";
-import {
-  getDirectoryChildVersion,
-  useDirectoryChildStateRevision,
-} from "@/modules";
+import { useDirectoryChildStateRevision } from "@/modules";
 import type { EntryMeta, ThumbnailRequest } from "@/types";
-
-export type GridDisplayMeta = {
-  fileKind: FileKind;
-  extension: string | null;
-  sizeLabel: string;
-};
-
-type CachedGridDisplayMeta = GridDisplayMeta & {
-  signature: string;
-};
-
-type CachedFolderSample = {
-  samplePath: string | null;
-  version: number;
-};
+import { useGridDisplayMeta } from "./useGridDisplayMeta";
+import type { GridDisplayMeta } from "./useGridDisplayMeta";
+import { useGridFolderSamples } from "./useGridFolderSamples";
 
 type UseGridThumbRequestsOptions = {
   viewportRef: RefObject<HTMLDivElement | null>;
@@ -68,41 +45,7 @@ type GridThumbRequestsState = {
   interactionActive: boolean;
 };
 
-const FOLDER_SAMPLE_CACHE_LIMIT = 3000;
-const GRID_META_CACHE_LIMIT = 5000;
 const perf = makeDebug("perf:resize:enrich");
-
-const upsertFolderSample = (
-  cache: Map<string, CachedFolderSample>,
-  folderKey: string,
-  sample: CachedFolderSample,
-) => {
-  // Refresh insertion order so pruning behaves like a simple LRU.
-  if (cache.has(folderKey)) {
-    cache.delete(folderKey);
-  }
-  cache.set(folderKey, sample);
-  if (cache.size <= FOLDER_SAMPLE_CACHE_LIMIT) return;
-  const oldestKey = cache.keys().next().value as string | undefined;
-  if (!oldestKey) return;
-  cache.delete(oldestKey);
-};
-
-const upsertGridMetaCache = (
-  cache: Map<string, CachedGridDisplayMeta>,
-  key: string,
-  value: CachedGridDisplayMeta,
-) => {
-  if (cache.has(key)) {
-    cache.delete(key);
-  }
-  cache.set(key, value);
-  while (cache.size > GRID_META_CACHE_LIMIT) {
-    const oldestKey = cache.keys().next().value as string | undefined;
-    if (!oldestKey) break;
-    cache.delete(oldestKey);
-  }
-};
 
 export const useGridThumbRequests = ({
   viewportRef,
@@ -183,52 +126,11 @@ export const useGridThumbRequests = ({
     return { metaPaths: nextMeta, thumbRequests: nextThumbs, folderPaths: nextFolders };
   }, [entryMeta, visibleItems]);
 
-  const entryMetaCacheRef = useRef<Map<string, CachedGridDisplayMeta>>(new Map());
-
-  const gridMetaByPath = useMemo(() => {
-    const cache = entryMetaCacheRef.current;
-    const next = new Map<string, GridDisplayMeta>();
-    visibleItems.forEach((item) => {
-      if (item.type !== "entry") return;
-      if (item.presence === "removed") return;
-      const entry = item.entry;
-      const path = entry.path;
-      const meta = entryMeta.get(path);
-      const resolvedMeta: EntryMeta | undefined =
-        meta ??
-        (entry.size != null || entry.modified != null
-          ? {
-              path,
-              size: entry.size ?? null,
-              modified: entry.modified ?? null,
-            }
-          : undefined);
-      const resolvedSize = resolvedMeta?.size ?? null;
-      const resolvedModified = resolvedMeta?.modified ?? null;
-      const cacheKey = `${viewKey}:${path}`;
-      const signature = `${resolvedModified ?? "none"}:${resolvedSize ?? "none"}`;
-      const cached = cache.get(cacheKey);
-      const canReuseCached =
-        cached != null && (signature === "none:none" || cached.signature === signature);
-      if (canReuseCached) {
-        next.set(path, cached);
-        return;
-      }
-      let resolved = cached;
-      if (!resolved || resolved.signature !== signature) {
-        const extension = entry.isDir ? null : getExtension(entry.name);
-        resolved = {
-          fileKind: entry.isDir ? "generic" : getFileKind(entry.name),
-          extension,
-          sizeLabel: entry.isDir ? "Folder" : formatBytes(resolvedSize),
-          signature,
-        };
-        upsertGridMetaCache(cache, cacheKey, resolved);
-      }
-      next.set(path, resolved);
-    });
-    return next;
-  }, [entryMeta, viewKey, visibleItems]);
+  const gridMetaByPath = useGridDisplayMeta({
+    entryMeta,
+    viewKey,
+    visibleItems,
+  });
 
   useEntryMetaRequest(loading || interactionActive, metaPaths, onRequestMeta);
   // Pause thumbnail generation while the user is actively interacting.
@@ -244,141 +146,19 @@ export const useGridThumbRequests = ({
     thumbResetKey,
   );
 
-  const [folderSampleByPath, setFolderSampleByPath] = useState<Map<string, CachedFolderSample>>(
-    new Map(),
-  );
-  const pendingFolderFetchesRef = useRef<Set<string>>(new Set());
-  const folderSampleGenerationRef = useRef(0);
-  const requestedFolderSampleThumbsRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    folderSampleGenerationRef.current += 1;
-    pendingFolderFetchesRef.current.clear();
-    requestedFolderSampleThumbsRef.current.clear();
-    setFolderSampleByPath(new Map());
-  }, [thumbResetKey, thumbnailFolders, thumbnailSvgs, thumbnailVideos]);
-
-  useEffect(() => {
-    // Directory-child revisions mean a folder may now choose a different sample path.
-    requestedFolderSampleThumbsRef.current.clear();
-  }, [directoryChildRevision]);
-
-  useEffect(() => {
-    if (!thumbnailsEnabled || !thumbnailFolders || loading || interactionActive) return;
-    if (folderPaths.length === 0) return;
-    const pendingPaths = folderPaths.filter((folderPath) => {
-      const key = normalizePath(folderPath);
-      if (!key) return false;
-      const cachedSample = folderSampleByPath.get(key) ?? null;
-      if (
-        cachedSample &&
-        cachedSample.version === getDirectoryChildVersion(folderPath)
-      ) {
-        return false;
-      }
-      if (pendingFolderFetchesRef.current.has(key)) return false;
-      return true;
-    });
-    if (pendingPaths.length === 0) return;
-    const requestGeneration = folderSampleGenerationRef.current;
-    pendingPaths.forEach((path) => pendingFolderFetchesRef.current.add(normalizePath(path)));
-    void listFolderThumbSamplesBatch(pendingPaths, {
-      allowVideos: thumbnailVideos,
-      allowSvgs: thumbnailSvgs,
-    })
-      .then((results) => {
-        if (requestGeneration !== folderSampleGenerationRef.current) return;
-        setFolderSampleByPath((previous) => {
-          const next = new Map(previous);
-          results.forEach((result) => {
-            const folderKey = normalizePath(result.folderPath);
-            if (!folderKey) return;
-            upsertFolderSample(next, folderKey, {
-              samplePath: result.samplePath?.trim() || null,
-              version: getDirectoryChildVersion(result.folderPath),
-            });
-          });
-          return next;
-        });
-      })
-      .catch(() => {
-        if (requestGeneration !== folderSampleGenerationRef.current) return;
-        setFolderSampleByPath((previous) => {
-          const next = new Map(previous);
-          pendingPaths.forEach((folderPath) => {
-            const folderKey = normalizePath(folderPath);
-            if (!folderKey) return;
-            upsertFolderSample(next, folderKey, {
-              samplePath: null,
-              version: getDirectoryChildVersion(folderPath),
-            });
-          });
-          return next;
-        });
-      })
-      .finally(() => {
-        pendingPaths.forEach((folderPath) =>
-          pendingFolderFetchesRef.current.delete(normalizePath(folderPath)),
-        );
-      });
-  }, [
+  const { folderThumbRequestCount, folderThumbSource } = useGridFolderSamples({
+    directoryChildRevision,
     folderPaths,
-    folderSampleByPath,
     interactionActive,
     loading,
+    onRequestThumbs,
     thumbnailFolders,
     thumbnailSvgs,
     thumbnailVideos,
     thumbnailsEnabled,
-    directoryChildRevision,
-  ]);
-
-  const folderThumbRequests = useMemo(() => {
-    if (!thumbnailsEnabled || !thumbnailFolders || loading || interactionActive) return [];
-    const requests: ThumbnailRequest[] = [];
-    folderSampleByPath.forEach((sample, folderKey) => {
-      if (sample.version !== getDirectoryChildVersion(folderKey)) return;
-      const samplePath = sample.samplePath;
-      if (!samplePath) return;
-      // Sample paths are requested verbatim, so direct map lookup avoids
-      // rebuilding a normalized index of the full thumbnail cache.
-      if (thumbSource.has(samplePath)) return;
-      if (requestedFolderSampleThumbsRef.current.has(samplePath)) return;
-      requestedFolderSampleThumbsRef.current.add(samplePath);
-      requests.push({ path: samplePath, size: null, modified: null });
-    });
-    return requests;
-  }, [
-    folderSampleByPath,
-    interactionActive,
-    loading,
-    thumbnailFolders,
+    thumbResetKey,
     thumbSource,
-    thumbnailsEnabled,
-  ]);
-
-  useEffect(() => {
-    if (folderThumbRequests.length === 0) return;
-    onRequestThumbs(folderThumbRequests);
-  }, [folderThumbRequests, onRequestThumbs]);
-
-  const folderThumbSource = useMemo(() => {
-    if (!thumbnailsEnabled || !thumbnailFolders) return new Map<string, string>();
-    const next = new Map<string, string>();
-    folderPaths.forEach((folderPath) => {
-      const folderKey = normalizePath(folderPath);
-      if (!folderKey) return;
-      const sample = folderSampleByPath.get(folderKey);
-      if (!sample) return;
-      if (sample.version !== getDirectoryChildVersion(folderPath)) return;
-      const samplePath = sample.samplePath;
-      if (!samplePath) return;
-      const sampleThumb = thumbSource.get(samplePath);
-      if (!sampleThumb) return;
-      next.set(folderPath, sampleThumb);
-    });
-    return next;
-  }, [folderPaths, folderSampleByPath, thumbnailFolders, thumbSource, thumbnailsEnabled]);
+  });
 
   const iconRequests = useMemo(() => {
     if (!thumbnailAppIcons || loading || interactionActive || visibleItems.length === 0) {
@@ -411,7 +191,7 @@ export const useGridThumbRequests = ({
       metaPaths.length,
       thumbRequests.length,
       folderPaths.length,
-      folderThumbRequests.length,
+      folderThumbRequestCount,
       iconRequests.length,
       loading ? "1" : "0",
       scrolling ? "1" : "0",
@@ -429,7 +209,7 @@ export const useGridThumbRequests = ({
       metaPaths.length,
       thumbRequests.length,
       folderPaths.length,
-      folderThumbRequests.length,
+      folderThumbRequestCount,
       iconRequests.length,
       loading ? "yes" : "no",
       scrolling ? "yes" : "no",
@@ -440,7 +220,7 @@ export const useGridThumbRequests = ({
     );
   }, [
     folderPaths.length,
-    folderThumbRequests.length,
+    folderThumbRequestCount,
     iconRequests.length,
     isResizing,
     interactionActive,

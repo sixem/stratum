@@ -1,6 +1,37 @@
 // Shared primitive controls used across overlays and settings.
 @use "./control-recipes" as control;
 
+// Tauri's drag-region listener is most reliable when the pointer lands on the
+// marked drag host itself. Decorative descendants pass through to the host,
+// while actual controls keep their own input handling.
+.window-drag-region {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.window-drag-region
+  :where(
+    :not(button):not(input):not(textarea):not(select):not(a):not([role="button"]):not(
+        [contenteditable="true"]
+      ):not([data-window-drag-ignore="true"])
+  ) {
+  pointer-events: none;
+}
+
+.window-drag-region
+  :where(
+    button,
+    input,
+    textarea,
+    select,
+    a,
+    [role="button"],
+    [contenteditable="true"],
+    [data-window-drag-ignore="true"]
+  ) {
+  pointer-events: auto;
+}
+
 :where(.ui-select) {
   position: relative;
   width: 100%;

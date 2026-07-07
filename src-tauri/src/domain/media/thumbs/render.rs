@@ -31,7 +31,10 @@ pub(super) fn render_thumbnail(job: &ThumbJob) -> Result<ThumbRenderOutput, Stri
             .write_to(&mut file, image::ImageOutputFormat::WebP)
             .map_err(|err| err.to_string())?,
         ThumbFormat::Jpeg => resized
-            .write_to(&mut file, image::ImageOutputFormat::Jpeg(job.options.quality))
+            .write_to(
+                &mut file,
+                image::ImageOutputFormat::Jpeg(job.options.quality),
+            )
             .map_err(|err| err.to_string())?,
     }
     let added_bytes = file.metadata().map(|metadata| metadata.len()).unwrap_or(0);

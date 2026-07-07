@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use super::cache;
-use super::{ThumbJob, ThumbKind, ThumbMeta, ThumbQueue, ThumbnailState};
 use super::{ThumbFormat, ThumbHit, ThumbOptions, ThumbRequest};
+use super::{ThumbJob, ThumbKind, ThumbMeta, ThumbQueue, ThumbnailState};
 
 pub(super) fn request_thumbnails(
     state: &ThumbnailState,

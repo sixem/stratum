@@ -287,9 +287,7 @@
 
 :where(.drop-submenu) {
   .drop-submenu-title {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
+    display: block;
     padding: 2px 4px 6px;
     border-bottom: 1px solid #1c2537;
     font-size: var(--font-size-xs);
@@ -297,13 +295,6 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted);
-  }
-
-  .drop-submenu-title-icon {
-    width: 14px;
-    height: 14px;
-    flex: 0 0 auto;
-    color: rgba(var(--accent-rgb), 0.92);
   }
 
   .drop-submenu-scroll {

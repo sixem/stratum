@@ -140,8 +140,9 @@ pub(super) fn maybe_trim_cache(state: &ThumbnailState, limit_mb: u32, added_byte
     if total <= limit_bytes {
         let mut trim_state = state.trim_state.lock().expect("thumb trim lock");
         trim_state.approx_total_bytes = Some(total);
-        trim_state.pending_growth_bytes =
-            trim_state.pending_growth_bytes.saturating_sub(pending_for_scan);
+        trim_state.pending_growth_bytes = trim_state
+            .pending_growth_bytes
+            .saturating_sub(pending_for_scan);
         return;
     }
 
@@ -168,7 +169,9 @@ pub(super) fn maybe_trim_cache(state: &ThumbnailState, limit_mb: u32, added_byte
 
     let mut trim_state = state.trim_state.lock().expect("thumb trim lock");
     trim_state.approx_total_bytes = Some(total);
-    trim_state.pending_growth_bytes = trim_state.pending_growth_bytes.saturating_sub(pending_for_scan);
+    trim_state.pending_growth_bytes = trim_state
+        .pending_growth_bytes
+        .saturating_sub(pending_for_scan);
 }
 
 pub(super) fn get_cache_dir(app_handle: &AppHandle) -> PathBuf {

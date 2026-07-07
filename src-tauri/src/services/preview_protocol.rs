@@ -140,14 +140,7 @@ fn build_range_response(
         Ok(data) => data,
         Err(response) => return response,
     };
-    partial_content_response(
-        content_type,
-        range.start,
-        range.end,
-        size,
-        data,
-        validators,
-    )
+    partial_content_response(content_type, range.start, range.end, size, data, validators)
 }
 
 fn read_file_range(path: &Path, range: ByteRange) -> Result<Vec<u8>, Response<Vec<u8>>> {

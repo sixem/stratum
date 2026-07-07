@@ -1,5 +1,5 @@
 // Landing content shown when no folder is selected in the active tab.
-import { formatBytes, handleMiddleClick, normalizePath } from "@/lib";
+import { buildDriveTooltip, formatBytes, handleMiddleClick, normalizePath } from "@/lib";
 import type { DriveInfo, Place } from "@/types";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PinIcon } from "@/components/icons";
@@ -174,40 +174,44 @@ export const StartLander = ({
                   const name = formatDriveName(info);
                   const usage = formatUsage(info);
                   return (
-                    <PressButton
+                    <TooltipWrapper
                       key={drive}
-                      type="button"
-                      className="lander-drive"
-                      onClick={() => onOpenDrive(drive)}
-                      onMouseDown={(event) => {
-                        if (!onOpenDriveNewTab) return;
-                        handleMiddleClick(event, () => onOpenDriveNewTab(drive));
-                      }}
+                      text={buildDriveTooltip(formatDriveLabel(drive), info)}
                     >
-                      <div className="lander-drive-head">
-                        <span className="lander-drive-label">
-                          {formatDriveLabel(drive)}
-                        </span>
-                        {name ? <span className="lander-drive-name">{name}</span> : null}
-                      </div>
-                      <div className="lander-drive-usage">
-                        <span className="lander-drive-usage-label">{usage.label}</span>
-                        {usage.percent != null ? (
-                          <span className="lander-drive-usage-percent">
-                            {usage.percent}% used
+                      <PressButton
+                        type="button"
+                        className="lander-drive"
+                        onClick={() => onOpenDrive(drive)}
+                        onMouseDown={(event) => {
+                          if (!onOpenDriveNewTab) return;
+                          handleMiddleClick(event, () => onOpenDriveNewTab(drive));
+                        }}
+                      >
+                        <div className="lander-drive-head">
+                          <span className="lander-drive-label">
+                            {formatDriveLabel(drive)}
                           </span>
-                        ) : null}
-                      </div>
-                      <div className="lander-drive-bar" data-known="true">
-                        <span
-                          className="lander-drive-bar-fill"
-                          style={{
-                            width:
-                              usage.percent != null ? `${usage.percent}%` : "0%",
-                          }}
-                        />
-                      </div>
-                    </PressButton>
+                          {name ? <span className="lander-drive-name">{name}</span> : null}
+                        </div>
+                        <div className="lander-drive-usage">
+                          <span className="lander-drive-usage-label">{usage.label}</span>
+                          {usage.percent != null ? (
+                            <span className="lander-drive-usage-percent">
+                              {usage.percent}% used
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="lander-drive-bar" data-known="true">
+                          <span
+                            className="lander-drive-bar-fill"
+                            style={{
+                              width:
+                                usage.percent != null ? `${usage.percent}%` : "0%",
+                            }}
+                          />
+                        </div>
+                      </PressButton>
+                    </TooltipWrapper>
                   );
                 })}
               </div>

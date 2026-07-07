@@ -60,11 +60,30 @@
   .status-text {
     flex: 0 1 48%;
     min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     text-align: right;
     color: rgba(235, 240, 248, 0.78);
+  }
+
+  .status-text-content {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    max-width: 100%;
+  }
+
+  .status-text-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .status-text-loading-icon {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 auto;
+    opacity: 0.85;
   }
 
   // Keep refresh and transient failures neutral, so the right status doesn't look dangerous.

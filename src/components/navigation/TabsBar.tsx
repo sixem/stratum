@@ -31,6 +31,7 @@ type TabsBarProps = {
   onNew: () => void;
   onReorder: (fromId: string, toIndex: number) => void;
   onSubmenuHoverTargetChange?: (target: DropTarget | null) => void;
+  onSubmenuCloseRequest?: () => void;
   onTabContextMenu?: (event: PointerEvent<HTMLDivElement>, target: PlaceContextTarget) => void;
   onTabContextMenuDown?: (
     event: PointerEvent<HTMLDivElement>,
@@ -162,6 +163,7 @@ export const TabsBar = ({
   onNew,
   onReorder,
   onSubmenuHoverTargetChange,
+  onSubmenuCloseRequest,
   onTabContextMenu,
   onTabContextMenuDown,
 }: TabsBarProps) => {
@@ -295,6 +297,7 @@ export const TabsBar = ({
         activePath={dropTargetPath}
         dragPoint={dragPoint}
         onHoverTargetChange={onSubmenuHoverTargetChange}
+        onRequestClose={onSubmenuCloseRequest}
       />
     </div>
   );

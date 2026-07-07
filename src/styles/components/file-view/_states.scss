@@ -137,7 +137,9 @@
   }
 
   :where(.file-list) .row.is-deleting::after,
-  :where(.thumb-shell) .thumb-card.is-deleting::after {
+  :where(.thumb-shell) .thumb-card.is-deleting::after,
+  :where(.file-list) .row.is-transferring::after,
+  :where(.thumb-shell) .thumb-card.is-transferring::after {
     animation: none;
   }
 }

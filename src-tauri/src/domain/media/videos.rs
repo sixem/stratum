@@ -249,7 +249,10 @@ fn resolve_ffmpeg_binary(explicit_path: Option<&str>) -> String {
     }
     let candidate = Path::new(trimmed);
     if candidate.is_dir() {
-        return candidate.join(ffmpeg_binary_name()).to_string_lossy().to_string();
+        return candidate
+            .join(ffmpeg_binary_name())
+            .to_string_lossy()
+            .to_string();
     }
     trimmed.to_string()
 }
@@ -261,7 +264,10 @@ fn resolve_ffprobe_binary(explicit_path: Option<&str>) -> String {
     }
     let candidate = Path::new(trimmed);
     if candidate.is_dir() {
-        return candidate.join(ffprobe_binary_name()).to_string_lossy().to_string();
+        return candidate
+            .join(ffprobe_binary_name())
+            .to_string_lossy()
+            .to_string();
     }
     candidate
         .with_file_name(ffprobe_binary_name())
@@ -471,7 +477,14 @@ fn emit_completion_progress(
         encoded_seconds: duration_seconds,
         speed_text: None,
     };
-    emit_conversion_progress(callback, context, source_path, duration_seconds, &snapshot, true);
+    emit_conversion_progress(
+        callback,
+        context,
+        source_path,
+        duration_seconds,
+        &snapshot,
+        true,
+    );
 }
 
 fn configure_media_command(command: &mut Command) {

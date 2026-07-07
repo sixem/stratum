@@ -1,8 +1,8 @@
 // OS-level helpers for opening paths and properties.
-use serde::Serialize;
-use std::collections::HashSet;
 #[cfg(target_os = "windows")]
 use crate::platform::windows::com::StaComGuard;
+use serde::Serialize;
+use std::collections::HashSet;
 #[cfg(target_os = "windows")]
 use std::ffi::OsStr;
 #[cfg(target_os = "windows")]

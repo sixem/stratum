@@ -53,6 +53,15 @@
     color: #f28b8b;
   }
 
+  .settings-mono {
+    margin-top: 6px;
+    font-size: var(--font-size-2xs);
+    line-height: 1.45;
+    color: var(--muted);
+    font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    word-break: break-all;
+  }
+
   .settings-toggle {
     position: relative;
     width: 42px;

@@ -2,6 +2,7 @@
 import type { DriveInfo, EntryMeta, FileEntry } from "@/types";
 import { TOOLTIP_CACHE_LIMIT } from "@/constants";
 import { formatBytes, formatDate, formatPercent } from "./format";
+import { formatIndexedDriveState } from "./indexedSearch";
 const entryTooltipCache = new Map<string, string>();
 
 const getFileTypeLabel = (name: string) => {
@@ -67,14 +68,21 @@ export const buildEntryTooltip = (entry: FileEntry, meta?: EntryMeta) => {
 
 export const buildDriveTooltip = (label: string, info?: DriveInfo) => {
   const heading = label.trim();
-  if (!info || info.total == null || info.free == null) return heading;
-  const used = Math.max(0, info.total - info.free);
-  const usedPercent = formatPercent(used, info.total);
-  const freePercent = formatPercent(info.free, info.total);
-  return [
-    heading,
-    `Used: ${formatBytes(used)}${usedPercent ? ` (${usedPercent})` : ""}`,
-    `Free: ${formatBytes(info.free)}${freePercent ? ` (${freePercent})` : ""}`,
-    `Total: ${formatBytes(info.total)}`,
-  ].join("\n");
+  if (!info) return heading;
+
+  const details = [heading];
+  if (info.total != null && info.free != null) {
+    const used = Math.max(0, info.total - info.free);
+    const usedPercent = formatPercent(used, info.total);
+    const freePercent = formatPercent(info.free, info.total);
+    details.push(`Used: ${formatBytes(used)}${usedPercent ? ` (${usedPercent})` : ""}`);
+    details.push(`Free: ${formatBytes(info.free)}${freePercent ? ` (${freePercent})` : ""}`);
+    details.push(`Total: ${formatBytes(info.total)}`);
+  }
+
+  if (info.indexStatus) {
+    details.push(`Indexed: ${formatIndexedDriveState(info.indexStatus.state)}`);
+  }
+
+  return details.join("\n");
 };

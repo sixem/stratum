@@ -1,4 +1,6 @@
 // Bottom status line for counts and messages.
+import loader from "@/assets/icons/loaders/ring.svg";
+
 type StatusBarProps = {
   message: string;
   level: "idle" | "loading" | "error";
@@ -24,7 +26,17 @@ export const StatusBar = ({
         aria-live={level === "error" ? "assertive" : "polite"}
         aria-atomic="true"
       >
-        {message}
+        <span className="status-text-content">
+          <span className="status-text-label">{message}</span>
+          {level === "loading" ? (
+            <img
+              src={loader}
+              alt=""
+              aria-hidden="true"
+              className="status-text-loading-icon"
+            />
+          ) : null}
+        </span>
       </span>
     </footer>
   );

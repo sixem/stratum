@@ -329,8 +329,10 @@ fn commit_prepared_output(prepared: &PreparedConversionExecution) -> Result<(), 
                 &prepared.temp_output_path,
             );
         }
-        let backup_path = reserve_sibling_path(&destination_path, "dest-backup")
-            .map_err(|error| fail_with_temp_cleanup(error, &prepared.temp_output_path).unwrap_err())?;
+        let backup_path =
+            reserve_sibling_path(&destination_path, "dest-backup").map_err(|error| {
+                fail_with_temp_cleanup(error, &prepared.temp_output_path).unwrap_err()
+            })?;
         if let Err(error) = rename_path(&destination_path, &backup_path) {
             return fail_with_temp_cleanup(
                 format!("Failed to stage the destination for replacement: {error}"),
@@ -390,7 +392,9 @@ fn rollback_commit(state: &mut CommitState) -> Result<(), String> {
 
     if state.destination_path.exists() {
         if let Err(error) = remove_path(&state.destination_path) {
-            failures.push(format!("Failed to remove the staged converted output: {error}"));
+            failures.push(format!(
+                "Failed to remove the staged converted output: {error}"
+            ));
         }
     }
 
@@ -405,7 +409,9 @@ fn rollback_commit(state: &mut CommitState) -> Result<(), String> {
     if let Some(destination_backup_path) = state.destination_backup_path.as_ref() {
         if destination_backup_path.exists() {
             if let Err(error) = rename_path(destination_backup_path, &state.destination_path) {
-                failures.push(format!("Failed to restore the original destination: {error}"));
+                failures.push(format!(
+                    "Failed to restore the original destination: {error}"
+                ));
             }
         }
     }
