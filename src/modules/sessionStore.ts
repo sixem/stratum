@@ -1,6 +1,7 @@
 // Persistent session state for tabs and view settings.
 import { createWithEqualityFn } from "zustand/traditional";
 import type { SortDir, SortKey, SortState, Tab, ViewMode } from "@/types";
+import type { TabHistory } from "@/types/tabs";
 import { DEFAULT_SORT, getDefaultSortDir } from "@/lib";
 import {
   SESSION_LEGACY_STORAGE_KEY,
@@ -15,11 +16,19 @@ type SessionState = {
   recentJumps: string[];
 };
 
-type SessionStore = SessionState & {
+type ClosedTab = {
+  tab: Tab;
+  index: number;
+  history?: TabHistory;
+};
+
+type SessionRuntimeState = SessionState & { closedTabs: ClosedTab[] };
+
+type SessionStore = SessionRuntimeState & {
   setTabs: (updater: Tab[] | ((prev: Tab[]) => Tab[])) => void;
   setActiveTabId: (id: string | null) => void;
   setRecentJumps: (updater: string[] | ((prev: string[]) => string[])) => void;
-  updateSession: (patch: Partial<SessionState>) => void;
+  updateSession: (patch: Partial<SessionRuntimeState>) => void;
   resetSession: () => void;
 };
 
@@ -172,6 +181,8 @@ const applyUpdater = <T,>(value: T, updater: T | ((prev: T) => T)) => {
 const createSessionStore = (key: string) => {
   const store = createWithEqualityFn<SessionStore>((set) => ({
     ...readStoredSession(key),
+    // Keep undo history for this pane even if its view unmounts.
+    closedTabs: [],
     setTabs: (updater) =>
       set((state) => ({
         tabs: applyUpdater(state.tabs, updater),
@@ -182,7 +193,7 @@ const createSessionStore = (key: string) => {
         recentJumps: applyUpdater(state.recentJumps, updater),
       })),
     updateSession: (patch) => set((state) => ({ ...state, ...patch })),
-    resetSession: () => set({ ...DEFAULT_SESSION }),
+    resetSession: () => set({ ...DEFAULT_SESSION, closedTabs: [] }),
   }));
 
   store.subscribe((state) => {

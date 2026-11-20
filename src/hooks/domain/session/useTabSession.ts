@@ -21,6 +21,7 @@ type TabSessionOptions = {
 };
 
 const log = makeDebug("tabs");
+const CLOSED_TAB_LIMIT = 20;
 
 export const useTabSession = ({
   useStore = useSessionStore,
@@ -73,7 +74,7 @@ export const useTabSession = ({
 
   const pathForHistory = loadingPath ?? (activeTab?.path || currentPath);
   // History and pending-jump tracking live in focused hooks to keep this file readable.
-  const { canGoBack, canGoForward, recordHistory, popBack, popForward } =
+  const { canGoBack, canGoForward, recordHistory, popBack, popForward, takeHistory, restoreHistory } =
     useTabHistory({ tabs, activeTabId });
   const { queuePendingJump, shouldSyncEmptyTab } = usePendingJump({
     activeTabId,
@@ -290,41 +291,61 @@ export const useTabSession = ({
   );
 
   const closeTab = useCallback(
-    (id: string) => {
-      log("close tab -> %s", id);
-      emptyTabIdsRef.current.delete(id);
-      const index = tabs.findIndex((tab) => tab.id === id);
+    (id: string, scrollTop?: number) => {
+      // The UI may have just saved the outgoing scroll position.
+      const session = useStore.getState();
+      const index = session.tabs.findIndex((tab) => tab.id === id);
       if (index === -1) return;
-      const nextTabs = tabs.filter((tab) => tab.id !== id);
-      setTabs(nextTabs);
 
-      if (nextTabs.length === 0) {
+      log("close tab -> %s", id);
+      const tab = session.tabs[index];
+      const savedTab = scrollTop !== undefined && Number.isFinite(scrollTop)
+        ? { ...tab, scrollTop: Math.max(0, Math.round(scrollTop)) }
+        : tab;
+      const closed = { tab: savedTab, index, history: takeHistory(id) };
+      emptyTabIdsRef.current.delete(id);
+      const nextTabs = session.tabs.filter((tab) => tab.id !== id);
+      const wasActive = id === session.activeTabId;
+      const fallback = nextTabs[Math.max(0, index - 1)] ?? nextTabs[0];
+      session.updateSession({
+        tabs: nextTabs,
+        activeTabId: wasActive || !fallback ? fallback?.id ?? null : session.activeTabId,
+        closedTabs: [closed, ...session.closedTabs].slice(0, CLOSED_TAB_LIMIT),
+      });
+
+      if (!fallback || (wasActive && !fallback.path.trim())) {
         pendingTabPathRef.current = null;
-        setActiveTabId(null);
         clearDir({ silent: true });
         return;
       }
 
-      if (id === activeTabId) {
-        const fallback = nextTabs[Math.max(0, index - 1)] ?? nextTabs[0];
-        if (fallback) {
-          setActiveTabId(fallback.id);
-          if (!fallback.path.trim()) {
-            pendingTabPathRef.current = null;
-            clearDir({ silent: true });
-            return;
-          }
-          performNavigation(
-            fallback.path,
-            { sort: fallback.sort, search: fallback.search },
-            "switch",
-            fallback.id,
-          );
-        }
+      if (wasActive) {
+        performNavigation(fallback.path, { sort: fallback.sort, search: fallback.search }, "switch", fallback.id);
       }
     },
-    [activeTabId, clearDir, performNavigation, setActiveTabId, setTabs, tabs],
+    [clearDir, emptyTabIdsRef, pendingTabPathRef, performNavigation, takeHistory, useStore],
   );
+
+  const reopenClosedTab = useCallback(() => {
+    const session = useStore.getState();
+    const [closed, ...remainingClosedTabs] = session.closedTabs;
+    if (!closed) return false;
+
+    const { tab, index, history } = closed;
+    const nextTabs = [...session.tabs];
+    nextTabs.splice(Math.min(index, nextTabs.length), 0, tab);
+    const isEmpty = !tab.path.trim();
+    if (isEmpty) {
+      emptyTabIdsRef.current.add(tab.id);
+      pendingTabPathRef.current = null;
+    }
+    session.updateSession({ tabs: nextTabs, activeTabId: tab.id, closedTabs: remainingClosedTabs });
+    if (history) restoreHistory(tab.id, history);
+
+    if (isEmpty) clearDir({ silent: true });
+    else performNavigation(tab.path, { sort: tab.sort, search: tab.search }, "switch", tab.id);
+    return true;
+  }, [clearDir, emptyTabIdsRef, pendingTabPathRef, performNavigation, restoreHistory, useStore]);
 
   const reorderTabs = useCallback(
     (fromId: string, toIndex: number) => {
@@ -377,6 +398,7 @@ export const useTabSession = ({
     openInNewTab,
     selectTab,
     closeTab,
+    reopenClosedTab,
     reorderTabs,
     setTabScrollTop,
     removeRecentJump,

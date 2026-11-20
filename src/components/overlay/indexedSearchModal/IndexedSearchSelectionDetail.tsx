@@ -65,11 +65,9 @@ export const IndexedSearchSelectionDetail = ({
   const selectedDriveSummary = selectedDrive
     ? formatIndexedDriveSummary(selectedDrive)
     : null;
-  const selectedDriveNote = selectedDrive?.state === "saved"
-    ? "Open folders and file operations in Stratum update this index. Refresh the index to scan the whole drive."
-    : selectedDrive && isIndexedDriveAttentionState(selectedDrive.state)
-      ? selectedDrive.message?.trim()
-      : null;
+  const selectedDriveWarning = selectedDrive && isIndexedDriveAttentionState(selectedDrive.state)
+    ? selectedDrive.message?.trim()
+    : null;
 
   return (
     <section className="indexed-search-selection-detail" aria-label="Selection details">
@@ -153,9 +151,9 @@ export const IndexedSearchSelectionDetail = ({
             </div>
           ) : null}
 
-          {selectedDriveNote ? (
+          {selectedDriveWarning ? (
             <div className="indexed-search-section-note">
-              {selectedDriveNote}
+              {selectedDriveWarning}
             </div>
           ) : null}
 

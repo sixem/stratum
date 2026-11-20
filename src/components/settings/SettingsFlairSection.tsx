@@ -96,7 +96,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
       <div className="settings-item">
         <div>
           <div className="settings-label">Blur overlays</div>
-          <div className="settings-desc">Backdrop blur for tooltips and menus.</div>
+          <div className="settings-desc">Backdrop blur for dialogs, menus, and tooltips.</div>
         </div>
         <label className="settings-toggle">
           <input

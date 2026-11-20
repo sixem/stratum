@@ -1,6 +1,7 @@
 // Centralizes keybind gating and handlers for the main app shell.
 import { useCallback, useMemo } from "react";
 import type { RefObject } from "react";
+import { REOPEN_CLOSED_TAB_KEYBIND } from "@/constants";
 import { formatDeleteLabel, getDriveKey, getSelectionTargets, isEditableElement, normalizeDropPath } from "@/lib";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { getFileCommandFocus } from "../menus/keyboardContextMenu";
@@ -34,6 +35,7 @@ type UseAppKeybindsOptions = {
   onContextMenu: (native: boolean) => boolean;
   onNewTab: () => void;
   onCloseTab: (id: string) => void;
+  onReopenClosedTab: () => boolean;
   onSelectTab: (id: string) => void;
   onRefresh: () => void;
   onClearSelection: () => void;
@@ -67,6 +69,7 @@ export const useAppKeybinds = ({
   onContextMenu,
   onNewTab,
   onCloseTab,
+  onReopenClosedTab,
   onSelectTab,
   onRefresh,
   onClearSelection,
@@ -109,6 +112,11 @@ export const useAppKeybinds = ({
     onCloseTab(activeTabId);
     return true;
   }, [activeTabId, canHandleGlobalKeybind, onCloseTab]);
+
+  const handleReopenClosedTabKeybind = useCallback((event: KeyboardEvent) => {
+    if (!canHandleGlobalKeybind() || event.isComposing || useBottomPaneStore.getState().active) return false;
+    return onReopenClosedTab();
+  }, [canHandleGlobalKeybind, onReopenClosedTab]);
 
   const handleAdjacentTab = useCallback(
     (_event: KeyboardEvent, direction: -1 | 1) => {
@@ -294,6 +302,7 @@ export const useAppKeybinds = ({
         "Control+c": () => handleClipboardSelection("copy"),
         "Control+x": () => handleClipboardSelection("move"),
         "Control+v": handlePasteSelectionKeybind,
+        [REOPEN_CLOSED_TAB_KEYBIND]: handleReopenClosedTabKeybind,
         ContextMenu: () => handleContextMenuKeybind(false),
         "Shift+F10": () => handleContextMenuKeybind(true),
         "Control+r": handleRefreshKeybind,
@@ -308,6 +317,7 @@ export const useAppKeybinds = ({
       handleClipboardSelection,
       handleContextMenuKeybind,
       handlePasteSelectionKeybind,
+      handleReopenClosedTabKeybind,
       handleRefreshKeybind,
       handleSelectAllKeybind,
       handleSelectTabIndex,

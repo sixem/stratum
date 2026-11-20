@@ -18,6 +18,7 @@ export type SidebarSectionId = "places" | "recent" | "tips";
 
 export type Settings = {
   sidebarOpen: boolean;
+  sidebarWidth: number;
   sidebarRecentLimit: number;
   sidebarSectionOrder: SidebarSectionId[];
   sidebarHiddenSections: SidebarSectionId[];

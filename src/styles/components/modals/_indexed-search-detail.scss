@@ -39,7 +39,8 @@
   .indexed-search-selection-detail-empty {
     margin: 0;
     color: var(--muted);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
     line-height: 1.4;
   }
 
@@ -66,7 +67,7 @@
     min-height: 28px;
     padding: 4px 7px;
     gap: 5px;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
   }
 
   .indexed-search-selection-detail-action svg {
@@ -90,12 +91,14 @@
 
   .indexed-search-selection-stat-label {
     color: var(--muted);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
   }
 
   .indexed-search-selection-stat-value {
     color: var(--text);
     font-size: var(--font-size-sm);
+    font-weight: 500;
     line-height: 1.3;
   }
 }

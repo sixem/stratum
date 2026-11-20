@@ -238,14 +238,6 @@ export const TabsBar = ({
           className="tabs"
           data-fixed-tabs={fixedWidthTabs ? "true" : "false"}
           ref={tabsRef}
-          onWheel={(event) => {
-            const tabsEl = tabsRef.current;
-            if (!tabsEl || !overflowed) return;
-            // Map mouse-wheel vertical deltas to horizontal tab scrolling.
-            if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-            tabsEl.scrollBy({ left: event.deltaY });
-            event.preventDefault();
-          }}
         >
           {tabs.map((tab, index) => (
             <Fragment key={tab.id}>

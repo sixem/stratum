@@ -1,25 +1,27 @@
 // Secondary workspace with its own tabs, navigation, and file selection.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ComponentProps, PointerEvent } from "react";
-import type { ShellMenuTarget } from "@/api";
+import type { ComponentProps } from "react";
+import { createPortal } from "react-dom";
 import { useDriveInfo } from "@/hooks/domain/filesystem/useDriveInfo";
 import { useStatusLabels } from "@/hooks/domain/metadata/useStatusLabels";
 import { FileView } from "../FileView";
 import { TabsBar } from "@/components/navigation/TabsBar";
-import { ChevronDownIcon, ChevronUpIcon, GridIcon, ListIcon, NavArrowIcon, TabCloseIcon } from "@/components/icons";
+import { ChevronDownIcon, ChevronUpIcon, FilterIcon, GridIcon, ListIcon, NavArrowIcon, TabCloseIcon } from "@/components/icons";
+import { ContextMenu } from "@/components/overlay/ContextMenu";
 import { ToolbarIconButton } from "@/components/primitives/ToolbarIconButton";
 import { useDragOutHandler } from "@/hooks/ui/inputs/useDragOutHandler";
-import { useWindowsContextMenu } from "@/hooks/ui/menus/useWindowsContextMenu";
+import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
 import { useSmartTabJump } from "@/hooks/ui/selection/useSmartTabJump";
 import { useTypeaheadSelection } from "@/hooks/ui/selection/useTypeaheadSelection";
-import type { PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
-import { useSettingsStore, refreshFileClipboard } from "@/modules";
+import type { BottomPreviewBindings, PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
+import { useSettingsStore } from "@/modules";
 import { hideBottomPane, setBottomPaneActive, useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { folderPathKey, getNextTrailPath, isPreviewableEntry } from "@/lib";
 import type { useFileManager } from "@/hooks/domain/filesystem/useFileManager";
 import type { useFileDrop } from "@/hooks/domain/filesystem/useFileDrop";
 import { bottomPaneKeys } from "./bottomPaneKeys";
 import { useBottomFolder } from "./useBottomFolder";
+import { useBottomPaneActions } from "./useBottomPaneActions";
 
 export type PaneActions = ReturnType<typeof useFileManager>;
 export type PaneDrop = ReturnType<typeof useFileDrop>;
@@ -35,16 +37,21 @@ type Props = {
   drop: PaneDrop;
   onSummary: (summary: PaneSummary) => void;
   onOpenGallery: (path: string, source: PreviewGallerySource) => void;
+  bottomPreview: BottomPreviewBindings;
+  menu: BottomMenuBindings;
+  commandsBlocked: boolean;
 };
 
-export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery }: Props) {
+export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery, bottomPreview, menu, commandsBlocked }: Props) {
   const folder = useBottomFolder(upper.currentPath);
   const { dir, meta, tabs, model, selection, viewKey, busy } = folder;
   const root = useRef<HTMLElement>(null);
   const files = useRef<HTMLDivElement>(null);
   const address = useRef<HTMLInputElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState(tabs.displayPath);
-  const [rename, setRename] = useState<{ path: string; name: string } | null>(null);
+  const gridColumns = useRef(1);
+  const updateGridColumns = useCallback((columns: number) => { gridColumns.current = columns; }, []);
   const [scrollRequest, setScrollRequest] = useState<{index: number; nonce: number} | null>(null);
   const tabNumbers = useSettingsStore(state => state.showTabNumbers);
   const fixedWidth = useSettingsStore(state => state.fixedWidthTabs);
@@ -61,22 +68,47 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery }: P
     onSummary({ path, recentJumps: tabs.recentJumps, countLabel, selectionLabel });
   }, [onSummary, path, tabs.recentJumps, countLabel, selectionLabel]);
   const ready = !!path && !busy && folderPathKey(path) === folderPathKey(tabs.activeTab?.path ?? "");
-  const viewVisit = useMemo(() => ({ current: false }), [viewKey]);
+  const viewVisit = useMemo(() => ({ current: false }), [viewKey, tabs.searchValue]);
   useLayoutEffect(() => {
     viewVisit.current = ready;
     return () => { viewVisit.current = false; };
   }, [ready, viewVisit]);
+  const selectEntry = selection.setSelection;
+  const bottomGallery = useMemo<PreviewGallerySource>(() => ({
+    items: dir.entries,
+    entryByPath: model.entryByPath,
+    onSelectPath: (selectedPath) => {
+      if (viewVisit.current) selectEntry([selectedPath], selectedPath);
+    },
+  }), [dir.entries, model.entryByPath, selectEntry, viewVisit]);
+  const openGallery = useCallback((targetPath: string) => {
+    const entry = bottomGallery.entryByPath.get(targetPath);
+    if (viewVisit.current && entry && isPreviewableEntry(entry)) {
+      onOpenGallery(entry.path, bottomGallery);
+    }
+  }, [bottomGallery, onOpenGallery, viewVisit]);
+  const registerPreviewSource = bottomPreview.registerSource;
+  useLayoutEffect(() => {
+    if (!ready || !root.current || !files.current) return;
+    return registerPreviewSource({
+      gallery: bottomGallery,
+      paneRoot: root.current,
+      filesRoot: files.current,
+      isCurrent: () => viewVisit.current,
+    });
+  }, [bottomGallery, ready, registerPreviewSource, viewVisit]);
   const nextTrailPath = ready ? getNextTrailPath(path, tabs.activeTab?.crumbTrailPath) : null;
   const paths = useMemo(() => Array.from(selection.selected).filter(item => model.entryByPath.has(item)),
     [selection.selected, model.entryByPath]);
   useLayoutEffect(() => setDraft(tabs.displayPath), [tabs.displayPath, tabs.activeTabId]);
-  useEffect(() => { setRename(null); setScrollRequest(null); }, [viewKey]);
-  useEffect(() => { root.current?.focus({ preventScroll: true }); }, []);
+  useEffect(() => { setScrollRequest(null); }, [viewKey]);
+  const focusFiles = useCallback(() => { files.current?.focus({ preventScroll: true }); }, []);
+  useEffect(focusFiles, [focusFiles]);
   // A sidebar jump belongs to the pane it opened. Its next keyboard action
   // should operate on the new folder even when the sidebar button took focus.
   useLayoutEffect(() => {
-    if (folder.navigation) root.current?.focus({ preventScroll: true });
-  }, [folder.navigation]);
+    if (folder.navigation) focusFiles();
+  }, [focusFiles, folder.navigation]);
   const scrollTop = useRef<number | null>(null);
   const { activeTabId, setTabScrollTop } = tabs;
   useLayoutEffect(() => {
@@ -85,58 +117,52 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery }: P
       if (activeTabId && scrollTop.current !== null) setTabScrollTop(activeTabId, scrollTop.current);
     };
   }, [activeTabId, setTabScrollTop]);
+  const closeTab = (id: string) => {
+    const outgoing = id === activeTabId ? scrollTop.current ?? undefined : undefined;
+    focusFiles();
+    tabs.closeTab(id, outgoing);
+  };
   const navigate = (next: string) => { if (next.trim()) tabs.browseTo(next.trim()); };
+  const clearSearchAndFocusFiles = () => {
+    tabs.setSearch("");
+    focusFiles();
+  };
+  const browseFromView = (next: string) => {
+    if (!next.trim()) return;
+    const hadSearch = tabs.searchValue.trim().length > 0;
+    if (hadSearch) tabs.setSearch("");
+    focusFiles();
+    tabs.browseTo(next, hadSearch ? { search: "" } : undefined);
+  };
   const openNew = tabs.openInNewTab;
   const dragOut = useDragOutHandler({
     beginFileActivity: actions.beginFileActivity, viewParentPath: dir.parentPath, onRefresh: dir.refreshAfterChange,
   });
-  const nativeMenu = useWindowsContextMenu({
-    enabled: "__TAURI_INTERNALS__" in window, closeContextMenu: () => {},
-    beginFileActivity: actions.beginFileActivity,
-    onCommand: () => { void refreshFileClipboard().catch(() => {}); void dir.refreshAfterChange(); },
-  });
-  const galleryAction = (targetPath?: string) => {
-    const entry = targetPath ? model.entryByPath.get(targetPath) : undefined;
-    if (!entry || !isPreviewableEntry(entry)) return;
-    return () => {
-      if (!viewVisit.current) return;
-      onOpenGallery(entry.path, {
-        items: dir.entries,
-        entryByPath: model.entryByPath,
-        onSelectPath: (selectedPath) => {
-          if (viewVisit.current) selection.setSelection([selectedPath], selectedPath);
-        },
-      });
-    };
-  };
-  const openKeyboardMenu = (target: ShellMenuTarget, point: { x: number; y: number }) =>
-    nativeMenu(target, point, false, galleryAction("paths" in target ? target.paths[0] : undefined));
-  const openMenu = (event: PointerEvent, entry?: {path: string}) => {
-    event.preventDefault(); event.stopPropagation();
-    if (!ready) return;
-    const targets = entry && (paths.includes(entry.path) ? paths : [entry.path]);
-    if (entry && !paths.includes(entry.path)) selection.setSelection([entry.path]);
-    nativeMenu(targets ? { paths: targets } : { backgroundPath: path },
-      { x: event.clientX, y: event.clientY }, event.shiftKey, galleryAction(entry?.path));
-  };
   const scrollTo = useCallback((index: number) => {
     setScrollRequest(prev => ({ index, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
-  const { setSelection } = selection;
+  const paneActions = useBottomPaneActions({
+    folder, actions, menu, files, ready, viewVisit, browseFromView, openGallery, scrollTo,
+    hideExtension: upper.gridNameHideExtension,
+    clearDragState: drop.clearDragState,
+  });
   const handleTypeahead = useTypeaheadSelection({
     items: model.items,
     resetKeys: [active, ready, viewKey, tabs.searchValue, tabs.viewMode],
     onMatch: ({ path, index }) => {
       // Keep keyboard focus in this pane when scrolling moves a row out of view.
-      files.current?.focus({ preventScroll: true });
-      setSelection([path], path);
+      focusFiles();
+      paneActions.handleSelectionChange([path], path);
       scrollTo(index);
     },
   });
   const handleTabJump = useSmartTabJump(files, active && ready ? `${viewKey}:${tabs.viewMode}` : null);
   const onKey = bottomPaneKeys({
-    folder, actions, address, nativeMenu: openKeyboardMenu, paths, ready, startRename: setRename,
-    scrollTo, handleTypeahead, handleTabJump,
+    folder, actions, address, paths, ready, closeTab, commandsBlocked, gridColumns,
+    openContextMenu: paneActions.openKeyboardContextMenu,
+    startRename: paneActions.handleRenameStart, clearSelection: paneActions.clearSelectionForVisit,
+    scrollTo: (index) => { focusFiles(); scrollTo(index); },
+    handleTypeahead, handleTabJump, searchInput, clearSearchAndFocusFiles, browseFromView,
   });
   const nextView = tabs.viewMode === "list" ? "thumbs" : "list";
   const viewSwitchLabel = nextView === "thumbs" ? "Switch to thumbnails" : "Switch to list";
@@ -144,9 +170,12 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery }: P
   return <section ref={root} className="bottom-pane" aria-label="Bottom pane" tabIndex={-1}
     onKeyDown={onKey} onFocusCapture={() => setBottomPaneActive(true)}
     onPointerDownCapture={event => {
+      if (!event.currentTarget.contains(event.target as Node)) return;
       setBottomPaneActive(true);
-      if (!(event.target as Element).closest("button, input, [tabindex='0']"))
-        root.current?.focus({preventScroll:true});
+      if (!(event.target as Element).closest("button, input, [tabindex='0']") ||
+          (event.button === 2 && !event.currentTarget.contains(document.activeElement))) {
+        focusFiles();
+      }
     }}
     onPointerDown={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()}>
     <nav className="bottom-nav" aria-label="Bottom pane navigation">
@@ -186,9 +215,23 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery }: P
       >
         <ChevronDownIcon />
       </ToolbarIconButton>
-      <form onSubmit={event => { event.preventDefault(); navigate(draft); root.current?.focus(); }}>
+      <form onSubmit={event => { event.preventDefault(); navigate(draft); focusFiles(); }}>
         <input ref={address} aria-label="Bottom pane folder" value={draft} placeholder="Folder path" onChange={event => setDraft(event.target.value)} />
       </form>
+      <label className="bottom-search">
+        <FilterIcon aria-hidden="true" />
+        <input
+          ref={searchInput}
+          aria-label="Search bottom folder"
+          value={tabs.searchValue}
+          onChange={event => tabs.setSearch(event.currentTarget.value)}
+          onKeyDown={event => { if (event.key === "Enter") event.preventDefault(); }}
+          disabled={!tabs.activeTab?.path}
+          placeholder="Search"
+          spellCheck={false}
+          autoComplete="off"
+        />
+      </label>
       <ToolbarIconButton
         label={viewSwitchLabel}
         onClick={() => {
@@ -205,7 +248,9 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery }: P
       </ToolbarIconButton>
     </nav>
     <TabsBar tabs={tabs.tabs} activeId={tabs.activeTabId} showTabNumbers={tabNumbers} fixedWidthTabs={fixedWidth}
-      onSelect={tabs.selectTab} onClose={tabs.closeTab} onNew={tabs.newTab} onReorder={tabs.reorderTabs}
+      onSelect={tabs.selectTab} onClose={closeTab} onNew={tabs.newTab} onReorder={tabs.reorderTabs}
+      onTabContextMenu={paneActions.handlePlaceTargetContextMenu}
+      onTabContextMenuDown={paneActions.handlePlaceTargetContextMenuDown}
       dropTargetId={drop.dropTargetTabId} dropTargetPath={drop.dropTargetPath} tabDropSubmenu={drop.tabDropSubmenu}
       dragPoint={drop.dragPoint} onSubmenuHoverTargetChange={drop.setDropTarget} onSubmenuCloseRequest={drop.clearDragState} />
     <div ref={files} className="main bottom-files" tabIndex={-1} aria-busy={busy} data-file-pane="bottom" data-pane-path={ready ? path : ""}
@@ -220,18 +265,30 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery }: P
         showLander={!path} recentJumps={tabs.recentJumps} onOpenPlace={navigate} onOpenRecent={navigate} onOpenDrive={navigate}
         onOpenDriveNewTab={openNew} onOpenPlaceNewTab={openNew} onOpenRecentNewTab={openNew}
         searchQuery={tabs.searchValue} loading={busy} scrollRestoreKey={viewKey} scrollRestoreTop={tabs.activeTab?.scrollTop ?? 0}
-        scrollRequest={scrollRequest} selectedPaths={selection.selected} onSelectItem={selection.selectItem}
-        onSetSelection={selection.setSelection} onClearSelection={selection.clearSelection}
-        onOpenDir={navigate} onOpenDirNewTab={openNew} onGoUp={() => dir.parentPath && navigate(dir.parentPath)} canGoUp={!!dir.parentPath}
-        sortState={tabs.sortState} onSortChange={sort => { tabs.setSort(sort); void dir.loadDir(path, {sort}); }}
+        scrollRequest={scrollRequest} selectedPaths={selection.selected} onSelectItem={paneActions.handleSelectItemWithRename}
+        onSetSelection={paneActions.handleSelectionChange} onClearSelection={paneActions.handleClearSelection}
+        onOpenDir={browseFromView} onOpenDirNewTab={openNew} onGoUp={() => dir.parentPath && navigate(dir.parentPath)} canGoUp={!!dir.parentPath}
+        sortState={tabs.sortState} onSortChange={paneActions.changeSort}
         entryMeta={meta.entryMeta} onRequestMeta={meta.requestEntryMeta} onStartDragOut={dragOut}
-        onCreateFile={actions.createFile} onCreateFolder={actions.createFolder}
-        onCreateFolderAndGo={async (parent, name) => { const created = await actions.createFolder(parent,name); if(created) navigate(created); }}
-        renameTargetPath={rename?.path} renameValue={rename?.name ?? ""} onRenameChange={name => setRename(prev => prev && {...prev, name})}
-        onRenameCommit={() => { if(rename) void actions.renameEntry(rename.path, rename.name); setRename(null); }} onRenameCancel={() => setRename(null)}
-        onEntryContextMenu={openMenu} onContextMenu={openMenu} onContextMenuDown={undefined} onEntryContextMenuDown={undefined}
-        onEntryPreviewPress={undefined} onEntryPreviewRelease={undefined} onGridColumnsChange={undefined}
+        onCreateFile={paneActions.createFile} onCreateFolder={paneActions.createFolder}
+        onCreateFolderAndGo={paneActions.createFolderAndGo}
+        renameTargetPath={paneActions.renameTarget?.path} renameValue={paneActions.renameValue}
+        onRenameChange={paneActions.setRenameValue} onRenameCommit={paneActions.handleRenameCommit}
+        onRenameCancel={paneActions.handleRenameCancel}
+        onEntryContextMenu={paneActions.handleEntryContextMenu} onEntryContextMenuDown={paneActions.handleEntryContextMenuDown}
+        onContextMenu={ready ? paneActions.handleLayoutContextMenu : undefined}
+        onContextMenuDown={ready ? paneActions.handleLayoutContextMenuDown : undefined}
+        onEntryPreviewPress={bottomPreview.onPress} onEntryPreviewRelease={upper.onEntryPreviewRelease}
+        onGridColumnsChange={updateGridColumns}
       />}
     </div>
+    {createPortal(<ContextMenu
+      open={paneActions.contextMenuOpen}
+      x={menu.contextMenu?.x ?? 0}
+      y={menu.contextMenu?.y ?? 0}
+      items={paneActions.contextMenuItems}
+      onClose={menu.closeContextMenu}
+      onOpenNative={() => paneActions.openKeyboardContextMenu(true)}
+    />, document.body)}
   </section>;
 }

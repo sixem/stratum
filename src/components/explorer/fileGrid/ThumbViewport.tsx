@@ -7,22 +7,22 @@ import { SelectionRect } from "../SelectionRect";
 type ThumbViewportProps = {
   viewportRef: RefObject<HTMLDivElement | null>;
   gridVars: CSSProperties;
-  contentReady: boolean;
-  viewAnimate: boolean;
+  contentHeight: number;
   selectionBox: SelectionBox | null;
   onContextMenu?: (event: ReactPointerEvent) => void;
   onContextMenuDown?: (event: ReactPointerEvent) => void;
+  emptyState: ReactNode;
   children: ReactNode;
 };
 
 export const ThumbViewport = ({
   viewportRef,
   gridVars,
-  contentReady,
-  viewAnimate,
+  contentHeight,
   selectionBox,
   onContextMenu,
   onContextMenuDown,
+  emptyState,
   children,
 }: ThumbViewportProps) => {
   return (
@@ -52,13 +52,10 @@ export const ThumbViewport = ({
         event.preventDefault();
       }}
     >
-      <div
-        className="thumb-content"
-        data-ready={contentReady ? "true" : "false"}
-        data-animate={viewAnimate ? "true" : "false"}
-      >
+      <div className="thumb-content" style={{ height: contentHeight }}>
         {children}
       </div>
+      {emptyState}
       <SelectionRect box={selectionBox} />
     </div>
   );

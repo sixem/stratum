@@ -163,6 +163,7 @@ export const useAppShellModel = () => {
     jumpTo: tabSession.jumpTo,
     selectTab: tabSession.selectTab,
     closeTab: tabSession.closeTab,
+    reopenClosedTab: tabSession.reopenClosedTab,
     newTab: tabSession.newTab,
     openInNewTab: tabSession.openInNewTab,
     setSort: tabSession.setSort,

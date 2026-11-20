@@ -30,6 +30,7 @@ type ContextMenuProps = {
   y: number;
   items: ContextMenuItem[];
   onClose: () => void;
+  onOpenNative?: () => boolean;
 };
 
 const MENU_EDGE = CONTEXT_MENU_EDGE;
@@ -55,7 +56,7 @@ const renderContextIcon = (icon: ContextMenuIcon) => {
   return <Icon className="context-check-icon" />;
 };
 
-export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) => {
+export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative }: ContextMenuProps) => {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const submenuRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState({ x, y });
@@ -83,6 +84,7 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
     refs: [menuRef],
     onEscape: onClose,
     onPointerDownOutside: onClose,
+    pointerDownCapture: true,
     onScroll: onClose,
     onResize: onClose,
   });
@@ -263,7 +265,16 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
       role="menu"
       aria-hidden={!open}
       inert={!open}
-      onKeyDown={handleContextMenuKey}
+      onKeyDown={(event) => {
+        if (event.shiftKey && event.key === "F10" && onOpenNative?.()) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        handleContextMenuKey(event);
+      }}
+      onPointerDown={(event) => { if (event.button === 2) event.stopPropagation(); }}
+      onPointerUp={(event) => { if (event.button === 2) event.stopPropagation(); }}
       onBlur={(event) => {
         if (open && event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) onClose();
       }}

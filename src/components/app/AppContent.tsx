@@ -1,9 +1,12 @@
 // Owns the main layout body (sidebar + file view) and the focusable main container.
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { CSSProperties, ComponentProps, RefObject } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { FileView, PerfProfiler, Sidebar } from "@/components";
-import type { PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
+import { SidebarDivider } from "@/components/navigation/SidebarDivider";
+import { useSettingsStore } from "@/modules";
+import type { BottomPreviewBindings, PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
+import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
 
 import { useBottomPaneStore, showBottomPane, setBottomPaneActive } from "@/modules/bottomPaneStore";
 import { PaneDivider } from "../explorer/bottomPane/PaneDivider";
@@ -21,7 +24,10 @@ type AppContentProps = {
   sidebarProps: ComponentProps<typeof Sidebar>;
   mainRef: RefObject<HTMLElement | null>;
   fileViewProps: ComponentProps<typeof FileView>;
+  bottomMenu: BottomMenuBindings;
+  bottomCommandsBlocked: boolean;
   onOpenGallery: (path: string, source: PreviewGallerySource) => void;
+  bottomPreview: BottomPreviewBindings;
   onContextMenu?: (event: ReactPointerEvent) => void;
   onContextMenuDown?: (event: ReactPointerEvent) => void;
 };
@@ -36,18 +42,25 @@ export const AppContent = ({
   sidebarProps,
   mainRef,
   fileViewProps,
+  bottomMenu,
+  bottomCommandsBlocked,
   onOpenGallery,
+  bottomPreview,
   onContextMenu,
   onContextMenuDown,
 }: AppContentProps) => {
   const split = useBottomPaneStore(state => state.open);
   const height = useBottomPaneStore(state => state.height);
   const bottomActive = useBottomPaneStore(state => state.open && state.active);
+  const sidebarWidth = useSettingsStore(state => state.sidebarWidth);
+  const [sidebarResizing, setSidebarResizing] = useState(false);
+  const paneViewProps = { ...fileViewProps, gridResizeDeferred: sidebarResizing };
   const upperPath = fileViewProps.loading || fileViewProps.showLander ? "" : fileViewProps.currentPath;
   return (
     <PerfProfiler id="app-content">
       <div
         className={layoutClass}
+        style={{ "--sidebar-width": sidebarWidth + "px" } as CSSProperties}
         onPointerDown={(event) => {
           if (event.button !== 2) return;
           onContextMenuDown?.(event);
@@ -65,6 +78,7 @@ export const AppContent = ({
               onSelectRecent: (path: string) => showBottomPane(path, false),
               onSelectNewTab: (path: string) => showBottomPane(path),
             })} />
+            <SidebarDivider width={sidebarWidth} onResizeChange={setSidebarResizing} />
           </PerfProfiler>
         ) : null}
         <div className="pane-stack" data-split={split} data-active-pane={bottomActive ? "bottom" : "main"}
@@ -77,14 +91,14 @@ export const AppContent = ({
             <div className="folder-load-progress" role="progressbar" aria-label="Loading folder" />
           )}
           <PerfProfiler id="file-view">
-            <FileView {...fileViewProps} dropTargetPath={fileDrop.hoveredPane === "main" ? fileDrop.dropTargetPath : null} />
+            <FileView {...paneViewProps} dropTargetPath={fileDrop.hoveredPane === "main" ? fileDrop.dropTargetPath : null} />
           </PerfProfiler>
         </main>
         {split && <>
           <PaneDivider />
           <Suspense fallback={<div className="pane-loading">Opening bottom pane…</div>}>
-            <BottomPane upper={fileViewProps} actions={paneActions} drop={fileDrop}
-              onSummary={onBottomSummary} onOpenGallery={onOpenGallery} />
+            <BottomPane upper={paneViewProps} actions={paneActions} drop={fileDrop} menu={bottomMenu} commandsBlocked={bottomCommandsBlocked}
+              onSummary={onBottomSummary} onOpenGallery={onOpenGallery} bottomPreview={bottomPreview} />
           </Suspense>
         </>}
         </div>

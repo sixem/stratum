@@ -21,7 +21,10 @@ const App = () => {
           onContextMenu: view.onContextMenu,
           onContextMenuDown: view.onContextMenuDown,
           fileViewProps: view.fileViewProps,
+          bottomMenu: view.bottomMenu,
+          bottomCommandsBlocked: view.bottomCommandsBlocked,
           onOpenGallery: view.onOpenGallery,
+          bottomPreview: view.bottomPreview,
         }}
         statusbar={{
           statusBar: selection.statusBar,

@@ -142,7 +142,8 @@
   .indexed-search-section-meta,
   .indexed-search-section-note {
     color: var(--muted);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
   }
 
   .indexed-search-section-note {
@@ -165,7 +166,8 @@
     padding: 9px 20px;
     border-top: 1px solid var(--stroke);
     color: var(--muted);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
   }
 
   .indexed-search-service-status {

@@ -6,6 +6,7 @@ import { EntryCard, ParentCard } from "./fileGrid/index";
 import { ThumbViewport } from "./fileGrid/ThumbViewport";
 import type { FileGridProps } from "./fileGrid/fileGrid.types";
 import { useFileGridController } from "./fileGrid/useFileGridController";
+import { useGridScrollAnchor } from "./fileGrid/useGridScrollAnchor";
 import { useGridSelection } from "./fileGrid/useGridSelection";
 import { useGridSizing } from "./fileGrid/useGridSizing";
 import { useGridThumbRequests } from "./fileGrid/useGridThumbRequests";
@@ -76,6 +77,7 @@ const FileGrid = ({
     columnGap,
     rowCount,
     rowHeight,
+    contentHeight,
     gridMetaEnabled,
     isResizing,
   } = useGridSizing({
@@ -85,7 +87,7 @@ const FileGrid = ({
     gridShowSize: grid.gridShowSize,
     gridShowExtension: grid.gridShowExtension,
     thumbnailFit: thumbs.thumbnailFit,
-    instantResizeKey: grid.instantResizeKey,
+    resizeDeferred: grid.resizeDeferred,
     viewKey: view.viewKey,
     scrollRestoreKey: view.scrollRestoreKey,
     scrollRestoreTop: view.scrollRestoreTop,
@@ -95,6 +97,19 @@ const FileGrid = ({
     onAutoViewportWidthChange: grid.onAutoViewportWidthChange,
     onGridColumnsChange: grid.onGridColumnsChange,
     viewItemsLength: viewItems.length,
+  });
+
+  // Reposition before the virtual range reads the new scroll offset.
+  useGridScrollAnchor({
+    viewportRef,
+    viewKey: view.viewKey,
+    scrollRestoreKey: view.scrollRestoreKey,
+    loading: view.loading,
+    items: viewItems,
+    columnCount,
+    rowHeight,
+    viewportHeight,
+    contentHeight,
   });
 
   const { virtual, visibleItems, startIndex } = useGridVirtual({
@@ -160,8 +175,8 @@ const FileGrid = ({
     loading: view.loading,
   });
 
-  const contentReady = true;
-  const viewAnimate = false;
+  // During reflow, keep the old offset reachable until the new range is measured.
+  const scrollHeight = Math.max(contentHeight, virtual.totalHeight);
 
   return (
     <div
@@ -174,11 +189,19 @@ const FileGrid = ({
       <ThumbViewport
         viewportRef={viewportRef}
         gridVars={gridVars}
-        contentReady={contentReady}
-        viewAnimate={viewAnimate}
+        contentHeight={scrollHeight}
         selectionBox={selectionBox}
         onContextMenu={contextMenu.onContextMenu}
         onContextMenuDown={contextMenu.onContextMenuDown}
+        emptyState={view.entryByPath.size === 0 && !view.loading ? (
+          <div className="thumb-empty">
+            <EmptyState
+              title={emptyMessage.title}
+              subtitle={emptyMessage.subtitle}
+              actions={emptyActions}
+            />
+          </div>
+        ) : null}
       >
         <div className="thumb-spacer" style={{ height: `${virtual.offsetTop}px` }} />
         <div className="thumb-grid" style={gridStyle}>
@@ -254,16 +277,6 @@ const FileGrid = ({
             );
           })}
         </div>
-        <div className="thumb-spacer" style={{ height: `${virtual.offsetBottom}px` }} />
-        {view.entryByPath.size === 0 && !view.loading ? (
-          <div className="thumb-empty">
-            <EmptyState
-              title={emptyMessage.title}
-              subtitle={emptyMessage.subtitle}
-              actions={emptyActions}
-            />
-          </div>
-        ) : null}
       </ThumbViewport>
     </div>
   );

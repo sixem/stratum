@@ -23,22 +23,8 @@
   }
 
   .thumb-content {
-    opacity: 0;
-    transition: none;
-  }
-
-  .thumb-content[data-ready="true"] {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .thumb-content[data-ready="false"] {
-    pointer-events: none;
-    transition: none;
-  }
-
-  .thumb-content[data-ready="false"][data-animate="true"] {
-    transition: none;
+    // Stale rendered rows must not extend the scroll area during reflow.
+    overflow: clip;
   }
 
   .thumb-grid {

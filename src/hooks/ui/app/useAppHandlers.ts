@@ -16,6 +16,7 @@ type UseAppHandlersOptions = {
   jumpTo: (path: string) => void;
   selectTab: (id: string) => void;
   closeTab: (id: string) => void;
+  reopenClosedTab: () => boolean;
   newTab: () => void;
   openInNewTab: (path: string) => void;
   setSort: (next: SortState) => void;
@@ -39,6 +40,7 @@ export const useAppHandlers = ({
   jumpTo,
   selectTab,
   closeTab,
+  reopenClosedTab,
   newTab,
   openInNewTab,
   setSort,
@@ -92,6 +94,11 @@ export const useAppHandlers = ({
     newTab();
   }, [newTab, stashActiveScroll]);
 
+  const handleReopenClosedTab = useCallback(() => {
+    stashActiveScroll();
+    return reopenClosedTab();
+  }, [reopenClosedTab, stashActiveScroll]);
+
   const handleOpenInNewTab = useCallback(
     (path: string) => {
       stashActiveScroll();
@@ -129,6 +136,7 @@ export const useAppHandlers = ({
     handleSelectPlace,
     handleSelectTab,
     handleCloseTab,
+    handleReopenClosedTab,
     handleNewTab,
     handleOpenInNewTab,
     handleToggleSidebar,

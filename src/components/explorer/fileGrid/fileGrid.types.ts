@@ -83,7 +83,7 @@ export type FileGridLayoutProps = {
   gridNameHideExtension: boolean;
   autoViewportWidth?: number;
   onAutoViewportWidthChange?: (width: number) => void;
-  instantResizeKey?: string | number | boolean;
+  resizeDeferred?: boolean;
   onGridColumnsChange?: (columns: number) => void;
 };
 

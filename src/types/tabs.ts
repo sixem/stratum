@@ -11,3 +11,8 @@ export type Tab = {
   sort: SortState;
   search: string;
 };
+
+export type TabHistory = {
+  back: string[];
+  forward: string[];
+};

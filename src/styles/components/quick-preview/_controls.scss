@@ -4,18 +4,17 @@
 
 .quick-preview-info {
   position: relative;
-  width: 100%;
   display: grid;
-  gap: 4px;
-  padding: 8px 16px;
-  // Keep the info bar in the main column so it doesn't overlap the right strip.
-  grid-column: 1 / 2;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 16px;
+  grid-column: 1 / -1;
   grid-row: 4;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: var(--quick-preview-divider);
   background: rgba(8, 10, 16, 0.6);
   @include shell.frosted-backdrop(var(--frosted-surface-blur), var(--frosted-surface-saturate));
   color: var(--text);
-  pointer-events: none;
 }
 
 .quick-preview-controls {
@@ -39,7 +38,7 @@
   align-items: center;
   gap: 8px;
   padding: 7px 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: var(--quick-preview-divider);
   background: linear-gradient(180deg, rgba(8, 10, 16, 0.78), rgba(8, 10, 16, 0.62));
   @include shell.frosted-backdrop(var(--frosted-surface-blur), var(--frosted-surface-saturate));
   color: var(--text);
@@ -316,6 +315,35 @@
     0 0 0 2px rgba(8, 11, 18, 0.7),
     0 0 0 5px rgba(var(--accent-rgb), 0.15),
     0 5px 11px rgba(0, 0, 0, 0.35);
+}
+
+.quick-preview-info-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.quick-preview-strip-toggle {
+  @include control.icon-button-shell(26px);
+
+  &:hover,
+  &:focus-visible {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.quick-preview-strip-chevron {
+  width: 15px;
+  height: 15px;
+  transition: transform 0.18s ease;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.quick-preview-strip-toggle[aria-expanded="false"] .quick-preview-strip-chevron {
+  transform: rotate(180deg);
 }
 
 .quick-preview-info-error {

@@ -1,20 +1,6 @@
 // Thumbnail icon selection with optional preview/app icon fallbacks.
 import { useEffect, useState } from "react";
-import { isPdfLikeExtension, isSvgLikeExtension } from "@/lib";
-import type { FileKind } from "@/lib";
-import {
-  ArchiveIcon,
-  AudioIcon,
-  ExecutableFileIcon,
-  FallbackFileIcon,
-  FolderIcon,
-  ImageIcon,
-  PdfIcon,
-  SecureFileIcon,
-  SvgIcon,
-  TextFileIcon,
-  VideoIcon,
-} from "@/components/icons";
+import { FileTypeIcon } from "@/components/icons/fileIcons";
 import type { ThumbnailIconProps } from "./gridCard.types";
 import { isThumbPreviewReadyCached, ThumbnailPreview } from "./ThumbnailPreview";
 
@@ -31,30 +17,6 @@ const markAppIconReady = (url: string) => {
     const oldest = readyAppIconUrls.values().next().value as string | undefined;
     if (!oldest) break;
     readyAppIconUrls.delete(oldest);
-  }
-};
-
-const resolveFallbackIcon = (fileKind: FileKind, extension: string | null) => {
-  if (isSvgLikeExtension(extension)) {
-    return SvgIcon;
-  }
-  switch (fileKind) {
-    case "document":
-      return isPdfLikeExtension(extension) ? PdfIcon : TextFileIcon;
-    case "video":
-      return VideoIcon;
-    case "audio":
-      return AudioIcon;
-    case "image":
-      return ImageIcon;
-    case "executable":
-      return ExecutableFileIcon;
-    case "archive":
-      return ArchiveIcon;
-    case "secure":
-      return SecureFileIcon;
-    case "generic":
-      return FallbackFileIcon;
   }
 };
 
@@ -82,7 +44,7 @@ export const ThumbnailIcon = ({
     // Keep the folder glyph visible until the folder preview is confirmed ready.
     return (
       <>
-        {!thumbReady ? <FolderIcon className="thumb-svg is-dir" /> : null}
+        {!thumbReady ? <FileTypeIcon className="thumb-svg is-dir" isDir fileKind={fileKind} extension={extension} /> : null}
         {thumbUrl ? (
           <ThumbnailPreview src={thumbUrl} onReadyChange={setThumbReady} />
         ) : null}
@@ -90,7 +52,6 @@ export const ThumbnailIcon = ({
     );
   }
 
-  const Icon = resolveFallbackIcon(fileKind, extension);
   const showAppIcon = Boolean(appIconUrl) && appIconsEnabled && !thumbReady;
   const [appIconReady, setAppIconReady] = useState(
     () => Boolean(appIconUrl && readyAppIconUrls.has(appIconUrl)),
@@ -109,7 +70,7 @@ export const ThumbnailIcon = ({
 
   return (
     <>
-      {showFallback ? <Icon className="thumb-svg" /> : null}
+      {showFallback ? <FileTypeIcon className="thumb-svg" isDir={false} fileKind={fileKind} extension={extension} /> : null}
       {showAppIcon ? (
         <img
           className="thumb-app-icon"

@@ -53,7 +53,7 @@ export const useShellViewDataPipeline = ({
 }: UseShellViewDataPipelineOptions & {
   resolvedView: UseShellViewDataPipelineResolvedView;
 }) => {
-  const contextMenuActive = Boolean(menuState.contextMenu);
+  const { contextMenuActive } = menuState;
   const blockReveal = resolvedView.viewLoading;
 
   const thumbnailOptions = useMemo(

@@ -88,12 +88,15 @@ export const PRIMARY_MODIFIERS = new Set(["Control", "Alt", "Meta"]);
 export const SINGLE_CHAR_PATTERN = /^.$/;
 
 // Fixed shortcuts that cannot be reassigned.
+export const REOPEN_CLOSED_TAB_KEYBIND = "Control+Shift+t";
+
 export const RESERVED_KEYBIND_DEFINITIONS = [
   { combo: "Control+f", label: "Search" },
   { combo: "Control+a", label: "Select all" },
   { combo: "Control+c", label: "Copy" },
   { combo: "Control+x", label: "Cut" },
   { combo: "Control+v", label: "Paste" },
+  { combo: REOPEN_CLOSED_TAB_KEYBIND, label: "Reopen closed tab" },
   { combo: "ContextMenu", label: "Context menu" },
   { combo: "Shift+F10", label: "Windows context menu" },
   { combo: "Control+r", label: "Refresh" },

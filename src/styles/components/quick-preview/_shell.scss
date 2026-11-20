@@ -27,6 +27,7 @@
 }
 
 .quick-preview {
+  --quick-preview-divider: 2px solid #1b213061;
   position: fixed;
   inset: 0;
   z-index: 2450;
@@ -40,11 +41,15 @@
   transition: opacity 0.12s ease;
 }
 
+.quick-preview[data-strip-open="false"] {
+  grid-template-columns: minmax(0, 1fr) 0;
+}
+
 .quick-preview-topbar-shell {
   grid-column: 1 / -1;
   grid-row: 1;
   background: linear-gradient(180deg, rgba(8, 10, 16, 0.82), rgba(8, 10, 16, 0.58));
-  border-bottom: 2px solid #1b213061;
+  border-bottom: var(--quick-preview-divider);
   @include shell.frosted-backdrop(var(--frosted-surface-blur), var(--frosted-surface-saturate));
 }
 

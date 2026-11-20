@@ -148,6 +148,7 @@ export const useShellViewBindings = ({
     onContextMenu: interactionModel.openKeyboardContextMenu,
     onNewTab: navigationController.handleNewTab,
     onCloseTab: navigationController.handleCloseTab,
+    onReopenClosedTab: navigationController.handleReopenClosedTab,
     onSelectTab: navigationController.handleSelectTab,
     onRefresh: interactionModel.handleManualRefresh,
     onClearSelection: interactionModel.handleClearSelection,

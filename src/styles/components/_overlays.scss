@@ -85,13 +85,6 @@
   border-color: rgba(255, 255, 255, 0.08);
 }
 
-:root[data-blur-overlays="true"] .prompt-modal[data-open="true"],
-:root[data-blur-overlays="true"] .about-modal[data-open="true"],
-:root[data-blur-overlays="true"] .conversion-modal[data-open="true"],
-:root[data-blur-overlays="true"] .settings-overlay[data-open="true"] {
-  @include shell.frosted-backdrop(var(--overlay-backdrop-blur-strong));
-}
-
 .context-menu[data-open="true"] {
   opacity: 1;
   pointer-events: auto;

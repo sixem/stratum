@@ -11,6 +11,7 @@ type BuildEntryOpenItemsOptions = {
   onOpenGallery: (path: string) => void;
   onOpenDir: (path: string) => void;
   onOpenDirNewTab: (path: string) => void;
+  onOpenDirInMainPane?: (path: string) => void;
 };
 
 export const buildEntryOpenItems = ({
@@ -20,6 +21,7 @@ export const buildEntryOpenItems = ({
   onOpenGallery,
   onOpenDir,
   onOpenDirNewTab,
+  onOpenDirInMainPane,
 }: BuildEntryOpenItemsOptions): ContextMenuItem[] => {
   const items: ContextMenuItem[] = [
     {
@@ -57,10 +59,14 @@ export const buildEntryOpenItems = ({
       },
       disabled: !hasTargets,
     });
-  }
-
-  if (target.isDir) {
-    items.push({ id: "entry-open-bottom", label: "Open in bottom pane", onSelect: () => showBottomPane(target.path) });
+    items.push({
+      id: "entry-open-other-pane",
+      label: onOpenDirInMainPane ? "Open in main pane" : "Open in bottom pane",
+      onSelect: () => {
+        if (onOpenDirInMainPane) onOpenDirInMainPane(target.path);
+        else showBottomPane(target.path);
+      },
+    });
   }
   return items;
 };

@@ -83,8 +83,11 @@ export const TransferStatusButton = () => {
         <span className="transfer-count tnum">{summary.countLabel}</span>
       </PressButton>
       {open ? (
+        // The title bar passes pointer events through decorative elements.
+        // Keep both the panel and its native scrollbar interactive.
         <div
           className="transfer-popover"
+          data-window-drag-ignore="true"
           role="dialog"
           aria-label="Work log"
           aria-modal="false"
@@ -110,7 +113,7 @@ export const TransferStatusButton = () => {
               </span>
             </TooltipWrapper>
           </div>
-          <div className="transfer-list" role="list">
+          <div className="transfer-list" role="list" data-window-drag-ignore="true">
             {recentJobs.map((job) => (
               <TransferStatusItem key={job.id} job={job} now={now} />
             ))}

@@ -1,12 +1,8 @@
 // History store for per-tab navigation stacks.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Tab } from "@/types";
+import type { TabHistory } from "@/types/tabs";
 import { folderPathKey } from "@/lib";
-
-export type TabHistory = {
-  back: string[];
-  forward: string[];
-};
 
 type UseTabHistoryOptions = {
   tabs: Tab[];
@@ -97,6 +93,17 @@ export const useTabHistory = ({
     [bump, getHistory, limit],
   );
 
+  const takeHistory = useCallback((tabId: string) => {
+    const history = historyRef.current.get(tabId);
+    historyRef.current.delete(tabId);
+    return history;
+  }, []);
+
+  const restoreHistory = useCallback((tabId: string, history: TabHistory) => {
+    historyRef.current.set(tabId, history);
+    bump();
+  }, [bump]);
+
   const canGoBack = useMemo(() => {
     if (!activeTabId) return false;
     return Boolean(historyRef.current.get(activeTabId)?.back.length);
@@ -128,5 +135,7 @@ export const useTabHistory = ({
     recordHistory,
     popBack,
     popForward,
+    takeHistory,
+    restoreHistory,
   };
 };

@@ -2,6 +2,7 @@
 import {
   GRID_AUTO_COLUMNS_DEFAULT,
   GRID_GAP_DEFAULT,
+  SIDEBAR_WIDTH_DEFAULT,
 } from "@/constants";
 import { DEFAULT_KEYBINDS } from "./keybinds";
 import type { Settings, SidebarSectionId } from "./settings.types";
@@ -19,6 +20,7 @@ export const DEFAULT_SIDEBAR_HIDDEN_SECTIONS: SidebarSectionId[] = [];
 
 export const DEFAULT_SETTINGS: Settings = {
   sidebarOpen: true,
+  sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
   sidebarRecentLimit: 10,
   sidebarSectionOrder: DEFAULT_SIDEBAR_SECTION_ORDER,
   sidebarHiddenSections: DEFAULT_SIDEBAR_HIDDEN_SECTIONS,

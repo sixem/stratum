@@ -1,8 +1,9 @@
 // Full-screen media preview overlay composed from focused hooks and view blocks.
-import { useCallback, useMemo } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { getFileKind, getPathName, normalizePath } from "@/lib";
 import type { EntryMeta, FileEntry, ThumbnailRequest } from "@/types";
 import { LoadingIndicator } from "@/components/primitives/LoadingIndicator";
+import { QuickPreviewFooter } from "./QuickPreviewFooter";
 import { QuickPreviewStrip } from "./QuickPreviewStrip";
 import { QuickPreviewTopBar } from "./QuickPreviewTopBar";
 import { PreviewControls } from "./PreviewControls";
@@ -48,6 +49,9 @@ const QuickPreviewOverlayContent = ({
   smartTabJump,
   smartTabBlocked,
 }: QuickPreviewOverlayContentProps) => {
+  const [stripOpen, setStripOpen] = useState(true);
+  const stripId = useId();
+  const stripToggleRef = useRef<HTMLButtonElement>(null);
   const previewPathIsVideo = useMemo(() => {
     return getFileKind(getPathName(path)) === "video";
   }, [path]);
@@ -72,6 +76,7 @@ const QuickPreviewOverlayContent = ({
   } = useQuickPreviewInput({
     open,
     isVideo: previewPathIsVideo,
+    stripOpen,
     items,
     activePath: path,
     onSelectPreview,
@@ -120,11 +125,23 @@ const QuickPreviewOverlayContent = ({
     <div
       className="quick-preview"
       data-open={open ? "true" : "false"}
+      data-strip-open={stripOpen}
       ref={containerRef}
       role="dialog"
       aria-modal="true"
       aria-label={preview.label}
       tabIndex={-1}
+      onKeyDown={(event) => {
+        // Reach the last control from the dialog even when Smart Tab owns forward Tab.
+        if (
+          event.key === "Tab" && event.shiftKey &&
+          !event.altKey && !event.ctrlKey && !event.metaKey &&
+          event.target === event.currentTarget
+        ) {
+          event.preventDefault();
+          stripToggleRef.current?.focus();
+        }
+      }}
     >
       <QuickPreviewTopBar
         title={preview.titleText}
@@ -170,20 +187,24 @@ const QuickPreviewOverlayContent = ({
           />
         }
       />
-      <QuickPreviewStrip
-        open={open}
-        items={preview.previewItems}
-        activePath={path}
-        entryMeta={entryMeta}
-        thumbnails={thumbnails}
-        thumbnailsEnabled={thumbnailsEnabled}
-        onRequestMeta={onRequestMeta}
-        onRequestThumbs={onRequestThumbs}
-        thumbResetKey={thumbResetKey}
-        loading={loading}
-        onSelect={onSelectPreview}
-        stripRef={stripRef}
-      />
+      <div className="quick-preview-strip-panel" id={stripId} hidden={!stripOpen}>
+        {stripOpen ? (
+          <QuickPreviewStrip
+            open={open}
+            items={preview.previewItems}
+            activePath={path}
+            entryMeta={entryMeta}
+            thumbnails={thumbnails}
+            thumbnailsEnabled={thumbnailsEnabled}
+            onRequestMeta={onRequestMeta}
+            onRequestThumbs={onRequestThumbs}
+            thumbResetKey={thumbResetKey}
+            loading={loading}
+            onSelect={onSelectPreview}
+            stripRef={stripRef}
+          />
+        ) : null}
+      </div>
       <div className="quick-preview-loading" data-visible={preview.isLoading ? "true" : "false"}>
         <div className="quick-preview-loading-card">
           <LoadingIndicator label={preview.isVideo ? "Loading video" : "Loading image"} />
@@ -210,35 +231,13 @@ const QuickPreviewOverlayContent = ({
         onVolumePointerUp={preview.handleVolumePointerUp}
         onVolumeBlur={() => preview.scheduleVolumePickerClose(220)}
       />
-      <div className="quick-preview-info" aria-live="polite">
-        {preview.hasError ? (
-          <div className="quick-preview-info-error" role="status">
-            Preview unavailable. Try opening the file externally.
-          </div>
-        ) : null}
-        <div className="quick-preview-info-row">
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Type</span>
-            <span className="quick-preview-info-value">{preview.typeLabel}</span>
-          </div>
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Dimensions</span>
-            <span className="quick-preview-info-value tnum">{preview.dimensionLabel}</span>
-          </div>
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Size</span>
-            <span className="quick-preview-info-value tnum">{preview.sizeLabel}</span>
-          </div>
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Modified</span>
-            <span className="quick-preview-info-value tnum">{preview.modifiedLabel}</span>
-          </div>
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Zoom</span>
-            <span className="quick-preview-info-value tnum">{preview.zoomLabel}</span>
-          </div>
-        </div>
-      </div>
+      <QuickPreviewFooter
+        preview={preview}
+        stripOpen={stripOpen}
+        stripId={stripId}
+        stripToggleRef={stripToggleRef}
+        onToggleStrip={() => setStripOpen((value) => !value)}
+      />
     </div>
   );
 };

@@ -1,10 +1,11 @@
 // Grid sizing calculations and layout effects for the file grid.
 import type { CSSProperties, RefObject } from "react";
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useScrollRestore, useWheelSnap } from "@/hooks";
 import { makeDebug } from "@/lib";
 import { GRID_AUTO_COLUMNS_MAX, GRID_AUTO_COLUMNS_MIN } from "@/modules";
 import type { GridSize, ThumbnailFit } from "@/modules";
+import { VIEW_INSET } from "../fileView/constants";
 import { getFileViewLayoutMetrics } from "../fileViewLayoutMetrics";
 import { useGridViewportLayout } from "./useGridViewportLayout";
 import { useGridWheelSize } from "./useGridWheelSize";
@@ -112,7 +113,7 @@ type UseGridSizingOptions = {
   gridShowSize: boolean;
   gridShowExtension: boolean;
   thumbnailFit: ThumbnailFit;
-  instantResizeKey?: string | number | boolean;
+  resizeDeferred?: boolean;
   viewKey: string;
   scrollRestoreKey: string;
   scrollRestoreTop: number;
@@ -134,6 +135,7 @@ export type GridSizingState = {
   columnGap: number;
   rowCount: number;
   rowHeight: number;
+  contentHeight: number;
   gridMetaEnabled: boolean;
   isResizing: boolean;
 };
@@ -145,7 +147,7 @@ export const useGridSizing = ({
   gridShowSize,
   gridShowExtension,
   thumbnailFit,
-  instantResizeKey,
+  resizeDeferred,
   viewKey,
   scrollRestoreKey,
   scrollRestoreTop,
@@ -167,7 +169,7 @@ export const useGridSizing = ({
   } = useGridViewportLayout({
     gridSize,
     autoViewportWidth,
-    instantResizeKey,
+    resizeDeferred,
     viewKey,
     onAutoViewportWidthChange,
   });
@@ -218,9 +220,7 @@ export const useGridSizing = ({
     [gridSizing, thumbnailFit],
   );
 
-  const columnGap = useMemo(() => {
-    return gridSizing.gap;
-  }, [gridSizing.gap]);
+  const columnGap = gridSizing.gap;
   const contentWidth = Math.max(0, layoutViewportWidth - viewportPadding * 2);
   const columnCount =
     gridSize === "auto"
@@ -231,6 +231,7 @@ export const useGridSizing = ({
         );
   const rowCount = Math.ceil(viewItemsLength / columnCount);
   const rowHeight = gridSizing.rowHeight + gridSizing.gap;
+  const contentHeight = rowCount * rowHeight + VIEW_INSET * 2;
   const layoutReady = viewportWidth > 0;
 
   useEffect(() => {
@@ -291,52 +292,6 @@ export const useGridSizing = ({
     restoreReady: !loading && layoutReady,
   });
 
-  const lastLayoutRef = useRef({ gridSize, gridAutoColumns, columnCount, rowHeight });
-
-  // Keep the same entries in view when density changes by anchoring the viewport center.
-  useLayoutEffect(() => {
-    const element = viewportRef.current;
-    if (!element) {
-      lastLayoutRef.current = { gridSize, gridAutoColumns, columnCount, rowHeight };
-      return;
-    }
-    const last = lastLayoutRef.current;
-    const densityChanged = last.gridSize !== gridSize ||
-      (gridSize === "auto" && last.gridAutoColumns !== gridAutoColumns);
-    if (
-      densityChanged && element.scrollTop > 0 &&
-      last.rowHeight > 0 && last.columnCount > 0 && viewItemsLength > 0
-    ) {
-      const viewportHeight = Math.max(0, element.clientHeight);
-      // Anchor to the middle of the viewport so the same items stay in view.
-      const anchorOffset = viewportHeight * 0.5;
-      const currentScrollTop = element.scrollTop;
-      const anchorTop = Math.max(0, currentScrollTop + anchorOffset);
-      const prevRowIndex = Math.max(0, Math.floor(anchorTop / last.rowHeight));
-      const prevOffset = anchorTop - prevRowIndex * last.rowHeight;
-      // Use the middle column as the horizontal anchor for the row.
-      const anchorColumn = Math.min(
-        last.columnCount - 1,
-        Math.floor(last.columnCount / 2),
-      );
-      const maxAnchorIndex = Math.max(0, viewItemsLength - 1);
-      const anchorIndex = Math.min(
-        maxAnchorIndex,
-        prevRowIndex * last.columnCount + anchorColumn,
-      );
-      const nextRowIndex = Math.max(0, Math.floor(anchorIndex / columnCount));
-      const offsetRatio = last.rowHeight > 0 ? prevOffset / last.rowHeight : 0;
-      const nextAnchorTop = nextRowIndex * rowHeight + rowHeight * offsetRatio;
-      const nextScrollTop = nextAnchorTop - anchorOffset;
-      const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
-      const clamped = Math.min(Math.max(0, nextScrollTop), maxScrollTop);
-      if (Math.abs(clamped - element.scrollTop) > 0.5) {
-        element.scrollTop = clamped;
-      }
-    }
-    lastLayoutRef.current = { gridSize, gridAutoColumns, columnCount, rowHeight };
-  }, [columnCount, gridAutoColumns, gridSize, rowHeight, viewItemsLength]);
-
   useEffect(() => {
     if (!onGridColumnsChange) return;
     onGridColumnsChange(columnCount);
@@ -359,6 +314,7 @@ export const useGridSizing = ({
     columnGap,
     rowCount,
     rowHeight,
+    contentHeight,
     gridMetaEnabled,
     isResizing,
   };

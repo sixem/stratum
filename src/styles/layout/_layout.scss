@@ -1,12 +1,40 @@
 // Overall layout grid and main panel.
 .layout {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width-preview, var(--sidebar-width, 250px)) minmax(0, 1fr);
   gap: var(--layout-gap);
   padding: var(--layout-padding);
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+}
+
+.layout > :is(.sidebar, .sidebar-divider) {
+  grid-area: 1 / 1;
+}
+
+.sidebar-divider {
+  // Overlay the sidebar edge so the grab area does not consume a grid column.
+  position: relative;
+  z-index: 3;
+  align-self: stretch;
+  justify-self: end;
+  width: 8px;
+  margin-inline-end: -4px;
+  display: grid;
+  justify-items: center;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+
+  &::before {
+    content: "";
+    width: var(--surface-border-width);
+  }
+
+  &:is(:hover, :focus-visible, [data-resizing])::before {
+    background: #28364b;
+  }
 }
 
 .layout.is-full {
@@ -101,6 +129,17 @@
     content: "";
     height: var(--surface-border-width);
     background: var(--stroke);
+  }
+
+  // Mirror the top bar shadow into the file view on the other side of the seam.
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    bottom: 50%;
+    height: 14px;
+    pointer-events: none;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.24), transparent);
   }
 
   &:hover::before,

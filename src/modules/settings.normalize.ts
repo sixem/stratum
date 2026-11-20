@@ -8,6 +8,8 @@ import {
   SETTINGS_STORAGE_VERSION,
   SIDEBAR_RECENT_LIMIT_MAX,
   SIDEBAR_RECENT_LIMIT_MIN,
+  SIDEBAR_WIDTH_MAX,
+  SIDEBAR_WIDTH_MIN,
 } from "@/constants";
 import { coerceKeybinds } from "./keybinds";
 import {
@@ -130,6 +132,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
   return {
     sidebarOpen:
       typeof value?.sidebarOpen === "boolean" ? value.sidebarOpen : DEFAULT_SETTINGS.sidebarOpen,
+    sidebarWidth: clampNumber(value?.sidebarWidth, DEFAULT_SETTINGS.sidebarWidth, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX),
     sidebarRecentLimit: coerceSidebarRecentLimit(value?.sidebarRecentLimit),
     sidebarSectionOrder: normalizeSidebarSectionOrder(value?.sidebarSectionOrder),
     sidebarHiddenSections: normalizeSidebarHiddenSections(value?.sidebarHiddenSections),

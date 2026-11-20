@@ -1,8 +1,11 @@
 // Route keyboard actions to the tabs and selection of the focused lower pane.
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
+import { REOPEN_CLOSED_TAB_KEYBIND } from "@/constants";
 import { formatDeleteLabel, isEditableElement } from "@/lib";
-import { buildKeybindFromEvent, useSettingsStore, usePromptStore, writeFileClipboard } from "@/modules";
-import type { useWindowsContextMenu } from "@/hooks/ui/menus/useWindowsContextMenu";
+import { handleSearchHotkey } from "@/hooks/ui/inputs/useSearchHotkey";
+import { moveFileSelection } from "@/hooks/ui/selection/moveFileSelection";
+import { buildKeybindFromEvent, useIndexedSearchUiStore, useSettingsStore, usePromptStore, writeFileClipboard } from "@/modules";
+import type { EntryContextTarget } from "@/types";
 import type { PaneActions } from "./BottomPane";
 import type { useBottomFolder } from "./useBottomFolder";
 
@@ -10,36 +13,47 @@ type Options = {
   folder: ReturnType<typeof useBottomFolder>;
   actions: PaneActions;
   address: RefObject<HTMLInputElement | null>;
-  nativeMenu: ReturnType<typeof useWindowsContextMenu>;
+  searchInput: RefObject<HTMLInputElement | null>;
+  clearSearchAndFocusFiles: () => void;
+  browseFromView: (path: string) => void;
+  openContextMenu: (native: boolean) => boolean;
   paths: string[];
   ready: boolean;
-  startRename: (item: {path: string; name: string}) => void;
+  commandsBlocked: boolean;
+  gridColumns: RefObject<number>;
+  closeTab: (id: string) => void;
+  startRename: (item: EntryContextTarget) => void;
+  clearSelection: () => void;
   scrollTo: (index: number) => void;
   handleTypeahead: (event: KeyboardEvent) => boolean;
   handleTabJump: (event: KeyboardEvent) => boolean;
 };
 
 export function bottomPaneKeys({
-  folder, actions, address, nativeMenu, paths, ready, startRename, scrollTo, handleTypeahead, handleTabJump,
+  folder, actions, address, searchInput, clearSearchAndFocusFiles, browseFromView,
+  openContextMenu, paths, ready, commandsBlocked, gridColumns, closeTab,
+  startRename, clearSelection, scrollTo, handleTypeahead, handleTabJump,
 }: Options) {
   const { dir, tabs, model, selection } = folder;
   const navigate = tabs.browseTo;
   const path = dir.currentPath;
   return (event: ReactKeyboardEvent<HTMLElement>) => {
-    // Window-wide shortcuts belong to the upper pane. Keep lower-pane commands
-    // local, including text-editing shortcuts in its address and rename fields.
-    if (!event.currentTarget.contains(event.target as Node) || usePromptStore.getState().prompt) return;
+    // Menus use a portal. Their keystrokes are handled before reaching this pane.
+    if (!event.currentTarget.contains(event.target as Node)) return;
     const binding = buildKeybindFromEvent(event.nativeEvent);
     const { keybinds, confirmDelete, smartTabJump } = useSettingsStore.getState();
     // Indexed search belongs to the window, even when the lower pane has focus.
     if (binding === keybinds.openIndexedSearch) return;
     event.stopPropagation();
-    if (isEditableElement(event.target as Element) || event.defaultPrevented) return;
+    if (commandsBlocked || usePromptStore.getState().prompt || useIndexedSearchUiStore.getState().open) return;
+    if (event.defaultPrevented || event.nativeEvent.isComposing) return;
+    if (handleSearchHotkey(event, searchInput.current, clearSearchAndFocusFiles)) return;
     if (event.repeat && !event.key.startsWith("Arrow")) return;
     const cmd = event.ctrlKey && !event.altKey && !event.metaKey;
     const key = event.key.toLowerCase();
-    if (binding === keybinds.newTab) tabs.newTab();
-    else if (binding === keybinds.closeTab && tabs.activeTabId) tabs.closeTab(tabs.activeTabId);
+    if (binding === REOPEN_CLOSED_TAB_KEYBIND) tabs.reopenClosedTab();
+    else if (binding === keybinds.newTab) tabs.newTab();
+    else if (binding === keybinds.closeTab && tabs.activeTabId) closeTab(tabs.activeTabId);
     else if (cmd && key === "l") { address.current?.focus(); address.current?.select(); }
     else if (((cmd && key === "tab") || binding === keybinds.prevTab || binding === keybinds.nextTab) && tabs.tabs.length) {
       const n = tabs.tabs.length;
@@ -49,22 +63,32 @@ export function bottomPaneKeys({
     } else if (cmd && /^[1-9]$/.test(key)) {
       const tab = tabs.tabs[Number(key) - 1];
       if (tab) tabs.selectTab(tab.id);
-    } else if (key === "f5" || binding === "Control+r") void dir.refresh();
+    } else if (binding === "F5" || binding === "Control+r") {
+      const tabPath = tabs.activeTab?.path;
+      if (!ready && !dir.loadingPath && tabPath) {
+        void dir.loadDir(tabPath, { sort: tabs.sortState, search: tabs.searchValue, force: true });
+      } else if (ready) {
+        void dir.refresh();
+      }
+    } else if (isEditableElement(event.target as Element)) return;
+    else if (binding === "ContextMenu" || binding === "Shift+F10") {
+      if (!openContextMenu(binding === "Shift+F10")) return;
+    }
     else if (!ready) return;
     // These gestures also work after a tab or toolbar button has taken focus.
     else if (handleTypeahead(event.nativeEvent) || (smartTabJump && handleTabJump(event.nativeEvent))) {
       event.preventDefault();
       return;
     } else if (event.target !== event.currentTarget && !(event.target as Element).closest("[data-pane-path]")) return;
-    else if (cmd && key === "a") selection.setSelection(Array.from(model.entryByPath.keys()));
+    else if (cmd && key === "a") selection.setSelection(model.itemPaths, model.itemPaths[0]);
     else if (paths.length && cmd && (key === "c" || key === "x")) void writeFileClipboard(paths, key === "x" ? "move" : "copy");
     else if (cmd && key === "v") void actions.pasteEntries(path);
     else if (binding === keybinds.undo) void actions.undo();
-    else if (key === "escape") selection.clearSelection();
+    else if (key === "escape") clearSelection();
     else if (key === "backspace" && dir.parentPath) navigate(dir.parentPath);
     else if (binding === keybinds.duplicateSelection && paths.length) void actions.duplicateEntries(paths, path);
     else if (binding === keybinds.deleteSelection && paths.length) {
-      const remove = () => { void actions.deleteEntries(paths); };
+      const remove = () => { void actions.deleteEntries(paths).then(report => { if (report?.deleted) clearSelection(); }); };
       if (confirmDelete) {
         usePromptStore.getState().showPrompt({
           title: "Delete selection?",
@@ -76,24 +100,17 @@ export function bottomPaneKeys({
       } else {
         remove();
       }
-    } else if (key === "f2" && paths.length === 1) {
+    } else if (binding === "F2" && paths.length) {
       const entry = model.entryByPath.get(paths[0])!;
       startRename(entry);
-    } else if (key === "contextmenu" || (key === "f10" && event.shiftKey)) {
-      const rect = (event.target as HTMLElement).getBoundingClientRect();
-      nativeMenu(paths.length ? {paths} : {backgroundPath: path}, {x: rect.left + 4, y: rect.top + 4});
-    } else if (key === "enter" && selection.selected.size === 1) {
-      const selected = selection.selected.values().next().value!;
-      if (selected === dir.parentPath || model.entryByPath.get(selected)?.isDir) navigate(selected);
-      else void actions.openEntry(selected);
-    } else if (key === "arrowdown" || key === "arrowup") {
-      const index = model.indexMap.get(selection.getAnchorPath() ?? "") ?? -1;
-      const next = Math.max(0, Math.min(model.items.length-1, index + (key === "arrowup" ? -1 : 1)));
-      if (model.itemPaths[next]) {
-        selection.selectItem(model.itemPaths[next], next, event);
-        scrollTo(next);
-      }
-    } else return;
+    } else if (key === "enter" && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      const target = selection.getSelectionTarget();
+      if (target?.isDir) browseFromView(target.path);
+      else if (target) void actions.openEntry(target.path);
+    } else if (!moveFileSelection(
+      event.nativeEvent, tabs.viewMode, gridColumns.current, model.itemPaths,
+      selection.getSelectionIndex(), selection.selectItem, scrollTo,
+    )) return;
     event.preventDefault();
   };
 }

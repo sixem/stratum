@@ -16,6 +16,7 @@ type DragState = {
 type UseQuickPreviewInputOptions = {
   open: boolean;
   isVideo: boolean;
+  stripOpen: boolean;
   items: FileEntry[];
   activePath: string;
   onSelectPreview: (path: string) => void;
@@ -39,6 +40,7 @@ const clamp = (value: number, min: number, max: number) => {
 export const useQuickPreviewInput = ({
   open,
   isVideo,
+  stripOpen,
   items,
   activePath,
   onSelectPreview,
@@ -59,6 +61,7 @@ export const useQuickPreviewInput = ({
   });
   const frameRef = useRef<number | null>(null);
   const wheelTransformTimerRef = useRef<number | null>(null);
+  const fitSizeRef = useRef<{ width: number; height: number } | null>(null);
   const offsetRef = useRef({ x: 0, y: 0 });
   const lastTabTapRef = useRef(0);
   const [zoom, setZoom] = useState(1);
@@ -91,6 +94,7 @@ export const useQuickPreviewInput = ({
   };
 
   const resetViewport = useCallback(() => {
+    fitSizeRef.current = null;
     setZoom(1);
     setOffset({ x: 0, y: 0 });
     offsetRef.current = { x: 0, y: 0 };
@@ -104,10 +108,17 @@ export const useQuickPreviewInput = ({
     const bounds = container.getBoundingClientRect();
     const fitZoom = Math.min(bounds.width / width, bounds.height / height, 1);
     const nextZoom = clamp(fitZoom, MIN_ZOOM, MAX_ZOOM);
+    fitSizeRef.current = { width, height };
     setZoom(nextZoom);
     setOffset({ x: 0, y: 0 });
     offsetRef.current = { x: 0, y: 0 };
   }, []);
+
+  useLayoutEffect(() => {
+    // Refit to the new stage width only while the media is in its automatic view.
+    const size = fitSizeRef.current;
+    if (size) fitMediaToViewport(size.width, size.height);
+  }, [fitMediaToViewport, stripOpen]);
 
   useEffect(() => {
     return () => {
@@ -242,17 +253,22 @@ export const useQuickPreviewInput = ({
 
   // Smart Tab jump also works in preview mode to jump the right-hand strip.
   useEffect(() => {
-    if (!open || !smartTabJump) return;
+    if (!open || !stripOpen || !smartTabJump) return;
+    lastTabTapRef.current = 0;
     const handleTabJump = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       if (event.key !== "Tab") return;
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
       if (event.isComposing || event.repeat) return;
       if (smartTabBlocked) return;
 
       const active = document.activeElement;
       if (isEditableElement(active)) return;
       if (!document.hasFocus()) return;
+      const strip = stripRef.current;
+      if (!strip) return;
+      const maxScrollTop = strip.scrollHeight - strip.clientHeight;
+      if (maxScrollTop <= 0) return;
 
       event.preventDefault();
       event.stopPropagation();
@@ -262,21 +278,18 @@ export const useQuickPreviewInput = ({
       lastTabTapRef.current = now;
       if (elapsed > TAB_DOUBLE_TAP_MS) return;
 
-      const strip = stripRef.current;
-      if (!strip) return;
-      const maxScrollTop = Math.max(0, strip.scrollHeight - strip.clientHeight);
-      if (maxScrollTop <= 0) return;
       const ratio = strip.scrollTop / maxScrollTop;
       strip.scrollTop = ratio < 0.5 ? maxScrollTop : 0;
     };
 
     window.addEventListener("keydown", handleTabJump);
     return () => window.removeEventListener("keydown", handleTabJump);
-  }, [open, smartTabBlocked, smartTabJump]);
+  }, [open, smartTabBlocked, smartTabJump, stripOpen]);
 
   const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
     if (!open) return;
     event.preventDefault();
+    fitSizeRef.current = null;
     setTransforming(true);
     scheduleWheelTransformSettle();
     const factor = Math.exp(-event.deltaY * ZOOM_SPEED);
@@ -308,6 +321,7 @@ export const useQuickPreviewInput = ({
     if (!drag.active || drag.pointerId !== event.pointerId) return;
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
+    if (dx !== 0 || dy !== 0) fitSizeRef.current = null;
     scheduleOffset({ x: drag.originX + dx, y: drag.originY + dy });
   };
 

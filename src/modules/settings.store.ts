@@ -68,6 +68,7 @@ export const useSettingsStore = createWithEqualityFn<SettingsStore>((set) => ({
 useSettingsStore.subscribe((state) => {
   writeStoredSettings({
     sidebarOpen: state.sidebarOpen,
+    sidebarWidth: state.sidebarWidth,
     sidebarRecentLimit: state.sidebarRecentLimit,
     sidebarSectionOrder: state.sidebarSectionOrder,
     sidebarHiddenSections: state.sidebarHiddenSections,

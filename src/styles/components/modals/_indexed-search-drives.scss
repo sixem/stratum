@@ -55,7 +55,8 @@
   .indexed-search-drive-meta,
   .indexed-search-drive-empty {
     color: var(--muted);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
     line-height: 1.4;
   }
 
@@ -68,7 +69,8 @@
     align-items: center;
     gap: 4px;
     color: #96a3ba;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
     white-space: nowrap;
   }
 

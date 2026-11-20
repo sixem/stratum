@@ -7,6 +7,8 @@ import { useDragOutHandler } from "@/hooks/ui/inputs";
 import { useFileViewInteractions, useFileViewModel } from "@/hooks/ui/view";
 import { useAppCommands } from "../useAppCommands";
 import { useAppContextMenuSection } from "../useAppContextMenuSection";
+import type { ContextMenuServices } from "../useAppContextMenus";
+import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { useAppPreviewSection } from "../useAppPreviewSection";
 import { useAppRenameFlow } from "../useAppRenameFlow";
 import { useAppSelectionHandlers } from "../useAppSelectionHandlers";
@@ -80,6 +82,7 @@ export const useShellViewInteractions = ({
     previewPath,
     previewMeta,
     previewGallery,
+    bottomPreview,
     openPreview,
     closePreview,
     handlePreviewPress,
@@ -241,6 +244,23 @@ export const useShellViewInteractions = ({
     void refreshClipboardFromOs();
     if (viewVisit.current) void refreshAfterChange();
   }, [refreshAfterChange, refreshClipboardFromOs, viewVisit]);
+  const menuServices: ContextMenuServices = {
+    windowsMenuEnabled: tauriEnv,
+    beginFileActivity: fileManager.beginFileActivity,
+    shellAvailability: dataPipeline.shellAvailability,
+    menuOpenPwsh: settings.menuOpenPwsh,
+    menuOpenWsl: settings.menuOpenWsl,
+    menuShowConvert: settings.menuShowConvert,
+    onOpenShell: handleOpenShell,
+    confirmDelete: settings.confirmDelete,
+    onOpenConvertModal: dataPipeline.openConversionModal,
+    onQuickConvertImages: dataPipeline.handleQuickConvertImages,
+    places,
+    onAddPlace: addPlace,
+    onPinPlace: pinPlace,
+    onUnpinPlace: unpinPlace,
+    onRemovePlace: removePlace,
+  };
   const {
     openKeyboardContextMenu,
     contextMenuItems,
@@ -252,15 +272,18 @@ export const useShellViewInteractions = ({
     handleEntryContextMenu,
     handleEntryContextMenuDown,
   } = useAppContextMenuSection({
-    windowsMenuEnabled: tauriEnv,
-    beginFileActivity: fileManager.beginFileActivity,
+    ...menuServices,
     onShellCommand,
     mainRef: viewState.mainRef,
     contextMenu: menuState.contextMenu,
     openContextMenuAt: menuState.openContextMenuAt,
     openSortMenu: menuState.openSortMenu,
     openEntryMenu: menuState.openEntryMenu,
-    openPlaceTargetMenu: menuState.openPlaceTargetMenu,
+    openPlaceTargetMenu: (event, target) => {
+      const fromSidebar = target.source === "sidebar-place" || target.source === "sidebar-recent";
+      const owner = fromSidebar && useBottomPaneStore.getState().active ? menuState.bottomMenu : menuState;
+      owner.openPlaceTargetMenu(event, target);
+    },
     closeContextMenu: menuState.closeContextMenu,
     selected,
     entryByPath: viewModel.entryByPath,
@@ -272,27 +295,14 @@ export const useShellViewInteractions = ({
     onCreateFolder: handleCreateFolder,
     onCreateFolderAndGo: handleCreateFolderAndGo,
     onCreateFile: handleCreateFile,
-    shellAvailability: dataPipeline.shellAvailability,
-    menuOpenPwsh: settings.menuOpenPwsh,
-    menuOpenWsl: settings.menuOpenWsl,
-    menuShowConvert: settings.menuShowConvert,
-    onOpenShell: handleOpenShell,
     onOpenEntry: fileManager.openEntry,
     onOpenGallery: handleOpenGallery,
     onOpenDir: viewState.browseFromView,
     onOpenDirNewTab: navigationController.handleOpenInNewTab,
     onDeleteEntries: fileManager.deleteEntries,
-    confirmDelete: settings.confirmDelete,
     onClearSelection: handleClearSelection,
     onRenameEntry: handleRenameStart,
     onPasteEntries: fileManager.pasteEntries,
-    onOpenConvertModal: dataPipeline.openConversionModal,
-    onQuickConvertImages: dataPipeline.handleQuickConvertImages,
-    places,
-    onAddPlace: addPlace,
-    onPinPlace: pinPlace,
-    onUnpinPlace: unpinPlace,
-    onRemovePlace: removePlace,
     onRemoveRecentJump: tabSession.removeRecentJump,
   });
 
@@ -304,6 +314,7 @@ export const useShellViewInteractions = ({
     previewPath,
     previewMeta,
     previewGallery,
+    bottomPreview,
     openPreview,
     handlePreviewPress,
     handlePreviewRelease,
@@ -338,6 +349,14 @@ export const useShellViewInteractions = ({
     openKeyboardContextMenu,
     contextMenuItems,
     contextMenuOpen,
+    bottomMenu: {
+      ...menuServices,
+      ...menuState.bottomMenu,
+      onOpenDirInMainPane: (path: string) => {
+        navigationController.handleOpenInNewTab(path);
+        viewState.mainRef.current?.focus({ preventScroll: true });
+      },
+    },
     handlePlaceTargetContextMenu,
     handlePlaceTargetContextMenuDown,
     handleLayoutContextMenu,

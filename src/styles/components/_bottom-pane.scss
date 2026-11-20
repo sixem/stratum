@@ -25,7 +25,7 @@
     min-width: 0;
   }
 
-  .bottom-nav input {
+  .bottom-nav form input {
     @include control.control-surface(5px, var(--surface-control-strong));
     width: 100%;
     height: 26px;
@@ -35,9 +35,45 @@
     user-select: text;
   }
 
-  .bottom-nav input:focus,
+  .bottom-nav form input:focus,
+  .bottom-search:focus-within,
   .bottom-nav button:focus-visible {
     @include control.focus-ring(rgba(var(--accent-rgb), 0.55), rgba(var(--accent-rgb), 0.16));
+  }
+
+  .bottom-search {
+    @include control.control-surface(5px, var(--surface-control-strong));
+    display: flex;
+    flex: 0 1 140px;
+    min-width: 76px;
+    height: 26px;
+    align-items: center;
+    gap: 5px;
+    padding: 0 7px;
+    color: var(--muted);
+  }
+
+  .bottom-search svg {
+    flex: 0 0 13px;
+    width: 13px;
+    height: 13px;
+  }
+
+  .bottom-search input {
+    min-width: 0;
+    width: 100%;
+    padding: 0;
+    color: var(--text);
+    font-size: var(--font-size-sm);
+    user-select: text;
+  }
+
+  .bottom-search input::placeholder {
+    color: var(--muted);
+  }
+
+  .bottom-search:has(input:disabled) {
+    opacity: 0.5;
   }
 
   .bottom-nav .view-btn {

@@ -1,10 +1,11 @@
 // Keep the lower pane's navigation, metadata and selection independent of the upper listing.
-import { useEffect, useRef } from "react";
+import { useDeferredValue, useEffect, useRef } from "react";
+import { useDirectoryFilter } from "@/hooks/domain/filesystem/useDirectoryFilter";
 import { useDirectoryLoader } from "@/hooks/domain/filesystem/useDirectoryLoader";
 import { useDirWatch } from "@/hooks/domain/filesystem/useDirWatch";
 import { useEntryMetaCache } from "@/hooks/domain/filesystem/useEntryMetaCache";
 import { useTabSession } from "@/hooks/domain/session/useTabSession";
-import { useSelection } from "@/hooks/ui/selection/useSelection";
+import { useFileViewSelection } from "@/hooks/ui/selection/useFileViewSelection";
 import { useFileViewModel } from "@/hooks/ui/view/useFileViewModel";
 import { folderPathKey, makeDebug } from "@/lib";
 import { usePromptStore, useSettingsStore } from "@/modules";
@@ -35,6 +36,16 @@ export function useBottomFolder(upperPath: string) {
 
   const path = dir.currentPath;
   const busy = dir.loadingPath !== null;
+  const deferredSearchValue = useDeferredValue(tabs.searchValue);
+  useDirectoryFilter({
+    activeTabPath: tabs.activeTab?.path ?? "",
+    currentPath: path,
+    activeSearch: tabs.searchValue,
+    deferredSearchValue,
+    sortState: tabs.sortState,
+    loading: busy,
+    loadDir: dir.loadDir,
+  });
   useDirWatch({
     pane: "bottom", enabled: "__TAURI_INTERNALS__" in window, sharesWatch: !!path && folderPathKey(upperPath) === folderPathKey(path),
     activeTabId: tabs.activeTabId, activeTabPath: tabs.activeTab?.path ?? "", currentPath: path, tabs: tabs.tabs,
@@ -45,6 +56,6 @@ export function useBottomFolder(upperPath: string) {
   const showParent = showParentEntry && !tabs.searchValue.trim() && dir.entries.length > 0;
   const model = useFileViewModel(dir.entries, showParent ? dir.parentPath : null);
   const viewKey = JSON.stringify([tabs.activeTabId, path]);
-  const selection = useSelection({ items: model.itemPaths, resetKey: viewKey, indexMap: model.indexMap });
+  const selection = useFileViewSelection({ viewModel: model, resetKey: viewKey });
   return { dir, meta, tabs, model, selection, viewKey, busy, navigation };
 }

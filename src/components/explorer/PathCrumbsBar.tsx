@@ -1,10 +1,11 @@
 // Breadcrumb navigation for the current filesystem path.
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, useRef } from "react";
 import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
 import { handleMiddleClick, resolvePathCrumbs } from "@/lib";
+import { useHorizontalWheelScroll } from "@/hooks";
 import { PressButton } from "@/components/primitives/PressButton";
 import type { PlaceContextTarget } from "@/types";
 
@@ -33,6 +34,8 @@ export const PathCrumbsBar = ({
     [path, trailPath],
   );
   const trimmedPath = path.trim();
+  const crumbsRef = useRef<HTMLDivElement>(null);
+  useHorizontalWheelScroll(crumbsRef, Boolean(trimmedPath));
   if (!trimmedPath) {
     return null;
   }
@@ -54,7 +57,7 @@ export const PathCrumbsBar = ({
       data-path={path}
       data-drop-target={isBarDropTarget ? "true" : "false"}
     >
-      <div className="crumbs">
+      <div className="crumbs" ref={crumbsRef}>
         {crumbs.map((crumb, index) => (
           <Fragment key={crumb.key}>
             <PressButton

@@ -21,6 +21,10 @@
 @mixin overlay-open() {
   opacity: 1;
   pointer-events: auto;
+
+  :root[data-blur-overlays="true"] & {
+    @include frosted-backdrop(var(--overlay-backdrop-blur-strong));
+  }
 }
 
 @mixin frosted-backdrop($blur, $saturate: null) {

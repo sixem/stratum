@@ -1,11 +1,12 @@
 // Handles keyboard navigation and selection activation in the file view.
-import { useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import type { RefObject } from "react";
 import { tinykeys } from "tinykeys";
 import { isEditableElement } from "@/lib";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import type { ViewMode } from "@/types";
 import { useSmartTabJump } from "./useSmartTabJump";
+import { moveFileSelection } from "./moveFileSelection";
 
 type SelectionTarget = {
   path: string;
@@ -59,42 +60,10 @@ export const useSelectionShortcuts = ({
 }: UseSelectionShortcutsOptions) => {
   const handleTabJump = useSmartTabJump(mainRef);
 
-  const moveSelectionBy = useCallback(
-    (delta: number, event: KeyboardEvent) => {
-      if (selectionItems.length === 0) return false;
-      const maxIndex = selectionItems.length - 1;
-      const currentIndex = getSelectionIndex();
-      const nextIndex =
-        currentIndex < 0
-          ? delta > 0
-            ? 0
-            : maxIndex
-          : Math.min(maxIndex, Math.max(0, currentIndex + delta));
-      if (currentIndex >= 0 && nextIndex === currentIndex) {
-        return true;
-      }
-      const path = selectionItems[nextIndex];
-      if (!path) return false;
-      selectItem(path, nextIndex, {
-        shiftKey: event.shiftKey,
-        ctrlKey: false,
-        metaKey: false,
-        altKey: false,
-      });
-      requestScrollToIndex(nextIndex);
-      return true;
-    },
-    [getSelectionIndex, requestScrollToIndex, selectItem, selectionItems],
-  );
-
   useEffect(() => {
-    const handleArrow = (
-      event: KeyboardEvent,
-      direction: "up" | "down" | "left" | "right",
-    ) => {
+    const handleArrow = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.isComposing) return;
+      if (useBottomPaneStore.getState().active) return;
       if (settingsOpen || contextMenuOpen || indexedSearchOpen) return;
       if (previewOpen) return;
       if (loading || blockReveal) return;
@@ -108,28 +77,16 @@ export const useSelectionShortcuts = ({
         !active || active === document.body || active === document.documentElement;
       if (!hasMainFocus && !isRootFocus) return;
 
-      let delta = 0;
-      if (viewMode === "list") {
-        if (direction === "left" || direction === "right") return;
-        delta = direction === "up" ? -1 : 1;
-      } else {
-        const columns = Math.max(1, gridColumnsRef.current);
-        if (direction === "up") delta = -columns;
-        else if (direction === "down") delta = columns;
-        else if (direction === "left") delta = -1;
-        else delta = 1;
-      }
-
-      if (moveSelectionBy(delta, event)) {
+      if (moveFileSelection(event, viewMode, gridColumnsRef.current, selectionItems, getSelectionIndex(), selectItem, requestScrollToIndex)) {
         event.preventDefault();
       }
     };
 
     const unsubscribe = tinykeys(window, {
-      ArrowUp: (event: KeyboardEvent) => handleArrow(event, "up"),
-      ArrowDown: (event: KeyboardEvent) => handleArrow(event, "down"),
-      ArrowLeft: (event: KeyboardEvent) => handleArrow(event, "left"),
-      ArrowRight: (event: KeyboardEvent) => handleArrow(event, "right"),
+      ArrowUp: handleArrow,
+      ArrowDown: handleArrow,
+      ArrowLeft: handleArrow,
+      ArrowRight: handleArrow,
     });
 
     return () => unsubscribe();
@@ -140,7 +97,10 @@ export const useSelectionShortcuts = ({
     gridColumnsRef,
     loading,
     mainRef,
-    moveSelectionBy,
+    getSelectionIndex,
+    requestScrollToIndex,
+    selectItem,
+    selectionItems,
     settingsOpen,
     indexedSearchOpen,
     viewMode,
@@ -176,6 +136,7 @@ export const useSelectionShortcuts = ({
     const handleKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       if (event.key !== "Enter") return;
+      if (useBottomPaneStore.getState().active) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.repeat || event.isComposing) return;
       if (settingsOpen || contextMenuOpen || indexedSearchOpen) return;

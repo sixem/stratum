@@ -35,6 +35,7 @@ type UseEntryMenuItemsOptions = {
   onOpenGallery: (path: string) => void;
   onOpenDir: (path: string) => void;
   onOpenDirNewTab: (path: string) => void;
+  onOpenDirInMainPane?: (path: string) => void;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   confirmDelete: boolean;
   onClearSelection: () => void;
@@ -55,6 +56,7 @@ export const useEntryMenuItems = ({
   onOpenGallery,
   onOpenDir,
   onOpenDirNewTab,
+  onOpenDirInMainPane,
   onDeleteEntries,
   confirmDelete,
   onClearSelection,
@@ -132,6 +134,7 @@ export const useEntryMenuItems = ({
         onOpenGallery,
         onOpenDir,
         onOpenDirNewTab,
+        onOpenDirInMainPane,
       }),
       ...buildEntryOpenWithItems({
         isDir: target.isDir,
@@ -184,6 +187,7 @@ export const useEntryMenuItems = ({
     confirmDelete,
     onOpenConvertModal,
     onOpenDir,
+    onOpenDirInMainPane,
     onOpenDirNewTab,
     onOpenEntry,
     onOpenGallery,

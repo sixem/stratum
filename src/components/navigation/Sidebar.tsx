@@ -266,7 +266,7 @@ export const Sidebar = ({
   }, []);
 
   return (
-    <aside className="sidebar">
+    <aside id="app-sidebar" className="sidebar">
       <ScrollArea
         className="sidebar-scroll"
         viewportClassName="sidebar-viewport"

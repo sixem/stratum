@@ -5,9 +5,9 @@
 import type { KeyboardEvent, RefObject } from "react";
 
 import loader from "@/assets/icons/loaders/ring.svg";
-import { BinocularsIcon, ErrorIcon, FallbackFileIcon, FolderIcon } from "@/components/icons";
-import { TooltipWrapper } from "@/components/overlay/Tooltip";
+import { BinocularsIcon, ErrorIcon, FileTypeIcon } from "@/components/icons";
 import { PressButton, ScrollArea } from "@/components/primitives";
+import { getExtension, getFileKind } from "@/lib/fileKind";
 import type { IndexedPathMatch } from "@/types";
 import { INDEXED_SEARCH_RESULT_LIMIT } from "./indexedSearchModalConfig";
 
@@ -86,33 +86,36 @@ export const IndexedSearchResultsList = ({
             const isDirectory = result.kind === "directory";
 
             return (
-              <TooltipWrapper key={result.path} text={result.path}>
-                <PressButton
-                  type="button"
-                  ref={(element) => {
-                    resultRefs.current[index] = element;
-                  }}
-                  className="indexed-search-result"
-                  aria-pressed={isSelected}
-                  tabIndex={isSelected || (selectedPath == null && index === 0) ? 0 : -1}
-                  pressOnPointerDown={false}
-                  onClick={() => onSelectResult(result)}
-                  onFocus={() => onSelectResult(result)}
-                  onKeyDown={onResultKeyDown}
-                  onDoubleClick={() => onOpenResult(result.path)}
-                >
-                  <span className="indexed-search-result-icon" data-kind={result.kind}>
-                    {isDirectory ? <FolderIcon /> : <FallbackFileIcon />}
+              <PressButton
+                key={result.path}
+                type="button"
+                ref={(element) => {
+                  resultRefs.current[index] = element;
+                }}
+                className="indexed-search-result"
+                aria-pressed={isSelected}
+                tabIndex={isSelected || (selectedPath == null && index === 0) ? 0 : -1}
+                pressOnPointerDown={false}
+                onClick={() => onSelectResult(result)}
+                onFocus={() => onSelectResult(result)}
+                onKeyDown={onResultKeyDown}
+                onDoubleClick={() => onOpenResult(result.path)}
+              >
+                <span className="indexed-search-result-icon" data-kind={result.kind}>
+                  <FileTypeIcon
+                    isDir={isDirectory}
+                    fileKind={isDirectory ? "generic" : getFileKind(result.name)}
+                    extension={isDirectory ? null : getExtension(result.name)}
+                  />
+                </span>
+                <span className="indexed-search-result-copy">
+                  <span className="indexed-search-result-name">{result.name}</span>
+                  <span className="indexed-search-result-path">
+                    {result.parentPath || result.path}
                   </span>
-                  <span className="indexed-search-result-copy">
-                    <span className="indexed-search-result-name">{result.name}</span>
-                    <span className="indexed-search-result-path">
-                      {result.parentPath || result.path}
-                    </span>
-                  </span>
-                  <span className="indexed-search-result-kind">{isDirectory ? "Folder" : "File"}</span>
-                </PressButton>
-              </TooltipWrapper>
+                </span>
+                <span className="indexed-search-result-kind">{isDirectory ? "Folder" : "File"}</span>
+              </PressButton>
             );
           })}
         </ScrollArea>

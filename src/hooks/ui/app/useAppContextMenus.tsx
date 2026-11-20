@@ -58,6 +58,7 @@ type UseAppContextMenusOptions = {
   onOpenGallery: (path: string) => void;
   onOpenDir: (path: string) => void;
   onOpenDirNewTab: (path: string) => void;
+  onOpenDirInMainPane?: (path: string) => void;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   confirmDelete: boolean;
   onClearSelection: () => void;
@@ -71,6 +72,16 @@ type UseAppContextMenusOptions = {
   onUnpinPlace: (path: string) => void;
   onRemovePlace: (path: string) => void;
   onRemoveRecentJump?: (path: string) => void;
+};
+
+export type ContextMenuServices = Pick<UseAppContextMenusOptions,
+  | "windowsMenuEnabled" | "beginFileActivity" | "shellAvailability" | "menuOpenPwsh"
+  | "menuOpenWsl" | "menuShowConvert" | "onOpenShell" | "confirmDelete" | "onOpenConvertModal"
+  | "onQuickConvertImages" | "places" | "onAddPlace" | "onPinPlace" | "onUnpinPlace" | "onRemovePlace"
+>;
+
+export type BottomMenuBindings = ContextMenuServices & ReturnType<typeof useAppMenuState>["bottomMenu"] & {
+  onOpenDirInMainPane: (path: string) => void;
 };
 
 export const useAppContextMenus = ({
@@ -103,6 +114,7 @@ export const useAppContextMenus = ({
   onOpenGallery,
   onOpenDir,
   onOpenDirNewTab,
+  onOpenDirInMainPane,
   onDeleteEntries,
   confirmDelete,
   onClearSelection,
@@ -265,6 +277,7 @@ export const useAppContextMenus = ({
     onOpenGallery,
     onOpenDir,
     onOpenDirNewTab,
+    onOpenDirInMainPane,
     onDeleteEntries,
     confirmDelete,
     onClearSelection,

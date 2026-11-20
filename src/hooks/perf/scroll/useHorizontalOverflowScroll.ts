@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import { useCallback, useEffect, useState } from "react";
+import { useHorizontalWheelScroll } from "./useHorizontalWheelScroll";
 
 type UseHorizontalOverflowScrollOptions = {
   enabled?: boolean;
@@ -34,6 +35,7 @@ export function useHorizontalOverflowScroll<T extends HTMLElement>(
   }: UseHorizontalOverflowScrollOptions = {},
 ): HorizontalOverflowScrollState {
   const [overflow, setOverflow] = useState(NO_OVERFLOW);
+  useHorizontalWheelScroll(containerRef, enabled);
 
   const updateScrollState = useCallback(() => {
     const container = containerRef.current;

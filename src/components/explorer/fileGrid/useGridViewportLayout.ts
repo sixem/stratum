@@ -14,7 +14,7 @@ type ViewportSize = {
 type UseGridViewportLayoutOptions = {
   gridSize: GridSize;
   autoViewportWidth?: number;
-  instantResizeKey?: string | number | boolean;
+  resizeDeferred?: boolean;
   viewKey: string;
   onAutoViewportWidthChange?: (width: number) => void;
 };
@@ -30,7 +30,7 @@ export type GridViewportLayoutState = {
 export const useGridViewportLayout = ({
   gridSize,
   autoViewportWidth,
-  instantResizeKey,
+  resizeDeferred = false,
   viewKey,
   onAutoViewportWidthChange,
 }: UseGridViewportLayoutOptions): GridViewportLayoutState => {
@@ -43,6 +43,7 @@ export const useGridViewportLayout = ({
   const resizeDebounceRef = useRef<number | null>(null);
   const resizeTimerRef = useRef<number | null>(null);
   const resizingRef = useRef(false);
+  const deferWidth = gridSize === "auto" && resizeDeferred;
 
   const commitViewportSize = (width: number, height: number) => {
     const current = viewportSizeRef.current;
@@ -63,7 +64,10 @@ export const useGridViewportLayout = ({
     if (!element) return;
 
     const measure = () => {
-      commitViewportSize(element.clientWidth, element.clientHeight);
+      const previousWidth = viewportSizeRef.current.width;
+      // A sidebar drag moves the viewport while the auto grid keeps its current width.
+      const width = deferWidth && previousWidth > 0 ? previousWidth : element.clientWidth;
+      commitViewportSize(width, element.clientHeight);
     };
 
     measure();
@@ -71,7 +75,7 @@ export const useGridViewportLayout = ({
     observer.observe(element);
 
     return () => observer.disconnect();
-  }, []);
+  }, [deferWidth]);
 
   useEffect(() => {
     const markResizeStart = () => {
@@ -105,6 +109,7 @@ export const useGridViewportLayout = ({
   }, []);
 
   useEffect(() => {
+    if (deferWidth) return;
     const viewportWidth = viewportSize.width;
     if (gridSize === "auto" && viewportWidth <= 0) {
       return;
@@ -142,13 +147,14 @@ export const useGridViewportLayout = ({
         resizeDebounceRef.current = null;
       }
     };
-  }, [gridSize, viewportSize.width]);
+  }, [deferWidth, gridSize, viewportSize.width]);
 
   useEffect(() => {
+    if (deferWidth) return;
     const nextWidth = viewportSizeRef.current.width;
     if (gridSize === "auto" && nextWidth <= 0) return;
     commitStableViewportWidth(nextWidth);
-  }, [gridSize, instantResizeKey, viewKey]);
+  }, [deferWidth, gridSize, viewKey]);
 
   useEffect(() => {
     if (!onAutoViewportWidthChange) return;
