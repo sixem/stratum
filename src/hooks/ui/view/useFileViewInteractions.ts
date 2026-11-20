@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import type { ViewMode } from "@/types";
 import { folderPathKey } from "@/lib";
+import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import type { FileViewModel } from "./useFileViewModel";
 import { useFileViewSelection } from "../selection/useFileViewSelection";
 import { useTypeaheadSelection } from "../selection/useTypeaheadSelection";
@@ -119,6 +120,7 @@ export const useFileViewInteractions = ({
   const shouldHandleTypeahead = useCallback(
     (activeElement: Element | null) => {
       if (settingsOpen || contextMenuOpen || promptOpen) return false;
+      if (useBottomPaneStore.getState().active) return false;
       // Block typeahead while quick preview is active to avoid stealing focus.
       if (previewOpenRef.current) return false;
       if (loading || blockReveal) return false;
@@ -138,12 +140,20 @@ export const useFileViewInteractions = ({
     [blockReveal, contextMenuOpen, loading, mainRef, previewOpenRef, promptOpen, settingsOpen],
   );
 
-  useTypeaheadSelection({
+  const handleTypeahead = useTypeaheadSelection({
     items: viewModel.items,
     onMatch: handleTypeaheadMatch,
     shouldHandle: shouldHandleTypeahead,
-    resetKeys: [currentPath, deferredSearchValue, viewMode],
+    resetKeys: [activeTabId, currentPath, deferredSearchValue, viewMode],
   });
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (handleTypeahead(event)) event.preventDefault();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleTypeahead]);
 
   return {
     gridColumnsRef,

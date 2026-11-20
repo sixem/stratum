@@ -13,6 +13,7 @@ export {
   formatIndexedDriveSummary,
   formatIndexedDriveState,
   formatIndexedSearchServiceState,
+  isCheckingIndexedDrive,
   isIndexedDriveAttentionState,
   isVisibleDriveInfo,
   isIndexedDriveActiveState,

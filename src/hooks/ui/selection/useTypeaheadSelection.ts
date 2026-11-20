@@ -1,5 +1,5 @@
 // Tracks incremental key presses to select entries by name.
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import { isEditableElement } from "@/lib";
 import type { EntryItem } from "@/lib";
 
@@ -67,11 +67,7 @@ export const useTypeaheadSelection = ({
   const lastTypeRef = useRef(0);
   const itemsRef = useRef(items);
   const indexRef = useRef<ReturnType<typeof buildIndex> | null>(null);
-  const onMatchRef = useRef(onMatch);
-  const delayRef = useRef(resetDelayMs);
-  const shouldHandleRef = useRef<UseTypeaheadSelectionOptions["shouldHandle"]>(shouldHandle);
-
-  useEffect(() => {
+  useLayoutEffect(() => {
     bufferRef.current = "";
     lastTypeRef.current = 0;
   }, resetKeys);
@@ -82,65 +78,37 @@ export const useTypeaheadSelection = ({
     indexRef.current = null;
   }, [items]);
 
-  useEffect(() => {
-    onMatchRef.current = onMatch;
-  }, [onMatch]);
+  return useCallback((event: KeyboardEvent) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return false;
+    if (event.isComposing || event.repeat) return false;
 
-  useEffect(() => {
-    delayRef.current = resetDelayMs;
-  }, [resetDelayMs]);
+    const active = document.activeElement;
+    if (isEditableElement(active)) return false;
 
-  useEffect(() => {
-    shouldHandleRef.current = shouldHandle;
-  }, [shouldHandle]);
+    const { key } = event;
+    if (key === "Escape") {
+      bufferRef.current = "";
+      lastTypeRef.current = 0;
+      return false;
+    }
+    // The scope check may focus the file pane. Leave navigation keys with the focused control.
+    const isBackspace = key === "Backspace";
+    if (!isBackspace && (key.length !== 1 || !key.trim())) return false;
 
-  useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.isComposing) return;
-      if (event.repeat) return;
+    const now = performance.now();
+    if (now - lastTypeRef.current > resetDelayMs) bufferRef.current = "";
+    if (isBackspace && !bufferRef.current) return false;
+    if (shouldHandle && !shouldHandle(active)) return false;
 
-      const active = document.activeElement;
-      if (isEditableElement(active)) return;
+    bufferRef.current = isBackspace ? bufferRef.current.slice(0, -1) : bufferRef.current + key.toLowerCase();
+    lastTypeRef.current = now;
+    const query = bufferRef.current;
+    if (!query) return isBackspace;
 
-      const key = event.key;
-      if (key === "Escape") {
-        bufferRef.current = "";
-        lastTypeRef.current = 0;
-        return;
-      }
-      // The scope check may focus the file pane. Leave navigation keys and
-      // modifiers with the currently focused control (e.g. the sidebar Menu key).
-      if (key !== "Backspace" && (key.length !== 1 || !key.trim())) return;
-      if (key === "Backspace" && !bufferRef.current) return;
-      if (shouldHandleRef.current && !shouldHandleRef.current(active)) return;
-
-      const now = performance.now();
-      if (now - lastTypeRef.current > delayRef.current) {
-        bufferRef.current = "";
-      }
-
-      if (key === "Backspace") {
-        if (!bufferRef.current) return;
-        bufferRef.current = bufferRef.current.slice(0, -1);
-      } else {
-        bufferRef.current += key.toLowerCase();
-      }
-
-      lastTypeRef.current = now;
-      const query = bufferRef.current.trim();
-      if (!query) return;
-
-      indexRef.current ??= buildIndex(itemsRef.current);
-      const match = findBestMatch(indexRef.current, query);
-      if (!match) return;
-
-      onMatchRef.current(match);
-      event.preventDefault();
-    };
-
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, []);
+    indexRef.current ??= buildIndex(itemsRef.current);
+    const match = findBestMatch(indexRef.current, query);
+    if (match) onMatch(match);
+    // Backspace edits a live query even when the shortened query has no match.
+    return Boolean(match) || isBackspace;
+  }, [onMatch, resetDelayMs, shouldHandle]);
 };

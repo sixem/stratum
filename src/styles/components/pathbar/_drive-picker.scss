@@ -165,7 +165,7 @@
     height: 7px;
     border-radius: 999px;
     flex: 0 0 auto;
-    background: rgba(157, 170, 194, 0.6);
+    background: #96a3ba;
     box-shadow: 0 0 0 1px rgba(10, 11, 16, 0.45);
   }
 
@@ -176,24 +176,21 @@
 
   .drive-picker-status[data-state="queued"] {
     background: transparent;
-    box-shadow: inset 0 0 0 1px rgba(231, 236, 244, 0.62);
+    box-shadow: inset 0 0 0 1px #82bfce;
   }
 
   .drive-picker-status[data-state="scanning"] {
-    background: #82bfce;
+    background: #60c4d6;
   }
 
-  .drive-picker-status[data-state="ready"] {
-    background: #87bc9d;
-  }
-
+  .drive-picker-status[data-state="ready"],
   .drive-picker-status[data-state="saved"] {
-    background: rgba(205, 214, 229, 0.72);
+    background: #71d6a2;
   }
 
   .drive-picker-status[data-state="stale"],
   .drive-picker-status[data-state="rescanrequired"] {
-    background: #e1be74;
+    background: #f0c96b;
   }
 
   .drive-picker-status[data-state="error"] {

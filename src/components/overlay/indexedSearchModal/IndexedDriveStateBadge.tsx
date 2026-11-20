@@ -4,10 +4,13 @@
 // is easy to scan and update when backend states evolve.
 import { CheckmarkIcon, ErrorIcon, HourglassIcon, RefreshIcon, WarningIcon } from "@/components/icons";
 import { TooltipWrapper } from "../Tooltip";
-import { formatIndexedDriveState } from "@/lib";
+import { formatIndexedDriveState, isCheckingIndexedDrive } from "@/lib";
 import type { IndexedDriveState, IndexedDriveStatus } from "@/types";
 
-const statusDescriptions: Partial<Record<IndexedDriveState, string>> = {
+type IndicatorState = IndexedDriveState | "checking";
+
+const statusDescriptions: Partial<Record<IndicatorState, string>> = {
+  checking: "Verifying the saved index for this drive.",
   saved: "A complete saved index is available. Open folders and Stratum file operations keep affected paths up to date.",
   rescanrequired: "This drive needs a fresh index.",
   stale: "The saved index may be out of date.",
@@ -17,7 +20,7 @@ const statusDescriptions: Partial<Record<IndexedDriveState, string>> = {
   error: "Stratum couldn't finish updating this index.",
 };
 
-const renderIndexedDriveStateMarker = (state: IndexedDriveState) => {
+const renderIndexedDriveStateMarker = (state: IndicatorState) => {
   switch (state) {
     case "ready":
     case "saved":
@@ -25,6 +28,7 @@ const renderIndexedDriveStateMarker = (state: IndexedDriveState) => {
     case "queued":
       return <HourglassIcon className="indexed-search-drive-state-icon" />;
     case "scanning":
+    case "checking":
       return <RefreshIcon className="indexed-search-drive-state-icon" />;
     case "stale":
     case "rescanrequired":
@@ -39,11 +43,11 @@ const renderIndexedDriveStateMarker = (state: IndexedDriveState) => {
   }
 };
 
-export const IndexedDriveStateBadge = ({ status }: { status: IndexedDriveStatus }) => {
-  const { state } = status;
-  const label = formatIndexedDriveState(state);
+export const IndexedDriveStateBadge = ({ status, checkingIndex }: { status: IndexedDriveStatus; checkingIndex: boolean }) => {
+  const state = isCheckingIndexedDrive(status.state, checkingIndex) ? "checking" : status.state;
+  const label = state === "checking" ? "Checking index…" : formatIndexedDriveState(state);
   const fallback = statusDescriptions[state];
-  const reason = status.message?.trim().replace(/\s+/g, " ");
+  const reason = state === "checking" ? null : status.message?.trim().replace(/\s+/g, " ");
   // Keep long filesystem paths and OS diagnostics from filling the tooltip.
   const detail = fallback && (reason || fallback);
   const concise = detail && detail.length > 120 ? detail.slice(0, 119).trimEnd() + "…" : detail;

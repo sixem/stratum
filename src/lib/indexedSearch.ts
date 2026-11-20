@@ -31,6 +31,10 @@ export const isIndexedDriveActiveState = (
 export const isIndexedDriveAttentionState = (state?: IndexedDriveState | null) =>
   state === "stale" || state === "rescanrequired" || state === "error";
 
+// Startup can briefly report a saved snapshot as provisional while the volume is checked.
+export const isCheckingIndexedDrive = (state: IndexedDriveState | undefined, checkingIndex: boolean) =>
+  checkingIndex && (state === undefined || state === "stale");
+
 export const formatIndexedDriveState = (state: IndexedDriveState) => {
   switch (state) {
     case "queued":

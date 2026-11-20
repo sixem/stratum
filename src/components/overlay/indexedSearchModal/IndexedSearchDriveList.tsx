@@ -8,14 +8,14 @@ type IndexedSearchDriveListProps = {
   driveStatuses: IndexedDriveStatus[];
   onSelectDrive: (drivePath: string) => void;
   selectedDrivePath: string | undefined;
-  statusLoading: boolean;
+  checkingIndex: boolean;
 };
 
 export const IndexedSearchDriveList = ({
   driveStatuses,
   onSelectDrive,
   selectedDrivePath,
-  statusLoading,
+  checkingIndex,
 }: IndexedSearchDriveListProps) => {
   return (
     <section className="indexed-search-drives" aria-label="Drives">
@@ -25,7 +25,7 @@ export const IndexedSearchDriveList = ({
 
       {driveStatuses.length === 0 ? (
         <p className="indexed-search-drive-empty">
-          {statusLoading ? "Checking drives…" : "No drive status available."}
+          {checkingIndex ? "Checking drives…" : "No drive status available."}
         </p>
       ) : (
         <div className="indexed-search-drive-list">
@@ -44,7 +44,7 @@ export const IndexedSearchDriveList = ({
                   {formatIndexedDriveSummary(status) ?? status.filesystem ?? "Unknown filesystem"}
                 </span>
               </span>
-              <IndexedDriveStateBadge status={status} />
+              <IndexedDriveStateBadge status={status} checkingIndex={checkingIndex} />
             </PressButton>
           ))}
         </div>

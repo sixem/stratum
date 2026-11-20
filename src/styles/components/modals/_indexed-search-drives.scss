@@ -67,7 +67,7 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: var(--muted);
+    color: #96a3ba;
     font-size: var(--font-size-xs);
     white-space: nowrap;
   }
@@ -78,7 +78,20 @@
     flex: 0 0 auto;
   }
 
-  .indexed-search-drive-state[data-state="ready"] {
+  .indexed-search-drive-state[data-state="checking"] {
+    color: rgba(231, 236, 244, 0.85);
+  }
+
+  .indexed-search-drive-state[data-state="queued"] {
+    color: #82bfce;
+  }
+
+  .indexed-search-drive-state[data-state="scanning"] {
+    color: #60c4d6;
+  }
+
+  .indexed-search-drive-state[data-state="ready"],
+  .indexed-search-drive-state[data-state="saved"] {
     color: #71d6a2;
   }
 

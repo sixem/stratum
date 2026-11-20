@@ -228,7 +228,7 @@ export const IndexedSearchModal = () => {
               driveStatuses={driveStatuses}
               onSelectDrive={selectDrive}
               selectedDrivePath={selectedDrive?.drivePath}
-              statusLoading={checkingIndex}
+              checkingIndex={checkingIndex}
             />
           </aside>
         </div>

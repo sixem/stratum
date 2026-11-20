@@ -1,5 +1,5 @@
 // Route keyboard actions to the tabs and selection of the focused lower pane.
-import type { KeyboardEvent, RefObject } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 import { formatDeleteLabel, isEditableElement } from "@/lib";
 import { buildKeybindFromEvent, useSettingsStore, usePromptStore, writeFileClipboard } from "@/modules";
 import type { useWindowsContextMenu } from "@/hooks/ui/menus/useWindowsContextMenu";
@@ -15,18 +15,22 @@ type Options = {
   ready: boolean;
   startRename: (item: {path: string; name: string}) => void;
   scrollTo: (index: number) => void;
+  handleTypeahead: (event: KeyboardEvent) => boolean;
+  handleTabJump: (event: KeyboardEvent) => boolean;
 };
 
-export function bottomPaneKeys({ folder, actions, address, nativeMenu, paths, ready, startRename, scrollTo }: Options) {
+export function bottomPaneKeys({
+  folder, actions, address, nativeMenu, paths, ready, startRename, scrollTo, handleTypeahead, handleTabJump,
+}: Options) {
   const { dir, tabs, model, selection } = folder;
   const navigate = tabs.browseTo;
   const path = dir.currentPath;
-  return (event: KeyboardEvent<HTMLElement>) => {
+  return (event: ReactKeyboardEvent<HTMLElement>) => {
     // Window-wide shortcuts belong to the upper pane. Keep lower-pane commands
     // local, including text-editing shortcuts in its address and rename fields.
     if (!event.currentTarget.contains(event.target as Node) || usePromptStore.getState().prompt) return;
     const binding = buildKeybindFromEvent(event.nativeEvent);
-    const { keybinds, confirmDelete } = useSettingsStore.getState();
+    const { keybinds, confirmDelete, smartTabJump } = useSettingsStore.getState();
     // Indexed search belongs to the window, even when the lower pane has focus.
     if (binding === keybinds.openIndexedSearch) return;
     event.stopPropagation();
@@ -46,7 +50,12 @@ export function bottomPaneKeys({ folder, actions, address, nativeMenu, paths, re
       const tab = tabs.tabs[Number(key) - 1];
       if (tab) tabs.selectTab(tab.id);
     } else if (key === "f5" || binding === "Control+r") void dir.refresh();
-    else if (!ready || (event.target !== event.currentTarget && !(event.target as Element).closest("[data-pane-path]"))) return;
+    else if (!ready) return;
+    // These gestures also work after a tab or toolbar button has taken focus.
+    else if (handleTypeahead(event.nativeEvent) || (smartTabJump && handleTabJump(event.nativeEvent))) {
+      event.preventDefault();
+      return;
+    } else if (event.target !== event.currentTarget && !(event.target as Element).closest("[data-pane-path]")) return;
     else if (cmd && key === "a") selection.setSelection(Array.from(model.entryByPath.keys()));
     else if (paths.length && cmd && (key === "c" || key === "x")) void writeFileClipboard(paths, key === "x" ? "move" : "copy");
     else if (cmd && key === "v") void actions.pasteEntries(path);

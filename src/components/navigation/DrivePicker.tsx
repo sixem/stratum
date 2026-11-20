@@ -5,6 +5,7 @@ import {
   buildDriveTooltip,
   formatIndexedDriveState,
   handleMiddleClick,
+  isCheckingIndexedDrive,
   normalizePath,
 } from "@/lib";
 import { useHorizontalOverflowScroll } from "@/hooks";
@@ -38,8 +39,7 @@ type DriveMarkerState = IndexedDriveState | "checking" | "loading";
 
 const getDriveIndexState = (info: DriveInfo | undefined, serviceState?: IndexedSearchServiceState) => {
   const state = info?.indexStatus?.state;
-  // A saved snapshot is provisional while startup verifies its volume.
-  return serviceState === "starting" && (state == null || state === "stale") ? "checking" : state;
+  return isCheckingIndexedDrive(state, serviceState === "starting") ? "checking" : state;
 };
 
 const buildDriveAriaLabel = (driveLabel: string, state?: DriveMarkerState) => {

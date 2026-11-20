@@ -1,9 +1,11 @@
 // Handles keyboard navigation and selection activation in the file view.
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect } from "react";
 import type { RefObject } from "react";
 import { tinykeys } from "tinykeys";
 import { isEditableElement } from "@/lib";
+import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import type { ViewMode } from "@/types";
+import { useSmartTabJump } from "./useSmartTabJump";
 
 type SelectionTarget = {
   path: string;
@@ -55,8 +57,7 @@ export const useSelectionShortcuts = ({
   onOpenDir,
   onOpenEntry,
 }: UseSelectionShortcutsOptions) => {
-  const lastTabTapRef = useRef(0);
-  const TAB_DOUBLE_TAP_MS = 280;
+  const handleTabJump = useSmartTabJump(mainRef);
 
   const moveSelectionBy = useCallback(
     (delta: number, event: KeyboardEvent) => {
@@ -147,56 +148,23 @@ export const useSelectionShortcuts = ({
 
   useEffect(() => {
     if (!smartTabJump) return;
-    const handleTabJump = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
-      if (event.key !== "Tab") return;
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.isComposing || event.repeat) return;
+    const onKeyDown = (event: KeyboardEvent) => {
       if (settingsOpen || contextMenuOpen || indexedSearchOpen || smartTabBlocked) return;
-      if (previewOpen) return;
-      if (loading || blockReveal) return;
-
-      const active = document.activeElement;
-      if (isEditableElement(active)) return;
-      if (!document.hasFocus()) return;
-
-      const main = mainRef.current;
-      if (!main) return;
-      const hasMainFocus = Boolean(active && main.contains(active));
-      const isRootFocus =
-        !active || active === document.body || active === document.documentElement;
-      if (!hasMainFocus && !isRootFocus) {
-        // Switching tabs can leave focus on the tabs bar. Double-tap Tab should still
-        // work, and re-focusing the view keeps subsequent keyboard actions predictable.
-        main.focus({ preventScroll: true });
-      }
+      if (previewOpen || loading || blockReveal || useBottomPaneStore.getState().active) return;
+      if (!handleTabJump(event)) return;
 
       // Suppress normal focus traversal so double-tap stays scoped to the view.
       event.preventDefault();
       event.stopPropagation();
-
-      const now = performance.now();
-      const elapsed = now - lastTabTapRef.current;
-      lastTabTapRef.current = now;
-      if (elapsed > TAB_DOUBLE_TAP_MS) return;
-
-      const scrollHost =
-        main?.querySelector<HTMLElement>(".list-body") ??
-        main?.querySelector<HTMLElement>(".thumb-viewport");
-      if (!scrollHost) return;
-      const maxScrollTop = Math.max(0, scrollHost.scrollHeight - scrollHost.clientHeight);
-      if (maxScrollTop <= 0) return;
-      const ratio = scrollHost.scrollTop / maxScrollTop;
-      scrollHost.scrollTop = ratio < 0.5 ? maxScrollTop : 0;
     };
 
-    window.addEventListener("keydown", handleTabJump);
-    return () => window.removeEventListener("keydown", handleTabJump);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [
     blockReveal,
     contextMenuOpen,
     loading,
-    mainRef,
+    handleTabJump,
     previewOpen,
     settingsOpen,
     indexedSearchOpen,

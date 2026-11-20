@@ -1,5 +1,5 @@
 // Secondary workspace with its own tabs, navigation, and file selection.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, PointerEvent } from "react";
 import type { ShellMenuTarget } from "@/api";
 import { useDriveInfo } from "@/hooks/domain/filesystem/useDriveInfo";
@@ -10,6 +10,8 @@ import { ChevronDownIcon, ChevronUpIcon, GridIcon, ListIcon, NavArrowIcon, TabCl
 import { ToolbarIconButton } from "@/components/primitives/ToolbarIconButton";
 import { useDragOutHandler } from "@/hooks/ui/inputs/useDragOutHandler";
 import { useWindowsContextMenu } from "@/hooks/ui/menus/useWindowsContextMenu";
+import { useSmartTabJump } from "@/hooks/ui/selection/useSmartTabJump";
+import { useTypeaheadSelection } from "@/hooks/ui/selection/useTypeaheadSelection";
 import type { PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
 import { useSettingsStore, refreshFileClipboard } from "@/modules";
 import { hideBottomPane, setBottomPaneActive, useBottomPaneStore } from "@/modules/bottomPaneStore";
@@ -39,12 +41,14 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery }: P
   const folder = useBottomFolder(upper.currentPath);
   const { dir, meta, tabs, model, selection, viewKey, busy } = folder;
   const root = useRef<HTMLElement>(null);
+  const files = useRef<HTMLDivElement>(null);
   const address = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState(tabs.displayPath);
   const [rename, setRename] = useState<{ path: string; name: string } | null>(null);
   const [scrollRequest, setScrollRequest] = useState<{index: number; nonce: number} | null>(null);
   const tabNumbers = useSettingsStore(state => state.showTabNumbers);
   const fixedWidth = useSettingsStore(state => state.fixedWidthTabs);
+  const active = useBottomPaneStore(state => state.active);
   const path = dir.currentPath;
   const { currentDriveInfo } = useDriveInfo({
     currentPath: path, drives: upper.drives, driveInfo: upper.driveInfo,
@@ -115,9 +119,24 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery }: P
     nativeMenu(targets ? { paths: targets } : { backgroundPath: path },
       { x: event.clientX, y: event.clientY }, event.shiftKey, galleryAction(entry?.path));
   };
+  const scrollTo = useCallback((index: number) => {
+    setScrollRequest(prev => ({ index, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, []);
+  const { setSelection } = selection;
+  const handleTypeahead = useTypeaheadSelection({
+    items: model.items,
+    resetKeys: [active, ready, viewKey, tabs.searchValue, tabs.viewMode],
+    onMatch: ({ path, index }) => {
+      // Keep keyboard focus in this pane when scrolling moves a row out of view.
+      files.current?.focus({ preventScroll: true });
+      setSelection([path], path);
+      scrollTo(index);
+    },
+  });
+  const handleTabJump = useSmartTabJump(files, active && ready ? `${viewKey}:${tabs.viewMode}` : null);
   const onKey = bottomPaneKeys({
     folder, actions, address, nativeMenu: openKeyboardMenu, paths, ready, startRename: setRename,
-    scrollTo: index => setScrollRequest(prev => ({ index, nonce: (prev?.nonce ?? 0) + 1 })),
+    scrollTo, handleTypeahead, handleTabJump,
   });
   const nextView = tabs.viewMode === "list" ? "thumbs" : "list";
   const viewSwitchLabel = nextView === "thumbs" ? "Switch to thumbnails" : "Switch to list";
@@ -189,7 +208,7 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery }: P
       onSelect={tabs.selectTab} onClose={tabs.closeTab} onNew={tabs.newTab} onReorder={tabs.reorderTabs}
       dropTargetId={drop.dropTargetTabId} dropTargetPath={drop.dropTargetPath} tabDropSubmenu={drop.tabDropSubmenu}
       dragPoint={drop.dragPoint} onSubmenuHoverTargetChange={drop.setDropTarget} onSubmenuCloseRequest={drop.clearDragState} />
-    <div className="main bottom-files" tabIndex={-1} aria-busy={busy} data-file-pane="bottom" data-pane-path={ready ? path : ""}
+    <div ref={files} className="main bottom-files" tabIndex={-1} aria-busy={busy} data-file-pane="bottom" data-pane-path={ready ? path : ""}
       data-drop-background={drop.backgroundHovered && drop.hoveredPane === "bottom" || undefined}
       onScrollCapture={event => {
         const el = event.target as HTMLElement;
