@@ -10,9 +10,7 @@ use super::manifest::{
 };
 use super::strategy::classify_transfer_root;
 use super::types::TransferWorkEstimate;
-use crate::domain::filesystem::{
-    CopyOptions, TransferControlCallback, TransferMode, TransferOptions,
-};
+use crate::domain::filesystem::{CopyOptions, TransferControlCallback, TransferOptions};
 use std::path::PathBuf;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -94,22 +92,13 @@ pub(crate) fn plan_transfer_job(
 ) -> Result<PlannedTransferJob, String> {
     let target_path = validate_destination(destination)?;
     let roots_total = requested_roots(paths);
-    let requested_mode = options
-        .and_then(|value| value.mode)
-        .unwrap_or(TransferMode::Auto);
-    let overwrite = options.and_then(|value| value.overwrite).unwrap_or(false);
     let mut files_total = 0usize;
     let mut bytes_total = 0u64;
     let mut used_manifest_fallback = false;
 
     for raw_path in paths {
-        let Some(strategy) = classify_transfer_root(
-            raw_path,
-            &target_path,
-            requested_mode,
-            overwrite,
-            &mut on_control,
-        )?
+        let Some(strategy) =
+            classify_transfer_root(raw_path, &target_path, options, &mut on_control)?
         else {
             continue;
         };

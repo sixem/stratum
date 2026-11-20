@@ -2,7 +2,6 @@
 import { useMemo } from "react";
 import { useEntryPresence, useScrollToIndex } from "@/hooks";
 import { EmptyState } from "@/components/primitives/EmptyState";
-import { LoadingIndicator } from "@/components/primitives/LoadingIndicator";
 import { EntryCard, ParentCard } from "./fileGrid/index";
 import { ThumbViewport } from "./fileGrid/ThumbViewport";
 import type { FileGridProps } from "./fileGrid/fileGrid.types";
@@ -12,6 +11,7 @@ import { useGridSizing } from "./fileGrid/useGridSizing";
 import { useGridThumbRequests } from "./fileGrid/useGridThumbRequests";
 import { useGridTooltip } from "./fileGrid/useGridTooltip";
 import { useGridVirtual } from "./fileGrid/useGridVirtual";
+import { useCutEntries } from "./fileView/useCutEntries";
 
 const FileGrid = ({
   view,
@@ -26,13 +26,13 @@ const FileGrid = ({
   dragDrop,
   creation,
 }: FileGridProps) => {
+  const isCut = useCutEntries();
   const {
     isDeletePending,
     isTransferPending,
     emptyMessage,
     emptyActions,
     resolvedIndexMap,
-    entryByPath,
     handleCardSelect,
     handleCardOpen,
     handleCardOpenNewTab,
@@ -140,12 +140,12 @@ const FileGrid = ({
   });
   useGridTooltip({
     viewportRef,
-    entryByPath,
+    entryByPath: view.entryByPath,
     entryMeta: metadata.entryMeta,
     disabled: interactionActive,
   });
 
-  const { selectionBox } = useGridSelection({
+  const { selectionBox, dragHandlers } = useGridSelection({
     viewportRef,
     selectedPaths: selection.selectedPaths,
     selectionItems,
@@ -157,19 +157,17 @@ const FileGrid = ({
     onSetSelection: selection.onSetSelection,
     onClearSelection: selection.onClearSelection,
     onStartDragOut: dragDrop.onStartDragOut,
-    onInternalDrop: dragDrop.onInternalDrop,
-    onInternalHover: dragDrop.onInternalHover,
     loading: view.loading,
   });
 
-  const hasContent = viewItems.length > 0;
   const contentReady = true;
   const viewAnimate = false;
-  const showLoadingOverlay = view.loading && !hasContent;
 
   return (
     <div
       className="thumb-shell"
+      {...dragHandlers}
+      inert={view.loading}
       data-category-tint={thumbs.categoryTinting ? "true" : "false"}
       data-meta-hidden={gridMetaEnabled ? "false" : "true"}
     >
@@ -236,6 +234,7 @@ const FileGrid = ({
                 hideExtension={grid.gridNameHideExtension}
                 selected={selection.selectedPaths.has(item.entry.path)}
                 isDeleting={isDeletePending(item.entry.path)}
+                isCut={isCut(item.entry.path)}
                 isTransferring={isTransferPending(item.entry.path)}
                 dropTarget={isDropTarget}
                 isRenaming={rename.renameTargetPath === item.entry.path}
@@ -256,7 +255,7 @@ const FileGrid = ({
           })}
         </div>
         <div className="thumb-spacer" style={{ height: `${virtual.offsetBottom}px` }} />
-        {view.entries.length === 0 && !view.loading ? (
+        {view.entryByPath.size === 0 && !view.loading ? (
           <div className="thumb-empty">
             <EmptyState
               title={emptyMessage.title}
@@ -266,13 +265,6 @@ const FileGrid = ({
           </div>
         ) : null}
       </ThumbViewport>
-      <div
-        className="loading-overlay"
-        data-visible={showLoadingOverlay ? "true" : "false"}
-        data-solid={!hasContent ? "true" : "false"}
-      >
-        <LoadingIndicator />
-      </div>
     </div>
   );
 };

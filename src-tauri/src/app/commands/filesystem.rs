@@ -5,26 +5,14 @@ use crate::services::transfer_manager;
 use crate::services::watch;
 use std::path::Path;
 
-fn reconcile_indexed_search_paths(
-    indexed_search: &indexed_search::IndexedSearchHandle,
-    paths: Vec<String>,
-    context: &str,
-) {
-    if let Err(error) = indexed_search.reconcile_paths(paths) {
-        eprintln!("Indexed-search reconcile failed after {context}: {error}");
-    }
-}
-
 fn queue_indexed_search_reconcile(
     indexed_search: indexed_search::IndexedSearchHandle,
     paths: Vec<String>,
     context: &'static str,
 ) {
-    // Indexed-search refresh is follow-up work. Queue it after the filesystem
-    // command settles so user-visible completion is not gated on catalog writes.
-    tauri::async_runtime::spawn_blocking(move || {
-        reconcile_indexed_search_paths(&indexed_search, paths, context);
-    });
+    if let Err(error) = indexed_search.queue_reconcile_paths(paths) {
+        eprintln!("Indexed-search queue failed after {context}: {error}");
+    }
 }
 
 fn queue_reconcile_after_create(
@@ -318,12 +306,41 @@ pub async fn copy_entries(
 pub async fn transfer_entries(
     indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
     transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
-    window: tauri::Window,
+    webview: tauri::Webview,
     paths: Vec<String>,
     destination: String,
     options: Option<fs::TransferOptions>,
     transfer_id: Option<String>,
+    drop_stage: Option<u64>,
 ) -> Result<fs::TransferReport, String> {
+    let window = webview.window();
+    #[cfg(windows)]
+    let stage = drop_stage
+        .map(|id| {
+            use crate::platform::windows::dragdrop::{
+                staged_path_spelling_supported, IncomingDrops,
+            };
+            use tauri::Manager;
+
+            if !matches!(
+                options.as_ref().and_then(|options| options.mode),
+                Some(fs::TransferMode::Copy)
+            ) {
+                return Err("Temporary dropped files must be copied.".into());
+            }
+            if !staged_path_spelling_supported(&destination) {
+                return Err(
+                    "Choose a destination folder whose name does not end in whitespace.".into(),
+                );
+            }
+            webview
+                .state::<IncomingDrops>()
+                .take_for_transfer(webview.label(), id, &paths)
+        })
+        .transpose()?;
+    #[cfg(not(windows))]
+    let _ = drop_stage;
+
     let manager = transfer_manager.inner().clone();
     let indexed_search = indexed_search.inner().clone();
     let reconcile_sources = paths.clone();
@@ -333,7 +350,17 @@ pub async fn transfer_entries(
         reconcile_sources,
         reconcile_destination,
         "transfer_entries",
-        move || manager.transfer_entries(window, paths, destination, options, transfer_id),
+        move || {
+            manager.transfer_entries(
+                window,
+                paths,
+                destination,
+                options,
+                transfer_id,
+                #[cfg(windows)]
+                stage,
+            )
+        },
     )
     .await
 }
@@ -362,11 +389,15 @@ pub fn resume_transfer_job(
 }
 
 #[tauri::command]
-pub fn cancel_transfer_job(
+pub async fn cancel_transfer_job(
     transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
     job_id: String,
 ) -> Result<bool, String> {
-    transfer_manager.inner().cancel_job(job_id.trim())
+    let manager = transfer_manager.inner().clone();
+    // Canceling a queued drop may release its staged files.
+    tauri::async_runtime::spawn_blocking(move || manager.cancel_job(job_id.trim()))
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -410,39 +441,21 @@ pub async fn trash_entries(
 }
 
 #[tauri::command]
-pub async fn restore_recycle_entries(
+pub async fn restore_recycle_items(
     indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
-    entries: Vec<fs::RecycleEntry>,
-) -> Result<fs::RestoreReport, String> {
+    receipt_id: String,
+) -> Result<fs::RestoreRecycleReport, String> {
     let indexed_search = indexed_search.inner().clone();
-    let reconcile_paths = entries
-        .iter()
-        .map(|entry| entry.original_path.clone())
-        .collect::<Vec<_>>();
-    run_reconcile_after_create_command(
+    let report =
+        tauri::async_runtime::spawn_blocking(move || fs::restore_recycle_items(receipt_id))
+            .await
+            .map_err(|err| err.to_string())??;
+    queue_reconcile_after_create(
         indexed_search,
-        reconcile_paths,
-        "restore_recycle_entries",
-        move || fs::restore_recycle_entries(entries),
-    )
-    .await
-}
-
-#[tauri::command]
-pub async fn restore_recycle_paths(
-    indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
-    paths: Vec<String>,
-    min_deleted_at: Option<u64>,
-) -> Result<fs::RestorePathsReport, String> {
-    let indexed_search = indexed_search.inner().clone();
-    let reconcile_paths = paths.clone();
-    run_reconcile_after_create_command(
-        indexed_search,
-        reconcile_paths,
-        "restore_recycle_paths",
-        move || fs::restore_recycle_paths(paths, min_deleted_at),
-    )
-    .await
+        report.restored_paths.clone(),
+        "restore_recycle_items",
+    );
+    Ok(report)
 }
 
 #[tauri::command]
@@ -466,15 +479,40 @@ pub async fn rename_entry(
 }
 
 #[tauri::command]
-pub fn start_dir_watch(
+pub async fn start_dir_watch(
     app: tauri::AppHandle,
     path: String,
+    pane: Option<fs::FilePane>,
+    generation: Option<u64>,
     state: tauri::State<'_, watch::DirWatchHandle>,
 ) -> Result<(), String> {
-    watch::start_dir_watch(app, path, state)
+    let path = path.trim();
+    let target = (!path.is_empty()).then(|| path.to_string());
+    update_dir_watch(app, state.inner().clone(), target, pane, generation).await
 }
 
 #[tauri::command]
-pub fn stop_dir_watch(state: tauri::State<'_, watch::DirWatchHandle>) -> Result<(), String> {
-    watch::stop_dir_watch(state)
+pub async fn stop_dir_watch(
+    app: tauri::AppHandle,
+    pane: Option<fs::FilePane>,
+    generation: Option<u64>,
+    state: tauri::State<'_, watch::DirWatchHandle>,
+) -> Result<(), String> {
+    update_dir_watch(app, state.inner().clone(), None, pane, generation).await
+}
+
+async fn update_dir_watch(
+    app: tauri::AppHandle,
+    state: watch::DirWatchHandle,
+    target: Option<String>,
+    pane: Option<fs::FilePane>,
+    generation: Option<u64>,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        state.set_target(pane.unwrap_or_default(), target, generation, |path| {
+            watch::open_dir_watch(app, path)
+        })
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }

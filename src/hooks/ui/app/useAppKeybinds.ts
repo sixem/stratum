@@ -1,9 +1,11 @@
 // Centralizes keybind gating and handlers for the main app shell.
 import { useCallback, useMemo } from "react";
-import { copyPathsToClipboard } from "@/api";
-import { formatDeleteLabel, getSelectionTargets, isEditableElement } from "@/lib";
+import type { RefObject } from "react";
+import { formatDeleteLabel, getDriveKey, getSelectionTargets, isEditableElement, normalizeDropPath } from "@/lib";
+import { useBottomPaneStore } from "@/modules/bottomPaneStore";
+import { getFileCommandFocus } from "../menus/keyboardContextMenu";
 import { useKeybinds } from "../inputs/useKeybinds";
-import { useClipboardStore, useIndexedSearchUiStore, usePromptStore } from "@/modules";
+import { useIndexedSearchUiStore, usePromptStore, writeFileClipboard } from "@/modules";
 import type { KeybindMap } from "@/modules/keybinds";
 import type { Tab } from "@/types";
 
@@ -12,6 +14,7 @@ type UseAppKeybindsOptions = {
   indexedSearchEnabled: boolean;
   confirmDelete: boolean;
   settingsOpen: boolean;
+  aboutOpen: boolean;
   conversionModalOpen: boolean;
   contextMenuOpen: boolean;
   promptOpen: boolean;
@@ -20,13 +23,15 @@ type UseAppKeybindsOptions = {
   activeTabId: string | null;
   tabs: Tab[];
   selected: Set<string>;
+  mainRef: RefObject<HTMLElement | null>;
+  currentPath: string;
   viewParentPath: string | null;
   canUndo: () => boolean;
   undo: () => Promise<unknown>;
   deleteEntries: (paths: string[]) => Promise<{ deleted: number } | null | undefined>;
   duplicateEntries: (paths: string[]) => Promise<unknown>;
-  pasteEntries: (paths: string[], destination?: string) => Promise<unknown>;
-  refreshClipboardFromOs: () => Promise<string[] | null>;
+  pasteEntries: (destination?: string) => Promise<unknown>;
+  onContextMenu: (native: boolean) => boolean;
   onNewTab: () => void;
   onCloseTab: (id: string) => void;
   onSelectTab: (id: string) => void;
@@ -42,6 +47,7 @@ export const useAppKeybinds = ({
   indexedSearchEnabled,
   confirmDelete,
   settingsOpen,
+  aboutOpen,
   conversionModalOpen,
   contextMenuOpen,
   promptOpen,
@@ -50,13 +56,15 @@ export const useAppKeybinds = ({
   activeTabId,
   tabs,
   selected,
+  mainRef,
+  currentPath,
   viewParentPath,
   canUndo,
   undo,
   deleteEntries,
   duplicateEntries,
   pasteEntries,
-  refreshClipboardFromOs,
+  onContextMenu,
   onNewTab,
   onCloseTab,
   onSelectTab,
@@ -73,25 +81,16 @@ export const useAppKeybinds = ({
   );
 
   // Keybind gating helpers: protect interactions during modal states.
-  const canHandleGlobalKeybind = useCallback(() => {
-    return !settingsOpen &&
-      !conversionModalOpen &&
-      !contextMenuOpen &&
-      !promptOpen &&
-      !previewOpen &&
-      !indexedSearchOpen;
-  }, [
-    contextMenuOpen,
-    conversionModalOpen,
-    indexedSearchOpen,
-    previewOpen,
-    promptOpen,
-    settingsOpen,
-  ]);
+  const modalOpen = settingsOpen || aboutOpen || conversionModalOpen ||
+    promptOpen || previewOpen || indexedSearchOpen;
+  const canHandleGlobalKeybind = useCallback(
+    () => !modalOpen && !contextMenuOpen,
+    [modalOpen, contextMenuOpen],
+  );
 
   const canHandleViewKeybind = useCallback(() => {
     if (!canHandleGlobalKeybind()) return false;
-    if (blockReveal) return false;
+    if (blockReveal || useBottomPaneStore.getState().active) return false;
     const active = document.activeElement;
     if (isEditableElement(active)) return false;
     return true;
@@ -207,27 +206,35 @@ export const useAppKeybinds = ({
     return false;
   }, []);
 
-  const handleCopySelectionKeybind = useCallback((_event: KeyboardEvent) => {
+  const handleClipboardSelection = useCallback((operation: "copy" | "move") => {
     if (!canHandleViewKeybind()) return false;
-    if (selectionTargets.length === 0) return false;
-    useClipboardStore.getState().setClipboard(selectionTargets);
-    void copyPathsToClipboard(selectionTargets);
+    const focus = getFileCommandFocus(mainRef.current);
+    if (!focus) return false;
+    const paths = focus === "view" ? selectionTargets : [focus.place.path];
+    if (!paths.length) return false;
+    if (operation === "move" && focus !== "view") {
+      const path = normalizeDropPath(focus.place.path);
+      const root = getDriveKey(path);
+      if (!root || root === path) return false;
+    }
+    void writeFileClipboard(paths, operation);
     return true;
-  }, [canHandleViewKeybind, selectionTargets]);
+  }, [canHandleViewKeybind, mainRef, selectionTargets]);
 
   const handlePasteSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
-    const clipboard = useClipboardStore.getState().clipboard;
-    if (clipboard && clipboard.paths.length > 0) {
-      void pasteEntries(clipboard.paths);
-      return true;
-    }
-    void refreshClipboardFromOs().then((paths) => {
-      if (!paths || paths.length === 0) return;
-      void pasteEntries(paths);
-    });
+    const focus = getFileCommandFocus(mainRef.current);
+    if (!focus) return false;
+    const destination = focus === "view" ? currentPath : focus.place.path;
+    if (!destination) return false;
+    void pasteEntries(destination);
     return true;
-  }, [canHandleViewKeybind, pasteEntries, refreshClipboardFromOs]);
+  }, [canHandleViewKeybind, currentPath, mainRef, pasteEntries]);
+
+  const handleContextMenuKeybind = useCallback((native: boolean) => {
+    if (modalOpen) return false;
+    return (contextMenuOpen || canHandleViewKeybind()) && onContextMenu(native);
+  }, [canHandleViewKeybind, contextMenuOpen, modalOpen, onContextMenu]);
 
   const handleRefreshKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleGlobalKeybind()) return false;
@@ -242,19 +249,16 @@ export const useAppKeybinds = ({
     if (indexedSearchOpen) {
       return true;
     }
-    if (settingsOpen || conversionModalOpen || contextMenuOpen || promptOpen || previewOpen) {
+    if (modalOpen || contextMenuOpen) {
       return true;
     }
     useIndexedSearchUiStore.getState().openModal();
     return true;
   }, [
     contextMenuOpen,
-    conversionModalOpen,
     indexedSearchOpen,
     indexedSearchEnabled,
-    previewOpen,
-    promptOpen,
-    settingsOpen,
+    modalOpen,
   ]);
 
   const keybindHandlers = useMemo(
@@ -287,8 +291,11 @@ export const useAppKeybinds = ({
         Escape: handleClearSelectionKeybind,
         F5: handleRefreshKeybind,
         "Control+a": handleSelectAllKeybind,
-        "Control+c": handleCopySelectionKeybind,
+        "Control+c": () => handleClipboardSelection("copy"),
+        "Control+x": () => handleClipboardSelection("move"),
         "Control+v": handlePasteSelectionKeybind,
+        ContextMenu: () => handleContextMenuKeybind(false),
+        "Shift+F10": () => handleContextMenuKeybind(true),
         "Control+r": handleRefreshKeybind,
       };
       for (let index = 1; index <= 9; index += 1) {
@@ -298,7 +305,8 @@ export const useAppKeybinds = ({
     },
     [
       handleClearSelectionKeybind,
-      handleCopySelectionKeybind,
+      handleClipboardSelection,
+      handleContextMenuKeybind,
       handlePasteSelectionKeybind,
       handleRefreshKeybind,
       handleSelectAllKeybind,

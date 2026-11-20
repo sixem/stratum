@@ -1,6 +1,5 @@
 // Conversion modal draft/run helpers shared by the App conversion controller.
-import { DEFAULT_VIDEO_CONVERT_PRESET_ID, getVideoConvertPreset } from "@/constants";
-import { normalizePath } from "@/lib";
+import { DEFAULT_VIDEO_CONVERT_PRESET_ID, getVideoConvertPreset } from "../../../../constants/convert.ts";
 import type {
   ConversionVideoFormat,
   ConversionItemRunStatus,
@@ -63,8 +62,6 @@ export const resolveVideoTargetSpec = (format: string): VideoTargetSpec | null =
   }
 };
 
-export const toPathKey = (path: string) => normalizePath(path) ?? path.trim().toLowerCase();
-
 export const buildConversionRunState = (
   request: ConversionModalRequest,
   patch?: Partial<ConversionRunState>,
@@ -97,36 +94,38 @@ export const buildConversionRunState = (
   };
 };
 
-const buildConversionRuleDrafts = (request: ConversionModalRequest): ConversionRuleDraft[] => {
-  const defaultVideoPreset = getVideoConvertPreset(DEFAULT_VIDEO_CONVERT_PRESET_ID);
+const buildConversionRuleDrafts = (request: ConversionModalRequest, presetId: ConversionModalDraft["videoOptions"]["presetId"]): ConversionRuleDraft[] => {
   return request.sourceKinds.map((kind) => ({
     kind,
     targetFormat:
       request.quickTargetKind === kind
         ? request.quickTargetFormat
         : kind === "video"
-          ? defaultVideoPreset?.format ?? null
+          ? "mp4"
           : null,
-    presetId: kind === "video" ? defaultVideoPreset?.id ?? null : null,
+    presetId: kind === "video" ? presetId : null,
   }));
 };
 
 export const buildConversionModalDraft = (request: ConversionModalRequest): ConversionModalDraft => {
-  const defaultVideoPreset = getVideoConvertPreset(DEFAULT_VIDEO_CONVERT_PRESET_ID);
+  const quickVideoFormat = request.quickTargetKind === "video" ? request.quickTargetFormat : null;
+  // AVI has no named profile. Its supported encoder uses the standard H.264 defaults.
+  const preset = getVideoConvertPreset(quickVideoFormat ? `${quickVideoFormat}_balanced` : DEFAULT_VIDEO_CONVERT_PRESET_ID);
+  const presetId = preset?.id ?? "custom";
   return {
-    outputMode: "replace",
+    outputMode: request.sourceKinds.includes("video") ? "create-new" : "replace",
     suffix: DEFAULT_CONVERSION_SUFFIX,
     imageOptions: {
       quality: 84,
     },
     videoOptions: {
-      presetId: defaultVideoPreset?.id ?? DEFAULT_VIDEO_CONVERT_PRESET_ID,
-      encoder: defaultVideoPreset?.encoder ?? "libx264",
-      speed: defaultVideoPreset?.speed ?? "balanced",
-      quality: defaultVideoPreset?.quality ?? 20,
-      audioEnabled: defaultVideoPreset?.audioEnabled ?? true,
+      presetId,
+      encoder: preset?.encoder ?? "libx264",
+      speed: preset?.speed ?? "balanced",
+      quality: preset?.quality ?? 20,
+      audioEnabled: preset?.audioEnabled ?? true,
     },
-    rules: buildConversionRuleDrafts(request),
+    rules: buildConversionRuleDrafts(request, presetId),
     items: request.items.map((item) => ({
       ...item,
       override: item.override ?? null,

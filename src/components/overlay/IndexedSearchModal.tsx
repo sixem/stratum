@@ -5,7 +5,7 @@
 // indexedSearchModal/.
 import { useEffect, useId, useRef } from "react";
 
-import { FilterIcon } from "@/components/icons";
+import { BinocularsIcon, TabCloseIcon } from "@/components/icons";
 import { IndexedSearchDriveList } from "@/components/overlay/indexedSearchModal/IndexedSearchDriveList";
 import { IndexedSearchResultsList } from "@/components/overlay/indexedSearchModal/IndexedSearchResultsList";
 import { IndexedSearchSelectionDetail } from "@/components/overlay/indexedSearchModal/IndexedSearchSelectionDetail";
@@ -13,12 +13,10 @@ import { useIndexedSearchResults } from "@/components/overlay/indexedSearchModal
 import { useIndexedSearchSelection } from "@/components/overlay/indexedSearchModal/useIndexedSearchSelection";
 import { useIndexedSearchStatus } from "@/components/overlay/indexedSearchModal/useIndexedSearchStatus";
 import { OverlayPanelHeader } from "@/components/overlay/OverlayPanelHeader";
+import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PressButton } from "@/components/primitives";
 import { useModalFocusTrap } from "@/hooks";
-import {
-  formatCount,
-  formatIndexedSearchServiceState,
-} from "@/lib";
+import { formatCount, formatIndexedSearchServiceState, isIndexedDriveActiveState } from "@/lib";
 import { useIndexedSearchUiStore } from "@/modules";
 
 export const IndexedSearchModal = () => {
@@ -37,30 +35,37 @@ export const IndexedSearchModal = () => {
     handleRebuildDrive,
     rebuildingDrivePath,
     serviceStatus,
-    shouldPollSnapshot,
     statusError,
     statusLoading,
     visibleDriveInfo,
   } = useIndexedSearchStatus(open);
+  const hasSavedDrive = driveStatuses.some(({ state }) => state === "saved" || state === "ready");
+  const hasSearchableDrive = (serviceStatus?.searchableDriveCount ?? Number(hasSavedDrive)) > 0;
+  const checkingIndex = statusLoading || serviceStatus?.state === "starting";
+  const buildingIndex = serviceStatus?.state === "scanning" || driveStatuses.some(
+    ({ state }) => isIndexedDriveActiveState(state) || state === "rescanrequired",
+  );
+  const indexUnavailable = serviceStatus?.state === "disabled" || serviceStatus?.state === "error";
+  const catalogPending = !indexUnavailable && !hasSearchableDrive && (checkingIndex || buildingIndex);
   const {
-    debouncedQuery,
     results,
     resultsError,
     resultsViewportRef,
-    shownResultCount,
+    searching,
+    trimmedQuery,
   } = useIndexedSearchResults({
+    catalogPending,
+    catalogRevision: serviceStatus?.catalogRevision,
     open,
     query,
-    shouldPollSnapshot,
   });
   const {
     handleOpenSelectedResult,
-    handleQueryKeyDown,
+    handleSearchKeyDown,
     resultRefs,
     selectedDrive,
     selectedResult,
     selectedResultMeta,
-    selection,
     selectionError,
     selectDrive,
     selectResult,
@@ -78,48 +83,40 @@ export const IndexedSearchModal = () => {
 
   useEffect(() => {
     if (!open) return;
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        closeModal();
-        return;
-      }
-
-      if (event.key === "Tab" && !event.ctrlKey && !event.altKey && !event.metaKey) {
-        event.preventDefault();
-        event.stopPropagation();
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeModal();
     };
-    window.addEventListener("keydown", handleKey, { capture: true });
-    return () => window.removeEventListener("keydown", handleKey, { capture: true });
+    window.addEventListener("keydown", handleEscape, { capture: true });
+    return () => window.removeEventListener("keydown", handleEscape, { capture: true });
   }, [closeModal, open]);
 
   if (!open) return null;
 
-  const trimmedQuery = debouncedQuery.trim();
   const totalIndexedEntries = driveStatuses.reduce((total, status) => {
     return total + Math.max(0, status.entryCount ?? 0);
   }, 0);
+  const serviceError = serviceStatus?.state === "error"
+    ? serviceStatus.activityLabel?.trim() || "Indexed search is unavailable."
+    : null;
+  const indexError = statusError ?? serviceError;
   const serviceMetaLabel =
-    statusLoading || serviceStatus == null
-      ? "Loading"
-      : serviceStatus.activityLabel
-        ? serviceStatus.activityLabel
+    indexUnavailable
+      ? formatIndexedSearchServiceState(serviceStatus)
+      : catalogPending
+        ? checkingIndex ? "Checking index…" : "Building index"
         : totalIndexedEntries > 0
           ? `${formatCount(totalIndexedEntries)} indexed entries`
-          : driveStatuses.length > 0
-            ? `${driveStatuses.length} indexed drives`
+          : hasSearchableDrive || hasSavedDrive
+            ? "Index ready"
             : formatIndexedSearchServiceState(serviceStatus);
-  const driveStatusNotice = driveStatuses.length > 0 ? statusError : null;
 
   return (
     <div
       className="indexed-search-modal"
       data-open="true"
-      aria-hidden="false"
       onMouseDown={(event) => {
         shouldCloseRef.current = event.target === event.currentTarget;
       }}
@@ -141,15 +138,12 @@ export const IndexedSearchModal = () => {
       >
         <OverlayPanelHeader
           className="indexed-search-header"
-          titleClassName="indexed-search-title"
-          subtitleClassName="indexed-search-subtitle"
           title="Indexed Search"
           titleId={titleId}
-          subtitle="Search indexed files and folders by name."
           actions={
             <PressButton
               type="button"
-              className="btn ghost indexed-search-close"
+              className="btn ghost"
               onClick={closeModal}
             >
               Close
@@ -159,33 +153,42 @@ export const IndexedSearchModal = () => {
 
         <div className="indexed-search-field">
           <div className="indexed-search-searchbox">
-            <div className="indexed-search-searchbox-row">
-              <div className="indexed-search-searchbox-icon" aria-hidden="true">
-                <FilterIcon className="indexed-search-searchbox-icon-svg" />
-              </div>
-              <input
-                ref={inputRef}
-                className="indexed-search-input"
-                value={query}
-                onChange={(event) => setQuery(event.currentTarget.value)}
-                placeholder="Search indexed files and folders by name"
-                aria-label="Indexed search query"
-                spellCheck={false}
-                autoComplete="off"
-                onKeyDown={handleQueryKeyDown}
-              />
-            </div>
-            <div className="indexed-search-searchbox-hint" aria-live="polite">
-              <div className="indexed-search-searchbox-hint-left">{serviceMetaLabel}</div>
-              <div className="indexed-search-searchbox-hint-right">
-                Wildcards * and ? supported
-              </div>
-            </div>
+            <BinocularsIcon className="indexed-search-searchbox-icon" />
+            <input
+              ref={inputRef}
+              type="search"
+              className="indexed-search-input"
+              value={query}
+              onChange={(event) => setQuery(event.currentTarget.value)}
+              placeholder="Search files and folders by name…"
+              aria-label="Search indexed files and folders by name"
+              spellCheck={false}
+              autoComplete="off"
+              onKeyDown={handleSearchKeyDown}
+            />
+            {query.length > 0 ? (
+              <TooltipWrapper text="Clear search">
+                <PressButton
+                  type="button"
+                  className="indexed-search-clear"
+                  aria-label="Clear search"
+                  pressOnPointerDown={false}
+                  onClick={() => {
+                    setQuery("");
+                    inputRef.current?.focus();
+                  }}
+                >
+                  <TabCloseIcon />
+                </PressButton>
+              </TooltipWrapper>
+            ) : null}
           </div>
         </div>
 
         <div className="indexed-search-body">
           <IndexedSearchResultsList
+            catalogPending={catalogPending}
+            onResultKeyDown={handleSearchKeyDown}
             onOpenResult={(path) => {
               void handleOpenSelectedResult(path);
             }}
@@ -194,44 +197,51 @@ export const IndexedSearchModal = () => {
             results={results}
             resultsError={resultsError}
             resultsViewportRef={resultsViewportRef}
-            selection={selection}
-            shownResultCount={shownResultCount}
+            searching={searching}
+            selectedPath={selectedResult?.path}
             trimmedQuery={trimmedQuery}
           />
 
-          <section className="indexed-search-drives" aria-label="Indexed search selection and drives">
-            {driveStatusNotice ? (
+          <aside className="indexed-search-sidebar" aria-label="Details and drives">
+            <IndexedSearchSelectionDetail
+              rebuildingDrivePath={rebuildingDrivePath}
+              selectedDrive={selectedDrive}
+              selectedResult={selectedResult}
+              selectedResultMeta={selectedResultMeta}
+              selectionError={selectionError}
+              visibleDriveInfo={visibleDriveInfo}
+              onOpenResult={(path) => {
+                void handleOpenSelectedResult(path);
+              }}
+              onRebuildDrive={(drivePath) => {
+                void handleRebuildDrive(drivePath);
+              }}
+            />
+
+            {indexError ? (
               <div className="indexed-search-section-note" role="status">
-                {driveStatusNotice}
+                {indexError}
               </div>
             ) : null}
 
-            <div className="indexed-search-section-body">
-              <IndexedSearchSelectionDetail
-                rebuildingDrivePath={rebuildingDrivePath}
-                selectedDrive={selectedDrive}
-                selectedResult={selectedResult}
-                selectedResultMeta={selectedResultMeta}
-                selectionError={selectionError}
-                visibleDriveInfo={visibleDriveInfo}
-                onOpenResult={(path) => {
-                  void handleOpenSelectedResult(path);
-                }}
-                onRebuildDrive={(drivePath) => {
-                  void handleRebuildDrive(drivePath);
-                }}
-              />
-
-              <IndexedSearchDriveList
-                driveStatuses={driveStatuses}
-                onSelectDrive={selectDrive}
-                open={open}
-                selection={selection}
-                statusLoading={statusLoading}
-              />
-            </div>
-          </section>
+            <IndexedSearchDriveList
+              driveStatuses={driveStatuses}
+              onSelectDrive={selectDrive}
+              selectedDrivePath={selectedDrive?.drivePath}
+              statusLoading={checkingIndex}
+            />
+          </aside>
         </div>
+
+        <footer className="indexed-search-footer">
+          <TooltipWrapper text={serviceMetaLabel}>
+            <span className="indexed-search-service-status tnum">{serviceMetaLabel}</span>
+          </TooltipWrapper>
+          <div className="indexed-search-shortcuts">
+            <span><kbd aria-label="Up arrow">↑</kbd> <kbd aria-label="Down arrow">↓</kbd> Select</span>
+            <span><kbd>Enter</kbd> Open</span>
+          </div>
+        </footer>
       </div>
     </div>
   );

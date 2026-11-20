@@ -1,24 +1,14 @@
-// Schema initialization and catalog migrations.
-//
-// The catalog schema is intentionally small, but keeping migration code here
-// makes it easier for contributors to review storage changes without also
-// reading query planning or writer behavior.
+// Core catalog schema and migrations for existing entry rows.
 use std::fs;
 use std::path::PathBuf;
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{Connection, TransactionBehavior};
 
-use super::IndexedCatalogStore;
+use super::{search_index, IndexedCatalogStore};
 
-pub(super) const DRIVE_CATALOG_STATE_SCANNING: &str = "scanning";
 pub(super) const DRIVE_CATALOG_STATE_READY: &str = "ready";
-pub(super) const DRIVE_CATALOG_STATE_ERROR: &str = "error";
-pub(super) const SEARCH_TOKENS_READY_META_KEY: &str = "searchTokensReady";
 
 const SCHEMA_SQL: &str = r#"
-PRAGMA journal_mode = WAL;
-PRAGMA synchronous = NORMAL;
-
 CREATE TABLE IF NOT EXISTS indexed_entries (
     entry_id INTEGER PRIMARY KEY,
     path TEXT NOT NULL UNIQUE,
@@ -26,18 +16,16 @@ CREATE TABLE IF NOT EXISTS indexed_entries (
     kind INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS indexed_entry_trigrams (
-    token TEXT NOT NULL,
-    entry_id INTEGER NOT NULL,
-    PRIMARY KEY (token, entry_id)
-) WITHOUT ROWID;
-
 CREATE TABLE IF NOT EXISTS indexed_drive_catalog_state (
     drive_path TEXT PRIMARY KEY,
     lifecycle_state TEXT NOT NULL,
     last_scan_source TEXT,
     last_scan_started_at INTEGER,
-    last_scan_completed_at INTEGER
+    last_scan_completed_at INTEGER,
+    volume_id TEXT,
+    journal_id INTEGER,
+    journal_next_usn INTEGER,
+    saved_entry_count INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS indexed_catalog_meta (
@@ -45,11 +33,29 @@ CREATE TABLE IF NOT EXISTS indexed_catalog_meta (
     value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS indexed_pending_renames (
+    drive_path TEXT NOT NULL,
+    file_id INTEGER NOT NULL,
+    old_parent_id INTEGER NOT NULL,
+    old_path TEXT NOT NULL,
+    PRIMARY KEY (drive_path, file_id)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS indexed_recursive_builds (
+    drive_path TEXT PRIMARY KEY,
+    attempt BLOB NOT NULL,
+    active_dir TEXT,
+    completed_entries INTEGER NOT NULL
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS indexed_recursive_directories (
+    drive_path TEXT NOT NULL,
+    relative_path TEXT NOT NULL,
+    PRIMARY KEY (drive_path, relative_path)
+) WITHOUT ROWID;
+
 CREATE INDEX IF NOT EXISTS indexed_entries_normalized_name_idx
     ON indexed_entries(normalized_name);
-
-CREATE INDEX IF NOT EXISTS indexed_entry_trigrams_entry_id_idx
-    ON indexed_entry_trigrams(entry_id);
 "#;
 
 impl IndexedCatalogStore {
@@ -64,9 +70,7 @@ impl IndexedCatalogStore {
         }
 
         let store = Self::new(db_path);
-        let connection = store.connect()?;
-        initialize_catalog_schema(&connection)?;
-
+        initialize_catalog_schema(&mut store.connect()?)?;
         Ok(store)
     }
 }
@@ -77,52 +81,48 @@ pub(super) fn begin_write_transaction(connection: &Connection) -> Result<(), Str
         .map_err(|error| format!("Failed to start indexed-search write transaction: {error}"))
 }
 
-pub(super) fn load_meta_bool(connection: &Connection, key: &str) -> Result<Option<bool>, String> {
-    let value = connection
-        .query_row(
-            "SELECT value FROM indexed_catalog_meta WHERE key = ?1",
-            params![key],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()
-        .map_err(|error| format!("Failed to read indexed-search catalog metadata: {error}"))?;
-
-    Ok(value.map(|value| value == "1"))
-}
-
-pub(super) fn store_meta_bool(
-    connection: &Connection,
-    key: &str,
-    value: bool,
-) -> Result<(), String> {
+fn initialize_catalog_schema(connection: &mut Connection) -> Result<(), String> {
     connection
-        .execute(
-            "INSERT INTO indexed_catalog_meta (key, value)
-             VALUES (?1, ?2)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            params![key, if value { "1" } else { "0" }],
-        )
-        .map_err(|error| format!("Failed to store indexed-search catalog metadata: {error}"))?;
-    Ok(())
-}
+        .execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;")
+        .map_err(|error| format!("Failed to configure indexed-search catalog: {error}"))?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| format!("Failed to start indexed-search schema migration: {error}"))?;
 
-pub(super) fn refresh_search_tokens_ready_meta(connection: &Connection) -> Result<bool, String> {
-    let ready = catalog_has_complete_search_tokens(connection)?;
-    store_meta_bool(connection, SEARCH_TOKENS_READY_META_KEY, ready)?;
-    Ok(ready)
-}
-
-fn initialize_catalog_schema(connection: &Connection) -> Result<(), String> {
-    let entry_columns = load_table_columns(connection, "indexed_entries")?;
-    if needs_indexed_entries_migration(&entry_columns) {
-        migrate_indexed_entries_table(connection)?;
+    let entry_columns = load_table_columns(&transaction, "indexed_entries")?;
+    if !entry_columns.is_empty() && !entry_columns.iter().any(|column| column == "entry_id") {
+        migrate_indexed_entries_table(&transaction)?;
     }
-
-    connection
+    transaction
         .execute_batch(SCHEMA_SQL)
         .map_err(|error| format!("Failed to initialize indexed-search catalog: {error}"))?;
-    ensure_catalog_meta_defaults(connection)?;
-    refresh_search_tokens_ready_meta(connection)?;
+    migrate_drive_snapshot_columns(&transaction)?;
+    search_index::initialize(&transaction)?;
+    transaction
+        .commit()
+        .map_err(|error| format!("Failed to commit indexed-search schema migration: {error}"))
+}
+
+fn migrate_drive_snapshot_columns(connection: &Connection) -> Result<(), String> {
+    let columns = load_table_columns(connection, "indexed_drive_catalog_state")?;
+    // A drive's old letter cannot establish its identity. Leave the new columns
+    // NULL so those rows stay on disk without being accepted as verified snapshots.
+    for (name, column) in [
+        ("volume_id", "volume_id TEXT"),
+        ("journal_id", "journal_id INTEGER"),
+        ("journal_next_usn", "journal_next_usn INTEGER"),
+        ("saved_entry_count", "saved_entry_count INTEGER"),
+    ] {
+        if !columns.iter().any(|existing| existing == name) {
+            connection
+                .execute_batch(&format!(
+                    "ALTER TABLE indexed_drive_catalog_state ADD COLUMN {column}"
+                ))
+                .map_err(|error| {
+                    format!("Failed to add indexed-search volume metadata: {error}")
+                })?;
+        }
+    }
     Ok(())
 }
 
@@ -139,23 +139,12 @@ fn load_table_columns(connection: &Connection, table_name: &str) -> Result<Vec<S
         .map_err(|error| format!("Failed to collect indexed-search catalog columns: {error}"))
 }
 
-fn needs_indexed_entries_migration(columns: &[String]) -> bool {
-    if columns.is_empty() {
-        return false;
-    }
-
-    !columns.iter().any(|column| column == "entry_id")
-}
-
 fn migrate_indexed_entries_table(connection: &Connection) -> Result<(), String> {
+    // Older catalogs used the path as the primary key. FTS needs a stable
+    // integer row ID for each entry, so let SQLite allocate IDs for those rows.
     connection
         .execute_batch(
-            "BEGIN IMMEDIATE;
-             DROP INDEX IF EXISTS indexed_entries_normalized_name_idx;
-             DROP INDEX IF EXISTS indexed_entries_drive_path_idx;
-             DROP TABLE IF EXISTS indexed_entry_trigrams;
-             DROP TABLE IF EXISTS indexed_entries_next;
-             CREATE TABLE indexed_entries_next (
+            "CREATE TABLE indexed_entries_next (
                  entry_id INTEGER PRIMARY KEY,
                  path TEXT NOT NULL UNIQUE,
                  normalized_name TEXT NOT NULL,
@@ -165,105 +154,7 @@ fn migrate_indexed_entries_table(connection: &Connection) -> Result<(), String> 
              SELECT path, normalized_name, kind
              FROM indexed_entries;
              DROP TABLE indexed_entries;
-             ALTER TABLE indexed_entries_next RENAME TO indexed_entries;
-             COMMIT;",
+             ALTER TABLE indexed_entries_next RENAME TO indexed_entries;",
         )
-        .map_err(|error| format!("Failed to upgrade the indexed-search catalog schema: {error}"))?;
-
-    connection
-        .execute_batch("VACUUM;")
-        .map_err(|error| format!("Failed to reclaim indexed-search catalog space: {error}"))?;
-
-    Ok(())
-}
-
-fn ensure_catalog_meta_defaults(connection: &Connection) -> Result<(), String> {
-    connection
-        .execute(
-            "INSERT OR IGNORE INTO indexed_catalog_meta (key, value) VALUES (?1, ?2)",
-            params![SEARCH_TOKENS_READY_META_KEY, "1"],
-        )
-        .map_err(|error| {
-            format!("Failed to initialize indexed-search catalog metadata: {error}")
-        })?;
-    Ok(())
-}
-
-fn catalog_has_complete_search_tokens(connection: &Connection) -> Result<bool, String> {
-    let ready = connection
-        .query_row(
-            "SELECT NOT EXISTS (
-                SELECT 1
-                FROM indexed_entries entry
-                LEFT JOIN indexed_entry_trigrams trigram
-                    ON trigram.entry_id = entry.entry_id
-                WHERE trigram.entry_id IS NULL
-                LIMIT 1
-            )",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .map_err(|error| {
-            format!("Failed to verify indexed-search helper token coverage: {error}")
-        })?;
-    Ok(ready != 0)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn open_test_connection() -> Connection {
-        let connection = Connection::open_in_memory().expect("open in-memory catalog");
-        initialize_catalog_schema(&connection).expect("initialize catalog schema");
-        connection
-    }
-
-    #[test]
-    fn empty_catalog_starts_with_search_tokens_ready() {
-        let connection = open_test_connection();
-
-        let ready = load_meta_bool(&connection, SEARCH_TOKENS_READY_META_KEY)
-            .expect("load search token readiness")
-            .expect("search token readiness metadata");
-
-        assert!(ready);
-    }
-
-    #[test]
-    fn catalog_with_entries_missing_tokens_marks_readiness_false() {
-        let connection = open_test_connection();
-        connection
-            .execute(
-                "INSERT INTO indexed_entries (path, normalized_name, kind) VALUES (?1, ?2, ?3)",
-                params!["C:\\alpha.txt", "alpha.txt", 0i64],
-            )
-            .expect("insert indexed entry");
-
-        let ready =
-            refresh_search_tokens_ready_meta(&connection).expect("refresh search token readiness");
-        assert!(!ready);
-    }
-
-    #[test]
-    fn catalog_with_complete_token_rows_marks_readiness_true() {
-        let connection = open_test_connection();
-        connection
-            .execute(
-                "INSERT INTO indexed_entries (entry_id, path, normalized_name, kind)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![1i64, "C:\\alpha.txt", "alpha.txt", 0i64],
-            )
-            .expect("insert indexed entry");
-        connection
-            .execute(
-                "INSERT INTO indexed_entry_trigrams (token, entry_id) VALUES (?1, ?2)",
-                params!["alp", 1i64],
-            )
-            .expect("insert trigram token");
-
-        let ready =
-            refresh_search_tokens_ready_meta(&connection).expect("refresh search token readiness");
-        assert!(ready);
-    }
+        .map_err(|error| format!("Failed to upgrade the indexed-search catalog schema: {error}"))
 }

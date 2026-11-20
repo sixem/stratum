@@ -3,13 +3,14 @@
 import { statEntries } from "@/api";
 import {
   buildDropCandidate,
+  entryExists,
   getDriveKey,
   joinPath,
   normalizeDropPath,
-  normalizePath,
 } from "@/lib";
 import type { DropCandidate } from "@/lib";
 import type { PromptConfig } from "@/modules";
+import type { TransferMode } from "@/types";
 
 type PromptStoreLike = {
   showPrompt: (prompt: PromptConfig) => void;
@@ -24,23 +25,20 @@ type MoveConflictDecision =
 
 export type PlannedDropItem = {
   candidate: DropCandidate;
-  pathKey: string;
   name: string;
   destination: string;
   shouldMove: boolean;
 };
 
 export type DropTransferPlan = {
+  mode: TransferMode;
   destination: string;
   destinationKey: string;
   items: PlannedDropItem[];
 };
 
-export type ResolvedDropTransferPlan = {
-  destination: string;
-  destinationKey: string;
-  items: PlannedDropItem[];
-  overwrite: boolean;
+export type ResolvedDropTransferPlan = DropTransferPlan & {
+  overwritePaths: string[];
   skippedByPrompt: number;
 };
 
@@ -111,34 +109,20 @@ const promptMoveConflictDecision = (
   });
 };
 
-const findConflictingItemKeys = async (items: PlannedDropItem[]) => {
-  if (items.length === 0) {
-    return new Set<string>();
-  }
-
+const findConflictingItems = async (items: PlannedDropItem[]) => {
   const metas = await statEntries(items.map((item) => item.destination));
-  const conflictingKeys = new Set<string>();
-
-  metas.forEach((meta, index) => {
-    const exists = meta.size != null || meta.modified != null;
-    if (!exists) return;
-    const item = items[index];
-    if (!item) return;
-    conflictingKeys.add(item.pathKey);
-  });
-
-  return conflictingKeys;
+  return items.filter((_, index) => entryExists(metas[index]));
 };
 
 export const planDropTransfer = (
   paths: string[],
-  targetPath: string | null,
-  fallbackPath: string,
+  targetPath: string,
+  mode: TransferMode = "auto",
 ): DropTransferPlan | null => {
   const trimmed = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
   if (trimmed.length === 0) return null;
 
-  const destination = (targetPath ?? fallbackPath).trim();
+  const destination = targetPath.trim();
   if (!destination) return null;
 
   const destinationKey = normalizeDropPath(destination);
@@ -151,18 +135,17 @@ export const planDropTransfer = (
   const meaningful = candidates.filter((candidate) => !candidate.isSameDirectory);
   if (meaningful.length === 0) return null;
 
-  const destinationDriveKey = getDriveKey(destination);
+  const destinationDriveKey = getDriveKey(destinationKey);
   const items = meaningful
     .map((candidate) => {
-      const sourceDriveKey = getDriveKey(candidate.path);
-      const shouldMove =
+      const sourceDriveKey = getDriveKey(normalizeDropPath(candidate.path));
+      const shouldMove = mode === "move" || (mode === "auto" &&
         destinationDriveKey != null &&
         sourceDriveKey != null &&
-        destinationDriveKey.toLowerCase() === sourceDriveKey.toLowerCase();
+        destinationDriveKey.toLowerCase() === sourceDriveKey.toLowerCase());
 
       return {
         candidate,
-        pathKey: normalizePath(candidate.path),
         name: candidate.name,
         destination: joinPath(destination, candidate.name),
         shouldMove,
@@ -173,6 +156,7 @@ export const planDropTransfer = (
   if (items.length === 0) return null;
 
   return {
+    mode,
     destination,
     destinationKey,
     items,
@@ -183,16 +167,12 @@ export const resolveDropTransferConflicts = async (
   plan: DropTransferPlan,
   promptStore: PromptStoreLike,
 ): Promise<ResolvedDropTransferPlan | null> => {
-  const conflictingKeys = await findConflictingItemKeys(plan.items);
-  const copyConflicts = plan.items.filter(
-    (item) => !item.shouldMove && conflictingKeys.has(item.pathKey),
-  );
-  const moveConflicts = plan.items.filter(
-    (item) => item.shouldMove && conflictingKeys.has(item.pathKey),
-  );
+  const conflicts = await findConflictingItems(plan.items);
+  const copyConflicts = conflicts.filter((item) => !item.shouldMove);
+  const moveConflicts = conflicts.filter((item) => item.shouldMove);
 
-  const overwriteKeys = new Set<string>();
-  const skippedKeys = new Set<string>();
+  const overwritePaths = new Set<string>();
+  const skippedItems = new Set<PlannedDropItem>();
   let overwriteAllMoveConflicts = false;
 
   if (copyConflicts.length > 0) {
@@ -202,15 +182,14 @@ export const resolveDropTransferConflicts = async (
       copyConflicts,
     );
     if (!confirmed) return null;
-    copyConflicts.forEach((item) => overwriteKeys.add(item.pathKey));
+    copyConflicts.forEach((item) => overwritePaths.add(item.destination));
   }
 
   for (let index = 0; index < moveConflicts.length; index += 1) {
     const item = moveConflicts[index];
     if (!item) continue;
-    if (skippedKeys.has(item.pathKey)) continue;
     if (overwriteAllMoveConflicts) {
-      overwriteKeys.add(item.pathKey);
+      overwritePaths.add(item.destination);
       continue;
     }
 
@@ -222,36 +201,37 @@ export const resolveDropTransferConflicts = async (
     );
     if (decision === "cancel") return null;
     if (decision === "overwrite") {
-      overwriteKeys.add(item.pathKey);
+      overwritePaths.add(item.destination);
       continue;
     }
     if (decision === "overwrite-all") {
       overwriteAllMoveConflicts = true;
-      overwriteKeys.add(item.pathKey);
+      overwritePaths.add(item.destination);
       continue;
     }
     if (decision === "skip") {
-      skippedKeys.add(item.pathKey);
+      skippedItems.add(item);
       continue;
     }
     if (decision === "skip-all") {
       for (let rest = index; rest < moveConflicts.length; rest += 1) {
         const conflict = moveConflicts[rest];
         if (!conflict) continue;
-        skippedKeys.add(conflict.pathKey);
+        skippedItems.add(conflict);
       }
       break;
     }
   }
 
-  const items = plan.items.filter((item) => !skippedKeys.has(item.pathKey));
+  const items = plan.items.filter((item) => !skippedItems.has(item));
   if (items.length === 0) return null;
 
   return {
+    mode: plan.mode,
     destination: plan.destination,
     destinationKey: plan.destinationKey,
     items,
-    overwrite: items.some((item) => overwriteKeys.has(item.pathKey)),
+    overwritePaths: [...overwritePaths],
     skippedByPrompt: plan.items.length - items.length,
   };
 };

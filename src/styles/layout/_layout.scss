@@ -14,6 +14,7 @@
 }
 
 .main {
+  position: relative;
   background: transparent;
   border: none;
   border-radius: var(--panel-radius);
@@ -24,3 +25,88 @@
   min-width: 0;
   overflow: hidden;
 }
+
+// Position progress above the file pane so it never shifts rows or captures clicks.
+.folder-load-progress {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+
+  &::before {
+    content: "";
+    display: block;
+    width: 35%;
+    height: 100%;
+    background: rgb(var(--accent-rgb));
+    animation: folder-load-slide 1.4s ease-in-out 120ms infinite backwards;
+  }
+}
+
+@keyframes folder-load-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(286%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .folder-load-progress::before {
+    width: 100%;
+    animation: none;
+  }
+}
+
+.pane-stack {
+  --pane-active-edge: #28364b;
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+.pane-stack[data-split="true"] {
+  grid-template-rows: minmax(0, 1fr) 4px minmax(0, var(--bottom-preview, var(--bottom-height)));
+
+  // Overlay the indicator so opaque file views cannot cover it.
+  &[data-active-pane="main"] .upper-files::after,
+  &[data-active-pane="bottom"] .bottom-pane::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: var(--surface-border-width);
+    background: var(--pane-active-edge);
+    pointer-events: none;
+    z-index: 2;
+  }
+}
+
+.main[data-drop-background="true"] {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.pane-divider {
+  position: relative;
+  z-index: 3;
+  // Keep an eight-pixel grab area around the narrow separator.
+  margin-block: -2px;
+  cursor: row-resize;
+  touch-action: none;
+  display: grid;
+  align-items: center;
+
+  &::before {
+    content: "";
+    height: var(--surface-border-width);
+    background: var(--stroke);
+  }
+
+  &:hover::before,
+  &:focus-visible::before {
+    background: var(--pane-active-edge);
+  }
+}
+
+.pane-loading { margin: auto; color: var(--muted); }

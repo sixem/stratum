@@ -121,7 +121,7 @@ export const AboutModal = ({
         <div className="about-meta">
           <div className="about-row">
             <span className="about-label">Version</span>
-            <span className="about-value">{version}</span>
+            <span className="about-value tnum">{version}</span>
           </div>
           <div className="about-row">
             <span className="about-label">Build</span>

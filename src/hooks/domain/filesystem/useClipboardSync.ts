@@ -1,57 +1,23 @@
-// Keeps the internal clipboard store in sync with OS file clipboard contents.
-import { useCallback, useEffect, useRef } from "react";
-import { getClipboardPaths } from "@/api";
-import { useClipboardStore } from "@/modules";
+// Refresh the clipboard snapshot used for menu availability on focus and open.
+import { useEffect } from "react";
+import { refreshFileClipboard } from "@/modules";
 
-type UseClipboardSyncOptions = {
-  enabled: boolean;
-  contextMenuOpen: boolean;
-};
+type UseClipboardSyncOptions = { enabled: boolean; contextMenuOpen: boolean };
+
+const refreshFromOs = () => refreshFileClipboard().catch(() => null);
 
 export const useClipboardSync = ({ enabled, contextMenuOpen }: UseClipboardSyncOptions) => {
-  // Coalesce overlapping OS clipboard reads to avoid redundant native calls.
-  const refreshInFlightRef = useRef(false);
-  const refreshQueuedRef = useRef(false);
-
-  const refreshFromOs = useCallback(async () => {
-    if (!enabled) return null;
-    if (refreshInFlightRef.current) {
-      refreshQueuedRef.current = true;
-      return null;
-    }
-    refreshInFlightRef.current = true;
-    try {
-      const paths = await getClipboardPaths();
-      if (paths.length === 0) {
-        useClipboardStore.getState().clearClipboard();
-        return paths;
-      }
-      useClipboardStore.getState().setClipboard(paths);
-      return paths;
-    } catch {
-      return null;
-    } finally {
-      refreshInFlightRef.current = false;
-      if (refreshQueuedRef.current) {
-        refreshQueuedRef.current = false;
-        void refreshFromOs();
-      }
-    }
+  useEffect(() => {
+    if (!enabled) return;
+    const refresh = () => { void refreshFromOs(); };
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
   }, [enabled]);
 
   useEffect(() => {
-    if (!enabled) return;
-    const handleFocus = () => {
-      void refreshFromOs();
-    };
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, [enabled, refreshFromOs]);
-
-  useEffect(() => {
-    if (!enabled || !contextMenuOpen) return;
-    void refreshFromOs();
-  }, [contextMenuOpen, enabled, refreshFromOs]);
+    if (enabled && contextMenuOpen) void refreshFromOs();
+  }, [enabled, contextMenuOpen]);
 
   return { refreshFromOs };
 };

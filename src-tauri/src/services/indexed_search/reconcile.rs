@@ -1,128 +1,156 @@
-// Catalog reconciliation for filesystem mutations.
-//
-// Filesystem commands queue this work after user-visible operations complete.
-// The reconcile path removes stale catalog rows, then scans any surviving
-// changed subtree with the same cancellation signal used by full-drive scans.
+// Replace changed subtrees and advance a journal cursor in the same SQLite
+// transaction. Physical reads use the captured volume GUID.
 use std::path::Path;
 
-use super::{scan, service::IndexedSearchHandle, state};
+use super::{
+    catalog::{IndexedCatalogStore, IndexedCatalogWriter},
+    journal_batch::{JournalBatch, JournalChangeKind},
+    scan,
+    volume_tracking::VolumeMount,
+    work_queue::{coalesce_paths, normalize_path},
+};
 
-impl IndexedSearchHandle {
-    pub fn reconcile_paths(&self, paths: Vec<String>) -> Result<(), String> {
-        if self.is_shutting_down() || !self.is_enabled() {
-            return Ok(());
+// Avoid creating new journal noise just to checkpoint small batches containing
+// only content writes or excluded catalog files.
+const JOURNAL_CHECKPOINT_GRANULARITY: i64 = 64 * 1024;
+
+pub(super) enum ReconcileOutcome {
+    Cancelled,
+    Unchanged,
+    NeedsRebuild,
+    Committed {
+        changed_paths: bool,
+        pending_renames: bool,
+    },
+}
+
+pub(super) fn reconcile_paths(
+    catalog: &IndexedCatalogStore,
+    mount: &VolumeMount,
+    paths: Vec<String>,
+    should_cancel: &impl Fn() -> bool,
+) -> Result<ReconcileOutcome, String> {
+    if should_cancel() {
+        return Ok(ReconcileOutcome::Cancelled);
+    }
+    mount.verify()?;
+    apply_paths(catalog, mount, paths, None, false, should_cancel, || {
+        mount.verify()
+    })
+}
+
+pub(super) fn reconcile_journal_batch(
+    catalog: &IndexedCatalogStore,
+    mount: &VolumeMount,
+    batch: JournalBatch,
+    should_cancel: &impl Fn() -> bool,
+    verify_mount: &impl Fn() -> Result<(), String>,
+) -> Result<ReconcileOutcome, String> {
+    if should_cancel() {
+        return Ok(ReconcileOutcome::Cancelled);
+    }
+    verify_mount()?;
+    let drive = &mount.drive_path;
+    let distance = batch.next.next_usn.saturating_sub(batch.previous.next_usn);
+    if !batch.has_more
+        && distance < JOURNAL_CHECKPOINT_GRANULARITY
+        && batch.changes.iter().all(|change| {
+            change.kind == JournalChangeKind::Path
+                && scan::excluded_path(Path::new(&change.path), catalog.directory())
+        })
+    {
+        return Ok(ReconcileOutcome::Unchanged);
+    }
+
+    let mut writer = catalog.begin_write()?;
+    if !writer.advance_journal_checkpoint(drive, &mount.identity, batch.previous, batch.next)? {
+        return Err("The saved change journal position changed during reconciliation.".to_string());
+    }
+    let Some(paths) = writer.journal_paths(drive, batch.changes)? else {
+        return Ok(ReconcileOutcome::NeedsRebuild);
+    };
+    let pending_renames = writer.has_pending_renames(drive)?;
+    apply_paths(
+        catalog,
+        mount,
+        paths,
+        Some(writer),
+        pending_renames,
+        should_cancel,
+        verify_mount,
+    )
+}
+
+fn apply_paths(
+    catalog: &IndexedCatalogStore,
+    mount: &VolumeMount,
+    paths: Vec<String>,
+    journal_writer: Option<IndexedCatalogWriter>,
+    pending_renames: bool,
+    should_cancel: &impl Fn() -> bool,
+    verify_mount: impl Fn() -> Result<(), String>,
+) -> Result<ReconcileOutcome, String> {
+    let directory = catalog.directory();
+    let Some(paths) = coalesce_paths(
+        paths
+            .into_iter()
+            .filter_map(|path| normalize_path(&path))
+            .filter(|(drive, path)| {
+                drive == &mount.drive_path
+                    && path != drive
+                    && !scan::excluded_path(Path::new(path), directory)
+            })
+            .map(|(_, path)| path)
+            .collect(),
+    ) else {
+        return Ok(ReconcileOutcome::NeedsRebuild);
+    };
+    // Journal metadata may need to commit even when every path was excluded.
+    // An empty ordinary filesystem notification needs no writer at all.
+    let mut writer = match journal_writer {
+        Some(writer) => writer,
+        None if paths.is_empty() => return Ok(ReconcileOutcome::Unchanged),
+        None => catalog.begin_write()?,
+    };
+    if !writer.remove_path_trees(&paths)? {
+        return Ok(ReconcileOutcome::NeedsRebuild);
+    }
+
+    for path in &paths {
+        if should_cancel() {
+            return Ok(ReconcileOutcome::Cancelled);
         }
-
-        let Some(catalog) = self.inner.catalog.as_ref().cloned() else {
-            return Ok(());
-        };
-        let _write_guard = self
-            .inner
-            .write_gate
-            .lock()
-            .expect("indexed search write gate lock");
-
-        let mut refresh_paths = Vec::new();
-        let mut touched_drives = std::collections::BTreeSet::new();
-        for path in dedupe_reconcile_paths(paths) {
-            let Some(drive_path) = self.indexed_drive_path_for_path(&path) else {
-                continue;
-            };
-
-            touched_drives.insert(drive_path.clone());
-            refresh_paths.push(path);
-        }
-
-        let mut writer = catalog.begin_write()?;
-        writer.remove_path_trees(&refresh_paths)?;
-
-        for path in &refresh_paths {
-            if self.should_cancel_scan() {
-                return Ok(());
-            }
-
-            match std::fs::symlink_metadata(path) {
-                Ok(_) => {
-                    let should_cancel = || self.should_cancel_scan();
-                    if let Err(error) =
-                        scan::scan_path_into_writer(Path::new(path), &mut writer, &should_cancel)
-                    {
-                        if self.should_cancel_scan() && error == scan::SCAN_CANCELLED_MESSAGE {
-                            return Ok(());
-                        }
-                        return Err(error);
+        let physical_path = Path::new(&mount.guid).join(&path[3..]);
+        match std::fs::symlink_metadata(&physical_path) {
+            Ok(_) => {
+                if let Err(error) = scan::scan_path_into_writer(
+                    &physical_path,
+                    Path::new(path),
+                    directory,
+                    &mut writer,
+                    should_cancel,
+                ) {
+                    if error == scan::SCAN_CANCELLED_MESSAGE {
+                        return Ok(ReconcileOutcome::Cancelled);
                     }
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    return Err(format!(
-                        "Failed to reconcile indexed-search path {}: {error}",
-                        path
-                    ));
+                    return Err(error);
                 }
             }
-        }
-        if self.should_cancel_scan() {
-            return Ok(());
-        }
-        writer.finish()?;
-        self.bump_catalog_revision();
-
-        for drive_path in touched_drives {
-            self.touch_drive_status(&drive_path);
-        }
-
-        Ok(())
-    }
-
-    fn indexed_drive_path_for_path(&self, path: &str) -> Option<String> {
-        let drive_path = drive_root_from_path(path)?;
-        let key = state::normalize_drive_key(&drive_path);
-        let guard = self.inner.state.lock().expect("indexed search state lock");
-        let status = guard.drive_statuses.get(&key)?;
-        if !status.indexable {
-            return None;
-        }
-        Some(status.drive_path.clone())
-    }
-}
-
-fn dedupe_reconcile_paths(paths: Vec<String>) -> Vec<String> {
-    let mut ordered = Vec::new();
-    let mut seen = std::collections::BTreeSet::new();
-
-    for path in paths {
-        let trimmed = trim_reconcile_path(&path);
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        let key = trimmed.to_ascii_lowercase();
-        if seen.insert(key) {
-            ordered.push(trimmed.to_string());
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!(
+                    "Failed to reconcile indexed-search path {path}: {error}"
+                ));
+            }
         }
     }
-
-    ordered.sort_by(|left, right| right.len().cmp(&left.len()).then_with(|| left.cmp(right)));
-    ordered
-}
-
-fn trim_reconcile_path(path: &str) -> &str {
-    let trimmed = path.trim();
-    if trimmed.len() <= 3 {
-        trimmed
-    } else {
-        trimmed.trim_end_matches(['\\', '/'])
+    verify_mount()?;
+    if should_cancel() {
+        return Ok(ReconcileOutcome::Cancelled);
     }
-}
-
-fn drive_root_from_path(path: &str) -> Option<String> {
-    let trimmed = trim_reconcile_path(path);
-    let bytes = trimmed.as_bytes();
-    if bytes.len() < 2 || bytes[1] != b':' {
-        return None;
-    }
-
-    let drive_letter = trimmed.chars().next()?.to_ascii_uppercase();
-    Some(format!("{drive_letter}:\\"))
+    writer.finish()?;
+    Ok(ReconcileOutcome::Committed {
+        changed_paths: !paths.is_empty(),
+        pending_renames,
+    })
 }

@@ -56,7 +56,7 @@
   }
 
   background: $background;
-  border: 1px solid var(--stroke);
+  border: var(--surface-border-width) solid var(--stroke);
   border-radius: $radius;
   box-shadow: $shadow;
   padding: $padding;

@@ -24,4 +24,6 @@ export type ConversionReport = {
   converted: number;
   failed: number;
   failures: string[];
+  failedSources: string[];
+  warnings: string[];
 };

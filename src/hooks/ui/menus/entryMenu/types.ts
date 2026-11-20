@@ -19,6 +19,5 @@ export type EntryMenuSelectionSummary = {
   canOpenConvertModal: boolean;
   sharedExtension: string | null;
   conversionRequest: ConversionModalRequest | null;
-  hasVideo: boolean;
   hasMultiplePropertyTypes: boolean;
 };

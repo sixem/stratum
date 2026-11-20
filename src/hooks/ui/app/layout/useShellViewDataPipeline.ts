@@ -124,9 +124,9 @@ export const useShellViewDataPipeline = ({
     enabled: tauriEnv,
     contextMenuOpen: contextMenuActive,
   });
-  const shellAvailability = useShellAvailability({ enabled: tauriEnv });
-  const ffmpegDetected =
-    Boolean(shellAvailability?.ffmpeg) || settings.ffmpegPath.trim().length > 0;
+  const shellAvailability = useShellAvailability({
+    enabled: tauriEnv, ffmpegPath: settings.ffmpegPath, settingsOpen: menuState.settingsOpen,
+  });
 
   const {
     conversionModalOpen,
@@ -163,7 +163,6 @@ export const useShellViewDataPipeline = ({
     currentDriveInfo,
     refreshClipboardFromOs,
     shellAvailability,
-    ffmpegDetected,
     conversionModalOpen,
     conversionModalState,
     openConversionModal,

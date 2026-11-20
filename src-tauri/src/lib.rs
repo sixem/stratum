@@ -7,44 +7,38 @@ mod services;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default().on_window_event({
+    #[cfg(target_os = "windows")]
+    if platform::windows::menu_host::run_if_requested() {
+        return;
+    }
+    let builder = tauri::Builder::default().on_window_event(|window, event| {
         #[cfg(target_os = "windows")]
-        let registered: std::sync::Arc<
-            std::sync::Mutex<std::collections::HashSet<String>>,
-        > = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
-        #[cfg(target_os = "windows")]
-        let registered = registered.clone();
-        move |window, event| {
-            #[cfg(target_os = "windows")]
-            {
-                // Experimental resize smoothing: a tiny sleep can reduce how aggressively
-                // the WebView resize path thrashes during a live drag on Windows.
-                if let tauri::WindowEvent::Resized(_) = event {
-                    std::thread::sleep(std::time::Duration::from_nanos(1));
-                }
-
-                // Register the custom drop target once per window label.
-                let label = window.label().to_string();
-                let mut seen = match registered.lock() {
-                    Ok(guard) => guard,
-                    Err(_) => return,
-                };
-                if !seen.insert(label.clone()) {
-                    return;
-                }
-                if let Some(webview_window) = window.app_handle().get_webview_window(&label) {
-                    match platform::dragdrop::register_drop_target(webview_window) {
-                        Ok(()) => {
-                            // Keep the label in the set so we do not re-register on future events.
-                        }
-                        Err(error) => {
-                            eprintln!("Failed to register drop target: {error}");
-                        }
-                    }
-                }
+        match event {
+            tauri::WindowEvent::Focused(true) => {
+                platform::dragdrop::schedule_registration(window, false)
             }
+            tauri::WindowEvent::Destroyed => {
+                window
+                    .state::<platform::windows::dragdrop::IncomingDrops>()
+                    .unsubscribe(window.label());
+                platform::windows::dragdrop::unregister_drop_target(window.label());
+            }
+            _ => {}
         }
     });
+    #[cfg(target_os = "windows")]
+    let builder = builder
+        .plugin(platform::windows::webview_navigation::init())
+        .manage(platform::windows::dragdrop::IncomingDrops::default())
+        .manage(platform::windows::menu_host::MenuHost::default())
+        .on_page_load(|webview, payload| match payload.event() {
+            tauri::webview::PageLoadEvent::Started => webview
+                .state::<platform::windows::dragdrop::IncomingDrops>()
+                .unsubscribe(webview.label()),
+            tauri::webview::PageLoadEvent::Finished => {
+                platform::dragdrop::schedule_registration(&webview.window(), true)
+            }
+        });
 
     let builder = services::preview_protocol::register_preview_protocol(builder);
 
@@ -52,13 +46,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            // The launch gate may request an elevated relaunch and exit before
-            // indexed-search state is registered, so later shutdown paths must
-            // treat that state as optional.
-            if !app::commands::handle_startup_indexing_launch_gate(&app.handle().clone())? {
-                return Ok(());
-            }
-
             #[cfg(target_os = "windows")]
             if let Err(error) =
                 platform::windows::console::install_console_exit_handler(&app.handle().clone())
@@ -97,17 +84,22 @@ pub fn run() {
             app::commands::cancel_transfer_job,
             app::commands::set_clipboard_paths,
             app::commands::get_clipboard_paths,
+            app::commands::get_file_clipboard,
+            app::commands::finish_file_cut,
             app::commands::delete_entries,
             app::commands::trash_entries,
-            app::commands::restore_recycle_entries,
-            app::commands::restore_recycle_paths,
+            app::commands::restore_recycle_items,
             app::commands::rename_entry,
             app::commands::start_dir_watch,
             app::commands::stop_dir_watch,
             app::commands::start_drag,
+            app::commands::release_drop_stage,
+            app::commands::file_drop_listener_ready,
+            app::commands::cancel_drag_start,
             app::commands::request_thumbnails,
             app::commands::set_thumb_paused,
             app::commands::open_path,
+            app::commands::show_shell_context_menu,
             app::commands::open_path_properties,
             app::commands::list_open_with_handlers,
             app::commands::open_path_with_handler,
@@ -127,10 +119,10 @@ pub fn run() {
             app::commands::get_shell_availability,
             app::commands::open_shell,
             app::commands::is_windows_11,
-            app::commands::get_indexing_runtime_mode,
             app::commands::get_indexing_launch_preferences,
             app::commands::set_indexing_launch_preferences,
-            app::commands::restart_as_administrator
+            app::commands::create_preview_grant,
+            app::commands::release_preview_grant,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

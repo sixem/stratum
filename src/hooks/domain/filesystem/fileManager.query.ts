@@ -1,15 +1,7 @@
-// Query key + sorting helpers shared by directory loading and cache lookups.
-import { DEFAULT_SORT, normalizePath, sortEntries } from "@/lib";
+// Default query settings and inline metadata supplied by native directory listings.
+import { DEFAULT_SORT } from "@/lib";
 import type { EntryMeta, FileEntry } from "@/types";
 import type { ListDirQuery, LoadDirOptions } from "./fileManager.types";
-
-const normalizeSearch = (value: string) => value.trim().toLowerCase();
-
-export const buildQueryKey = (path: string, query: ListDirQuery) => {
-  const normalizedPath = normalizePath(path);
-  const normalizedSearch = normalizeSearch(query.search);
-  return `${normalizedPath}:${query.sort.key}:${query.sort.dir}:${normalizedSearch}`;
-};
 
 export const resolveQuery = (
   options?: LoadDirOptions,
@@ -21,27 +13,6 @@ export const resolveQuery = (
   };
 };
 
-const toEntryMeta = (entry: FileEntry): EntryMeta | null => {
-  if (entry.size == null && entry.modified == null) return null;
-  return {
-    path: entry.path,
-    size: entry.size ?? null,
-    modified: entry.modified ?? null,
-  };
+export const getInlineEntryMeta = (entry: FileEntry): EntryMeta | null => {
+  return entry.size == null && entry.modified == null ? null : entry;
 };
-
-// Canonicalize entry ordering in the UI layer so cached and refreshed snapshots
-// follow the same deterministic order across tab switches.
-export const normalizeEntriesOrder = (items: FileEntry[], sort: ListDirQuery["sort"]) => {
-  if (sort.key === "name") return items;
-  if (items.length <= 1) return items;
-  const metaMap = new Map<string, EntryMeta>();
-  items.forEach((entry) => {
-    const meta = toEntryMeta(entry);
-    if (!meta) return;
-    metaMap.set(entry.path, meta);
-  });
-  return sortEntries(items, metaMap, sort);
-};
-
-export const getInlineEntryMeta = toEntryMeta;

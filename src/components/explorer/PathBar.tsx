@@ -13,7 +13,6 @@ type PathBarProps = {
   canGoForward: boolean;
   canGoUp: boolean;
   canGoDown: boolean;
-  loading: boolean;
   leftSlot?: ReactNode;
   driveSlot?: ReactNode;
   rightSlot?: ReactNode;
@@ -29,7 +28,6 @@ export const PathBar = ({
   canGoForward,
   canGoUp,
   canGoDown,
-  loading,
   leftSlot,
   driveSlot,
   rightSlot,
@@ -43,8 +41,7 @@ export const PathBar = ({
           type="button"
           className="btn ghost"
           onClick={onBack}
-          disabled={loading || !canGoBack}
-          aria-disabled={loading || !canGoBack}
+          disabled={!canGoBack}
           aria-label="Back"
         >
           <NavArrowIcon className="btn-icon nav-arrow is-back" />
@@ -53,8 +50,7 @@ export const PathBar = ({
           type="button"
           className="btn ghost"
           onClick={onForward}
-          disabled={loading || !canGoForward}
-          aria-disabled={loading || !canGoForward}
+          disabled={!canGoForward}
           aria-label="Forward"
         >
           <NavArrowIcon className="btn-icon nav-arrow" />
@@ -63,8 +59,7 @@ export const PathBar = ({
           type="button"
           className="btn ghost"
           onClick={onUp}
-          disabled={loading || !canGoUp}
-          aria-disabled={loading || !canGoUp}
+          disabled={!canGoUp}
           aria-label="Up one level"
         >
           <ChevronUpIcon className="btn-icon" />
@@ -73,8 +68,7 @@ export const PathBar = ({
           type="button"
           className="btn ghost"
           onClick={onDown}
-          disabled={loading || !canGoDown}
-          aria-disabled={loading || !canGoDown}
+          disabled={!canGoDown}
           aria-label="Down one level"
         >
           <ChevronDownIcon className="btn-icon" />

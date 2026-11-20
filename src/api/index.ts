@@ -1,22 +1,20 @@
 // Barrel exports for native API wrappers.
 export type { DragOutcome } from "./drag";
-export { startDrag } from "./drag";
-export { copyPathsToClipboard, getClipboardPaths } from "./clipboard";
+export { cancelDragStart, fileDropListenerReady, releaseDropStage, startDrag } from "./drag";
+export { finishFileCut, getFileClipboard, setFileClipboard } from "./clipboard";
 export {
   getIndexedSearchCatalogPath,
+  getIndexedSearchSnapshot,
   setIndexedSearchEnabled,
-  getIndexedSearchStatus,
-  listIndexedDriveStatuses,
   queryIndexedPaths,
   rebuildIndexedDrive,
 } from "./indexedSearch";
 export {
   getIndexingLaunchPreferences,
-  getIndexingRuntimeMode,
-  restartAsAdministrator,
   setIndexingLaunchPreferences,
 } from "./system";
 export { getShellAvailability, openShell } from "./shells";
+export { showShellContextMenu, type ShellMenuTarget } from "./shellContextMenu";
 export {
   copyEntries,
   createFile,
@@ -35,8 +33,7 @@ export {
   parentDir,
   pauseTransferJob,
   planCopyEntries,
-  restoreRecycleEntries,
-  restoreRecyclePaths,
+  restoreRecycleItems,
   resumeTransferJob,
   transferEntries,
   renameEntry,

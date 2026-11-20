@@ -26,7 +26,6 @@ export const summarizeEntrySelection = (
   let sameKindSelection = true;
   let sharedExtension: string | null = null;
   let hasSharedExtension = false;
-  let hasVideo = false;
   const conversionItems: ConversionItemDraft[] = [];
   const sourceKindsSet = new Set<ConversionMediaKind>();
 
@@ -64,7 +63,6 @@ export const summarizeEntrySelection = (
       sameKindSelection = false;
     }
 
-    if (kind === "video") hasVideo = true;
     sourceKindsSet.add(kind);
 
     if (!hasSharedExtension) {
@@ -102,7 +100,6 @@ export const summarizeEntrySelection = (
     canOpenConvertModal,
     sharedExtension: canOpenConvertModal ? sharedExtension : null,
     conversionRequest,
-    hasVideo,
     hasMultiplePropertyTypes,
   };
 };

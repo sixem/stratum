@@ -66,12 +66,11 @@ export const buildEntryTooltip = (entry: FileEntry, meta?: EntryMeta) => {
   return tooltip;
 };
 
-export const buildDriveTooltip = (label: string, info?: DriveInfo) => {
+export const buildDriveTooltip = (label: string, info?: DriveInfo, indexLabel?: string) => {
   const heading = label.trim();
-  if (!info) return heading;
 
   const details = [heading];
-  if (info.total != null && info.free != null) {
+  if (info?.total != null && info.free != null) {
     const used = Math.max(0, info.total - info.free);
     const usedPercent = formatPercent(used, info.total);
     const freePercent = formatPercent(info.free, info.total);
@@ -80,8 +79,11 @@ export const buildDriveTooltip = (label: string, info?: DriveInfo) => {
     details.push(`Total: ${formatBytes(info.total)}`);
   }
 
-  if (info.indexStatus) {
-    details.push(`Indexed: ${formatIndexedDriveState(info.indexStatus.state)}`);
+  const indexedState = info?.indexStatus?.state;
+  if (indexLabel) {
+    details.push(indexLabel);
+  } else if (indexedState) {
+    details.push(`Indexed search: ${formatIndexedDriveState(indexedState)}`);
   }
 
   return details.join("\n");

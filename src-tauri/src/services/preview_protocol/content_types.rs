@@ -2,13 +2,10 @@
 
 use std::path::Path;
 
-pub fn content_type_for_path(path: &Path) -> &'static str {
-    let ext = match path.extension().and_then(|value| value.to_str()) {
-        Some(value) => value.to_ascii_lowercase(),
-        None => return "application/octet-stream",
-    };
+pub fn content_type_for_path(path: &Path) -> Option<&'static str> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
 
-    match ext.as_str() {
+    Some(match ext.as_str() {
         "jpg" | "jpeg" | "jpe" | "jfif" => "image/jpeg",
         "png" => "image/png",
         "gif" => "image/gif",
@@ -16,7 +13,6 @@ pub fn content_type_for_path(path: &Path) -> &'static str {
         "bmp" => "image/bmp",
         "tif" | "tiff" => "image/tiff",
         "ico" => "image/x-icon",
-        "svg" => "image/svg+xml",
         "mp4" | "m4v" => "video/mp4",
         "webm" => "video/webm",
         "mov" => "video/quicktime",
@@ -24,6 +20,10 @@ pub fn content_type_for_path(path: &Path) -> &'static str {
         "avi" => "video/x-msvideo",
         "wmv" => "video/x-ms-wmv",
         "mpeg" | "mpg" | "mpe" => "video/mpeg",
-        _ => "application/octet-stream",
-    }
+        "flv" => "video/x-flv",
+        "3gp" => "video/3gpp",
+        "ogv" => "video/ogg",
+        // Keep active document formats, including raw SVG, off the preview origin.
+        _ => return None,
+    })
 }

@@ -25,16 +25,11 @@
 }
 
 :where(.file-list) .row.is-dir:not(.is-selected):not([data-drop-target="true"]) {
-  @include shared.entry-state-surface(rgba(92, 126, 196, 0.2), rgba(92, 126, 196, 0.1));
   --list-dot-color: rgba(132, 164, 232, 0.9);
 }
 
 :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not([data-drop-target="true"]):hover {
   @include shared.entry-state-surface(rgba(124, 157, 226, 0.38), rgba(110, 146, 221, 0.18));
-}
-
-:where(.file-list) .row.is-dir:not(.is-selected):not([data-drop-target="true"]):hover {
-  @include shared.entry-state-surface(rgba(124, 157, 226, 0.34), rgba(110, 146, 221, 0.16));
 }
 
 :where(.thumb-shell) .thumb-card.is-selected,
@@ -68,42 +63,19 @@
   @include shared.entry-state-surface(rgba(255, 255, 255, 0.040), rgba(255, 255, 255, 0.025));
 }
 
-:root[data-ambient="true"] :where(.file-list) .row {
-  // Keep ambient list rows readable, but let more of the shell gradient show through.
-  @include shared.entry-state-surface(rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.03));
-}
-
-:root[data-ambient="true"] :where(.file-list) .row .size,
-:root[data-ambient="true"] :where(.file-list) .row .modified {
-  color: rgba(229, 235, 245, 0.82);
-}
-
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not(
     [data-drop-target="true"]
   ) {
   @include shared.entry-state-surface(rgba(124, 157, 226, 0.26), rgba(92, 126, 196, 0.11));
 }
 
-:root[data-ambient="true"] :where(.file-list) .row.is-dir:not(.is-selected):not(
-    [data-drop-target="true"]
-  ) {
-  @include shared.entry-state-surface(rgba(124, 157, 226, 0.26), rgba(92, 126, 196, 0.12));
-}
-
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not(
     [data-drop-target="true"]
   ):hover {
   @include shared.entry-state-surface(rgba(124, 157, 226, 0.3), rgba(110, 146, 221, 0.14));
 }
 
-:root[data-ambient="true"] :where(.file-list) .row.is-dir:not(.is-selected):not(
-    [data-drop-target="true"]
-  ):hover {
-  @include shared.entry-state-surface(rgba(124, 157, 226, 0.3), rgba(110, 146, 221, 0.14));
-}
-
-:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-selected,
-:root[data-ambient="true"] :where(.file-list) .row.is-selected {
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-selected {
   @include shared.entry-state-surface(rgba(var(--accent-rgb), 0.7), rgba(var(--accent-rgb), 0.12));
 }
 
@@ -113,14 +85,7 @@
   @include shared.entry-state-surface(rgba(var(--accent-rgb), 0.82), rgba(var(--accent-rgb), 0.18));
 }
 
-:root[data-ambient="true"] :where(.file-list) .row.is-dir.is-selected:not(
-    [data-drop-target="true"]
-  ) {
-  @include shared.entry-state-surface(rgba(var(--accent-rgb), 0.8), rgba(var(--accent-rgb), 0.17));
-}
-
-:root[data-ambient="true"] :where(.thumb-shell) .thumb-card[data-drop-target="true"],
-:root[data-ambient="true"] :where(.file-list) .row[data-drop-target="true"] {
+:root[data-ambient="true"] :where(.thumb-shell) .thumb-card[data-drop-target="true"] {
   @include shared.entry-state-surface(rgba(var(--accent-rgb), 0.9), rgba(var(--accent-rgb), 0.18));
 }
 

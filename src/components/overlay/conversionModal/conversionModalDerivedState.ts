@@ -159,9 +159,7 @@ export const buildConversionModalDerivedState = ({
         : "Queue";
   const primaryActionDisabled =
     runInProgress || (!queueCompleted && Boolean(validationMessage));
-  const secondaryActionLabel = runInProgress
-    ? "Hide"
-    : queueFailed || queueCompleted
+  const secondaryActionLabel = queueFailed || queueCompleted
       ? "Close"
       : "Cancel";
 

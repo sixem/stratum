@@ -19,6 +19,7 @@ export const buildEntryPropertiesItems = ({
   {
     id: "entry-properties",
     label: "Properties",
+    icon: "properties",
     hint: hasMultiplePropertyTypes ? "Multiple types" : undefined,
     onSelect: () => {
       if (!hasTargets) return;

@@ -50,3 +50,9 @@ export const getFileKind = (name: string): FileKind => {
   if (DOCUMENT_EXTENSIONS.has(ext)) return "document";
   return "generic";
 };
+
+export const isPreviewableEntry = (entry: { name: string; isDir: boolean }) => {
+  if (entry.isDir) return false;
+  const kind = getFileKind(entry.name);
+  return kind === "image" || kind === "video";
+};

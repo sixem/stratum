@@ -18,6 +18,7 @@ export const useAppPreviewSection = ({
   const {
     previewOpen,
     previewPath,
+    previewGallery,
     openPreview,
     closePreview,
     handlePreviewPress,
@@ -26,12 +27,15 @@ export const useAppPreviewSection = ({
 
   previewOpenRef.current = previewOpen;
 
-  const previewMeta = previewPath ? entryMeta.get(previewPath) ?? null : null;
+  const previewMeta = previewPath
+    ? entryMeta.get(previewPath) ?? previewGallery?.entryByPath.get(previewPath) ?? null
+    : null;
 
   return {
     previewOpenRef,
     previewOpen,
     previewPath,
+    previewGallery,
     previewMeta,
     openPreview,
     closePreview,

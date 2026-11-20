@@ -99,7 +99,6 @@ useSettingsStore.subscribe((state) => {
     menuOpenWsl: state.menuOpenWsl,
     menuShowConvert: state.menuShowConvert,
     indexedSearchEnabled: state.indexedSearchEnabled,
-    acceleratedNtfsIndexing: state.acceleratedNtfsIndexing,
     thumbnailsEnabled: state.thumbnailsEnabled,
     thumbnailSize: state.thumbnailSize,
     thumbnailQuality: state.thumbnailQuality,

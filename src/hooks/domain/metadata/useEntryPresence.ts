@@ -21,17 +21,12 @@ type UseEntryPresenceOptions = {
 const FADE_IN_MS = 180;
 const FADE_OUT_MS = 180;
 
-const buildStableItems = (items: EntryItem[]) =>
-  items.map((item) => ({ ...item, presence: "stable" as const }));
-
 export const useEntryPresence = ({
   items,
   resetKey,
   animate,
 }: UseEntryPresenceOptions) => {
-  const [presentItems, setPresentItems] = useState<PresenceItem[]>(() =>
-    buildStableItems(items),
-  );
+  const [animated, setAnimated] = useState<{ resetKey: string; items: PresenceItem[] } | null>(null);
   const stateRef = useRef(new Map<string, PresenceState>());
   const prevKeysRef = useRef<string[]>([]);
   const mergedKeysRef = useRef<string[]>([]);
@@ -53,7 +48,7 @@ export const useEntryPresence = ({
       if (!state) return;
       next.push({ ...state.item, presence: state.presence });
     });
-    setPresentItems(next);
+    setAnimated({ resetKey, items: next });
   };
 
   const scheduleCleanup = () => {
@@ -106,11 +101,11 @@ export const useEntryPresence = ({
 
     if (!animate) {
       stateRef.current.clear();
-      prevKeysRef.current = items.map((item) => item.key);
-      mergedKeysRef.current = [...prevKeysRef.current];
+      prevKeysRef.current = [];
+      mergedKeysRef.current = [];
       initialLoadRef.current = true;
       clearTimer();
-      setPresentItems(buildStableItems(items));
+      setAnimated(null);
       return;
     }
 
@@ -165,5 +160,7 @@ export const useEntryPresence = ({
     };
   }, []);
 
-  return useMemo(() => ({ items: presentItems }), [presentItems]);
+  // With animations off, the original rows can be virtualized immediately.
+  const visibleItems = animate && animated?.resetKey === resetKey ? animated.items : items;
+  return useMemo(() => ({ items: visibleItems }), [visibleItems]);
 };

@@ -7,6 +7,8 @@ export type IndexedSearchServiceStatus = {
   lastUpdatedAt: number;
   driveCount: number;
   indexableDriveCount: number;
+  searchableDriveCount?: number;
+  catalogRevision: number;
 };
 
 export type IndexedDriveState =
@@ -14,6 +16,7 @@ export type IndexedDriveState =
   | "queued"
   | "scanning"
   | "ready"
+  | "saved"
   | "unsupported"
   | "unavailable"
   | "stale"

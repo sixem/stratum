@@ -1,6 +1,6 @@
 // Filesystem operation outputs and progress payloads.
 // These are grouped together so command handlers can import one contract surface.
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 // Transfer/reporting types for copy, move, and queue updates.
 #[derive(Clone, Serialize)]
@@ -40,12 +40,13 @@ pub struct MovedTransferEntry {
     pub destination_path: String,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransferReport {
     pub copied: usize,
     pub moved: usize,
     pub skipped: usize,
+    pub cancelled: bool,
     pub failures: Vec<String>,
     pub moved_entries: Vec<MovedTransferEntry>,
 }
@@ -98,16 +99,6 @@ pub struct DeleteReport {
     pub failures: Vec<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RecycleEntry {
-    pub original_path: String,
-    pub info_path: String,
-    pub data_path: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub deleted_at: Option<u64>,
-}
-
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashReport {
@@ -116,23 +107,13 @@ pub struct TrashReport {
     pub cancelled: bool,
     pub failures: Vec<String>,
     pub failed_paths: Vec<String>,
-    pub recycled: Vec<RecycleEntry>,
+    pub recycle_undo_receipt: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RestoreReport {
-    pub restored: usize,
-    pub skipped: usize,
+pub struct RestoreRecycleReport {
+    pub restored_paths: Vec<String>,
     pub failures: Vec<String>,
-    pub remaining: Vec<RecycleEntry>,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RestorePathsReport {
-    pub restored: usize,
-    pub skipped: usize,
-    pub failures: Vec<String>,
-    pub remaining_paths: Vec<String>,
+    pub can_retry: bool,
 }

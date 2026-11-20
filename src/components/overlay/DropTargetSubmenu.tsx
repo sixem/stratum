@@ -285,65 +285,22 @@ export const DropTargetSubmenu = ({
   }, [open, scrollElement, updateMenuPosition]);
 
   useEffect(() => {
-    if (!open || !menuReady) {
+    if (open && menuReady) updateAutoScrollFromPoint(dragPoint);
+    else {
       lastDragPointRef.current = null;
       stopAutoScroll();
-      return;
     }
-
-    const handlePointerMove = (event: PointerEvent) => {
-      updateAutoScrollFromPoint({ x: event.clientX, y: event.clientY });
-    };
-
-    const handleDragOver = (event: DragEvent) => {
-      updateAutoScrollFromPoint({ x: event.clientX, y: event.clientY });
-    };
-
-    window.addEventListener("pointermove", handlePointerMove, { passive: true });
-    window.addEventListener("dragover", handleDragOver);
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("dragover", handleDragOver);
-      lastDragPointRef.current = null;
-      stopAutoScroll();
-    };
-  }, [menuReady, open, stopAutoScroll, updateAutoScrollFromPoint]);
-
-  useEffect(() => {
-    if (!open || !menuReady) return;
-    if (!dragPoint) return;
-    updateAutoScrollFromPoint(dragPoint);
-  }, [dragPoint, menuReady, open, updateAutoScrollFromPoint]);
+  }, [dragPoint, menuReady, open, stopAutoScroll, updateAutoScrollFromPoint]);
 
   useEffect(() => {
     if (!open || !onRequestClose) return;
-
-    const closeAfterDragEnds = () => {
-      onRequestClose();
+    // The native drop event must hit-test the visible menu before it closes.
+    // A browser pointerup can arrive before that event crosses the IPC bridge.
+    const closeWhenHidden = () => {
+      if (document.hidden) onRequestClose();
     };
-
-    const closeWhenDocumentIsHidden = () => {
-      if (document.visibilityState === "visible") return;
-      onRequestClose();
-    };
-
-    // Drag completion is a hard boundary for this transient menu. Closing here
-    // prevents stale hover state from keeping the submenu visible after a drop.
-    window.addEventListener("pointerup", closeAfterDragEnds, { capture: true });
-    window.addEventListener("pointercancel", closeAfterDragEnds, { capture: true });
-    window.addEventListener("drop", closeAfterDragEnds, { capture: true });
-    window.addEventListener("dragend", closeAfterDragEnds, { capture: true });
-    window.addEventListener("blur", closeAfterDragEnds);
-    document.addEventListener("visibilitychange", closeWhenDocumentIsHidden);
-
-    return () => {
-      window.removeEventListener("pointerup", closeAfterDragEnds, { capture: true });
-      window.removeEventListener("pointercancel", closeAfterDragEnds, { capture: true });
-      window.removeEventListener("drop", closeAfterDragEnds, { capture: true });
-      window.removeEventListener("dragend", closeAfterDragEnds, { capture: true });
-      window.removeEventListener("blur", closeAfterDragEnds);
-      document.removeEventListener("visibilitychange", closeWhenDocumentIsHidden);
-    };
+    document.addEventListener("visibilitychange", closeWhenHidden);
+    return () => document.removeEventListener("visibilitychange", closeWhenHidden);
   }, [onRequestClose, open]);
 
   if (!open || !anchorElement || !hostTabId || !hostPath) {

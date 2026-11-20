@@ -1,11 +1,16 @@
 // Handles native drag-and-drop into the file view and tab targets.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import type { DragDropEvent } from "@tauri-apps/api/webview";
+import { fileDropListenerReady, releaseDropStage } from "@/api";
+import type { TransferMode } from "@/types";
+import { FileDropQueue } from "./nativeFileDrag";
+import type { NativeFileDrag } from "./nativeFileDrag";
 import {
   getDropTargetFromPoint,
   makeDebug,
   normalizePath,
+  normalizeDropPath,
+  toMessage,
 } from "@/lib";
 import { usePromptStore, useTransferStore } from "@/modules";
 import type { DropTarget } from "@/lib";
@@ -16,8 +21,10 @@ import {
 import type { UndoMoveEntry } from "./fileManagerUndo";
 import { runDropTransfer } from "./runDropTransfer";
 import { useTabDropSubmenu } from "./useTabDropSubmenu";
+import type { BeginFileActivity } from "./useFileActivity";
 
 type UseFileDropOptions = {
+  beginFileActivity: BeginFileActivity;
   currentPath: string;
   onRefresh?: () => void;
   onRecordMoveUndo?: (entries: UndoMoveEntry[]) => void;
@@ -33,29 +40,17 @@ type ClientPoint = {
 
 const log = makeDebug("drop");
 
-const getDropTarget = (event: DragDropEvent): DropTarget | null => {
-  if (!("position" in event)) {
-    return null;
-  }
-  const scale = window.devicePixelRatio || 1;
-  const x = event.position.x / scale;
-  const y = event.position.y / scale;
-  return getDropTargetFromPoint(x, y);
-};
-
-const getClientPoint = (event: DragDropEvent): ClientPoint | null => {
-  if (!("position" in event)) {
-    return null;
-  }
+const getClientPoint = (position: ClientPoint): ClientPoint => {
   const scale = window.devicePixelRatio || 1;
   return {
-    x: event.position.x / scale,
-    y: event.position.y / scale,
+    x: position.x / scale,
+    y: position.y / scale,
   };
 };
 
 
 export const useFileDrop = ({
+  beginFileActivity,
   currentPath,
   onRefresh,
   onRecordMoveUndo,
@@ -69,12 +64,12 @@ export const useFileDrop = ({
   // Track source entries that are currently being moved or copied so the
   // explorer can show immediate busy feedback before backend progress arrives.
   const [pendingTransferPaths, setPendingTransferPaths] = useState<Set<string>>(new Set());
-  const currentPathRef = useRef(currentPath);
+  const [hoveredPane, setHoveredPane] = useState<DropTarget["pane"]>();
+  const [backgroundHovered, setBackgroundHovered] = useState(false);
   // Cache the normalized path to keep drop comparisons cheap.
-  const currentPathKeyRef = useRef(normalizePath(currentPath));
+  const currentPathKeyRef = useRef(normalizeDropPath(currentPath));
   const refreshRef = useRef(onRefresh);
-  const inFlightRef = useRef(false);
-  const lastHoverRef = useRef<string | null>(null);
+  const [dropQueue] = useState(() => new FileDropQueue());
   const promptStore = useMemo(() => usePromptStore.getState(), []);
   const registerTransferJob = useTransferStore((state) => state.registerJob);
   const updateTransferLabel = useTransferStore((state) => state.updateJobLabel);
@@ -88,7 +83,9 @@ export const useFileDrop = ({
   });
 
   const setDropTarget = useCallback((target: DropTarget | null) => {
-    if (!target) {
+    setHoveredPane(target?.pane);
+    setBackgroundHovered(target?.kind === "pane");
+    if (!target || target.kind === "pane") {
       setDropTargetPath(null);
       setDropTargetTabId(null);
       updateTabDropSubmenuTarget(null);
@@ -112,27 +109,21 @@ export const useFileDrop = ({
   }, [updateTabDropSubmenuTarget]);
 
   const clearDragState = useCallback(() => {
-    lastHoverRef.current = null;
     setDragPoint(null);
     setDropTarget(null);
     closeTabDropSubmenu();
   }, [closeTabDropSubmenu, setDropTarget]);
 
-  useEffect(() => {
-    currentPathRef.current = currentPath;
-    currentPathKeyRef.current = normalizePath(currentPath);
+  useLayoutEffect(() => {
+    currentPathKeyRef.current = normalizeDropPath(currentPath);
   }, [currentPath]);
 
   useEffect(() => {
     refreshRef.current = onRefresh;
   }, [onRefresh]);
 
-  const performDrop = useCallback(
-    async (paths: string[], targetPath: string | null) => {
-      if (inFlightRef.current) return;
-      const plan = planDropTransfer(paths, targetPath, currentPathRef.current);
-      if (!plan) return;
-
+  const executeDrop = useCallback(
+    async (plan: NonNullable<ReturnType<typeof planDropTransfer>>, dropStage?: number) => {
       if (log.enabled) {
         log("drop-handle: count=%d destination=%s", plan.items.length, plan.destination);
       }
@@ -146,7 +137,6 @@ export const useFileDrop = ({
           .filter((value): value is string => Boolean(value)),
       );
 
-      inFlightRef.current = true;
       onTransferInFlightChange?.(true);
       if (pendingPathKeys.size > 0) {
         setPendingTransferPaths((previous) => {
@@ -159,6 +149,7 @@ export const useFileDrop = ({
       try {
         await runDropTransfer({
           plan: resolvedPlan,
+          dropStage,
           promptStore,
           currentPathKey: currentPathKeyRef.current,
           onRefresh: refreshRef.current,
@@ -178,7 +169,6 @@ export const useFileDrop = ({
             return next;
           });
         }
-        inFlightRef.current = false;
         onTransferInFlightChange?.(false);
       }
     },
@@ -192,66 +182,101 @@ export const useFileDrop = ({
     ],
   );
 
+  const dropErrorQueued = useRef(false);
+  const queueDropError = useCallback(async (message: string) => {
+    if (dropErrorQueued.current) return;
+    dropErrorQueued.current = true;
+    // A pending conflict prompt holds the staged files until it resolves.
+    // Keep a later drop error from replacing that prompt.
+    await dropQueue.add(async () => {
+      dropErrorQueued.current = false;
+      promptStore.showPrompt({ title: "Drop failed", content: message, confirmLabel: "OK", cancelLabel: null });
+    });
+  }, [dropQueue, promptStore]);
+
+  const performDrop = useCallback(async (paths: string[], target: string, mode: TransferMode, dropStage?: number) => {
+    if (dropStage != null && /^[\s\u0085]|[\s\u0085]$/u.test(target)) {
+      await queueDropError("Choose a destination folder whose name does not end in whitespace.");
+      return;
+    }
+    // Capture the destination on release, even when an earlier drop has a prompt open.
+    const plan = planDropTransfer(paths, target, mode);
+    if (!plan) return;
+    const finishWaiting = dropQueue.busy
+      ? beginFileActivity(`Drop queued for ${plan.destination}`) : null;
+    return dropQueue.add(() => {
+      finishWaiting?.();
+      return executeDrop(plan, dropStage);
+    }).catch((error) => {
+      promptStore.showPrompt({
+        title: "Drop failed",
+        content: toMessage(error, "Unable to prepare the dropped files."),
+        confirmLabel: "OK",
+        cancelLabel: null,
+      });
+    });
+  }, [beginFileActivity, dropQueue, executeDrop, promptStore, queueDropError]);
+
+  const onDragEvent = useRef<(event: NativeFileDrag) => void>(() => {});
+  useLayoutEffect(() => {
+    onDragEvent.current = async (payload) => {
+      if (payload.type === "error") {
+        clearDragState();
+        await queueDropError(payload.message);
+        return;
+      }
+      if (payload.type === "leave") {
+        clearDragState();
+        return;
+      }
+      if (payload.type === "drop") {
+        try {
+          const point = getClientPoint(payload.position);
+          const target = getDropTargetFromPoint(point.x, point.y);
+          clearDragState();
+          if (target) await performDrop(payload.paths, target.path, payload.mode, payload.stage ?? undefined);
+        } finally {
+          if (payload.stage != null) await releaseDropStage(payload.stage).catch((error) => log("release drop stage: %o", error));
+        }
+        return;
+      }
+      const point = getClientPoint(payload.position);
+      const target = getDropTargetFromPoint(point.x, point.y);
+      // Only the optional tab submenu uses coordinates to scroll. Ordinary
+      // file drags need a render when the hovered destination changes.
+      if (enableTabDropSubfolders) {
+        setDragPoint((previous) => previous?.x === point.x && previous.y === point.y ? previous : point);
+      }
+      setDropTarget(target);
+    };
+  }, [clearDragState, enableTabDropSubfolders, performDrop, queueDropError, setDropTarget]);
+
   useEffect(() => {
     if (!enabled) return;
     let active = true;
     let unlisten: (() => void) | null = null;
 
-    getCurrentWebview()
-      .onDragDropEvent((event) => {
-        if (!active) return;
-        const payload = event.payload;
-        if (payload.type === "enter" || payload.type === "over") {
-          const target = getDropTarget(payload);
-          setDragPoint(getClientPoint(payload));
-          const key = target ? `${target.kind}:${target.path}` : "none";
-          if (lastHoverRef.current !== key && log.enabled) {
-            log("hover: type=%s target=%s", payload.type, key);
-          }
-          lastHoverRef.current = key;
-          setDropTarget(target);
-          return;
-        }
-        if (payload.type === "leave") {
-          if (log.enabled) {
-            log("leave");
-          }
-          clearDragState();
-          return;
-        }
-        if (payload.type === "drop") {
-          const target = getDropTarget(payload);
-          if (log.enabled) {
-            log("drop: count=%d target=%s", payload.paths.length, target?.path ?? "none");
-            log("drop: paths=%o", payload.paths);
-            log("drop: payload=%o", payload);
-          }
-          clearDragState();
-          void performDrop(payload.paths, target?.path ?? null);
-        }
-      })
-      .then((stop) => {
-        unlisten = stop;
-      })
-      .catch(() => {
-        // Ignore drag/drop setup failures.
-      });
-
+    getCurrentWebview().listen<NativeFileDrag>("stratum-file-drag", ({ payload }) => {
+      if (active) onDragEvent.current(payload);
+    }).then((stop) => {
+      if (!active) return stop();
+      unlisten = stop;
+      return fileDropListenerReady();
+    }).catch((error) => log("drop listener failed: %o", error));
     return () => {
       active = false;
-      if (unlisten) {
-        unlisten();
-      }
+      unlisten?.();
     };
-  }, [clearDragState, enabled, performDrop, setDropTarget]);
+  }, [enabled]);
 
   return {
+    hoveredPane,
+    backgroundHovered,
     dropTargetPath,
     dropTargetTabId,
     dragPoint,
     pendingTransferPaths,
     tabDropSubmenu,
-    performDrop,
     setDropTarget,
     clearDragState,
   };

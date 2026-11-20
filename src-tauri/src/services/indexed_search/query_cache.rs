@@ -5,9 +5,7 @@
 // keeps that cache policy away from lifecycle and worker code.
 use std::sync::atomic::Ordering;
 
-use crate::domain::indexed_search::{
-    IndexedPathMatch, IndexedPathQuery, IndexedSearchServiceState,
-};
+use crate::domain::indexed_search::{IndexedPathMatch, IndexedPathQuery};
 
 use super::service::IndexedSearchHandle;
 
@@ -20,49 +18,76 @@ pub(super) struct QueryCache {
 struct QueryCacheEntry {
     key: String,
     revision: u64,
+    volumes: Vec<(String, String)>,
     matches: Vec<IndexedPathMatch>,
 }
 
 impl IndexedSearchHandle {
-    pub fn query_paths(&self, query: IndexedPathQuery) -> Vec<IndexedPathMatch> {
+    pub fn query_paths(&self, query: IndexedPathQuery) -> Result<Vec<IndexedPathMatch>, String> {
         if self.is_shutting_down() || !self.is_enabled() {
-            return Vec::new();
+            return Ok(Vec::new());
+        }
+
+        let Some(result) = self.inner.catalog.get() else {
+            return Ok(Vec::new());
+        };
+        let catalog = result.as_ref().map_err(Clone::clone)?;
+
+        // A drive letter can change between background checks. Check the
+        // physical binding before either the cache lookup or the SQL read.
+        let (revision, mounts) = {
+            let state = self.inner.state.lock().expect("indexed search state lock");
+            (self.catalog_revision(), state.volumes.verified_mounts())
+        };
+        let volumes = mounts
+            .into_iter()
+            .filter(|mount| mount.verify().is_ok())
+            .map(|mount| (mount.drive_path, mount.identity))
+            .collect::<Vec<_>>();
+        if volumes.is_empty() {
+            return Ok(Vec::new());
         }
 
         let cache_key = build_query_cache_key(&query);
-        let revision = self.catalog_revision();
-        if let Some(matches) = self
+        let cached = self
             .inner
             .query_cache
             .lock()
             .expect("indexed search query cache lock")
-            .get(&cache_key, revision)
-        {
-            return matches;
-        }
-
-        let Some(catalog) = self.inner.catalog.as_ref().cloned() else {
-            self.mark_catalog_unavailable();
-            return Vec::new();
-        };
-
-        match catalog.query(query) {
-            Ok(matches) => {
+            .get(&cache_key, revision, &volumes);
+        let mut matches = match cached {
+            Some(matches) => matches,
+            None => {
+                let matches = catalog.query(query, &volumes)?;
                 self.inner
                     .query_cache
                     .lock()
                     .expect("indexed search query cache lock")
-                    .store(cache_key, revision, matches.clone());
+                    .store(cache_key, revision, volumes.clone(), matches.clone());
                 matches
             }
-            Err(error) => {
-                self.set_service_state(
-                    IndexedSearchServiceState::Error,
-                    Some(format!("Indexed search query failed: {error}")),
-                );
-                Vec::new()
-            }
+        };
+
+        if self.is_shutting_down() || !self.is_enabled() {
+            return Ok(Vec::new());
         }
+        if self.catalog_revision() != revision {
+            // Unmount or invalidation can race a read. Exclude any result
+            // whose original binding is no longer in the verified scope.
+            let state = self.inner.state.lock().expect("indexed search state lock");
+            let current = state.volumes.verified_mounts();
+            matches.retain(|hit| {
+                hit.drive_path.as_ref().is_some_and(|drive| {
+                    volumes.iter().any(|(root, id)| {
+                        root.eq_ignore_ascii_case(drive)
+                            && current
+                                .iter()
+                                .any(|mount| &mount.drive_path == root && &mount.identity == id)
+                    })
+                })
+            });
+        }
+        Ok(matches)
     }
 
     pub(super) fn catalog_revision(&self) -> u64 {
@@ -96,25 +121,37 @@ impl QueryCache {
         }
     }
 
-    fn get(&mut self, key: &str, revision: u64) -> Option<Vec<IndexedPathMatch>> {
-        let index = self
-            .entries
-            .iter()
-            .position(|entry| entry.revision == revision && entry.key == key)?;
+    fn get(
+        &mut self,
+        key: &str,
+        revision: u64,
+        volumes: &[(String, String)],
+    ) -> Option<Vec<IndexedPathMatch>> {
+        let index = self.entries.iter().position(|entry| {
+            entry.revision == revision && entry.key == key && entry.volumes == volumes
+        })?;
         let entry = self.entries.remove(index);
         let matches = entry.matches.clone();
         self.entries.insert(0, entry);
         Some(matches)
     }
 
-    fn store(&mut self, key: String, revision: u64, matches: Vec<IndexedPathMatch>) {
-        self.entries
-            .retain(|entry| !(entry.revision == revision && entry.key == key));
+    fn store(
+        &mut self,
+        key: String,
+        revision: u64,
+        volumes: Vec<(String, String)>,
+        matches: Vec<IndexedPathMatch>,
+    ) {
+        self.entries.retain(|entry| {
+            !(entry.revision == revision && entry.key == key && entry.volumes == volumes)
+        });
         self.entries.insert(
             0,
             QueryCacheEntry {
                 key,
                 revision,
+                volumes,
                 matches,
             },
         );

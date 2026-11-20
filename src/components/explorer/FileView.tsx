@@ -5,7 +5,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import type { GridNameEllipsis, GridSize, ThumbnailFit } from "@/modules";
-import type { DropTarget, EntryItem } from "@/lib";
+import type { EntryItem } from "@/lib";
 import type {
   EntryMeta,
   FileEntry,
@@ -28,7 +28,7 @@ const FileGrid = lazy(loadFileGrid);
 type FileViewProps = {
   viewMode: ViewMode;
   currentPath: string;
-  entries: FileEntry[];
+  entryByPath: Map<string, FileEntry>;
   items: EntryItem[];
   indexMap?: Map<string, number>;
   loading: boolean;
@@ -37,6 +37,7 @@ type FileViewProps = {
   onOpenRecent: (path: string) => void;
   onOpenRecentNewTab?: (path: string) => void;
   drives: string[];
+  drivesLoaded?: boolean;
   driveInfo: DriveInfo[];
   onOpenDrive: (path: string) => void;
   onOpenDriveNewTab?: (path: string) => void;
@@ -106,8 +107,6 @@ type FileViewProps = {
   onEntryPreviewRelease?: (path: string) => boolean;
   dropTargetPath?: string | null;
   onStartDragOut?: (paths: string[]) => void;
-  onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
-  onInternalHover?: (target: DropTarget | null) => void;
 };
 
 export const FileView = ({
@@ -118,6 +117,7 @@ export const FileView = ({
   onOpenRecent,
   onOpenRecentNewTab,
   drives,
+  drivesLoaded,
   driveInfo,
   onOpenDrive,
   onOpenDriveNewTab,
@@ -148,8 +148,6 @@ export const FileView = ({
   onGridColumnsChange,
   dropTargetPath,
   onStartDragOut,
-  onInternalDrop,
-  onInternalHover,
   onEntryContextMenu,
   onEntryContextMenuDown,
   onEntryPreviewPress,
@@ -185,6 +183,7 @@ export const FileView = ({
         onOpenRecent={onOpenRecent}
         onOpenRecentNewTab={onOpenRecentNewTab}
         drives={drives}
+        drivesLoaded={drivesLoaded}
         driveInfo={driveInfo}
         onOpenDrive={onOpenDrive}
         onOpenDriveNewTab={onOpenDriveNewTab}
@@ -275,8 +274,6 @@ export const FileView = ({
             dragDrop={{
               dropTargetPath,
               onStartDragOut,
-              onInternalDrop,
-              onInternalHover,
             }}
             creation={{
               onCreateFolder,
@@ -340,8 +337,6 @@ export const FileView = ({
             dragDrop={{
               dropTargetPath,
               onStartDragOut,
-              onInternalDrop,
-              onInternalHover,
             }}
             creation={{
               onCreateFolder,

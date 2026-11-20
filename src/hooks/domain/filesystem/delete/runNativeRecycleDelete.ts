@@ -24,9 +24,6 @@ export const runNativeRecycleDelete = async ({
   operations,
   context,
 }: RunNativeRecycleDeleteOptions) => {
-  // Capture delete time so undo can resolve recycle metadata even if the shell
-  // writes recycle info slightly after delete returns.
-  const deleteStartedAtMs = Math.max(0, Date.now() - 5_000);
   let report = null;
 
   try {
@@ -43,22 +40,11 @@ export const runNativeRecycleDelete = async ({
     return null;
   }
 
-  const recycledPaths = report.recycled.map((entry) => entry.originalPath);
-  if (recycledPaths.length > 0) {
+  if (report.recycleUndoReceipt) {
     context.pushUndo({
-      type: "recyclePaths",
-      paths: recycledPaths,
-      deletedAfterMs: deleteStartedAtMs,
+      type: "recycle",
+      receiptId: report.recycleUndoReceipt,
     });
-  } else if (report.deleted > 0) {
-    const recycledRoots = paths.filter((path) => !report.failedPaths.includes(path));
-    if (recycledRoots.length > 0) {
-      context.pushUndo({
-        type: "recyclePaths",
-        paths: recycledRoots,
-        deletedAfterMs: deleteStartedAtMs,
-      });
-    }
   }
   if (report.deleted > 0) {
     await context.refreshAfterChange();

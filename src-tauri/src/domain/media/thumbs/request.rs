@@ -32,8 +32,14 @@ pub(super) fn request_thumbnails(
         };
         let signature = resolve_request_signature(trimmed, &request, &key);
 
-        let (thumb_path, thumb_id) =
-            build_thumb_path(&state.cache_dir, &input_path, &meta, &key, &options.format);
+        let (thumb_path, thumb_id) = build_thumb_path(
+            &state.cache_dir,
+            &input_path,
+            &meta,
+            &key,
+            &options.format,
+            &kind,
+        );
         if cache::has_cache_entry(state, &thumb_id) {
             hits.push(ThumbHit {
                 path: trimmed.to_string(),
@@ -115,6 +121,7 @@ fn build_thumb_path(
     meta: &ThumbMeta,
     key: &str,
     format: &ThumbFormat,
+    kind: &ThumbKind,
 ) -> (PathBuf, String) {
     let mut hasher = DefaultHasher::new();
     input_path.hash(&mut hasher);
@@ -123,6 +130,10 @@ fn build_thumb_path(
         modified.hash(&mut hasher);
     }
     key.hash(&mut hasher);
+    if matches!(kind, ThumbKind::Svg) {
+        // Regenerate SVG thumbnails that used the old external resource resolver.
+        "self-contained-svg".hash(&mut hasher);
+    }
     let hash = hasher.finish();
     let shard = format!("{:02x}", hash & 0xff);
     let extension = match format {

@@ -27,7 +27,9 @@ export const ConversionProgressStrip = ({
     <div className={`conversion-progress-strip is-${tone}`}>
       <div className="conversion-progress-bottom">
         {activeMessage ? (
-            <div className="conversion-progress-detail">{activeMessage}</div>
+          <div className="conversion-progress-detail tnum" role={tone === "failed" ? "alert" : "status"}>
+            {activeMessage}
+          </div>
         ) : (
           <div className="conversion-progress-detail" />
         )}

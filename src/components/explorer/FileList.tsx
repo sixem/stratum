@@ -2,7 +2,6 @@
 import { useMemo } from "react";
 import { useEntryPresence, useScrollToIndex } from "@/hooks";
 import { EmptyState } from "@/components/primitives/EmptyState";
-import { LoadingIndicator } from "@/components/primitives/LoadingIndicator";
 import { SelectionRect } from "./SelectionRect";
 import { EntryRow, ParentRow } from "./fileList/index";
 import { ListHeader } from "./fileList/ListHeader";
@@ -12,6 +11,8 @@ import { useListLayout } from "./fileList/useListLayout";
 import { useListMeta } from "./fileList/useListMeta";
 import { useListSelection } from "./fileList/useListSelection";
 import { useListVirtual } from "./fileList/useListVirtual";
+
+import { useCutEntries } from "./fileView/useCutEntries";
 
 const FileList = ({
   view,
@@ -25,6 +26,7 @@ const FileList = ({
   dragDrop,
   creation,
 }: FileListProps) => {
+  const isCut = useCutEntries();
   const {
     isDeletePending,
     isTransferPending,
@@ -92,7 +94,7 @@ const FileList = ({
     loading: view.loading,
   });
 
-  const { selectionBox } = useListSelection({
+  const { selectionBox, dragHandlers } = useListSelection({
     listRef,
     selectedPaths: selection.selectedPaths,
     selectionItems,
@@ -101,17 +103,13 @@ const FileList = ({
     onSetSelection: selection.onSetSelection,
     onClearSelection: selection.onClearSelection,
     onStartDragOut: dragDrop.onStartDragOut,
-    onInternalDrop: dragDrop.onInternalDrop,
-    onInternalHover: dragDrop.onInternalHover,
     loading: view.loading,
   });
-  const hasContent = rows.length > 0;
   const contentReady = true;
   const viewAnimate = false;
-  const showLoadingOverlay = view.loading && !hasContent;
 
   return (
-    <div className="file-list">
+    <div className="file-list" inert={view.loading} {...dragHandlers}>
       <ListHeader sortState={list.sortState} onSortChange={list.onSortChange} />
       <div className="list-shell" data-category-tint={list.categoryTinting ? "true" : "false"}>
         <div
@@ -186,6 +184,7 @@ const FileList = ({
                     hideExtension={list.hideExtension}
                     selected={selection.selectedPaths.has(row.entry.path)}
                     isDeleting={isDeletePending(row.entry.path)}
+                    isCut={isCut(row.entry.path)}
                     isTransferring={isTransferPending(row.entry.path)}
                     dropTarget={isDropTarget}
                     isRenaming={rename.renameTargetPath === row.entry.path}
@@ -205,7 +204,7 @@ const FileList = ({
                 );
               })}
             </div>
-            {view.entries.length === 0 && !view.loading ? (
+            {view.entryByPath.size === 0 && !view.loading ? (
               <div className="list-empty">
                 <EmptyState
                   title={emptyMessage.title}
@@ -216,13 +215,6 @@ const FileList = ({
             ) : null}
           </div>
           <SelectionRect box={selectionBox} />
-        </div>
-        <div
-          className="loading-overlay"
-          data-visible={showLoadingOverlay ? "true" : "false"}
-          data-solid={!hasContent ? "true" : "false"}
-        >
-          <LoadingIndicator />
         </div>
       </div>
     </div>

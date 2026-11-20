@@ -30,10 +30,17 @@ export const useIndexedSearchSelection = ({
   results,
 }: UseIndexedSearchSelectionParams) => {
   const resultRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
   const [selection, setSelection] = useState<IndexedSelection | null>(null);
   const [selectedResultMeta, setSelectedResultMeta] = useState<EntryMeta | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
+
+  const selectedResult =
+    selection?.kind === "result"
+      ? results.find(
+          (result) =>
+            normalizeIndexedPathKey(result.path) === normalizeIndexedPathKey(selection.path),
+        ) ?? null
+      : null;
 
   useEffect(() => {
     resultRefs.current.length = results.length;
@@ -42,7 +49,6 @@ export const useIndexedSearchSelection = ({
   useEffect(() => {
     if (open) return;
 
-    setSelectedIndex(-1);
     setSelection(null);
     setSelectedResultMeta(null);
     setSelectionError(null);
@@ -58,7 +64,9 @@ export const useIndexedSearchSelection = ({
             normalizeIndexedPathKey(result.path) === normalizeIndexedPathKey(current.path),
         );
         if (matchingResult) {
-          return { kind: "result", path: matchingResult.path };
+          return current.path === matchingResult.path
+            ? current
+            : { kind: "result", path: matchingResult.path };
         }
       }
 
@@ -68,13 +76,10 @@ export const useIndexedSearchSelection = ({
             normalizeDrivePathKey(status.drivePath) === normalizeDrivePathKey(current.drivePath),
         );
         if (matchingDrive) {
-          return { kind: "drive", drivePath: matchingDrive.drivePath };
+          return current.drivePath === matchingDrive.drivePath
+            ? current
+            : { kind: "drive", drivePath: matchingDrive.drivePath };
         }
-      }
-
-      const firstDrive = driveStatuses[0];
-      if (firstDrive) {
-        return { kind: "drive", drivePath: firstDrive.drivePath };
       }
 
       const firstResult = results[0];
@@ -86,39 +91,18 @@ export const useIndexedSearchSelection = ({
     });
   }, [driveStatuses, open, results]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    if (selection?.kind !== "result") {
-      setSelectedIndex(-1);
-      return;
-    }
-
-    const nextIndex = results.findIndex(
-      (result) =>
-        normalizeIndexedPathKey(result.path) === normalizeIndexedPathKey(selection.path),
-    );
-    setSelectedIndex(nextIndex);
-  }, [open, results, selection]);
+  const selectedResultPath = selectedResult?.path;
 
   useEffect(() => {
-    if (!open || selectedIndex < 0) return;
-    resultRefs.current[selectedIndex]?.scrollIntoView({
-      block: "nearest",
-    });
-  }, [open, selectedIndex]);
-
-  useEffect(() => {
-    if (!open || selection?.kind !== "result") {
-      setSelectedResultMeta(null);
-      setSelectionError(null);
+    setSelectedResultMeta(null);
+    setSelectionError(null);
+    if (!open || !selectedResultPath) {
       return;
     }
 
     let active = true;
-    setSelectionError(null);
 
-    void statEntries([selection.path])
+    void statEntries([selectedResultPath])
       .then((entries) => {
         if (!active) return;
         setSelectedResultMeta(entries[0] ?? null);
@@ -133,7 +117,7 @@ export const useIndexedSearchSelection = ({
     return () => {
       active = false;
     };
-  }, [open, selection]);
+  }, [open, selectedResultPath]);
 
   const handleOpenSelectedResult = useCallback(async (path: string) => {
     setSelectionError(null);
@@ -146,8 +130,7 @@ export const useIndexedSearchSelection = ({
     }
   }, []);
 
-  const selectResult = useCallback((result: IndexedPathMatch, index: number) => {
-    setSelectedIndex(index);
+  const selectResult = useCallback((result: IndexedPathMatch) => {
     setSelectionError(null);
     setSelection({ kind: "result", path: result.path });
   }, []);
@@ -157,11 +140,8 @@ export const useIndexedSearchSelection = ({
   }, []);
 
   const moveSelection = useCallback(
-    (direction: 1 | -1) => {
-      if (results.length === 0) {
-        setSelectedIndex(-1);
-        return;
-      }
+    (direction: 1 | -1, focusRow: boolean) => {
+      if (results.length === 0) return;
 
       const currentIndex =
         selection?.kind === "result"
@@ -180,24 +160,36 @@ export const useIndexedSearchSelection = ({
       const nextResult = results[nextIndex];
       if (!nextResult) return;
 
-      selectResult(nextResult, nextIndex);
+      selectResult(nextResult);
+      const row = resultRefs.current[nextIndex];
+      if (focusRow) row?.focus({ preventScroll: true });
+      row?.scrollIntoView({ block: "nearest" });
     },
     [results, selectResult, selection],
   );
 
-  const handleQueryKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "ArrowDown") {
+  const handleSearchKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLInputElement | HTMLButtonElement>) => {
+      if (event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
-        moveSelection(1);
+        moveSelection(
+          event.key === "ArrowDown" ? 1 : -1,
+          event.currentTarget instanceof HTMLButtonElement,
+        );
         return;
       }
-      if (event.key === "ArrowUp") {
+
+      const resultToOpen = selectedResult ?? results[0];
+      if (event.key === "Enter" && resultToOpen) {
         event.preventDefault();
-        moveSelection(-1);
+        if (event.repeat) return;
+        selectResult(resultToOpen);
+        void handleOpenSelectedResult(resultToOpen.path);
       }
     },
-    [moveSelection],
+    [handleOpenSelectedResult, moveSelection, results, selectedResult, selectResult],
   );
 
   const selectedDrive =
@@ -207,23 +199,14 @@ export const useIndexedSearchSelection = ({
             normalizeDrivePathKey(status.drivePath) === normalizeDrivePathKey(selection.drivePath),
         ) ?? null
       : null;
-  const selectedResult =
-    selection?.kind === "result"
-      ? results.find(
-          (result) =>
-            normalizeIndexedPathKey(result.path) === normalizeIndexedPathKey(selection.path),
-        ) ?? null
-      : null;
 
   return {
     handleOpenSelectedResult,
-    handleQueryKeyDown,
+    handleSearchKeyDown,
     resultRefs,
     selectedDrive,
-    selectedIndex,
     selectedResult,
-    selectedResultMeta,
-    selection,
+    selectedResultMeta: selectedResultMeta?.path === selectedResultPath ? selectedResultMeta : null,
     selectionError,
     selectDrive,
     selectResult,

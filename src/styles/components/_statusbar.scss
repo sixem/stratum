@@ -86,6 +86,12 @@
     opacity: 0.85;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .status-text-loading-icon {
+      display: none;
+    }
+  }
+
   // Keep refresh and transient failures neutral, so the right status doesn't look dangerous.
   .status-text.loading,
   .status-text.error,

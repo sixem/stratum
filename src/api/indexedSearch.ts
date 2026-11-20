@@ -7,17 +7,28 @@ import type {
   IndexedSearchServiceStatus,
 } from "@/types";
 
-export const getIndexedSearchStatus = () =>
-  invoke<IndexedSearchServiceStatus>("get_indexed_search_status");
+const fetchIndexedSearchSnapshot = async () =>
+  Promise.allSettled([
+    invoke<IndexedSearchServiceStatus>("get_indexed_search_status"),
+    invoke<IndexedDriveStatus[]>("list_indexed_drive_statuses"),
+  ]);
+
+let pendingSnapshot: ReturnType<typeof fetchIndexedSearchSnapshot> | undefined;
+
+// The shell and modal can both request status while a scan is running.
+// Share any in-flight pair of calls between them.
+export const getIndexedSearchSnapshot = () => {
+  pendingSnapshot ??= fetchIndexedSearchSnapshot().finally(() => {
+    pendingSnapshot = undefined;
+  });
+  return pendingSnapshot;
+};
 
 export const setIndexedSearchEnabled = (enabled: boolean) =>
   invoke<void>("set_indexed_search_enabled", { enabled });
 
 export const getIndexedSearchCatalogPath = () =>
   invoke<string>("get_indexed_search_catalog_path");
-
-export const listIndexedDriveStatuses = () =>
-  invoke<IndexedDriveStatus[]>("list_indexed_drive_statuses");
 
 export const queryIndexedPaths = (query: IndexedPathQuery) =>
   invoke<IndexedPathMatch[]>("query_indexed_paths", { query });

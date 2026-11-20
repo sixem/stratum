@@ -1,5 +1,5 @@
 // Compact drive selector used in the path bar.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   activeDrive,
   buildDriveTooltip,
@@ -8,14 +8,16 @@ import {
   normalizePath,
 } from "@/lib";
 import { useHorizontalOverflowScroll } from "@/hooks";
-import type { DriveInfo } from "@/types";
+import type { DriveInfo, IndexedDriveState, IndexedSearchServiceState } from "@/types";
 import { HorizontalChevronButton, PressButton } from "@/components/primitives";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 
 type DrivePickerProps = {
   activePath: string;
   drives: string[];
+  drivesLoading: boolean;
   driveInfo: DriveInfo[];
+  indexedSearchState?: IndexedSearchServiceState;
   onSelect: (path: string) => void;
   onSelectNewTab?: (path: string) => void;
 };
@@ -32,24 +34,36 @@ const formatDriveLabel = (drive: string) => {
   return trimmed;
 };
 
-const buildDriveAriaLabel = (driveLabel: string, info?: DriveInfo) => {
-  const indexedState = info?.indexStatus?.state;
-  if (!indexedState) {
-    return driveLabel;
-  }
-  return `${driveLabel}. Indexed search ${formatIndexedDriveState(indexedState)}.`;
+type DriveMarkerState = IndexedDriveState | "checking" | "loading";
+
+const getDriveIndexState = (info: DriveInfo | undefined, serviceState?: IndexedSearchServiceState) => {
+  const state = info?.indexStatus?.state;
+  // A saved snapshot is provisional while startup verifies its volume.
+  return serviceState === "starting" && (state == null || state === "stale") ? "checking" : state;
+};
+
+const buildDriveAriaLabel = (driveLabel: string, state?: DriveMarkerState) => {
+  if (state === "loading") return "Loading drives";
+  if (state === "checking") return `${driveLabel}. Checking index.`;
+  return state ? `${driveLabel}. Indexed search ${formatIndexedDriveState(state).toLowerCase()}.` : driveLabel;
+};
+
+const DriveStatusMarker = ({ state }: { state?: DriveMarkerState }) => {
+  return state ? <span className="drive-picker-status" data-state={state} aria-hidden="true" /> : null;
 };
 
 export const DrivePicker = ({
   activePath,
   drives,
+  drivesLoading,
   driveInfo,
+  indexedSearchState,
   onSelect,
   onSelectNewTab,
 }: DrivePickerProps) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const toggleRef = useRef<HTMLButtonElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [driveListOpen, setDriveListOpen] = useState(false);
   const driveInfoMap = useMemo(() => {
     const map = new Map<string, DriveInfo>();
     driveInfo.forEach((info) => {
@@ -61,25 +75,20 @@ export const DrivePicker = ({
     () => drives.map((drive) => normalizePath(drive)),
     [drives],
   );
-  const hasLoadedDrives = drives.length > 0;
-  const active = activeDrive(activePath, drives);
+  const hasDrives = drives.length > 0;
+  const active = activeDrive(activePath, drives) ?? (drives.length === 1 ? drives[0] : null);
   const activeKey = active ? normalizePath(active) : "";
   const activeInfo = activeKey ? driveInfoMap.get(activeKey) : undefined;
+  const activeIndexedState = !hasDrives && drivesLoading ? "loading" : getDriveIndexState(activeInfo, indexedSearchState);
   const activeIndex = activeKey ? normalizedDrives.indexOf(activeKey) : -1;
-  const label = active ? formatDriveLabel(active) : hasLoadedDrives ? "Drives" : "";
-  const extraCount =
-    drives.length > 0 ? Math.max(0, drives.length - (activeIndex >= 0 ? 1 : 0)) : 0;
-  const displayLabel = hasLoadedDrives
-    ? extraCount > 0
-      ? `${label} +${extraCount}`
-      : label
-    : "";
+  const label = active ? formatDriveLabel(active) : hasDrives ? "Drives" : drivesLoading ? "Drives…" : "No drives";
+  const extraCount = drives.length - (activeIndex >= 0 ? 1 : 0);
+  const displayLabel = extraCount > 0 ? `${label} +${extraCount}` : label;
   const canOpen = drives.length > 1;
-  const activeTooltip = active
-    ? buildDriveTooltip(label, activeInfo)
-    : hasLoadedDrives
-      ? "Drives"
-      : "";
+  const expanded = canOpen && driveListOpen;
+  const activeTooltip = activeIndexedState === "loading"
+    ? "Loading drives"
+    : buildDriveTooltip(label, activeInfo, activeIndexedState === "checking" ? "Checking index" : undefined);
   const { canScrollLeft, canScrollRight, scrollByDirection, updateScrollState } =
     useHorizontalOverflowScroll(listRef, {
       enabled: expanded,
@@ -98,69 +107,44 @@ export const DrivePicker = ({
       }
     }
     updateScrollState();
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (!containerRef.current?.contains(target)) {
-        setExpanded(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      setExpanded(false);
-    };
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown, { capture: true });
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown, { capture: true });
-    };
   }, [expanded, updateScrollState, drives]);
 
-  const handleToggle = () => {
-    if (!canOpen) return;
-    setExpanded((prev) => !prev);
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!expanded || event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    setDriveListOpen(false);
+    toggleRef.current?.focus();
   };
 
   return (
     <div
       className="drive-picker"
       data-expanded={expanded ? "true" : "false"}
-      ref={containerRef}
+      onKeyDown={handleKeyDown}
     >
       <div className="drive-toggle">
         <div className="drive-toggle-body" role="menu">
           <TooltipWrapper text={activeTooltip}>
             <PressButton
+              ref={toggleRef}
               type="button"
               className="drive-picker-button"
-              onClick={handleToggle}
+              onClick={() => setDriveListOpen((open) => !open)}
               disabled={!canOpen}
               aria-disabled={!canOpen}
+              aria-busy={activeIndexedState === "loading"}
               aria-haspopup="menu"
               aria-expanded={expanded}
-              aria-label={buildDriveAriaLabel(displayLabel || label || "Drives", activeInfo)}
+              aria-label={buildDriveAriaLabel(displayLabel, activeIndexedState)}
             >
               <span className="drive-picker-button-content">
-                {activeInfo?.indexStatus ? (
-                  <span
-                    className="drive-picker-status"
-                    data-state={activeInfo.indexStatus.state}
-                    aria-hidden="true"
-                  />
-                ) : null}
-                <span
-                  className="drive-picker-button-label"
-                  data-loaded={hasLoadedDrives ? "true" : "false"}
-                >
-                  {displayLabel}
-                </span>
+                <DriveStatusMarker state={activeIndexedState} />
+                <span className="tnum">{displayLabel}</span>
               </span>
             </PressButton>
           </TooltipWrapper>
-          <div className="drive-picker-extend">
+          <div className="drive-picker-extend" inert={!expanded}>
             <div
               className="drive-picker-scroll"
               data-can-left={canScrollLeft ? "true" : "false"}
@@ -179,36 +163,25 @@ export const DrivePicker = ({
                 {drives.map((drive) => {
                   const driveKey = normalizePath(drive);
                   const info = driveInfoMap.get(driveKey);
+                  const indexedState = getDriveIndexState(info, indexedSearchState);
                   const driveLabel = formatDriveLabel(drive);
                   const isActive = driveKey === activeKey;
-                  const tooltipText = buildDriveTooltip(driveLabel, info);
+                  const tooltipText = buildDriveTooltip(driveLabel, info, indexedState === "checking" ? "Checking index" : undefined);
                   return (
                     <TooltipWrapper key={drive} text={tooltipText}>
                       <PressButton
                         type="button"
                         role="menuitem"
                         className={`drive-picker-item${isActive ? " is-active" : ""}`}
-                        aria-label={buildDriveAriaLabel(driveLabel, info)}
-                        onClick={() => {
-                          setExpanded(false);
-                          onSelect(drive);
-                        }}
+                        aria-label={buildDriveAriaLabel(driveLabel, indexedState)}
+                        onClick={() => onSelect(drive)}
                         onMouseDown={(event) => {
                           if (!onSelectNewTab) return;
-                          handleMiddleClick(event, () => {
-                            setExpanded(false);
-                            onSelectNewTab(drive);
-                          });
+                          handleMiddleClick(event, () => onSelectNewTab(drive));
                         }}
                       >
                         <span className="drive-picker-item-content">
-                          {info?.indexStatus ? (
-                            <span
-                              className="drive-picker-status"
-                              data-state={info.indexStatus.state}
-                              aria-hidden="true"
-                            />
-                          ) : null}
+                          <DriveStatusMarker state={indexedState} />
                           <span>{driveLabel}</span>
                         </span>
                       </PressButton>

@@ -3,7 +3,9 @@
 // ownership of queue state, cancellation, and fallback prompts while still
 // getting Explorer-like delete semantics.
 use super::delete_discovery::{DeleteDiscoveryPlan, DeleteDiscoveryRoot};
-use crate::domain::filesystem::fs_recycle_windows::can_use_recycle_bin;
+use crate::domain::filesystem::fs_recycle_windows::{
+    can_use_recycle_bin, current_user_sid, RecycleEntry,
+};
 use crate::domain::filesystem::{TransferControlCallback, TransferProgressCallback};
 use crate::platform::windows::com::StaComGuard;
 use std::collections::HashMap;
@@ -28,6 +30,7 @@ pub(crate) enum ShellDeleteMode {
 #[derive(Default)]
 pub(crate) struct ShellDeleteReport {
     pub completed_paths: Vec<String>,
+    pub recycled_items: Vec<RecycleEntry>,
     pub remaining_paths: Vec<String>,
     pub cancelled: bool,
     pub failures: Vec<String>,
@@ -70,6 +73,8 @@ pub(crate) fn shell_delete_entries(
         on_control: control_ptr,
         roots: discovery.roots.clone(),
         root_failures: HashMap::new(),
+        recycle_source_ids: (mode == ShellDeleteMode::Recycle).then(HashMap::new),
+        recycled_items: Vec::new(),
         aborted: false,
     }));
     let sink: IFileOperationProgressSink = create_progress_sink(Arc::clone(&sink_state));
@@ -144,6 +149,22 @@ pub(crate) fn shell_delete_entries(
     if let Some(error) = perform_error.as_ref() {
         if error.code() != E_ABORT {
             report.failures.push(error.to_string());
+        }
+    }
+    let recycled_items = std::mem::take(&mut sink_state.recycled_items);
+    if !recycled_items.is_empty() {
+        if let Some(sid) = current_user_sid() {
+            report.recycled_items = recycled_items
+                .into_iter()
+                .filter_map(|item| {
+                    RecycleEntry::capture(
+                        &item.original_path,
+                        &item.shell_path,
+                        &sid,
+                        item.identity,
+                    )
+                })
+                .collect();
         }
     }
 

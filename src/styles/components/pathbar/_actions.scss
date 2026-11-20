@@ -61,6 +61,10 @@
     height: 14px;
   }
 
+  .recycle-bin-loader {
+    animation: recycle-bin-loader-fade 160ms ease-out;
+  }
+
   .btn {
     min-height: 26px;
     padding: 2px 8px;
@@ -78,5 +82,16 @@
 
   .nav-arrow.is-back {
     transform: rotate(180deg);
+  }
+}
+
+@keyframes recycle-bin-loader-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.pathbar) .recycle-bin-loader {
+    animation: none;
   }
 }

@@ -51,8 +51,8 @@ export const useShellNavigationModel = ({
   reorderPinnedPlace,
 }: UseShellNavigationModelOptions) => {
   const handleOpenRecycleBin = useCallback(() => {
-    // Windows shell namespace target for the system Recycle Bin.
-    void fileManager.openEntry("shell:RecycleBinFolder");
+    // The promise tracks the shell request. Explorer loads the view separately.
+    return fileManager.openEntry("shell:RecycleBinFolder");
   }, [fileManager.openEntry]);
 
   const topstackProps = useAppTopstackProps({
@@ -66,7 +66,6 @@ export const useShellNavigationModel = ({
       canGoForward: resolvedView.canGoForward,
       canGoUp: resolvedView.canGoUp,
       canGoDown: navigationController.canGoDown,
-      loading: fileManager.loading,
     },
     pathInputsBar: {
       path: viewState.pathValue,
@@ -112,7 +111,9 @@ export const useShellNavigationModel = ({
     drivePicker: {
       activePath: resolvedView.viewPath,
       drives: fileManager.drives,
+      drivesLoading: !fileManager.drivesLoaded,
       driveInfo: fileManager.driveInfo,
+      indexedSearchState: fileManager.indexedSearchStatus?.state,
       onSelect: navigationController.handleSelectDrive,
       onSelectNewTab: navigationController.handleOpenInNewTab,
     },
@@ -132,7 +133,7 @@ export const useShellNavigationModel = ({
     sidebarProps: {
       places,
       recentJumps: tabSession.recentJumps,
-      activePath: fileManager.currentPath,
+      activePath: resolvedView.viewPath,
       dropTargetPath: fileDrop.dropTargetPath,
       sectionOrder: settings.sidebarSectionOrder,
       hiddenSections: settings.sidebarHiddenSections,

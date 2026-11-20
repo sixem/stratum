@@ -29,7 +29,7 @@ export const PreviewError = ({
     : "Stratum previews files using your system webview.";
   const errorDetail = isVideo
     ? "Some containers/codecs (often MKV/H.265/AV1, depending on your OS) are not supported there, so playback can fail."
-    : "If the file format is not supported there, rendering can fail.";
+    : "Large files or unsupported formats may need to be opened in your default app.";
 
   return (
     <div className="quick-preview-error" role="status" aria-live="polite">

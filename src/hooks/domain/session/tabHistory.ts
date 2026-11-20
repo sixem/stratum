@@ -1,7 +1,7 @@
 // History store for per-tab navigation stacks.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Tab } from "@/types";
-import { normalizePath } from "@/lib";
+import { folderPathKey } from "@/lib";
 
 export type TabHistory = {
   back: string[];
@@ -51,8 +51,8 @@ export const useTabHistory = ({
       const trimmedFrom = fromPath.trim();
       const trimmedTo = toPath.trim();
       if (!trimmedFrom || !trimmedTo) return;
-      const fromKey = normalizePath(trimmedFrom) ?? trimmedFrom;
-      const toKey = normalizePath(trimmedTo) ?? trimmedTo;
+      const fromKey = folderPathKey(trimmedFrom);
+      const toKey = folderPathKey(trimmedTo);
       if (!fromKey || !toKey || fromKey === toKey) return;
       const history = getHistory(tabId);
       history.back.push(trimmedFrom);

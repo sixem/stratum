@@ -16,6 +16,7 @@ export const buildEntryRenameItems = ({
   {
     id: "entry-rename",
     label: "Rename",
+    icon: "rename",
     onSelect: () => {
       if (!hasTargets) return;
       onRenameEntry(target);

@@ -223,19 +223,19 @@ const QuickPreviewOverlayContent = ({
           </div>
           <div className="quick-preview-info-item">
             <span className="quick-preview-info-label">Dimensions</span>
-            <span className="quick-preview-info-value">{preview.dimensionLabel}</span>
+            <span className="quick-preview-info-value tnum">{preview.dimensionLabel}</span>
           </div>
           <div className="quick-preview-info-item">
             <span className="quick-preview-info-label">Size</span>
-            <span className="quick-preview-info-value">{preview.sizeLabel}</span>
+            <span className="quick-preview-info-value tnum">{preview.sizeLabel}</span>
           </div>
           <div className="quick-preview-info-item">
             <span className="quick-preview-info-label">Modified</span>
-            <span className="quick-preview-info-value">{preview.modifiedLabel}</span>
+            <span className="quick-preview-info-value tnum">{preview.modifiedLabel}</span>
           </div>
           <div className="quick-preview-info-item">
             <span className="quick-preview-info-label">Zoom</span>
-            <span className="quick-preview-info-value">{preview.zoomLabel}</span>
+            <span className="quick-preview-info-value tnum">{preview.zoomLabel}</span>
           </div>
         </div>
       </div>

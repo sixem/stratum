@@ -319,3 +319,16 @@ export const clampVideoQuality = (
   }
   return Math.min(range.max, Math.max(range.min, Math.round(value)));
 };
+
+// CRF values have different scales for H.264 and VP9.
+export const videoEncodingForTarget = (
+  format: ConversionVideoFormat,
+  requestedEncoder: ConversionVideoEncoder,
+  requestedQuality: number,
+) => {
+  const encoder = resolveVideoEncoderForFormat(format, requestedEncoder);
+  const quality = encoder === requestedEncoder
+    ? clampVideoQuality(encoder, requestedQuality)
+    : VIDEO_QUALITY_RANGES[encoder].defaultValue;
+  return { encoder, quality };
+};

@@ -1,28 +1,6 @@
 // Shared file-view primitives that both the grid and list variants use.
 @use "../control-recipes" as control;
 
-:where(.list-shell, .thumb-shell) {
-  .loading-overlay {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    padding: 16px;
-    z-index: 2;
-    opacity: 0;
-    pointer-events: none;
-    transition: none;
-  }
-
-  .loading-overlay[data-visible="true"] {
-    opacity: 1;
-  }
-
-  .loading-overlay[data-solid="true"] {
-    background: rgba(10, 11, 16, 0.55);
-  }
-}
-
 .loading-indicator {
   display: grid;
   gap: 8px;
@@ -55,6 +33,10 @@
 }
 
 :where(.file-list, .thumb-shell) {
+  [data-cut="true"] :is(.thumb-icon, .name-marker, .name-label) {
+    opacity: 0.55;
+  }
+
   .rename-input {
     display: block;
     width: 100%;
@@ -64,7 +46,7 @@
     border: none;
     border-radius: 2px;
     background: rgba(8, 10, 16, 0.75);
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
+    box-shadow: 0 0 0 var(--surface-border-width) rgba(255, 255, 255, 0.16);
     color: inherit;
     font: inherit;
     line-height: inherit;
@@ -75,8 +57,8 @@
   .rename-input:focus {
     outline: none;
     box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.24),
-      0 0 0 2px rgba(var(--accent-rgb), 0.28);
+      0 0 0 var(--surface-border-width) rgba(255, 255, 255, 0.24),
+      0 0 0 calc(var(--surface-border-width) + 1px) rgba(var(--accent-rgb), 0.28);
   }
 
   .rename-input::selection {

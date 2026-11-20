@@ -3,7 +3,7 @@ import { transferEntries } from "@/api";
 import {
   formatFailures,
   getParentPath,
-  normalizePath,
+  normalizeDropPath,
 } from "@/lib";
 import { bumpDirectoryChildVersions } from "@/modules";
 import type { PromptConfig } from "@/modules";
@@ -29,6 +29,7 @@ type TransferJobStoreLike = {
 
 type RunDropTransferOptions = {
   plan: ResolvedDropTransferPlan;
+  dropStage?: number;
   promptStore: PromptStoreLike;
   currentPathKey: string;
   onRefresh?: () => void;
@@ -36,33 +37,18 @@ type RunDropTransferOptions = {
   transferStore: TransferJobStoreLike;
 };
 
-const shouldRefreshForTransfer = (
+const shouldRefreshTransferView = (
   plan: ResolvedDropTransferPlan,
   currentPathKey: string,
-  movedCount: number,
-  copiedCount: number,
-) => {
-  const touchedCurrentDestination =
-    plan.destinationKey === currentPathKey && (movedCount > 0 || copiedCount > 0);
-  const touchedCurrentSource =
-    movedCount > 0 &&
-    plan.items.some((item) => {
-      const parent = getParentPath(item.candidate.path) ?? "";
-      return normalizePath(parent) === currentPathKey;
-    });
-
-  return touchedCurrentDestination || touchedCurrentSource;
-};
-
-const shouldRefreshAfterCancellation = (
-  plan: ResolvedDropTransferPlan,
-  currentPathKey: string,
+  includeSourceParents: boolean,
 ) => {
   const touchedCurrentDestination = plan.destinationKey === currentPathKey;
-  const touchedCurrentSource = plan.items.some((item) => {
-    const parent = getParentPath(item.candidate.path) ?? "";
-    return normalizePath(parent) === currentPathKey;
-  });
+  const touchedCurrentSource =
+    includeSourceParents &&
+    plan.items.some((item) => {
+      const parent = getParentPath(item.candidate.path) ?? "";
+      return normalizeDropPath(parent) === currentPathKey;
+    });
 
   return touchedCurrentDestination || touchedCurrentSource;
 };
@@ -85,6 +71,7 @@ const bumpTransferDirectoryChildren = (
 
 export const runDropTransfer = async ({
   plan,
+  dropStage,
   promptStore,
   currentPathKey,
   onRefresh,
@@ -92,24 +79,25 @@ export const runDropTransfer = async ({
   transferStore,
 }: RunDropTransferOptions) => {
   const job = transferStore.registerTransferJob({
-    label: "Transfer",
+    label: plan.mode === "move" ? "Move" : plan.mode === "copy" ? "Copy" : "Transfer",
     items: plan.items.map((item) => item.candidate.path),
   });
 
   try {
-    // Use auto mode so same-drive drops move and cross-drive drops copy.
+    // Conflict planning and execution must honor the same negotiated operation.
     const report = await transferEntries(
       plan.items.map((item) => item.candidate.path),
       plan.destination,
-      { mode: "auto", overwrite: plan.overwrite },
+      { mode: plan.mode, overwritePaths: plan.overwritePaths },
       job.id,
+      dropStage,
     );
     const label =
-      report.moved > 0 && report.copied > 0
-        ? "Transfer"
-        : report.moved > 0
-          ? "Move"
-          : "Copy";
+      report.moved > 0 && report.copied === 0
+        ? "Move"
+        : report.copied > 0 && report.moved === 0
+          ? "Copy"
+          : "Transfer";
 
     transferStore.updateTransferLabel(job.id, label);
     transferStore.recordTransferJobOutcome(job.id, {
@@ -129,26 +117,26 @@ export const runDropTransfer = async ({
 
     if (report.failures.length > 0) {
       promptStore.showPrompt({
-        title: `${label} completed with issues`,
+        title: `${label} ${report.cancelled ? "cancelled" : "completed"} with issues`,
         content: formatFailures(report.failures),
         confirmLabel: "OK",
         cancelLabel: null,
       });
     }
 
-    if (
-      shouldRefreshForTransfer(plan, currentPathKey, report.moved ?? 0, report.copied ?? 0)
-    ) {
-      onRefresh?.();
+    if (report.cancelled || report.moved > 0 || report.copied > 0) {
+      // A move can publish its copy and keep newly changed entries at the source.
+      const includeSourceParents = report.cancelled || report.moved > 0 ||
+        (report.failures.length > 0 && plan.items.some((item) => item.shouldMove));
+      if (shouldRefreshTransferView(plan, currentPathKey, includeSourceParents)) {
+        onRefresh?.();
+      }
+      bumpTransferDirectoryChildren(plan, { includeSourceParents });
     }
-    if ((report.moved ?? 0) > 0 || (report.copied ?? 0) > 0) {
-      bumpTransferDirectoryChildren(plan, {
-        includeSourceParents: (report.moved ?? 0) > 0,
-      });
-    }
+    return report;
   } catch (error) {
     if (isTransferCancelledError(error)) {
-      if (shouldRefreshAfterCancellation(plan, currentPathKey)) {
+      if (shouldRefreshTransferView(plan, currentPathKey, true)) {
         onRefresh?.();
       }
       bumpTransferDirectoryChildren(plan, { includeSourceParents: true });
@@ -158,7 +146,7 @@ export const runDropTransfer = async ({
     transferStore.recordTransferJobOutcome(job.id, { failures: 1 });
     promptStore.showPrompt({
       title: "Transfer failed",
-      content: getTransferErrorMessage(error, "Failed to transfer dropped items."),
+      content: getTransferErrorMessage(error, "Failed to transfer selected items."),
       confirmLabel: "OK",
       cancelLabel: null,
     });

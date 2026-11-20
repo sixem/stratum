@@ -1,6 +1,6 @@
 // Pending navigation helpers for tab session flows.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { normalizePath } from "@/lib";
+import { folderPathKey } from "@/lib";
 
 type PendingJumpSource = "navigate" | "switch";
 
@@ -45,11 +45,11 @@ export const usePendingJump = ({
       pendingTabRef.current = null;
       return;
     }
-    const pendingKey = normalizePath(pendingJump);
-    const currentKey = normalizePath(currentPath);
+    const pendingKey = folderPathKey(pendingJump);
+    const currentKey = folderPathKey(currentPath);
     if (!pendingKey || pendingKey !== currentKey) return;
     setRecentJumps((prev) => {
-      const next = [pendingJump, ...prev.filter((item) => normalizePath(item) !== pendingKey)];
+      const next = [pendingJump, ...prev.filter((item) => folderPathKey(item) !== pendingKey)];
       return next.slice(0, recentLimit);
     });
     setPendingJump(null);

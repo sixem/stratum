@@ -46,6 +46,7 @@ $accent-themes: (
   --surface-control-strong: #151a26;
   --panel-shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.42);
   --stroke: #1b2130;
+  --surface-border-width: 2px;
   --window-frame-edge: rgba(255, 255, 255, 0.08);
   --window-chrome-bar-height: 34px;
   // Blur tiers keep frosted shells and overlay backdrops visually aligned.
@@ -70,9 +71,9 @@ $accent-themes: (
   --font-size-2xl: 1.25rem;
   --eyebrow-tracking: 0.1em;
   // File-view sizing tokens keep virtualization math and card styles aligned.
-  --file-view-list-row-height: 36px;
-  --file-view-list-row-gap: 6px;
-  --file-view-grid-card-border: 1px;
+  --file-view-list-row-height: 30px;
+  --file-view-list-row-gap: 1px;
+  --file-view-grid-card-border: var(--surface-border-width);
   --file-view-grid-card-padding: 6px;
   --file-view-grid-card-gap: 6px;
   --file-view-grid-meta-gap: 6px;

@@ -28,6 +28,7 @@ pub(super) fn plan_job(
             paths,
             destination,
             options,
+            ..
         } => plan_transfer_job(paths, destination, options.as_ref(), on_control),
         TransferOperation::Delete { paths } => {
             plan_delete_job_with_feedback(inner, job_id, event_emitter, paths, "delete", on_control)

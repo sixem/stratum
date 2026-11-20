@@ -1,7 +1,7 @@
 // App-level conversion workflow orchestration.
 // The modal owns draft state; the backend work queue owns live job execution.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { convertMediaEntries } from "@/api";
+import { convertMediaEntries, statEntries } from "@/api";
 import { formatFailures, toMessage } from "@/lib";
 import { isManagedJobCancelledError, getManagedJobErrorMessage } from "@/hooks/domain/filesystem/transferJobErrors";
 import { usePromptStore, useTransferStore } from "@/modules";
@@ -11,6 +11,7 @@ import {
   buildConversionRunState,
 } from "./conversion/conversionDrafts";
 import { prepareConversionJob } from "./conversion/prepareConversionJob";
+import { failedConversionDraft } from "./conversion/conversionRetry";
 
 type ConversionModalState = {
   open: boolean;
@@ -40,14 +41,17 @@ export const useConversionController = ({
   const [conversionModalState, setConversionModalState] = useState<ConversionModalState>(
     buildClosedConversionState,
   );
-  const conversionStateRef = useRef(conversionModalState);
+  const preparationRef = useRef<AbortController | null>(null);
 
   const registerTransferJob = useTransferStore((state) => state.registerJob);
   const recordTransferJobOutcome = useTransferStore((state) => state.recordJobOutcome);
+  // Folder reads have their own error feedback. A refresh must not change the outcome of an encode.
+  const refreshAfterConversion = useCallback(
+    () => Promise.resolve().then(refreshEntries).catch(() => {}),
+    [refreshEntries],
+  );
 
-  useEffect(() => {
-    conversionStateRef.current = conversionModalState;
-  }, [conversionModalState]);
+  useEffect(() => () => preparationRef.current?.abort(), []);
 
   const showPrompt = useCallback((title: string, content: string) => {
     usePromptStore.getState().showPrompt({
@@ -73,22 +77,26 @@ export const useConversionController = ({
     [],
   );
 
-  const openConversionModal = useCallback((request: ConversionModalRequest) => {
+  const openConversionModal = useCallback((request: ConversionModalRequest, draft = buildConversionModalDraft(request)) => {
+    preparationRef.current?.abort();
+    preparationRef.current = null;
     setConversionModalState({
       open: true,
       request,
-      uiDraft: buildConversionModalDraft(request),
+      uiDraft: draft,
       run: buildConversionRunState(request),
     });
   }, []);
 
   const closeConversionModal = useCallback(() => {
+    preparationRef.current?.abort();
+    preparationRef.current = null;
     setConversionModalState(buildClosedConversionState());
   }, []);
 
   const handleConversionDraftChange = useCallback((draft: ConversionModalDraft) => {
     setConversionModalState((prev) => {
-      if (!prev.request) {
+      if (!prev.request || preparationRef.current) {
         return prev;
       }
       return {
@@ -105,14 +113,26 @@ export const useConversionController = ({
       draft: ConversionModalDraft,
       feedbackMode: ConversionFeedbackMode,
     ) => {
+      const preparation = feedbackMode === "modal" ? new AbortController() : null;
+      if (preparation) {
+        if (preparationRef.current) return;
+        preparationRef.current = preparation;
+        setConversionModalState({
+          open: true, request, uiDraft: draft,
+          run: buildConversionRunState(request, { phase: "running", message: "Checking output filenames…" }),
+        });
+      }
       let preparedJob;
       try {
         preparedJob = await prepareConversionJob({
-          request,
           draft,
           ffmpegPath,
+          statEntries,
+          signal: preparation?.signal,
         });
+        if (preparation?.signal.aborted) return;
       } catch (error) {
+        if (preparation?.signal.aborted) return;
         const message = toMessage(error, "Failed to prepare conversion.");
         if (feedbackMode === "modal") {
           setModalFailure(request, draft, message);
@@ -120,6 +140,8 @@ export const useConversionController = ({
           showPrompt("Conversion failed", message);
         }
         return;
+      } finally {
+        if (preparationRef.current === preparation) preparationRef.current = null;
       }
 
       const job = registerTransferJob({
@@ -139,19 +161,29 @@ export const useConversionController = ({
             failures: report.failures.length,
           });
 
-          if (report.failures.length > 0) {
-            showPrompt(
-              "Conversion completed with issues",
-              formatFailures(report.failures),
-            );
+          if (report.failures.length || report.warnings.length) {
+            const retry = failedConversionDraft(request, draft, report.failedSources);
+            const failed = report.failed;
+            const failedTitle = report.converted ? `${report.converted} converted, ${failed} failed` : "Conversion failed";
+            const sections = [
+              report.failures.length ? formatFailures(report.failures) : "",
+              report.warnings.length ? `Output saved. Cleanup needs attention.\n${formatFailures(report.warnings)}` : "",
+            ];
+            usePromptStore.getState().showPrompt({
+              title: failed ? failedTitle : "Conversion finished with a warning",
+              content: sections.filter(Boolean).join("\n\n"),
+              confirmLabel: retry ? "Review failed files" : "Close",
+              cancelLabel: retry ? "Close" : null,
+              onConfirm: retry ? () => openConversionModal(retry.request, retry.draft) : undefined,
+            });
           }
 
           if (report.converted > 0) {
-            await refreshEntries();
+            void refreshAfterConversion();
           }
         } catch (error) {
           if (isManagedJobCancelledError(error)) {
-            await refreshEntries();
+            void refreshAfterConversion();
             return;
           }
           recordTransferJobOutcome(job.id, { failures: 1 });
@@ -164,21 +196,20 @@ export const useConversionController = ({
     },
     [
       ffmpegPath,
+      openConversionModal,
       recordTransferJobOutcome,
-      refreshEntries,
+      refreshAfterConversion,
       registerTransferJob,
       setModalFailure,
       showPrompt,
     ],
   );
 
-  const handleStartConversion = useCallback(() => {
-    const snapshot = conversionStateRef.current;
-    const request = snapshot.request;
-    const draft = snapshot.uiDraft;
-    if (!request || !draft) return;
+  const handleStartConversion = useCallback((draft: ConversionModalDraft) => {
+    const request = conversionModalState.request;
+    if (!request) return;
     void queueConversionJob(request, draft, "modal");
-  }, [queueConversionJob]);
+  }, [conversionModalState.request, queueConversionJob]);
 
   const handleQuickConvertImages = useCallback(
     (request: ConversionModalRequest, targetFormat: string) => {

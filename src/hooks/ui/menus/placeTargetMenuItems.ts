@@ -69,6 +69,7 @@ export const buildPlaceTargetMenuItems = ({
     items.push({
       id: "place-target-open",
       label: "Open",
+      icon: "open",
       onSelect: () => onOpenPath(path),
     });
   }
@@ -129,6 +130,7 @@ export const buildPlaceTargetMenuItems = ({
     items.push({
       id: "place-target-properties",
       label: "Properties",
+      icon: "properties",
       onSelect: () => {
         void onOpenProperties(path);
       },

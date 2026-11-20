@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import {
-  copyPathsToClipboard,
   openPathProperties,
   openPathWithDialog,
   openPathWithHandler,
@@ -33,16 +32,16 @@ type UseEntryMenuItemsOptions = {
   parentPath: string | null;
   currentPath: string;
   onOpenEntry: (path: string) => void;
+  onOpenGallery: (path: string) => void;
   onOpenDir: (path: string) => void;
   onOpenDirNewTab: (path: string) => void;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   confirmDelete: boolean;
   onClearSelection: () => void;
   onRenameEntry: (target: EntryContextTarget) => void;
-  onPasteEntries: (paths: string[], destination: string) => Promise<unknown> | void;
+  onPasteEntries: (destination: string) => Promise<unknown> | void;
   onOpenConvertModal: (request: ConversionModalRequest) => void;
   onQuickConvertImages: (request: ConversionModalRequest, targetFormat: string) => void;
-  ffmpegDetected: boolean;
   menuShowConvert: boolean;
 };
 
@@ -53,6 +52,7 @@ export const useEntryMenuItems = ({
   parentPath,
   currentPath,
   onOpenEntry,
+  onOpenGallery,
   onOpenDir,
   onOpenDirNewTab,
   onDeleteEntries,
@@ -62,7 +62,6 @@ export const useEntryMenuItems = ({
   onPasteEntries,
   onOpenConvertModal,
   onQuickConvertImages,
-  ffmpegDetected,
   menuShowConvert,
 }: UseEntryMenuItemsOptions) => {
   const clipboard = useClipboardStore((state) => state.clipboard);
@@ -76,13 +75,7 @@ export const useEntryMenuItems = ({
     const selectionSummary = summarizeEntrySelection(actionTargets, target, entryByPath);
     const hasTargets = actionTargets.length > 0;
     const pasteTarget = (target.isDir ? target.path : currentPath).trim();
-    const clipboardPaths = clipboard?.paths ?? [];
-    const canPaste = Boolean(clipboardPaths.length > 0 && pasteTarget);
-
-    const handleCopyEntries = (paths: string[]) => {
-      useClipboardStore.getState().setClipboard(paths);
-      void copyPathsToClipboard(paths);
-    };
+    const canPaste = Boolean(clipboard?.paths.length && pasteTarget);
 
     const handleDeleteEntries = async (paths: string[]) => {
       const report = await onDeleteEntries(paths);
@@ -136,6 +129,7 @@ export const useEntryMenuItems = ({
         target,
         hasTargets,
         onOpenEntry,
+        onOpenGallery,
         onOpenDir,
         onOpenDirNewTab,
       }),
@@ -147,7 +141,6 @@ export const useEntryMenuItems = ({
       }),
       ...buildEntryConvertItems({
         selectionSummary,
-        ffmpegDetected,
         menuShowConvert,
         onOpenConvertModal,
         onQuickConvertImages,
@@ -155,7 +148,6 @@ export const useEntryMenuItems = ({
       ...buildEntryCopyItems({
         actionTargets,
         hasTargets,
-        onCopyEntries: handleCopyEntries,
       }),
       ...buildEntryRenameItems({
         target,
@@ -165,7 +157,6 @@ export const useEntryMenuItems = ({
       ...buildEntryPasteItems({
         target,
         canPaste,
-        clipboardPaths,
         pasteTarget,
         onPasteEntries,
       }),
@@ -187,7 +178,6 @@ export const useEntryMenuItems = ({
     clipboard,
     currentPath,
     entryByPath,
-    ffmpegDetected,
     menuShowConvert,
     onClearSelection,
     onDeleteEntries,
@@ -196,6 +186,7 @@ export const useEntryMenuItems = ({
     onOpenDir,
     onOpenDirNewTab,
     onOpenEntry,
+    onOpenGallery,
     onPasteEntries,
     onQuickConvertImages,
     onRenameEntry,

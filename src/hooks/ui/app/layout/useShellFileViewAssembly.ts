@@ -55,7 +55,7 @@ export const useShellFileViewAssembly = ({
         view: {
           currentPath: resolvedView.viewPath,
           viewMode: resolvedView.viewMode,
-          entries: dataPipeline.sortedEntries,
+          entryByPath: interactionModel.viewModel.entryByPath,
           items: interactionModel.viewModel.items,
           indexMap: interactionModel.viewModel.indexMap,
           loading: resolvedView.viewLoading,
@@ -76,6 +76,7 @@ export const useShellFileViewAssembly = ({
           onOpenRecent: viewState.browseFromView,
           onOpenRecentNewTab: navigationController.handleOpenInNewTab,
           drives: fileManager.drives,
+          drivesLoaded: fileManager.drivesLoaded,
           driveInfo: fileManager.driveInfo,
           onOpenDrive: navigationController.handleSelectDrive,
           onOpenDriveNewTab: navigationController.handleOpenInNewTab,
@@ -141,8 +142,6 @@ export const useShellFileViewAssembly = ({
         dragDrop: {
           dropTargetPath: fileDrop.dropTargetPath,
           onStartDragOut: interactionModel.handleStartDragOut,
-          onInternalDrop: interactionModel.handleInternalDrop,
-          onInternalHover: interactionModel.handleInternalHover,
         },
         preview: {
           onEntryPreviewPress: interactionModel.handlePreviewPress,
@@ -157,10 +156,12 @@ export const useShellFileViewAssembly = ({
   return {
     view: {
       layoutClass,
+      folderBusy: fileManager.loading,
       mainRef: viewState.mainRef,
       onContextMenu: layoutContextMenu,
       onContextMenuDown: layoutContextMenuDown,
       fileViewProps,
+      onOpenGallery: interactionModel.openPreview,
     },
     selection: {
       statusBar: {
@@ -169,7 +170,11 @@ export const useShellFileViewAssembly = ({
         countLabel,
         selectionLabel,
       },
-      statusHidden: resolvedView.showLander,
+      statusHidden: resolvedView.showLander
+        && fileManager.placesLoaded
+        && fileManager.status.level === "idle"
+        && fileManager.indexedSearchStatus?.state !== "starting"
+        && fileManager.indexedSearchStatus?.state !== "scanning",
     },
     preview: {
       open: interactionModel.previewOpen,
@@ -185,14 +190,14 @@ export const useShellFileViewAssembly = ({
       previewOpen: interactionModel.previewOpen,
       previewPath: interactionModel.previewPath,
       previewMeta: interactionModel.previewMeta,
-      sortedEntries: dataPipeline.sortedEntries,
+      sortedEntries: interactionModel.previewGallery?.items ?? dataPipeline.sortedEntries,
       entryMeta: fileManager.entryMeta,
       thumbnailsEnabled: settings.thumbnailsEnabled,
       requestMeta: fileManager.requestEntryMeta,
       thumbnails: dataPipeline.thumbnails,
       requestThumbnails: dataPipeline.requestThumbnails,
       thumbnailResetKey: dataPipeline.thumbnailResetKey,
-      viewLoading: resolvedView.viewLoading,
+      viewLoading: !interactionModel.previewGallery && resolvedView.viewLoading,
       handlePreviewSelect: interactionModel.handlePreviewSelect,
       smartTabJump: settings.smartTabJump,
       smartTabBlocked: dataPipeline.smartTabBlocked,

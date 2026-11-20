@@ -10,7 +10,7 @@ type PromptAction = NonNullable<PromptConfig["actions"]>[number];
 export const PromptModal = () => {
   const prompt = usePromptStore((state) => state.prompt);
   const hidePrompt = usePromptStore((state) => state.hidePrompt);
-  const shouldCloseRef = useRef(false);
+  const backdropPromptRef = useRef<PromptConfig | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useModalFocusTrap({
@@ -52,6 +52,7 @@ export const PromptModal = () => {
       prompt.cancelLabel === undefined ? (prompt.onCancel ? "Cancel" : null) : prompt.cancelLabel;
     const showCancel = Boolean(cancelLabel && cancelLabel.trim().length > 0);
     const handleKey = (event: KeyboardEvent) => {
+      if (usePromptStore.getState().prompt !== prompt) return;
       if (event.repeat) return;
       if (isEditableElement(document.activeElement)) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -64,8 +65,7 @@ export const PromptModal = () => {
         if (!showConfirm) return;
         event.preventDefault();
         event.stopPropagation();
-        prompt.onConfirm?.();
-        hidePrompt();
+        if (hidePrompt(prompt)) prompt.onConfirm?.();
         return;
       }
 
@@ -73,8 +73,7 @@ export const PromptModal = () => {
       if (prompt.blocking) return;
       event.preventDefault();
       event.stopPropagation();
-      prompt.onCancel?.();
-      hidePrompt();
+      if (hidePrompt(prompt)) prompt.onCancel?.();
     };
     window.addEventListener("keydown", handleKey, { capture: true });
     return () => window.removeEventListener("keydown", handleKey, { capture: true });
@@ -91,20 +90,18 @@ export const PromptModal = () => {
   const showActions = showConfirm || showCancel || actions.length > 0;
 
   const handleCancel = () => {
-    prompt.onCancel?.();
-    hidePrompt();
+    if (hidePrompt(prompt)) prompt.onCancel?.();
   };
 
   const handleConfirm = () => {
-    prompt.onConfirm?.();
-    hidePrompt();
+    if (hidePrompt(prompt)) prompt.onConfirm?.();
   };
 
   const handleAction = (action: PromptAction) => {
-    action.onClick();
-    if (action.closeOnClick !== false) {
-      hidePrompt();
-    }
+    const active = action.closeOnClick === false
+      ? usePromptStore.getState().prompt === prompt
+      : hidePrompt(prompt);
+    if (active) action.onClick();
   };
 
   return (
@@ -113,13 +110,13 @@ export const PromptModal = () => {
       data-open="true"
       aria-hidden="false"
       onMouseDown={(event) => {
-        shouldCloseRef.current = event.target === event.currentTarget;
+        backdropPromptRef.current = event.target === event.currentTarget ? prompt : null;
       }}
       onClick={() => {
-        if (!prompt.blocking && shouldCloseRef.current) {
+        if (!prompt.blocking && backdropPromptRef.current === prompt) {
           handleCancel();
         }
-        shouldCloseRef.current = false;
+        backdropPromptRef.current = null;
       }}
     >
       <div

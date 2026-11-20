@@ -50,7 +50,6 @@ export const DEFAULT_SETTINGS: Settings = {
   menuOpenWsl: false,
   menuShowConvert: true,
   indexedSearchEnabled: false,
-  acceleratedNtfsIndexing: false,
   thumbnailsEnabled: true,
   thumbnailSize: 224,
   thumbnailQuality: 80,

@@ -5,7 +5,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import type { DropTarget, EntryItem } from "@/lib";
+import type { EntryItem } from "@/lib";
 import type { GridNameEllipsis } from "@/modules";
 import type { EntryMeta, FileEntry, RenameCommitReason, SortState } from "@/types";
 
@@ -17,7 +17,7 @@ export type FileListEntryContextTarget = {
 
 export type FileListViewProps = {
   currentPath: string;
-  entries: FileEntry[];
+  entryByPath: Map<string, FileEntry>;
   items: EntryItem[];
   indexMap?: Map<string, number>;
   loading: boolean;
@@ -89,8 +89,6 @@ export type FileListPreviewProps = {
 export type FileListDragDropProps = {
   dropTargetPath?: string | null;
   onStartDragOut?: (paths: string[]) => void;
-  onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
-  onInternalHover?: (target: DropTarget | null) => void;
 };
 
 export type FileListCreationProps = {

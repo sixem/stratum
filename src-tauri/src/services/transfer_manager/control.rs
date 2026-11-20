@@ -2,7 +2,7 @@
 // Jobs block on this state when paused and exit cleanly when cancelled.
 use std::sync::{Arc, Condvar, Mutex};
 
-pub const TRANSFER_CANCELLED_MESSAGE: &str = "Transfer cancelled";
+pub(super) use crate::domain::filesystem::transfer::TRANSFER_CANCELLED_MESSAGE;
 
 #[derive(Clone)]
 pub(super) struct TransferJobControlHandle {

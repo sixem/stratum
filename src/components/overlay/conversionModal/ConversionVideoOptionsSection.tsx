@@ -106,7 +106,7 @@ export const ConversionVideoOptionsSection = ({
                 <div className="conversion-rule-note">{selectedVideoPresetDescription}</div>
               ) : (
                 <div className="conversion-rule-note">
-                  Custom profile tuned for current format and encoder.
+                  Custom encoder settings
                 </div>
               )}
             </div>
@@ -121,6 +121,10 @@ export const ConversionVideoOptionsSection = ({
           </div>
         </div>
       </div>
+      <p className="conversion-rule-note">
+        {audioEnabled ? "Exports the first video and audio tracks." : "Exports the first video track without audio."}
+        {" "}Additional tracks, subtitles and attachments are omitted.
+      </p>
     </div>
   );
 };

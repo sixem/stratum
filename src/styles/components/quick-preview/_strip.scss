@@ -50,7 +50,7 @@
   padding: 0;
   box-sizing: border-box;
   border-radius: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: var(--surface-border-width) solid rgba(255, 255, 255, 0.08);
   // Match the path bar shell surface exactly so the strip avoids a separate gray fill.
   background: var(--panel-2);
   overflow: hidden;

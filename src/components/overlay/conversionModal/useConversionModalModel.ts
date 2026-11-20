@@ -30,7 +30,7 @@ type UseConversionModalModelParams = {
   draft: ConversionModalDraft | null;
   runState: ConversionRunState | null;
   onDraftChange: (draft: ConversionModalDraft) => void;
-  onConvert: () => void;
+  onConvert: (draft: ConversionModalDraft) => void;
   onClose: () => void;
 };
 
@@ -204,8 +204,13 @@ export const useConversionModalModel = ({
     commitDraftMutation((currentDraft) => toggleConversionVideoAudio(currentDraft));
   }, [commitDraftMutation]);
 
-  const handlePrimaryAction =
-    derivedState.primaryActionIntent === "close" ? onClose : onConvert;
+  const handlePrimaryAction = () => {
+    if (derivedState.primaryActionIntent === "close") return onClose();
+    if (derivedState.primaryActionDisabled) return;
+    imageQualityControl.flushPendingValue();
+    videoQualityControl.flushPendingValue();
+    if (draftRef.current) onConvert(draftRef.current);
+  };
 
   return {
     activeMessage: derivedState.activeMessage,

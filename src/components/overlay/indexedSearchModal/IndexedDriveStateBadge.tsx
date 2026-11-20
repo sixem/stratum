@@ -2,25 +2,30 @@
 //
 // The visual marker stays separate from the drive list so state-to-icon mapping
 // is easy to scan and update when backend states evolve.
-import loader from "@/assets/icons/loaders/ring.svg";
-import { CheckmarkIcon, ErrorIcon, WarningIcon } from "@/components/icons";
+import { CheckmarkIcon, ErrorIcon, HourglassIcon, RefreshIcon, WarningIcon } from "@/components/icons";
+import { TooltipWrapper } from "../Tooltip";
 import { formatIndexedDriveState } from "@/lib";
-import type { IndexedDriveState } from "@/types";
+import type { IndexedDriveState, IndexedDriveStatus } from "@/types";
+
+const statusDescriptions: Partial<Record<IndexedDriveState, string>> = {
+  saved: "A complete saved index is available. Open folders and Stratum file operations keep affected paths up to date.",
+  rescanrequired: "This drive needs a fresh index.",
+  stale: "The saved index may be out of date.",
+  unavailable: "Stratum couldn't access this drive.",
+  unsupported: "Indexed search supports fixed NTFS drives.",
+  unknown: "The drive's indexing status hasn't been determined.",
+  error: "Stratum couldn't finish updating this index.",
+};
 
 const renderIndexedDriveStateMarker = (state: IndexedDriveState) => {
   switch (state) {
     case "ready":
+    case "saved":
       return <CheckmarkIcon className="indexed-search-drive-state-icon" />;
     case "queued":
+      return <HourglassIcon className="indexed-search-drive-state-icon" />;
     case "scanning":
-      return (
-        <img
-          src={loader}
-          alt=""
-          aria-hidden="true"
-          className="indexed-search-drive-state-icon indexed-search-drive-state-loader"
-        />
-      );
+      return <RefreshIcon className="indexed-search-drive-state-icon" />;
     case "stale":
     case "rescanrequired":
     case "unsupported":
@@ -34,15 +39,24 @@ const renderIndexedDriveStateMarker = (state: IndexedDriveState) => {
   }
 };
 
-export const IndexedDriveStateBadge = ({ state }: { state: IndexedDriveState }) => {
+export const IndexedDriveStateBadge = ({ status }: { status: IndexedDriveStatus }) => {
+  const { state } = status;
+  const label = formatIndexedDriveState(state);
+  const fallback = statusDescriptions[state];
+  const reason = status.message?.trim().replace(/\s+/g, " ");
+  // Keep long filesystem paths and OS diagnostics from filling the tooltip.
+  const detail = fallback && (reason || fallback);
+  const concise = detail && detail.length > 120 ? detail.slice(0, 119).trimEnd() + "…" : detail;
+  const text = concise ? `${label}\n${concise}` : label;
   return (
-    <span
-      className="indexed-search-drive-state"
-      data-state={state}
-      role="img"
-      aria-label={formatIndexedDriveState(state)}
-    >
-      {renderIndexedDriveStateMarker(state)}
-    </span>
+    <TooltipWrapper text={text}>
+      <span
+        className="indexed-search-drive-state"
+        data-state={state}
+      >
+        {renderIndexedDriveStateMarker(state)}
+        {label}
+      </span>
+    </TooltipWrapper>
   );
 };

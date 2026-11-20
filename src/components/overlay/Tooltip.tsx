@@ -1,6 +1,6 @@
 // Tooltip overlay and wrapper helpers.
 import type { FocusEvent, HTMLAttributes, MouseEvent, ReactElement } from "react";
-import { Children, cloneElement, useEffect, useRef } from "react";
+import { Children, cloneElement, useCallback, useEffect, useRef } from "react";
 import { shallow } from "zustand/shallow";
 import { useTooltipStore } from "@/modules";
 import { TOOLTIP_EDGE_PADDING, TOOLTIP_GAP } from "@/constants";
@@ -26,7 +26,6 @@ export const TooltipDisplay = () => {
   const blockTooltips = useTooltipStore((state) => state.blockTooltips);
   const bumpHoverSession = useTooltipStore((state) => state.bumpHoverSession);
   const tooltipText = tooltipState.text ?? "";
-  const isMultiline = tooltipText.includes("\n");
 
   useEffect(() => {
     setTooltipElement(tooltipRef.current);
@@ -46,7 +45,7 @@ export const TooltipDisplay = () => {
     onScroll: handleTooltipViewportDismiss,
     onResize: hideTooltip,
     onPointerDown: hideTooltip,
-    keydownCapture: false,
+    keydownCapture: true,
     pointerDownCapture: true,
   });
 
@@ -82,9 +81,7 @@ export const TooltipDisplay = () => {
   return (
     <div
       ref={tooltipRef}
-      className={`tooltip${tooltipState.visible ? " is-visible" : ""}${
-        isMultiline ? " is-multiline" : " is-singleline"
-      }`}
+      className={`tooltip${tooltipState.visible ? " is-visible" : ""}`}
       style={{ transform: `translate3d(${tooltipState.x}px, ${tooltipState.y}px, 0)` }}
     >
       {tooltipText}
@@ -108,12 +105,33 @@ export const TooltipWrapper = ({
   const child = Children.only(children) as ReactElement<HTMLAttributes<Element>>;
   const rafRef = useRef<number | null>(null);
   const delayRef = useRef<number | null>(null);
+  const anchorRef = useRef<Element | null>(null);
   // Only show hover tooltips after a real pointer move inside the element.
   const hoveredRef = useRef(false);
   const hoveredElementRef = useRef<Element | null>(null);
   const hoverMovedRef = useRef(false);
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   const hoverSessionRef = useRef(useTooltipStore.getState().hoverSession);
+
+  const clearPendingTooltip = useCallback(() => {
+    if (delayRef.current != null) {
+      window.clearTimeout(delayRef.current);
+      delayRef.current = null;
+    }
+    if (rafRef.current != null) {
+      window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
+
+  // A search result can disappear without dispatching mouse leave or blur.
+  useEffect(() => () => {
+    clearPendingTooltip();
+    const tooltip = useTooltipStore.getState();
+    if (anchorRef.current && tooltip.anchor === anchorRef.current) {
+      tooltip.hideTooltip();
+    }
+  }, [clearPendingTooltip]);
 
   const resetHoverState = () => {
     hoveredRef.current = false;
@@ -130,6 +148,7 @@ export const TooltipWrapper = ({
   };
 
   const showTooltip = (
+    anchor: Element,
     anchorX: number,
     anchorY: number,
     requestId: number,
@@ -148,8 +167,9 @@ export const TooltipWrapper = ({
     }
 
     rafRef.current = window.requestAnimationFrame(() => {
+      rafRef.current = null;
       const latest = useTooltipStore.getState();
-      if (latest.nonce !== requestId) return;
+      if (latest.nonce !== requestId || !anchor.isConnected) return;
       if (trigger === "mouse" && latest.blockUntilPointerMove) return;
       if (!canRenderTooltip()) return;
       const tooltipEl = tooltipApi.tooltipElement;
@@ -175,7 +195,7 @@ export const TooltipWrapper = ({
       );
 
       if (useTooltipStore.getState().nonce !== requestId) return;
-      tooltipApi.showTooltip({ text, x: left, y: top });
+      tooltipApi.showTooltip({ text, x: left, y: top, anchor });
     });
   };
 
@@ -189,6 +209,7 @@ export const TooltipWrapper = ({
   };
 
   const scheduleTooltip = (
+    anchor: Element,
     anchorX: number,
     anchorY: number,
     trigger: "mouse" | "focus",
@@ -208,6 +229,7 @@ export const TooltipWrapper = ({
     }
     const requestId = store.nonce;
     const delayValue = delayMs ?? store.tooltipDelay;
+    anchorRef.current = anchor;
     const resolveAnchor = () => {
       if (trigger !== "mouse") {
         return { x: anchorX, y: anchorY };
@@ -227,7 +249,7 @@ export const TooltipWrapper = ({
       if (trigger === "mouse" && !isPointerStillInsideHovered(nextAnchor.x, nextAnchor.y)) {
         return;
       }
-      showTooltip(nextAnchor.x, nextAnchor.y, requestId, trigger);
+      showTooltip(anchor, nextAnchor.x, nextAnchor.y, requestId, trigger);
     };
 
     if (!delayValue) {
@@ -242,14 +264,7 @@ export const TooltipWrapper = ({
   };
 
   const hideTooltip = () => {
-    if (delayRef.current) {
-      window.clearTimeout(delayRef.current);
-      delayRef.current = null;
-    }
-    if (rafRef.current) {
-      window.cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
+    clearPendingTooltip();
     useTooltipStore.getState().hideTooltip();
   };
 
@@ -285,7 +300,7 @@ export const TooltipWrapper = ({
       }
       if (hoverMovedRef.current) return;
       hoverMovedRef.current = true;
-      scheduleTooltip(event.clientX, event.clientY, "mouse");
+      scheduleTooltip(event.currentTarget as Element, event.clientX, event.clientY, "mouse");
     },
     onMouseLeave: (event: MouseEvent) => {
       child.props.onMouseLeave?.(event);
@@ -304,7 +319,7 @@ export const TooltipWrapper = ({
           return;
         }
         const rect = target.getBoundingClientRect();
-        scheduleTooltip(rect.left + rect.width / 2, rect.bottom, "focus");
+        scheduleTooltip(target, rect.left + rect.width / 2, rect.bottom, "focus");
       }
     },
     onBlur: (event: FocusEvent) => {

@@ -28,10 +28,9 @@ export const useBufferedRangeValue = (
       frameRef.current = null;
     }
     const pendingValue = pendingValueRef.current;
-    if (pendingValue == null || pendingValue === committedValueRef.current) {
-      return;
-    }
     pendingValueRef.current = null;
+    if (pendingValue == null || pendingValue === committedValueRef.current) return;
+    committedValueRef.current = pendingValue;
     startTransition(() => {
       onCommit(pendingValue);
     });

@@ -147,6 +147,16 @@
   cursor: not-allowed;
 }
 
+// Disabled buttons suppress React mouse events, so their wrapper handles hover.
+.toolbar-icon-tooltip-anchor {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.toolbar-icon-tooltip-anchor > :disabled {
+  pointer-events: none;
+}
+
 // Shared dark-surface range control used by settings and other sliders.
 :where(.ui-range) {
   --ui-range-track-height: 8px;

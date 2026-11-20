@@ -1,77 +1,57 @@
-// Selected result and drive detail panel for indexed search.
+// Selected result and drive details with their primary actions.
 
 :where(.indexed-search-panel) {
   .indexed-search-selection-detail {
     display: grid;
-    gap: 7px;
-    padding: 0 0 12px;
-    border-bottom: 1px solid #1c2537;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--stroke);
   }
 
   .indexed-search-selection-detail-head {
     display: flex;
     align-items: start;
     justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
   }
 
   .indexed-search-selection-detail-copy {
-    flex: 1 1 auto;
     min-width: 0;
     display: grid;
-    gap: 4px;
+    gap: 3px;
   }
 
-  .indexed-search-selection-detail-title-action {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    overflow: hidden;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .indexed-search-selection-detail-title-action:hover .indexed-search-selection-detail-title,
-  .indexed-search-selection-detail-title-action:focus-visible .indexed-search-selection-detail-title {
-    color: color-mix(in srgb, var(--accent) 68%, white 32%);
-  }
-
-  .indexed-search-selection-detail-title {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
+  .indexed-search-selection-detail-title,
+  .indexed-search-selection-detail-meta {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .indexed-search-selection-detail-title {
     color: var(--text);
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-md);
     font-weight: 600;
   }
 
   .indexed-search-selection-detail-meta,
-  .indexed-search-selection-detail-note {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .indexed-search-selection-detail-empty {
+    margin: 0;
     color: var(--muted);
     font-size: var(--font-size-xs);
     line-height: 1.4;
-    white-space: normal;
-    word-break: break-word;
+  }
+
+  .indexed-search-selection-detail .indexed-search-section-note {
+    margin: 0;
   }
 
   .indexed-search-selection-progress {
-    height: 3px;
+    height: 4px;
+    overflow: hidden;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.1);
-    overflow: hidden;
-    margin-top: 1px;
   }
 
   .indexed-search-selection-progress-fill {
@@ -82,65 +62,40 @@
   }
 
   .indexed-search-selection-detail-action {
+    flex: 0 0 auto;
     min-height: 28px;
-    padding: 4px 8px;
+    padding: 4px 7px;
+    gap: 5px;
     font-size: var(--font-size-xs);
+  }
+
+  .indexed-search-selection-detail-action svg {
+    width: 12px;
+    height: 12px;
   }
 
   .indexed-search-selection-stats {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px 12px;
-    padding-top: 2px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: 8px;
+    margin-top: 2px;
   }
 
   .indexed-search-selection-stat {
     display: grid;
+    align-content: start;
     gap: 3px;
     min-width: 0;
   }
 
-  .indexed-search-selection-stat:last-child {
-    justify-items: end;
-    text-align: right;
-  }
-
   .indexed-search-selection-stat-label {
     color: var(--muted);
-    font-size: var(--font-size-2xs);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: var(--font-size-xs);
   }
 
   .indexed-search-selection-stat-value {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     color: var(--text);
     font-size: var(--font-size-sm);
     line-height: 1.3;
-  }
-
-  .indexed-search-selection-stat:last-child .indexed-search-selection-stat-value {
-    text-align: right;
-  }
-
-  .indexed-search-selection-detail-empty {
-    color: var(--muted);
-    font-size: var(--font-size-sm);
-    line-height: 1.4;
-    display: grid;
-    place-items: center;
-    min-height: 96px;
-    text-align: center;
-  }
-}
-
-@media (max-width: 840px) {
-  :where(.indexed-search-panel) {
-    .indexed-search-selection-stats {
-      grid-template-columns: 1fr;
-    }
   }
 }

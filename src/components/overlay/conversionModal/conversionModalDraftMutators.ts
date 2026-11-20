@@ -13,6 +13,7 @@ import type {
   ConversionVideoSpeed,
 } from "@/types";
 import { asVideoFormat, findRuleFormat } from "./conversionModalConfig";
+import { videoEncodingForTarget } from "@/constants/convert";
 
 type ConversionDraftRules = ConversionModalDraft["rules"];
 type ConversionVideoOptions = ConversionModalDraft["videoOptions"];
@@ -156,15 +157,10 @@ export const setConversionRuleFormat = (
     draft,
     (videoOptions) => {
       const videoFormat = asVideoFormat(targetFormat);
-      const nextEncoder = videoFormat
-        ? resolveVideoEncoderForFormat(videoFormat, videoOptions.encoder)
-        : videoOptions.encoder;
-
       return {
         ...videoOptions,
         presetId: "custom",
-        encoder: nextEncoder,
-        quality: clampVideoQuality(nextEncoder, videoOptions.quality),
+        ...(videoFormat && videoEncodingForTarget(videoFormat, videoOptions.encoder, videoOptions.quality)),
       };
     },
     {

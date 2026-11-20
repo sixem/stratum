@@ -13,6 +13,7 @@ import type { ShellViewInteractionModel } from "./useShellViewInteractions";
 type UseShellViewBindingsOptions = Pick<
   UseShellViewModelOptions,
   | "tauriEnv"
+  | "aboutOpen"
   | "promptOpen"
   | "menuState"
   | "fileManager"
@@ -32,6 +33,7 @@ type UseShellViewBindingsOptions = Pick<
 
 export const useShellViewBindings = ({
   tauriEnv,
+  aboutOpen,
   promptOpen,
   menuState,
   fileManager,
@@ -123,6 +125,7 @@ export const useShellViewBindings = ({
 
   useAppKeybinds({
     keybinds: settings.keybinds,
+    aboutOpen,
     indexedSearchEnabled: settings.indexedSearchEnabled,
     confirmDelete: settings.confirmDelete,
     settingsOpen: menuState.settingsOpen,
@@ -134,13 +137,15 @@ export const useShellViewBindings = ({
     activeTabId: resolvedView.activeTabId,
     tabs: resolvedView.tabs,
     selected: interactionModel.selected,
+    mainRef: viewState.mainRef,
+    currentPath: resolvedView.viewPath,
     viewParentPath: dataPipeline.viewParentPath,
     canUndo: fileManager.canUndo,
     undo: fileManager.undo,
     deleteEntries: fileManager.deleteEntries,
     duplicateEntries: fileManager.duplicateEntries,
     pasteEntries: fileManager.pasteEntries,
-    refreshClipboardFromOs: dataPipeline.refreshClipboardFromOs,
+    onContextMenu: interactionModel.openKeyboardContextMenu,
     onNewTab: navigationController.handleNewTab,
     onCloseTab: navigationController.handleCloseTab,
     onSelectTab: navigationController.handleSelectTab,

@@ -65,7 +65,7 @@ export const TransferStatusButton = () => {
   if (jobs.length === 0) return null;
 
   return (
-    <div className="transfer-status tnum" ref={containerRef}>
+    <div className="transfer-status" ref={containerRef}>
       <PressButton
         type="button"
         className={`transfer-button${open ? " is-open" : ""}`}

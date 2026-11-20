@@ -1,8 +1,8 @@
 // Handles preview-stage interaction: zoom, pan, pointer drag, and keyboard shortcuts.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { FileEntry } from "@/types";
-import { getFileKind, isEditableElement, normalizePath } from "@/lib";
+import { isEditableElement, isPreviewableEntry, normalizePath } from "@/lib";
 
 type DragState = {
   active: boolean;
@@ -66,14 +66,20 @@ export const useQuickPreviewInput = ({
   const [dragging, setDragging] = useState(false);
   const [transforming, setTransforming] = useState(false);
   const previewItems = useMemo(
-    () =>
-      items.filter((entry) => {
-        if (entry.isDir) return false;
-        const kind = getFileKind(entry.name);
-        return kind === "image" || kind === "video";
-      }),
+    () => items.filter(isPreviewableEntry),
     [items],
   );
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement;
+    containerRef.current?.focus({ preventScroll: true });
+    return () => {
+      if (previous instanceof HTMLElement && previous.isConnected) {
+        previous.focus({ preventScroll: true });
+      }
+    };
+  }, [open]);
 
   const scheduleOffset = (next: { x: number; y: number }) => {
     offsetRef.current = next;

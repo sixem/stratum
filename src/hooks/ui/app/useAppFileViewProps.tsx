@@ -9,7 +9,7 @@ type UseAppFileViewPropsOptions = {
     FileViewProps,
     | "currentPath"
     | "viewMode"
-    | "entries"
+    | "entryByPath"
     | "items"
     | "indexMap"
     | "loading"
@@ -31,6 +31,7 @@ type UseAppFileViewPropsOptions = {
     | "onOpenRecent"
     | "onOpenRecentNewTab"
     | "drives"
+    | "drivesLoaded"
     | "driveInfo"
     | "onOpenDrive"
     | "onOpenDriveNewTab"
@@ -87,7 +88,7 @@ type UseAppFileViewPropsOptions = {
   >;
   dragDrop: Pick<
     FileViewProps,
-    "dropTargetPath" | "onStartDragOut" | "onInternalDrop" | "onInternalHover"
+    "dropTargetPath" | "onStartDragOut"
   >;
   preview: Pick<FileViewProps, "onEntryPreviewPress" | "onEntryPreviewRelease">;
   sort: Pick<FileViewProps, "onSortChange">;

@@ -93,18 +93,20 @@ fn list_folder_thumb_sample(
         if file_type.is_dir() {
             continue;
         }
-        let path = entry.path();
-        if !is_eligible_folder_thumb(&path, options) {
+        let name = entry.file_name();
+        if !is_eligible_folder_thumb(Path::new(&name), options) {
             continue;
         }
 
-        let name = entry.file_name().to_string_lossy().to_string();
-        let normalized_name = normalize_name(&name);
-        let sample_path = path.to_string_lossy().to_string();
+        let normalized_name = normalize_name(&name.to_string_lossy());
         match best_candidate.as_ref() {
             Some((best_name, _))
                 if compare_normalized_names(&normalized_name, best_name) != Ordering::Less => {}
-            _ => best_candidate = Some((normalized_name, sample_path)),
+            // Only build the full path for a candidate that can become the result.
+            _ => {
+                best_candidate =
+                    Some((normalized_name, entry.path().to_string_lossy().into_owned()))
+            }
         }
     }
 

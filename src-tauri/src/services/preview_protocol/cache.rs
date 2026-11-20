@@ -36,6 +36,13 @@ pub fn with_preview_cache_headers(
 ) -> ResponseBuilder {
     let mut builder = builder
         .header(header::CACHE_CONTROL, super::PREVIEW_CACHE_CONTROL)
+        // A preview URL is intended for media subresources. Constrain it even if it
+        // is opened directly as a WebView document.
+        .header(header::X_CONTENT_TYPE_OPTIONS, "nosniff")
+        .header(
+            header::CONTENT_SECURITY_POLICY,
+            "default-src 'none'; sandbox",
+        )
         .header(header::ETAG, validators.etag.as_str())
         .header(header::ACCEPT_RANGES, "bytes");
     if let Some(last_modified) = validators.last_modified.as_deref() {

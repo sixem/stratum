@@ -1,0 +1,102 @@
+// Docked navigation and edge-to-edge file views for the split workspace.
+@use "./control-recipes" as control;
+
+.bottom-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+:where(.bottom-pane) {
+  .bottom-nav {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px 0;
+    background: var(--panel);
+  }
+
+  .bottom-nav form {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .bottom-nav input {
+    @include control.control-surface(5px, var(--surface-control-strong));
+    width: 100%;
+    height: 26px;
+    padding: 3px 8px;
+    color: var(--text);
+    font-size: var(--font-size-sm);
+    user-select: text;
+  }
+
+  .bottom-nav input:focus,
+  .bottom-nav button:focus-visible {
+    @include control.focus-ring(rgba(var(--accent-rgb), 0.55), rgba(var(--accent-rgb), 0.16));
+  }
+
+  .bottom-nav .view-btn {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+  }
+
+  .bottom-nav .view-btn:disabled {
+    cursor: default;
+    opacity: 0.4;
+    background: transparent;
+  }
+
+  .bottom-nav .nav-arrow.is-back {
+    transform: rotate(180deg);
+  }
+
+  .tabsbar {
+    flex: 0 0 auto;
+    background: var(--panel);
+    border-bottom: 1px solid var(--stroke);
+  }
+
+  .bottom-files {
+    flex: 1;
+  }
+
+  // A short split can clip entire landing sections. Scroll them together at
+  // their natural height, with the navigation and tabs outside the viewport.
+  .bottom-files > .view-lander {
+    display: block;
+    flex: 1;
+    height: auto;
+    min-height: 0;
+    overflow: hidden auto;
+    overscroll-behavior-y: contain;
+  }
+
+  .bottom-files :is(.lander-panel, .lander-columns, .lander-recents, .lander-places) {
+    grid-template-rows: none;
+  }
+
+  .bottom-files .lander-panel {
+    height: auto;
+    margin-inline: auto;
+  }
+
+  .bottom-files :is(.lander-panel, .lander-drives-list, .lander-recents-list) {
+    max-height: none;
+    overflow: visible;
+  }
+
+  // The divider and toolbar already define the pane, so the list needs no outer card.
+  .bottom-files .file-list {
+    --list-inset-start: 0px;
+    --list-inset-end: 0px;
+    --list-scrollbar-gap: 0px;
+    border: 0;
+    border-radius: 0;
+  }
+}

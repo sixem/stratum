@@ -3,12 +3,15 @@
 // The panel receives already-selected domain objects and renders their details;
 // actions are passed in so opening files and rebuilding drives stay testable in
 // the modal hooks.
+import { OpenExternalIcon } from "@/components/icons";
+import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PressButton } from "@/components/primitives";
 import {
   formatBytes,
   formatDate,
   formatIndexedDriveSummary,
   formatPercent,
+  isIndexedDriveAttentionState,
 } from "@/lib";
 import type {
   DriveInfo,
@@ -62,50 +65,57 @@ export const IndexedSearchSelectionDetail = ({
   const selectedDriveSummary = selectedDrive
     ? formatIndexedDriveSummary(selectedDrive)
     : null;
+  const selectedDriveNote = selectedDrive?.state === "saved"
+    ? "Open folders and file operations in Stratum update this index. Refresh the index to scan the whole drive."
+    : selectedDrive && isIndexedDriveAttentionState(selectedDrive.state)
+      ? selectedDrive.message?.trim()
+      : null;
 
   return (
-    <div className="indexed-search-selection-detail">
+    <section className="indexed-search-selection-detail" aria-label="Selection details">
+      <h3 className="indexed-search-section-title">Details</h3>
       {selectedResult ? (
         <>
           <div className="indexed-search-selection-detail-head">
             <div className="indexed-search-selection-detail-copy">
-              <button
-                type="button"
-                className="indexed-search-selection-detail-title-action"
-                onDoubleClick={() => {
-                  onOpenResult(selectedResult.path);
-                }}
-              >
-                <span className="indexed-search-selection-detail-title">
-                  {selectedResult.name}
-                </span>
-              </button>
+              <TooltipWrapper text={selectedResult.name}>
+                <div className="indexed-search-selection-detail-title">{selectedResult.name}</div>
+              </TooltipWrapper>
+              <TooltipWrapper text={selectedResult.path}>
+                <div className="indexed-search-selection-detail-meta">
+                  {selectedResult.parentPath || selectedResult.path}
+                </div>
+              </TooltipWrapper>
             </div>
-          </div>
-
-          <div className="indexed-search-selection-detail-meta">
-            {selectedResult.parentPath ?? selectedResult.drivePath ?? "No parent directory"}
+            <PressButton
+              type="button"
+              className="btn indexed-search-selection-detail-action"
+              onClick={() => onOpenResult(selectedResult.path)}
+            >
+              <OpenExternalIcon />
+              Open
+            </PressButton>
           </div>
 
           <div className="indexed-search-selection-stats">
             <div className="indexed-search-selection-stat">
               <span className="indexed-search-selection-stat-label">Size</span>
-              <span className="indexed-search-selection-stat-value">
+              <span className="indexed-search-selection-stat-value tnum">
                 {selectedResult.kind === "directory"
-                  ? "Directory"
+                  ? "—"
                   : formatBytes(selectedResultMeta?.size ?? null)}
               </span>
             </div>
             <div className="indexed-search-selection-stat">
               <span className="indexed-search-selection-stat-label">Modified</span>
-              <span className="indexed-search-selection-stat-value">
+              <span className="indexed-search-selection-stat-value tnum">
                 {formatDate(selectedResultMeta?.modified ?? null)}
               </span>
             </div>
           </div>
 
           {selectionError ? (
-            <div className="indexed-search-selection-detail-note">{selectionError}</div>
+            <div className="indexed-search-section-note" role="status">{selectionError}</div>
           ) : null}
         </>
       ) : selectedDrive ? (
@@ -113,8 +123,11 @@ export const IndexedSearchSelectionDetail = ({
           <div className="indexed-search-selection-detail-head">
             <div className="indexed-search-selection-detail-copy">
               <div className="indexed-search-selection-detail-title">
-                {selectedDrive.drivePath}
+                {selectedDriveInfo?.label || selectedDrive.drivePath}
               </div>
+              {selectedDriveInfo?.label ? (
+                <div className="indexed-search-selection-detail-meta">{selectedDrive.drivePath}</div>
+              ) : null}
             </div>
             {selectedDrive.indexable ? (
               <PressButton
@@ -129,19 +142,25 @@ export const IndexedSearchSelectionDetail = ({
                   onRebuildDrive(selectedDrive.drivePath);
                 }}
               >
-                {rebuildingDrivePath === selectedDrive.drivePath ? "Rebuilding..." : "Rebuild"}
+                {rebuildingDrivePath === selectedDrive.drivePath ? "Queuing…" : "Refresh index"}
               </PressButton>
             ) : null}
           </div>
 
           {selectedDriveSummary ? (
-            <div className="indexed-search-selection-detail-meta">
+            <div className="indexed-search-selection-detail-meta tnum">
               {selectedDriveSummary}
             </div>
           ) : null}
 
+          {selectedDriveNote ? (
+            <div className="indexed-search-section-note">
+              {selectedDriveNote}
+            </div>
+          ) : null}
+
           {selectedDriveUsageLabel ? (
-            <div className="indexed-search-selection-detail-meta">
+            <div className="indexed-search-selection-detail-meta tnum">
               {selectedDriveUsageLabel}
             </div>
           ) : null}
@@ -159,8 +178,8 @@ export const IndexedSearchSelectionDetail = ({
           ) : null}
         </>
       ) : (
-        <div className="indexed-search-selection-detail-empty">Nothing selected yet.</div>
+        <p className="indexed-search-selection-detail-empty">Select a result or drive to see details.</p>
       )}
-    </div>
+    </section>
   );
 };

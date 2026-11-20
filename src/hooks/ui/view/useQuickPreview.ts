@@ -2,8 +2,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { FileEntry } from "@/types";
-import { getFileKind, isEditableElement } from "@/lib";
+import { isEditableElement, isPreviewableEntry } from "@/lib";
 import { buildKeybindFromEvent, normalizeKeybind } from "@/modules";
+
+export type PreviewGallerySource = {
+  items: FileEntry[];
+  entryByPath: Map<string, FileEntry>;
+  onSelectPath: (path: string) => void;
+};
 
 type UseQuickPreviewOptions = {
   entryByPath: Map<string, FileEntry>;
@@ -27,7 +33,8 @@ export const useQuickPreview = ({
   promptOpen,
   loading,
 }: UseQuickPreviewOptions) => {
-  const [previewPath, setPreviewPath] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ path: string; gallery?: PreviewGallerySource } | null>(null);
+  const previewPath = preview?.path ?? null;
   const previewPathRef = useRef<string | null>(null);
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const holdStateRef = useRef<{
@@ -82,12 +89,12 @@ export const useQuickPreview = ({
     return true;
   }, [contextMenuOpen, loading, mainRef, promptOpen, settingsOpen]);
 
-  const openPreview = useCallback((path: string) => {
-    setPreviewPath(path);
+  const openPreview = useCallback((path: string, gallery?: PreviewGallerySource) => {
+    setPreview({ path, gallery });
   }, []);
 
   const closePreview = useCallback(() => {
-    setPreviewPath(null);
+    setPreview(null);
   }, []);
 
   useEffect(() => {
@@ -113,10 +120,7 @@ export const useQuickPreview = ({
     (path: string | null) => {
       if (!path) return null;
       const entry = entryByPath.get(path);
-      if (!entry || entry.isDir) return null;
-      const kind = getFileKind(entry.name);
-      if (kind !== "image" && kind !== "video") return null;
-      return entry.path;
+      return entry && isPreviewableEntry(entry) ? entry.path : null;
     },
     [entryByPath],
   );
@@ -348,6 +352,7 @@ export const useQuickPreview = ({
 
   return {
     previewPath,
+    previewGallery: preview?.gallery,
     previewOpen: Boolean(previewPath),
     openPreview,
     closePreview,

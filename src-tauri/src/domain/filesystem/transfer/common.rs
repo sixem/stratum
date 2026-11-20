@@ -5,11 +5,7 @@ use crate::domain::filesystem::{
     CopyOptions, TransferControlCallback, TransferProgressCallback, TransferProgressUpdate,
 };
 use std::collections::{HashMap, HashSet};
-#[cfg(target_os = "windows")]
-use std::ffi::OsStr;
 use std::fs;
-#[cfg(target_os = "windows")]
-use std::iter::once;
 use std::path::{Path, PathBuf};
 
 #[cfg(target_os = "windows")]
@@ -76,8 +72,8 @@ pub(crate) struct CopyExecution {
 }
 
 pub(crate) struct CopyDecisionSets {
-    pub overwrite_paths: HashSet<String>,
-    pub skip_paths: HashSet<String>,
+    pub overwrite_paths: HashSet<PathBuf>,
+    pub skip_paths: HashSet<PathBuf>,
 }
 
 pub(crate) fn path_exists(path: &Path) -> bool {
@@ -155,24 +151,32 @@ pub(crate) fn is_same_directory_copy(src: &Path, destination_dir: &Path) -> bool
 
 #[cfg(target_os = "windows")]
 pub(crate) fn windows_extended_path(path: &Path) -> Result<Vec<u16>, String> {
-    let absolute = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .map_err(|err| err.to_string())?
-            .join(path)
-    };
+    use std::path::{Component, Prefix};
 
-    let raw = absolute.to_string_lossy().replace('/', "\\");
-    let extended = if raw.starts_with(r"\\?\") {
-        raw
-    } else if raw.starts_with(r"\\") {
-        format!(r"\\?\UNC\{}", raw.trim_start_matches('\\'))
-    } else {
-        format!(r"\\?\{raw}")
+    let absolute = std::path::absolute(path).map_err(|error| error.to_string())?;
+    let prefix = match absolute.components().next() {
+        Some(Component::Prefix(prefix)) => prefix.kind(),
+        _ => return Err("Missing Windows path prefix".to_string()),
     };
-
-    Ok(OsStr::new(&extended).encode_wide().chain(once(0)).collect())
+    // Keep names in their native encoding. NTFS permits unpaired surrogates,
+    // and replacing one with U+FFFD can select a different file.
+    let mut units = absolute.as_os_str().encode_wide();
+    let mut wide = Vec::new();
+    match prefix {
+        Prefix::Disk(_) => wide.extend(r"\\?\".encode_utf16()),
+        Prefix::UNC(_, _) => {
+            wide.extend(r"\\?\UNC\".encode_utf16());
+            units.next();
+            units.next();
+        }
+        _ => {}
+    }
+    wide.extend(units);
+    if wide.contains(&0) {
+        return Err("Windows path contains a null character".to_string());
+    }
+    wide.push(0);
+    Ok(wide)
 }
 
 #[cfg(target_os = "windows")]
@@ -198,17 +202,17 @@ fn transfer_entry_kind_from_metadata_windows(metadata: &fs::Metadata) -> Transfe
     TransferEntryKind::File
 }
 
-pub(crate) fn inspect_path(path: &Path) -> Result<PathInspection, String> {
-    let metadata = fs::symlink_metadata(path).map_err(|err| err.to_string())?;
-
+pub(crate) fn transfer_entry_kind(_path: &Path, metadata: &fs::Metadata) -> TransferEntryKind {
     #[cfg(target_os = "windows")]
-    let kind = transfer_entry_kind_from_metadata_windows(&metadata);
+    {
+        transfer_entry_kind_from_metadata_windows(metadata)
+    }
 
     #[cfg(not(target_os = "windows"))]
-    let kind = {
+    {
         let file_type = metadata.file_type();
         if file_type.is_symlink() {
-            match fs::metadata(path) {
+            match fs::metadata(_path) {
                 Ok(target_metadata) if target_metadata.is_dir() => {
                     TransferEntryKind::SymlinkDirectory
                 }
@@ -219,8 +223,12 @@ pub(crate) fn inspect_path(path: &Path) -> Result<PathInspection, String> {
         } else {
             TransferEntryKind::File
         }
-    };
+    }
+}
 
+pub(crate) fn inspect_path(path: &Path) -> Result<PathInspection, String> {
+    let metadata = fs::symlink_metadata(path).map_err(|err| err.to_string())?;
+    let kind = transfer_entry_kind(path, &metadata);
     Ok(PathInspection { metadata, kind })
 }
 
@@ -237,58 +245,29 @@ pub(crate) fn destination_kind(
     planned: &HashMap<String, EntryKind>,
 ) -> Result<Option<EntryKind>, String> {
     match fs::symlink_metadata(path) {
-        Ok(metadata) => {
-            #[cfg(target_os = "windows")]
-            let kind =
-                entry_kind_for_transfer_kind(transfer_entry_kind_from_metadata_windows(&metadata));
-
-            #[cfg(not(target_os = "windows"))]
-            let kind = if metadata.is_dir() {
-                EntryKind::Directory
-            } else {
-                EntryKind::File
-            };
-
-            Ok(Some(kind))
-        }
+        Ok(metadata) => Ok(Some(entry_kind_for_transfer_kind(transfer_entry_kind(
+            path, &metadata,
+        )))),
         Err(_) => Ok(planned.get(&normalize_path_key(path)).copied()),
     }
 }
 
 pub(crate) fn build_copy_decision_sets(options: Option<&CopyOptions>) -> CopyDecisionSets {
-    let overwrite_paths = options
-        .and_then(|value| value.overwrite_paths.as_ref())
-        .map(|paths| {
-            paths
-                .iter()
-                .map(|value| normalize_path_string(value))
-                .collect::<HashSet<_>>()
-        })
-        .unwrap_or_default();
-    let skip_paths = options
-        .and_then(|value| value.skip_paths.as_ref())
-        .map(|paths| {
-            paths
-                .iter()
-                .map(|value| normalize_path_string(value))
-                .collect::<HashSet<_>>()
-        })
-        .unwrap_or_default();
-
+    // Preserve the spelling from the conflict prompt for case-sensitive directories.
+    let paths =
+        |values: Option<&Vec<String>>| values.into_iter().flatten().map(PathBuf::from).collect();
     CopyDecisionSets {
-        overwrite_paths,
-        skip_paths,
+        overwrite_paths: paths(options.and_then(|value| value.overwrite_paths.as_ref())),
+        skip_paths: paths(options.and_then(|value| value.skip_paths.as_ref())),
     }
 }
 
 pub(crate) fn should_skip_copy_destination(dest: &Path, decisions: &CopyDecisionSets) -> bool {
-    decisions.skip_paths.contains(&normalize_path_key(dest))
+    decisions.skip_paths.contains(dest)
 }
 
 pub(crate) fn should_overwrite_copy_destination(dest: &Path, decisions: &CopyDecisionSets) -> bool {
-    decisions
-        .overwrite_paths
-        .contains(&normalize_path_key(dest))
+    decisions.overwrite_paths.contains(dest)
 }
 
 pub(crate) fn emit_transfer_progress(

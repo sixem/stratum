@@ -1,12 +1,14 @@
 // Filesystem facade: composes focused hooks for loading, metadata, mutations, and bootstrap.
 import { useCallback, useMemo, useRef } from "react";
 import { openPath } from "@/api";
-import { makeDebug, toMessage } from "@/lib";
+import { makeDebug, tabLabel, toMessage } from "@/lib";
 import { usePromptStore } from "@/modules";
 import { useDirectoryLoader } from "./useDirectoryLoader";
 import { useEntryMetaCache } from "./useEntryMetaCache";
+import { useFileActivity } from "./useFileActivity";
 import { useFileMutations } from "./useFileMutations";
 import { useFsBootstrap } from "./useFsBootstrap";
+import type { StatusState } from "./fileManager.types";
 
 const log = makeDebug("fs");
 const perf = makeDebug("perf:fs");
@@ -35,12 +37,12 @@ export function useFileManager() {
   });
 
   const fsBootstrap = useFsBootstrap({
-    setLoading: directoryLoader.setLoading,
-    setStatus: directoryLoader.setStatus,
     reportError,
   });
 
+  const { message: fileActivity, beginFileActivity } = useFileActivity();
   const fileMutations = useFileMutations({
+    beginFileActivity,
     currentPathRef: directoryLoader.currentPathRef,
     refreshAfterChange: directoryLoader.refreshAfterChange,
     log,
@@ -50,6 +52,7 @@ export function useFileManager() {
     async (path: string) => {
       const target = path.trim();
       if (!target) return;
+      const finish = beginFileActivity(`Opening ${tabLabel(target)}`);
       try {
         await openPath(target);
       } catch (error) {
@@ -57,47 +60,46 @@ export function useFileManager() {
           "Couldn't open item",
           `Failed to open ${target}: ${toMessage(error, "unknown error")}`,
         );
+      } finally {
+        finish();
       }
     },
-    [reportError],
+    [beginFileActivity, reportError],
   );
 
   const refresh = useCallback(async () => {
-    const target = directoryLoader.currentPathRef.current;
-    if (!target) return;
-    log("refresh start: %s", target);
     const start = perf.enabled ? performance.now() : 0;
     await Promise.all([
-      directoryLoader.loadDir(target, { force: true }),
+      directoryLoader.refresh(),
       fsBootstrap.refreshDriveInfo(),
     ]);
     if (perf.enabled) {
       perf(
-        "refresh complete: %s in %dms",
-        target,
+        "refresh complete in %dms",
         Math.round(performance.now() - start),
       );
     }
-  }, [directoryLoader.currentPathRef, directoryLoader.loadDir, fsBootstrap.refreshDriveInfo]);
+  }, [directoryLoader.refresh, fsBootstrap.refreshDriveInfo]);
 
-  const status = useMemo(() => {
-    const baseStatus = directoryLoader.status;
-    const activityLabel = fsBootstrap.indexedSearchStatus?.activityLabel?.trim();
-    const indexedSearchState = fsBootstrap.indexedSearchStatus?.state;
-    if (baseStatus.level !== "idle") {
-      return baseStatus;
+  const indexState = fsBootstrap.indexedSearchStatus?.state;
+  const indexActivity = fsBootstrap.indexedSearchStatus?.activityLabel?.trim();
+  const status = useMemo<StatusState>(() => {
+    if (directoryLoader.loadingPath) {
+      return { level: "loading", message: `Loading ${directoryLoader.loadingPath}` };
     }
-    if (!activityLabel) {
-      return baseStatus;
+    if (fileActivity) return { level: "loading", message: fileActivity };
+    if (!fsBootstrap.placesLoaded) return { level: "loading", message: "Loading locations" };
+    if (indexState === "error") {
+      return { level: "error", message: "Indexed search unavailable" };
     }
-    return {
-      level:
-        indexedSearchState === "starting" || indexedSearchState === "scanning"
-          ? ("loading" as const)
-          : ("idle" as const),
-      message: activityLabel,
-    };
-  }, [directoryLoader.status, fsBootstrap.indexedSearchStatus]);
+    if (indexState === "starting") {
+      return { level: "idle", message: "Checking saved indexes" };
+    }
+    if (indexState === "scanning") {
+      return { level: "idle", message: indexActivity || "Updating index" };
+    }
+    return { level: "idle", message: "Ready" };
+  }, [directoryLoader.loadingPath, fileActivity, fsBootstrap.placesLoaded, indexState, indexActivity]);
 
   return {
     currentPath: directoryLoader.currentPath,
@@ -107,17 +109,21 @@ export function useFileManager() {
     places: fsBootstrap.places,
     placesLoaded: fsBootstrap.placesLoaded,
     drives: fsBootstrap.drives,
+    drivesLoaded: fsBootstrap.drivesLoaded,
     driveInfo: fsBootstrap.driveInfo,
     indexedSearchStatus: fsBootstrap.indexedSearchStatus,
     entryMeta: metaCache.entryMeta,
-    loading: directoryLoader.loading,
+    loading: directoryLoader.loadingPath !== null,
+    loadingPath: directoryLoader.loadingPath,
     suppressUndoPresence: fileMutations.suppressUndoPresence,
     pendingDeletePaths: fileMutations.pendingDeletePaths,
     status,
     loadDir: directoryLoader.loadDir,
     clearDir: directoryLoader.clearDir,
     openEntry: openEntryInView,
+    beginFileActivity,
     refresh,
+    refreshAfterChange: directoryLoader.refreshAfterChange,
     refreshDriveInfo: fsBootstrap.refreshDriveInfo,
     peekDirCache: directoryLoader.peekDirCache,
     requestEntryMeta: metaCache.requestEntryMeta,

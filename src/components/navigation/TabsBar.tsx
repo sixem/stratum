@@ -85,6 +85,8 @@ const TabItem = ({
       data-drop-id={tab.id}
       data-drop-target={isDropTarget ? "true" : "false"}
       data-tab-id={tab.id}
+      data-context-place="tab"
+      data-context-name={label}
       data-tab-kind={isUntitled ? "untitled" : "directory"}
       onPointerDown={(event) => {
         if (event.button === 2 && !isUntitled) {
@@ -287,7 +289,7 @@ export const TabsBar = ({
         <PlusIcon className="tab-new-icon" />
       </PressButton>
       <DropTargetSubmenu
-        open={Boolean(tabDropSubmenu?.hostTabId && (tabDropSubmenu.loading || tabDropSubmenu.items.length > 0))}
+        open={Boolean(submenuAnchorElement && tabDropSubmenu?.hostTabId && (tabDropSubmenu.loading || tabDropSubmenu.items.length > 0))}
         anchorElement={submenuAnchorElement}
         scrollElement={tabsRef.current}
         hostTabId={tabDropSubmenu?.hostTabId ?? null}

@@ -1,45 +1,39 @@
-// Shell availability helpers for PowerShell, WSL, and optional tools like ffmpeg.
+// Locate external tools and launch Windows shells with structured arguments.
+#[cfg(windows)]
+use crate::platform::windows::process_token::require_standard_token_for_tools;
 use serde::Serialize;
+#[cfg(windows)]
 use std::env;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+#[cfg(windows)]
 use std::path::{Path, PathBuf};
+#[cfg(windows)]
 use std::process::Command;
+#[cfg(windows)]
+use windows::Win32::System::Threading::CREATE_NEW_CONSOLE;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ShellAvailability {
     pub pwsh: bool,
     pub wsl: bool,
     pub ffmpeg: bool,
+    pub ffmpeg_path: Option<String>,
+    pub ffmpeg_message: Option<String>,
 }
 
-fn build_candidates(command: &str) -> Vec<String> {
-    let path = Path::new(command);
-    if path.extension().is_some() {
-        return vec![command.to_string()];
-    }
-    vec![
-        format!("{command}.exe"),
-        format!("{command}.cmd"),
-        format!("{command}.bat"),
-    ]
-}
-
+#[cfg(windows)]
 fn find_on_path(command: &str) -> Option<PathBuf> {
-    let path_var = match env::var_os("PATH") {
-        Some(value) => value,
-        None => return None,
-    };
-    let candidates = build_candidates(command);
-    for dir in env::split_paths(&path_var) {
-        for candidate in &candidates {
-            let resolved = dir.join(candidate);
-            if resolved.is_file() {
-                return Some(resolved);
-            }
-        }
-    }
-    None
+    let path_var = env::var_os("PATH")?;
+    let name = format!("{command}.exe");
+    env::split_paths(&path_var)
+        .filter(|dir| dir.is_absolute())
+        .map(|dir| dir.join(&name))
+        .find(|file| file.is_file())
 }
 
+#[cfg(windows)]
 fn fallback_paths(command: &str) -> Vec<PathBuf> {
     match command {
         "pwsh" => vec![
@@ -55,43 +49,64 @@ fn fallback_paths(command: &str) -> Vec<PathBuf> {
     }
 }
 
+#[cfg(windows)]
 fn find_command_path(command: &str) -> Option<PathBuf> {
-    if let Some(found) = find_on_path(command) {
-        return Some(found);
-    }
-    for fallback in fallback_paths(command) {
-        if fallback.is_file() {
-            return Some(fallback);
-        }
-    }
-    None
+    find_on_path(command).or_else(|| {
+        fallback_paths(command)
+            .into_iter()
+            .find(|file| file.is_file())
+    })
 }
 
-fn is_command_available(command: &str) -> bool {
-    find_command_path(command).is_some()
+#[cfg(windows)]
+fn powershell_path() -> Option<PathBuf> {
+    find_command_path("pwsh").or_else(|| find_command_path("powershell"))
 }
 
-pub fn get_shell_availability() -> ShellAvailability {
+pub fn get_shell_availability(configured: Option<&str>) -> ShellAvailability {
+    #[cfg(windows)]
+    if let Err(error) = require_standard_token_for_tools() {
+        return ShellAvailability {
+            ffmpeg_message: Some(error),
+            ..Default::default()
+        };
+    }
+
+    let tools = crate::domain::media::ffmpeg::FfmpegTools::resolve(configured);
+    let (ffmpeg_path, ffmpeg_message) = match tools {
+        Ok(tools) => (
+            Some(tools.ffmpeg.to_string_lossy().into_owned()),
+            tools.notice,
+        ),
+        Err(message) => (None, Some(message)),
+    };
+    #[cfg(windows)]
+    let (pwsh, wsl) = (
+        powershell_path().is_some(),
+        find_command_path("wsl").is_some(),
+    );
+    #[cfg(not(windows))]
+    let (pwsh, wsl) = (false, false);
     ShellAvailability {
-        // Treat Windows PowerShell as a fallback when pwsh isn't installed.
-        pwsh: is_command_available("pwsh") || is_command_available("powershell"),
-        wsl: is_command_available("wsl"),
-        ffmpeg: is_command_available("ffmpeg"),
+        pwsh,
+        wsl,
+        ffmpeg: ffmpeg_path.is_some(),
+        ffmpeg_path,
+        ffmpeg_message,
     }
 }
 
 // Best-effort conversion of a Windows drive path into a WSL mount.
+#[cfg(windows)]
 fn to_wsl_path(path: &str) -> Option<String> {
     let trimmed = path.trim();
-    if trimmed.len() < 2 {
+    let [drive, b':', separator, ..] = trimmed.as_bytes() else {
+        return None;
+    };
+    if !drive.is_ascii_alphabetic() || !matches!(separator, b'\\' | b'/') {
         return None;
     }
-    let mut chars = trimmed.chars();
-    let drive = chars.next()?;
-    if chars.next()? != ':' {
-        return None;
-    }
-    let drive = drive.to_ascii_lowercase();
+    let drive = char::from(drive.to_ascii_lowercase());
     let rest = trimmed[2..].trim_start_matches(&['\\', '/']);
     let rest = rest.replace('\\', "/");
     if rest.is_empty() {
@@ -100,58 +115,76 @@ fn to_wsl_path(path: &str) -> Option<String> {
     Some(format!("/mnt/{drive}/{rest}"))
 }
 
-fn spawn_pwsh(path: &str) -> Result<(), String> {
-    let trimmed = path.trim();
-    if trimmed.is_empty() {
-        return Err("Missing working directory".to_string());
-    }
-    let pwsh_path = find_command_path("pwsh")
-        .or_else(|| find_command_path("powershell"))
-        .unwrap_or_else(|| PathBuf::from("powershell"));
-    let escaped = trimmed.replace('\'', "''");
-    let command = format!("Set-Location -LiteralPath '{escaped}'");
-    spawn_in_new_console(
-        &pwsh_path.to_string_lossy(),
-        &[
-            "-NoLogo".to_string(),
-            "-NoExit".to_string(),
-            "-Command".to_string(),
-            command,
-        ],
-    )
+#[cfg(windows)]
+fn powershell_command(exe: &Path, directory: &Path) -> Command {
+    let mut command = Command::new(exe);
+    // Pass the folder to Windows as the initial working directory.
+    command.args(["-NoLogo", "-NoExit"]).current_dir(directory);
+    command
 }
 
-fn spawn_wsl(path: &str) -> Result<(), String> {
-    let trimmed = path.trim();
-    let wsl_path = find_command_path("wsl").unwrap_or_else(|| PathBuf::from("wsl"));
-    let mut args = Vec::new();
-    if let Some(wsl_cd) = to_wsl_path(trimmed) {
-        args.push("--cd".to_string());
-        args.push(wsl_cd);
+#[cfg(windows)]
+fn wsl_command(exe: &Path, directory: &str) -> Command {
+    let mut command = Command::new(exe);
+    if let Some(wsl_dir) = to_wsl_path(directory) {
+        command.arg("--cd").arg(wsl_dir);
     }
-    spawn_in_new_console(&wsl_path.to_string_lossy(), &args)
+    command
 }
 
+#[cfg(windows)]
 pub fn open_shell(kind: String, path: String) -> Result<(), String> {
-    match kind.as_str() {
-        "pwsh" => spawn_pwsh(&path),
-        "wsl" => spawn_wsl(&path),
-        _ => Err("Unknown shell kind".to_string()),
-    }
-}
+    require_standard_token_for_tools()?;
+    let directory = path.trim();
+    let mut command = match kind.as_str() {
+        "pwsh" => {
+            let directory = Path::new(directory);
+            if !directory.is_absolute() {
+                return Err("The working directory must be an absolute path.".into());
+            }
+            let exe = powershell_path().ok_or("PowerShell is unavailable.")?;
+            powershell_command(&exe, directory)
+        }
+        "wsl" => {
+            let exe = find_command_path("wsl").ok_or("WSL is unavailable.")?;
+            wsl_command(&exe, directory)
+        }
+        _ => return Err("Unknown shell kind".into()),
+    };
 
-// Launches a process in a new console window so the terminal is separate from the app.
-fn spawn_in_new_console(exe: &str, args: &[String]) -> Result<(), String> {
-    let cmd_path = env::var_os("ComSpec")
-        .map(PathBuf::from)
-        .filter(|path| path.is_file())
-        .unwrap_or_else(|| PathBuf::from("cmd"));
-    let mut cmd = Command::new(cmd_path);
-    cmd.arg("/c").arg("start").arg("").arg(exe);
-    for arg in args {
-        cmd.arg(arg);
-    }
-    cmd.spawn()
+    // A native console keeps the terminal separate from the desktop app.
+    command
+        .creation_flags(CREATE_NEW_CONSOLE.0)
+        .spawn()
         .map(|_| ())
         .map_err(|err| format!("Failed to launch shell: {err}"))
+}
+
+#[cfg(not(windows))]
+pub fn open_shell(_kind: String, _path: String) -> Result<(), String> {
+    Err("Opening a terminal from Stratum requires Windows.".into())
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_commands_pass_the_folder_as_data() {
+        let directory = r"D:\Project files\O'Brien’s notes";
+        let powershell = powershell_command(Path::new(r"C:\Tools\pwsh.exe"), Path::new(directory));
+        assert_eq!(powershell.get_current_dir(), Some(Path::new(directory)));
+        assert_eq!(
+            powershell.get_args().collect::<Vec<_>>(),
+            ["-NoLogo", "-NoExit"]
+        );
+
+        let wsl = wsl_command(Path::new(r"C:\Windows\System32\wsl.exe"), directory);
+        assert_eq!(
+            wsl.get_args().collect::<Vec<_>>(),
+            ["--cd", "/mnt/d/Project files/O'Brien’s notes"]
+        );
+        assert_eq!(to_wsl_path(r"D:\"), Some("/mnt/d".into()));
+        assert_eq!(to_wsl_path(r"D:relative"), None);
+    }
 }

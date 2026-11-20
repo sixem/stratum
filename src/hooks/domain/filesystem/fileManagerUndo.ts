@@ -1,9 +1,10 @@
 // Handles undo stack operations for delete, rename, and move actions.
 import { useCallback } from "react";
 import type { RefObject } from "react";
-import { restoreRecyclePaths, statEntries, transferEntries } from "@/api";
+import { restoreRecycleItems, statEntries, transferEntries } from "@/api";
 import { entryExists, formatFailures, getParentPath, getPathName, toMessage } from "@/lib";
 import { usePromptStore } from "@/modules";
+import { isTransferCancelledError } from "./transferJobErrors";
 
 export type UndoRenameEntry = {
   from: string;
@@ -24,7 +25,7 @@ export type UndoAction =
   | { type: "rename"; entries: UndoRenameEntry[] }
   | { type: "move"; entries: UndoMoveEntry[] }
   | { type: "trash"; entries: UndoTrashEntry[] }
-  | { type: "recyclePaths"; paths: string[]; deletedAfterMs: number };
+  | { type: "recycle"; receiptId: string };
 
 type RenameRequest = {
   path: string;
@@ -48,6 +49,27 @@ type UseFileManagerUndoOptions = {
     options?: { recordUndo?: boolean; failureTitle?: string },
   ) => Promise<RenameBatchResult | null>;
   refreshAfterChange: () => Promise<void>;
+};
+
+// Stop the whole Undo on cancellation, keeping earlier groups' committed restores.
+const restoreGroups = async (grouped: Map<string, string[]>, failures: string[]) => {
+  const restoredPaths = new Set<string>();
+  for (const [destination, paths] of grouped) {
+    try {
+      const report = await transferEntries(paths, destination, {
+        mode: "move",
+        overwrite: false,
+      });
+      for (const entry of report.movedEntries) restoredPaths.add(entry.sourcePath);
+      failures.push(...report.failures);
+      if (report.cancelled) break;
+    } catch (error) {
+      // Queued and planning jobs can be cancelled before an execution report exists.
+      if (isTransferCancelledError(error)) break;
+      throw error;
+    }
+  }
+  return restoredPaths;
 };
 
 export const useFileManagerUndo = ({
@@ -93,27 +115,13 @@ export const useFileManagerUndo = ({
         grouped.set(destination, list);
       });
 
-      let restored = 0;
-      for (const [destination, paths] of grouped) {
-        const report = await transferEntries(paths, destination, {
-          mode: "move",
-          overwrite: false,
-        });
-        restored += report.moved;
-        if (report.failures.length > 0) {
-          failures.push(...report.failures);
-        }
-      }
+      const restoredPaths = await restoreGroups(grouped, failures);
+      const restored = restoredPaths.size;
 
-      const remainingMeta = await statEntries(entries.map((entry) => entry.to));
-      const remaining: UndoMoveEntry[] = [];
-      remainingMeta.forEach((meta, index) => {
-        if (!entryExists(meta)) return;
-        const entry = entries[index];
-        if (entry) {
-          remaining.push(entry);
-        }
-      });
+      // A new file at a completed move's old path must not be queued for Undo.
+      const pending = entries.filter((entry) => !restoredPaths.has(entry.to));
+      const remainingMeta = await statEntries(pending.map((entry) => entry.to));
+      const remaining = pending.filter((_, index) => entryExists(remainingMeta[index]));
 
       if (failures.length > 0) {
         usePromptStore.getState().showPrompt({
@@ -170,27 +178,12 @@ export const useFileManagerUndo = ({
         grouped.set(parent, list);
       });
 
-      let restored = 0;
-      for (const [destination, paths] of grouped) {
-        const report = await transferEntries(paths, destination, {
-          mode: "move",
-          overwrite: false,
-        });
-        restored += report.moved;
-        if (report.failures.length > 0) {
-          failures.push(...report.failures);
-        }
-      }
+      const restoredPaths = await restoreGroups(grouped, failures);
+      const restored = restoredPaths.size;
 
-      const trashMeta = await statEntries(entries.map((entry) => entry.trashPath));
-      const remaining: UndoTrashEntry[] = [];
-      trashMeta.forEach((meta, index) => {
-        if (!entryExists(meta)) return;
-        const entry = entries[index];
-        if (entry) {
-          remaining.push(entry);
-        }
-      });
+      const pending = entries.filter((entry) => !restoredPaths.has(entry.trashPath));
+      const trashMeta = await statEntries(pending.map((entry) => entry.trashPath));
+      const remaining = pending.filter((_, index) => entryExists(trashMeta[index]));
 
       if (failures.length > 0) {
         usePromptStore.getState().showPrompt({
@@ -213,14 +206,11 @@ export const useFileManagerUndo = ({
     [refreshAfterChange],
   );
 
-  const restoreRecycledPaths = useCallback(
-    async (paths: string[], deletedAfterMs?: number) => {
-      if (paths.length === 0) {
-        return { restored: 0, remaining: [] as string[] };
-      }
+  const restoreRecycledItems = useCallback(
+    async (receiptId: string) => {
       let report = null;
       try {
-        report = await restoreRecyclePaths(paths, deletedAfterMs);
+        report = await restoreRecycleItems(receiptId);
       } catch (error) {
         usePromptStore.getState().showPrompt({
           title: "Undo failed",
@@ -228,7 +218,7 @@ export const useFileManagerUndo = ({
           confirmLabel: "OK",
           cancelLabel: null,
         });
-        return { restored: 0, remaining: paths };
+        return { restored: 0, canRetry: true };
       }
       if (report.failures.length > 0) {
         usePromptStore.getState().showPrompt({
@@ -238,15 +228,15 @@ export const useFileManagerUndo = ({
           cancelLabel: null,
         });
       }
-      if (report.restored > 0) {
+      if (report.restoredPaths.length > 0) {
         await refreshAfterChange();
         onDirectoryChildrenChanged?.(
-          paths.map((path) => getParentPath(path) ?? "").filter(Boolean),
+          report.restoredPaths.map((path) => getParentPath(path) ?? "").filter(Boolean),
         );
       }
-      return { restored: report.restored, remaining: report.remainingPaths };
+      return { restored: report.restoredPaths.length, canRetry: report.canRetry };
     },
-    [refreshAfterChange],
+    [onDirectoryChildrenChanged, refreshAfterChange],
   );
 
   const undoLastAction = useCallback(async () => {
@@ -318,17 +308,10 @@ export const useFileManagerUndo = ({
       return restored > 0;
     }
 
-    if (action.type === "recyclePaths") {
-      const { restored, remaining } = await restoreRecycledPaths(
-        action.paths,
-        action.deletedAfterMs,
-      );
-      if (remaining.length > 0) {
-        undoStackRef.current.push({
-          type: "recyclePaths",
-          paths: remaining,
-          deletedAfterMs: action.deletedAfterMs,
-        });
+    if (action.type === "recycle") {
+      const { restored, canRetry } = await restoreRecycledItems(action.receiptId);
+      if (canRetry) {
+        undoStackRef.current.push(action);
       }
       return restored > 0;
     }
@@ -341,7 +324,7 @@ export const useFileManagerUndo = ({
     onRenameUndoPresence,
     performRenameRequests,
     renameInFlightRef,
-    restoreRecycledPaths,
+    restoreRecycledItems,
     restoreMovedEntries,
     restoreTrashedEntries,
     transferInFlightRef,

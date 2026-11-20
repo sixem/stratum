@@ -1,5 +1,6 @@
 // Manages rename state and commit logic for single + bulk renames.
 import { useCallback, useRef, useState } from "react";
+import type { RefObject } from "react";
 import type { FileEntry, RenameCommitReason } from "@/types";
 import {
   applyHiddenExtension,
@@ -10,6 +11,7 @@ import {
 import type { EntryContextTarget } from "@/types";
 
 type UseAppRenameFlowOptions = {
+  viewVisit: RefObject<boolean>;
   entries: FileEntry[];
   entryByPath: Map<string, FileEntry>;
   indexMap: Map<string, number>;
@@ -24,6 +26,7 @@ type UseAppRenameFlowOptions = {
 };
 
 export const useAppRenameFlow = ({
+  viewVisit,
   entries,
   entryByPath,
   indexMap,
@@ -72,8 +75,7 @@ export const useAppRenameFlow = ({
         setSuppressInternalPresence(true);
         void renameEntry(renameTarget.path, resolvedNextName)
           .then((nextPath) => {
-            if (!nextPath) return;
-            if (!shouldSelect) return;
+            if (!nextPath || !shouldSelect || !viewVisit.current) return;
             setSelection([nextPath], nextPath);
           })
           .finally(() => {
@@ -107,7 +109,7 @@ export const useAppRenameFlow = ({
       setSuppressInternalPresence(true);
       void renameEntries(plan)
         .then((result) => {
-          if (!result || !shouldSelect) return;
+          if (!result || !shouldSelect || !viewVisit.current) return;
           const renamed = result.renamed;
           const nextSelection = ordered.map((path) => renamed.get(path) ?? path);
           const nextAnchor = renamed.get(renameTarget.path) ?? renameTarget.path;
@@ -130,6 +132,7 @@ export const useAppRenameFlow = ({
       selected,
       setSelection,
       viewParentPath,
+      viewVisit,
     ],
   );
 

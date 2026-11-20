@@ -3,6 +3,8 @@
 import { useEffect, useId, useRef } from "react";
 import { PressButton } from "@/components/primitives";
 import { useModalFocusTrap } from "@/hooks";
+import { useShellStore } from "@/modules";
+import { findRuleFormat } from "./conversionModalConfig";
 import type {
   ConversionModalDraft,
   ConversionModalRequest,
@@ -22,7 +24,7 @@ export type ConversionModalProps = {
   draft: ConversionModalDraft | null;
   runState: ConversionRunState | null;
   onDraftChange: (draft: ConversionModalDraft) => void;
-  onConvert: () => void;
+  onConvert: (draft: ConversionModalDraft) => void;
   onClose: () => void;
 };
 
@@ -39,6 +41,7 @@ export const ConversionModal = ({
   const panelRef = useRef<HTMLDivElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const shouldCloseRef = useRef(false);
+  const ffmpegMessage = useShellStore(state => state.availability?.ffmpegMessage);
   const model = useConversionModalModel({
     open,
     request,
@@ -96,15 +99,12 @@ export const ConversionModal = ({
       >
         <div className="conversion-header">
           <div className="conversion-heading">
-            <h2 id={titleId}>Convert files</h2>
-            <p className="conversion-selection-note">
-              {model.videoCount > 0
-                ? `${model.videoCount} video${model.videoCount === 1 ? "" : "s"}`
-                : "No videos"}{" "}
-              |{" "}
-              {model.imageCount > 0
-                ? `${model.imageCount} image${model.imageCount === 1 ? "" : "s"}`
-                : "No images"}
+            <h2 id={titleId}>{model.hasVideoItems && !model.hasImageItems ? "Convert video" : "Convert files"}</h2>
+            <p className="conversion-selection-note tnum">
+              {[
+                model.videoCount > 0 && `${model.videoCount} video${model.videoCount === 1 ? "" : "s"}`,
+                model.imageCount > 0 && `${model.imageCount} image${model.imageCount === 1 ? "" : "s"}`,
+              ].filter(Boolean).join(" · ")}
             </p>
           </div>
           <PressButton type="button" className="btn ghost" onClick={onClose}>
@@ -118,6 +118,7 @@ export const ConversionModal = ({
                 outputMode={draft.outputMode}
                 suffix={draft.suffix}
                 sampleItem={model.sampleItem}
+                sampleFormat={model.sampleItem && (model.sampleItem.override?.targetFormat ?? findRuleFormat(draft, model.sampleItem.kind))}
                 runInProgress={model.runInProgress}
                 onOutputModeChange={model.setOutputMode}
                 onSuffixChange={model.setSuffix}
@@ -129,6 +130,9 @@ export const ConversionModal = ({
                 runInProgress={model.runInProgress}
                 onRuleFormatChange={model.setRuleFormat}
               />
+              {model.hasVideoItems && ffmpegMessage && (
+                <div className="conversion-block" role="status">{ffmpegMessage}</div>
+              )}
               {model.hasImageItems ? (
                 <ConversionImageOptionsSection
                   imageQualityValue={model.imageQualityValue}

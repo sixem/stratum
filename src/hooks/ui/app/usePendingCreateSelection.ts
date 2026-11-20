@@ -1,6 +1,6 @@
 // Tracks newly created entries so they can be selected once they appear in view.
 import { useCallback, useEffect, useState } from "react";
-import { normalizePath } from "@/lib";
+import { folderPathKey } from "@/lib";
 
 type PendingSelection = {
   path: string;
@@ -30,7 +30,7 @@ export const usePendingCreateSelection = ({
   // Select and scroll to freshly created entries once the view updates.
   const queueCreateSelection = useCallback(
     (createdPath: string, parentPath: string) => {
-      const parentKey = normalizePath(parentPath);
+      const parentKey = folderPathKey(parentPath);
       if (!parentKey || parentKey !== viewPathKey) return;
       setPendingCreateSelection({ path: createdPath, viewKey });
     },

@@ -1,31 +1,18 @@
-// Clipboard integration for sharing file paths with the OS.
+// File clipboard IPC. The sequence identifies the exact Cut that a move consumed.
 import { invoke } from "@tauri-apps/api/core";
 
-const normalizeClipboardPaths = (paths: string[]) => {
-  const seen = new Set<string>();
-  const next: string[] = [];
-  paths.forEach((path) => {
-    const trimmed = path.trim();
-    if (!trimmed) return;
-    if (seen.has(trimmed)) return;
-    seen.add(trimmed);
-    next.push(trimmed);
-  });
-  return next;
+export type FileClipboardMode = "copy" | "move";
+
+export type FileClipboard = {
+  paths: string[];
+  mode: FileClipboardMode;
+  sequence: number;
 };
 
-export const copyPathsToClipboard = async (paths: string[]) => {
-  const normalized = normalizeClipboardPaths(paths);
-  if (normalized.length === 0) return false;
+export const setFileClipboard = (paths: string[], mode: FileClipboardMode) =>
+  invoke<void>("set_clipboard_paths", { paths, mode });
 
-  try {
-    await invoke("set_clipboard_paths", { paths: normalized });
-    return true;
-  } catch {
-    return false;
-  }
-};
+export const getFileClipboard = () => invoke<FileClipboard>("get_file_clipboard");
 
-export const getClipboardPaths = async () => {
-  return invoke<string[]>("get_clipboard_paths");
-};
+export const finishFileCut = (sequence: number, moved: string[]) =>
+  invoke<void>("finish_file_cut", { sequence, moved });

@@ -8,7 +8,6 @@ export type {
   IndexedSearchServiceState,
   IndexedSearchServiceStatus,
 } from "./indexedSearch";
-export type { IndexingRuntimeMode } from "./indexing";
 export type {
   CopyConflict,
   CopyConflictKind,
@@ -18,7 +17,6 @@ export type {
   DeleteReport,
   MovedTransferEntry,
   DriveInfo,
-  RecycleEntry,
   EntryMeta,
   FileEntry,
   FolderThumbSampleBatchOptions,
@@ -27,8 +25,7 @@ export type {
   ListDirResult,
   ListDirWithParentResult,
   Place,
-  RestoreReport,
-  RestorePathsReport,
+  RestoreRecycleReport,
   TrashReport,
   TransferMode,
   TransferJobPhase,

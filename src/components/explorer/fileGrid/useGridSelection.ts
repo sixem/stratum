@@ -1,10 +1,7 @@
 // Selection and drag-out wiring for the file grid.
 import type { RefObject } from "react";
 import { useEntryDragOut, useSelectionDrag } from "@/hooks";
-import type { DropTarget } from "@/lib";
 import { VIEW_INSET } from "../fileView/constants";
-
-const noop = () => {};
 
 type UseGridSelectionOptions = {
   viewportRef: RefObject<HTMLDivElement | null>;
@@ -18,8 +15,6 @@ type UseGridSelectionOptions = {
   onSetSelection: (paths: string[], anchor?: string) => void;
   onClearSelection: () => void;
   onStartDragOut?: (paths: string[]) => void;
-  onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
-  onInternalHover?: (target: DropTarget | null) => void;
   loading: boolean;
 };
 
@@ -35,8 +30,6 @@ export const useGridSelection = ({
   onSetSelection,
   onClearSelection,
   onStartDragOut,
-  onInternalDrop,
-  onInternalHover,
   loading,
 }: UseGridSelectionOptions) => {
   const { selectionBox } = useSelectionDrag(viewportRef, {
@@ -56,16 +49,12 @@ export const useGridSelection = ({
     },
   });
 
-  const dragEnabled = Boolean(onStartDragOut) && !loading;
-  useEntryDragOut(viewportRef, {
+  const dragHandlers = useEntryDragOut({
     selected: selectedPaths,
     onSetSelection,
-    onStartDrag: onStartDragOut ?? noop,
-    onInternalDrop,
-    onInternalHover,
-    itemSelector: "[data-selectable=\"true\"]",
-    enabled: dragEnabled,
+    onStartDrag: onStartDragOut,
+    loading,
   });
 
-  return { selectionBox };
+  return { selectionBox, dragHandlers };
 };

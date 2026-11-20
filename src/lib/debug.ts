@@ -6,6 +6,7 @@ const BASE_NAMESPACE = "stratum";
 
 const TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
+  hourCycle: "h23",
   minute: "2-digit",
   second: "2-digit",
 });

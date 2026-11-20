@@ -56,7 +56,7 @@ export const QuickPreviewTopBar = ({
     </TooltipWrapper>
   );
   const rightSlot = positionLabel ? (
-    <div className="quick-preview-topbar-position" aria-label={`Preview position ${positionLabel}`}>
+    <div className="quick-preview-topbar-position tnum" aria-label={`Preview position ${positionLabel}`}>
       {positionLabel}
     </div>
   ) : null;

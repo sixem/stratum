@@ -128,7 +128,7 @@ export const SettingsCacheSection = ({
         <div>
           <div className="settings-label settings-label-row">
             <span>Thumbnail cache</span>
-            <span className="settings-chip">{cacheUsageLabel}</span>
+            <span className="settings-chip tnum">{cacheUsageLabel}</span>
           </div>
           <div className="settings-desc">Open the cache folder or clear stored previews.</div>
         </div>

@@ -1,7 +1,7 @@
 // Keeps tab state synced with the current path and persisted history.
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type { ListDirOptions, SortState, Tab } from "@/types";
-import { normalizePath } from "@/lib";
+import { folderPathKey } from "@/lib";
 
 type SetTabs = (next: Tab[] | ((prev: Tab[]) => Tab[])) => void;
 
@@ -40,8 +40,8 @@ const resolveCrumbTrailPath = (currentPath: string, trailPath: string) => {
   if (!trimmedCurrent) return "";
   const trimmedTrail = trailPath.trim();
   if (!trimmedTrail) return trimmedCurrent;
-  const currentKey = normalizePath(trimmedCurrent);
-  const trailKey = normalizePath(trimmedTrail);
+  const currentKey = folderPathKey(trimmedCurrent);
+  const trailKey = folderPathKey(trimmedTrail);
   if (!currentKey || !trailKey) return trimmedCurrent;
   if (currentKey === trailKey) return trimmedCurrent;
   // Keep the deepest path when navigating up within the same branch.
@@ -71,11 +71,10 @@ export const useTabPersistence = ({
     tabs.find((tab) => tab.id === activeTabId)?.path ?? null,
   );
   const restoreRequestedRef = useRef(false);
-  const suppressTabSyncRef = useRef(Boolean(restorePathRef.current));
   // Hold target path after tab switches to avoid transient path flicker.
   const pendingTabPathRef = useRef<string | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Keep the active tab path synced with the current directory.
     if (!currentPath && activeTabId) return;
     if (!activeTabId) return;
@@ -89,24 +88,12 @@ export const useTabPersistence = ({
     }
     const pendingPath = pendingTabPathRef.current;
     if (pendingPath) {
-      const pendingKey = normalizePath(pendingPath) ?? pendingPath;
-      const currentKey = normalizePath(currentPath) ?? currentPath;
+      const pendingKey = folderPathKey(pendingPath) ?? pendingPath;
+      const currentKey = folderPathKey(currentPath) ?? currentPath;
       if (pendingKey && currentKey && pendingKey !== currentKey) {
         return;
       }
       pendingTabPathRef.current = null;
-    }
-    if (suppressTabSyncRef.current) {
-      const target = restorePathRef.current;
-      if (target) {
-        const targetKey = normalizePath(target);
-        const currentKey = normalizePath(currentPath);
-        if (targetKey && targetKey !== currentKey) {
-          return;
-        }
-      }
-      suppressTabSyncRef.current = false;
-      restorePathRef.current = null;
     }
     setTabs((prev) => {
       const index = prev.findIndex((tab) => tab.id === activeTabId);
@@ -131,14 +118,14 @@ export const useTabPersistence = ({
     // Restore the last active tab path once on startup.
     const target = restorePathRef.current;
     if (!target || restoreRequestedRef.current) return;
-    const targetKey = normalizePath(target);
-    const currentKey = normalizePath(currentPath);
+    const targetKey = folderPathKey(target);
+    const currentKey = folderPathKey(currentPath);
     if (!targetKey || targetKey === currentKey) {
-      suppressTabSyncRef.current = false;
       restorePathRef.current = null;
       return;
     }
     restoreRequestedRef.current = true;
+    pendingTabPathRef.current = target;
     void loadDir(target, { sort: sortState, search: searchValue });
   }, [currentPath, loadDir, searchValue, sortState]);
 

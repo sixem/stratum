@@ -7,10 +7,10 @@ use crate::domain::indexed_search::{
 use crate::services::indexed_search;
 
 #[tauri::command]
-pub fn get_indexed_search_catalog_path(app: tauri::AppHandle) -> String {
-    indexed_search::catalog_path_for_app(&app)
+pub fn get_indexed_search_catalog_path(app: tauri::AppHandle) -> Result<String, String> {
+    Ok(indexed_search::catalog_path_for_app(&app)?
         .to_string_lossy()
-        .to_string()
+        .into_owned())
 }
 
 #[tauri::command]
@@ -25,11 +25,13 @@ pub async fn get_indexed_search_status(
         Ok(status) => Ok(status),
         Err(_) => Ok(IndexedSearchServiceStatus {
             state: crate::domain::indexed_search::IndexedSearchServiceState::Error,
+            catalog_revision: 0,
             activity_label: Some("Indexed-search status is currently unavailable.".to_string()),
             started_at: 0,
             last_updated_at: 0,
             drive_count: 0,
             indexable_drive_count: 0,
+            searchable_drive_count: 0,
         }),
     }
 }
@@ -66,7 +68,7 @@ pub async fn query_indexed_paths(
         .inner()
         .clone();
     match tauri::async_runtime::spawn_blocking(move || indexed_search.query_paths(query)).await {
-        Ok(matches) => Ok(matches),
+        Ok(result) => result,
         Err(error) => Err(error.to_string()),
     }
 }

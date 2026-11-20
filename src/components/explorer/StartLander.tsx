@@ -11,6 +11,7 @@ type StartLanderProps = {
   onOpenRecent: (path: string) => void;
   onOpenRecentNewTab?: (path: string) => void;
   drives: string[];
+  drivesLoaded?: boolean;
   driveInfo: DriveInfo[];
   onOpenDrive: (path: string) => void;
   onOpenDriveNewTab?: (path: string) => void;
@@ -87,29 +88,18 @@ const summarizeStorage = (
 ) => {
   let total = 0;
   let free = 0;
-  let unknownCount = 0;
   drives.forEach((drive) => {
     const info = driveInfoMap.get(normalizePath(drive));
-    if (!info || info.total == null || info.free == null) {
-      unknownCount += 1;
-      return;
-    }
+    if (!info || info.total == null || info.free == null) return;
     total += info.total;
     free += info.free;
   });
-  if (total <= 0) {
-    return {
-      label: "Totals unavailable",
-      percent: null,
-      unknownCount,
-    };
-  }
+  if (total <= 0) return null;
   const used = Math.max(0, total - free);
   const percent = total > 0 ? Math.round((used / total) * 100) : 0;
   return {
     label: `${formatBytes(used)} / ${formatBytes(total)}`,
     percent: Math.min(100, Math.max(0, percent)),
-    unknownCount,
   };
 };
 
@@ -118,6 +108,7 @@ export const StartLander = ({
   onOpenRecent,
   onOpenRecentNewTab,
   drives,
+  drivesLoaded = true,
   driveInfo,
   onOpenDrive,
   onOpenDriveNewTab,
@@ -128,11 +119,7 @@ export const StartLander = ({
   const visibleRecents = recentJumps;
   const visiblePlaces = places;
   const driveInfoMap = buildDriveInfoMap(driveInfo);
-  const knownDrives = drives.filter((drive) => {
-    const info = driveInfoMap.get(normalizePath(drive));
-    return info?.total != null && info?.free != null;
-  });
-  const storageSummary = summarizeStorage(knownDrives, driveInfoMap);
+  const storageSummary = summarizeStorage(drives, driveInfoMap);
   return (
     <div className="view-lander">
       <div className="lander-panel">
@@ -142,34 +129,29 @@ export const StartLander = ({
         />
         <div className="lander-columns">
           <div
-            className={`lander-drives lander-section${knownDrives.length === 0 ? " is-empty" : ""}`}
+            className={`lander-drives lander-section${drives.length === 0 ? " is-empty" : ""}`}
           >
             <div className="lander-section-head">
               <div className="lander-section-title">Drives</div>
-              <span className="lander-section-count">{knownDrives.length}</span>
+              {drivesLoaded ? <span className="lander-section-count">{drives.length}</span> : null}
             </div>
-            <div className="lander-storage-summary">
-              <span className="lander-storage-title">Total storage</span>
-              <span className="lander-storage-value">{storageSummary.label}</span>
-              {storageSummary.percent != null ? (
-                <span className="lander-storage-percent">
-                  {storageSummary.percent}% used
-                </span>
-              ) : null}
-            </div>
-            {storageSummary.percent != null ? (
-              <div className="lander-storage-bar">
-                <span
-                  className="lander-storage-bar-fill"
-                  style={{ width: `${storageSummary.percent}%` }}
-                />
-              </div>
+            {storageSummary ? (
+              <>
+                <div className="lander-storage-summary">
+                  <span className="lander-storage-title">Total storage</span>
+                  <span className="lander-storage-value tnum">{storageSummary.label}</span>
+                  <span className="lander-storage-percent tnum">{storageSummary.percent}% used</span>
+                </div>
+                <div className="lander-storage-bar">
+                  <span className="lander-storage-bar-fill" style={{ width: `${storageSummary.percent}%` }} />
+                </div>
+              </>
             ) : null}
-            {knownDrives.length === 0 ? (
-              <div className="lander-drives-empty">No drives with size data</div>
+            {drives.length === 0 ? (
+              <div className="lander-drives-empty">{drivesLoaded ? "No drives found" : "Loading drives…"}</div>
             ) : (
               <div className="lander-drives-list">
-                {knownDrives.map((drive) => {
+                {drives.map((drive) => {
                   const info = driveInfoMap.get(normalizePath(drive));
                   const name = formatDriveName(info);
                   const usage = formatUsage(info);
@@ -194,14 +176,14 @@ export const StartLander = ({
                           {name ? <span className="lander-drive-name">{name}</span> : null}
                         </div>
                         <div className="lander-drive-usage">
-                          <span className="lander-drive-usage-label">{usage.label}</span>
+                          <span className="lander-drive-usage-label tnum">{usage.label}</span>
                           {usage.percent != null ? (
-                            <span className="lander-drive-usage-percent">
+                            <span className="lander-drive-usage-percent tnum">
                               {usage.percent}% used
                             </span>
                           ) : null}
                         </div>
-                        <div className="lander-drive-bar" data-known="true">
+                        <div className="lander-drive-bar" data-known={usage.percent != null}>
                           <span
                             className="lander-drive-bar-fill"
                             style={{

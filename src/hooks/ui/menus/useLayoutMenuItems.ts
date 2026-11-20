@@ -9,7 +9,7 @@ type UseLayoutMenuItemsOptions = {
   currentPath: string;
   sortState: SortState;
   onSortChange: (next: SortState) => void;
-  onPaste: (paths: string[]) => void;
+  onPaste: (destination: string) => void;
   onCreateFolder?: (parentPath: string, name: string) => Promise<unknown> | void;
   onCreateFolderAndGo?: (parentPath: string, name: string) => Promise<unknown> | void;
   onCreateFile?: (parentPath: string, name: string) => Promise<unknown> | void;
@@ -37,8 +37,8 @@ export const useLayoutMenuItems = ({
   const openCreatePrompt = useCreateEntryPrompt();
 
   return useMemo<ContextMenuItem[]>(() => {
-    const canPaste = Boolean(clipboard && clipboard.paths.length > 0);
     const targetPath = currentPath.trim();
+    const canPaste = Boolean(clipboard?.paths.length && targetPath);
     const canCreate = Boolean(targetPath && (onCreateFolder || onCreateFile));
     const showPwsh = Boolean(menuOpenPwsh && shellAvailability?.pwsh);
     const showWsl = Boolean(menuOpenWsl && shellAvailability?.wsl);
@@ -103,8 +103,7 @@ export const useLayoutMenuItems = ({
         id: "layout-paste",
         label: "Paste",
         onSelect: () => {
-          if (!clipboard || clipboard.paths.length === 0) return;
-          onPaste(clipboard.paths);
+          if (targetPath) onPaste(targetPath);
         },
         disabled: !canPaste,
       },

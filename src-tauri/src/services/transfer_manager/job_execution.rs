@@ -39,6 +39,8 @@ pub(super) fn run_operation(
             paths,
             destination,
             options,
+            #[cfg(windows)]
+                drop_stage: _drop_stage,
         } => execute_transfer_job(
             inner,
             job_id,
@@ -109,18 +111,25 @@ fn execute_transfer_job(
 ) -> TransferOperationOutcome {
     run_with_progress_dispatcher(inner, job_id, plan, event_emitter, move |callback| {
         let mut on_control = move || control.checkpoint();
-        let result = fs::transfer_entries(
+        match fs::transfer_entries(
             paths,
             destination,
             options,
             Some(callback),
             Some(&mut on_control),
-        )
-        .map(TransferOperationResult::Transfer);
-
-        TransferOperationOutcome {
-            terminal_status: completed_status_for_result(&result),
-            result,
+        ) {
+            Ok(report) => TransferOperationOutcome {
+                terminal_status: if report.cancelled {
+                    TransferJobStatus::Cancelled
+                } else {
+                    TransferJobStatus::Completed
+                },
+                result: Ok(TransferOperationResult::Transfer(report)),
+            },
+            Err(error) => TransferOperationOutcome {
+                terminal_status: terminal_status_for_error(&error),
+                result: Err(error),
+            },
         }
     })
 }
@@ -199,12 +208,15 @@ fn execute_conversion_job(
 ) -> TransferOperationOutcome {
     run_with_progress_dispatcher(inner, job_id, plan, event_emitter, move |callback| {
         let mut on_control = move || control.checkpoint();
-        let result = conversion_jobs::convert_items(items, Some(callback), Some(&mut on_control))
-            .map(TransferOperationResult::Conversion);
+        let result = conversion_jobs::convert_items(items, Some(callback), Some(&mut on_control));
+        let terminal_status = match &result {
+            Ok(report) if report.converted == 0 && report.failed > 0 => TransferJobStatus::Failed,
+            _ => completed_status_for_result(&result),
+        };
 
         TransferOperationOutcome {
-            terminal_status: completed_status_for_result(&result),
-            result,
+            terminal_status,
+            result: result.map(TransferOperationResult::Conversion),
         }
     })
 }

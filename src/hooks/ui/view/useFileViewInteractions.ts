@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import type { ViewMode } from "@/types";
-import { normalizePath } from "@/lib";
+import { folderPathKey } from "@/lib";
 import type { FileViewModel } from "./useFileViewModel";
 import { useFileViewSelection } from "../selection/useFileViewSelection";
 import { useTypeaheadSelection } from "../selection/useTypeaheadSelection";
@@ -42,7 +42,7 @@ export const useFileViewInteractions = ({
   const handleGridColumnsChange = useCallback((columns: number) => {
     gridColumnsRef.current = columns;
   }, []);
-  const pathKey = normalizePath(currentPath) ?? currentPath.trim();
+  const pathKey = folderPathKey(currentPath);
   const selectionScopeKey =
     activeTabId && pathKey ? `${activeTabId}:${pathKey}` : null;
   const selectionResetKey = `${activeTabId ?? "none"}:${currentPath}`;
@@ -139,7 +139,7 @@ export const useFileViewInteractions = ({
   );
 
   useTypeaheadSelection({
-    items: viewModel.typeaheadItems,
+    items: viewModel.items,
     onMatch: handleTypeaheadMatch,
     shouldHandle: shouldHandleTypeahead,
     resetKeys: [currentPath, deferredSearchValue, viewMode],

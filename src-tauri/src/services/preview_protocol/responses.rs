@@ -54,11 +54,28 @@ pub fn ok_response(
     data: Vec<u8>,
     validators: &CacheValidators,
 ) -> Response<Vec<u8>> {
+    complete_response(content_type, data.len() as u64, data, validators)
+}
+
+pub fn head_response(
+    content_type: &'static str,
+    size: u64,
+    validators: &CacheValidators,
+) -> Response<Vec<u8>> {
+    complete_response(content_type, size, Vec::new(), validators)
+}
+
+fn complete_response(
+    content_type: &'static str,
+    size: u64,
+    data: Vec<u8>,
+    validators: &CacheValidators,
+) -> Response<Vec<u8>> {
     with_preview_cache_headers(
         Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, content_type)
-            .header(header::CONTENT_LENGTH, data.len().to_string()),
+            .header(header::CONTENT_LENGTH, size.to_string()),
         validators,
     )
     .body(data)

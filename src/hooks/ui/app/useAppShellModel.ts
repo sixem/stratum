@@ -29,26 +29,31 @@ export const useAppShellModel = () => {
   const settings = useSettings();
   const tabSession = useTabSession({
     currentPath: fileManager.currentPath,
+    loadingPath: fileManager.loadingPath,
     loadDir: fileManager.loadDir,
     clearDir: fileManager.clearDir,
     defaultViewMode: settings.defaultViewMode,
     recentJumpsLimit: settings.sidebarRecentLimit,
   });
+  const lastViewRef = useRef<{ tabId: string | null; pathKey: string } | null>(null);
+  const resolvedView = resolveShellViewState({ fileManager, settings, tabSession, lastViewRef });
+  const tauriEnv = isTauriEnv();
   const fileDrop = useFileDrop({
-    currentPath: fileManager.currentPath,
-    onRefresh: fileManager.refresh,
+    beginFileActivity: fileManager.beginFileActivity,
+    enabled: tauriEnv,
+    // The background has no drop destination until its folder listing is current.
+    currentPath: resolvedView.viewLoading ? "" : fileManager.currentPath,
+    onRefresh: fileManager.refreshAfterChange,
     onRecordMoveUndo: fileManager.recordMoveUndo,
     onTransferInFlightChange: fileManager.setTransferInFlight,
     enableTabDropSubfolders: settings.tabDropSubfolders,
   });
   const scrollState = useScrollRequest();
   const { flushPersist: flushWindowSize } = useWindowSize();
-  const lastViewRef = useRef<{ tabId: string | null; pathKey: string } | null>(null);
   const launchPreferencesHydratedRef = useRef(false);
 
   // Menu and overlay state stays local to the shell model so App only renders slices.
   const menuState = useAppMenuState();
-  const tauriEnv = isTauriEnv();
   const promptOpen = usePromptStore((state) => Boolean(state.prompt));
   const [, setSuppressExternalPresence] = useState(false);
   const [thumbResetNonce, setThumbResetNonce] = useState(0);
@@ -82,7 +87,6 @@ export const useAppShellModel = () => {
       await setIndexedSearchEnabled(settings.indexedSearchEnabled);
       await setIndexingLaunchPreferences({
         indexedSearchEnabled: settings.indexedSearchEnabled,
-        acceleratedNtfsIndexing: settings.acceleratedNtfsIndexing,
       });
       if (canceled) return;
       await fileManager.refreshDriveInfo();
@@ -96,7 +100,6 @@ export const useAppShellModel = () => {
   }, [
     fileManager.refreshDriveInfo,
     launchPreferencesReady,
-    settings.acceleratedNtfsIndexing,
     settings.indexedSearchEnabled,
     tauriEnv,
   ]);
@@ -113,16 +116,12 @@ export const useAppShellModel = () => {
       const launchPreferences = await getIndexingLaunchPreferences();
       if (canceled) return;
 
-      if (
-        launchPreferences.indexedSearchEnabled === settings.indexedSearchEnabled &&
-        launchPreferences.acceleratedNtfsIndexing === settings.acceleratedNtfsIndexing
-      ) {
+      if (launchPreferences.indexedSearchEnabled === settings.indexedSearchEnabled) {
         return;
       }
 
       settings.updateSettings({
         indexedSearchEnabled: launchPreferences.indexedSearchEnabled,
-        acceleratedNtfsIndexing: launchPreferences.acceleratedNtfsIndexing,
       });
     };
 
@@ -145,19 +144,10 @@ export const useAppShellModel = () => {
     };
   }, [tabSession.jumpTo]);
 
-  const resolvedView = resolveShellViewState({
-    fileManager,
-    settings,
-    tabSession,
-    lastViewRef,
-  });
-
   // View inputs stay grouped so the render tree only consumes already-derived data.
   const viewState = useAppViewState({
-    currentPath: fileManager.currentPath,
     displayPath: resolvedView.viewPath,
     parentPath: resolvedView.viewParentPathBase,
-    loading: resolvedView.viewLoading,
     jumpTo: tabSession.jumpTo,
     browseTo: tabSession.browseTo,
   });
@@ -165,7 +155,7 @@ export const useAppShellModel = () => {
     activeTabId: resolvedView.activeTabId,
     activeTabPath: resolvedView.activeTabPath,
     currentPath: fileManager.currentPath,
-    loading: fileManager.loading,
+    viewLoading: resolvedView.viewLoading,
     activeSearch: resolvedView.activeSearch,
     mainRef: viewState.mainRef,
     refresh: fileManager.refresh,
@@ -237,6 +227,8 @@ export const useAppShellModel = () => {
   return {
     navigation,
     view: shellView.view,
+    paneActions: fileManager,
+    fileDrop,
     selection: shellView.selection,
     preview: shellView.preview,
     overlays,

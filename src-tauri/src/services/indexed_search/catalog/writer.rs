@@ -10,9 +10,12 @@ use rusqlite::{params, Connection};
 use crate::domain::indexed_search::IndexedEntryKind;
 
 use super::{
-    query::collect_search_tokens, schema, CatalogEntryRecord, IndexedCatalogStore,
-    IndexedCatalogWriter,
+    recursive_build, schema, CatalogEntryRecord, IndexedCatalogStore, IndexedCatalogWriter,
+    JournalCheckpoint,
 };
+
+#[path = "writer_paths.rs"]
+mod paths;
 
 impl IndexedCatalogStore {
     pub(in crate::services::indexed_search) fn begin_drive_refresh(
@@ -20,36 +23,28 @@ impl IndexedCatalogStore {
         drive_path: &str,
     ) -> Result<IndexedCatalogWriter, String> {
         let connection = self.connect()?;
-        mark_drive_scan_started(&connection, drive_path)?;
         schema::begin_write_transaction(&connection)?;
-        let drive_pattern = build_drive_refresh_pattern(drive_path);
-
+        // Readers keep using the previous drive snapshot until the replacement and
+        // its ready metadata commit together. Catalog triggers update FTS inside
+        // this same transaction.
+        delete_drive_entries(&connection, drive_path).map_err(|error| {
+            format!("Failed to clear indexed-search entries for {drive_path}: {error}")
+        })?;
+        // The replacement baseline supersedes any half-read rename from the
+        // previous journal or volume at this drive letter.
         connection
             .execute(
-                "DELETE FROM indexed_entry_trigrams
-                 WHERE entry_id IN (
-                    SELECT entry_id
-                    FROM indexed_entries
-                    WHERE path LIKE ?1 ESCAPE '\\'
-                 )",
-                params![drive_pattern],
+                "DELETE FROM indexed_pending_renames WHERE drive_path = ?1",
+                [drive_path],
             )
             .map_err(|error| {
-                format!("Failed to clear indexed-search search tokens for {drive_path}: {error}")
-            })?;
-
-        connection
-            .execute(
-                "DELETE FROM indexed_entries WHERE path LIKE ?1 ESCAPE '\\'",
-                params![drive_pattern],
-            )
-            .map_err(|error| {
-                format!("Failed to clear indexed-search entries for {drive_path}: {error}")
+                format!("Failed to clear pending renames for {drive_path}: {error}")
             })?;
 
         Ok(IndexedCatalogWriter {
             connection,
             finished: false,
+            entries_written: 0,
         })
     }
 
@@ -61,136 +56,77 @@ impl IndexedCatalogStore {
         Ok(IndexedCatalogWriter {
             connection,
             finished: false,
+            entries_written: 0,
         })
     }
 
-    pub(in crate::services::indexed_search) fn mark_drive_scan_ready(
+    pub(in crate::services::indexed_search) fn begin_watched_write_if_changed(
         &self,
-        drive_path: &str,
-        scan_source: &str,
-        completed_at: u64,
-    ) -> Result<(), String> {
-        let connection = self.connect()?;
-        connection
-            .execute(
-                "INSERT INTO indexed_drive_catalog_state (
-                    drive_path,
-                    lifecycle_state,
-                    last_scan_source,
-                    last_scan_started_at,
-                    last_scan_completed_at
-                 ) VALUES (
-                    ?1,
-                    ?2,
-                    ?3,
-                    COALESCE(
-                        (SELECT last_scan_started_at
-                         FROM indexed_drive_catalog_state
-                         WHERE drive_path = ?1),
-                        ?4
-                    ),
-                    ?4
-                 )
-                 ON CONFLICT(drive_path) DO UPDATE SET
-                    lifecycle_state = excluded.lifecycle_state,
-                    last_scan_source = excluded.last_scan_source,
-                    last_scan_started_at = COALESCE(
-                        indexed_drive_catalog_state.last_scan_started_at,
-                        excluded.last_scan_started_at
-                    ),
-                    last_scan_completed_at = excluded.last_scan_completed_at",
-                params![
-                    drive_path,
-                    schema::DRIVE_CATALOG_STATE_READY,
-                    scan_source,
-                    completed_at as i64,
-                ],
-            )
-            .map_err(|error| {
-                format!("Failed to finalize indexed-search drive state for {drive_path}: {error}")
-            })?;
-        Ok(())
-    }
-
-    pub(in crate::services::indexed_search) fn mark_drive_scan_failed(
-        &self,
-        drive_path: &str,
-        failed_at: u64,
-    ) -> Result<(), String> {
-        let connection = self.connect()?;
-        connection
-            .execute(
-                "INSERT INTO indexed_drive_catalog_state (
-                    drive_path,
-                    lifecycle_state,
-                    last_scan_started_at
-                 ) VALUES (?1, ?2, ?3)
-                 ON CONFLICT(drive_path) DO UPDATE SET
-                    lifecycle_state = excluded.lifecycle_state,
-                    last_scan_started_at = COALESCE(
-                        indexed_drive_catalog_state.last_scan_started_at,
-                        excluded.last_scan_started_at
-                    )",
-                params![
-                    drive_path,
-                    schema::DRIVE_CATALOG_STATE_ERROR,
-                    failed_at as i64,
-                ],
-            )
-            .map_err(|error| {
-                format!(
-                    "Failed to mark indexed-search drive scan failure for {drive_path}: {error}"
-                )
-            })?;
-        Ok(())
+        path: &str,
+        replacement: &[CatalogEntryRecord],
+        limit: usize,
+    ) -> Result<Option<IndexedCatalogWriter>, String> {
+        let mut connection = self.connect()?;
+        let read = connection
+            .transaction()
+            .map_err(|error| format!("Failed to start indexed-search watch comparison: {error}"))?;
+        if !paths::bounded_tree_differs(&read, path, replacement, limit)? {
+            return Ok(None);
+        }
+        read.commit().map_err(|error| {
+            format!("Failed to finish indexed-search watch comparison: {error}")
+        })?;
+        // The single worker holds both operations, but an external process
+        // can open this catalog. Recheck the existing deletion cap and
+        // ambiguous path rules when applying the change.
+        schema::begin_write_transaction(&connection)?;
+        Ok(Some(IndexedCatalogWriter {
+            connection,
+            finished: false,
+            entries_written: 0,
+        }))
     }
 }
 
+fn delete_drive_entries(connection: &Connection, drive_path: &str) -> rusqlite::Result<()> {
+    let drive_path = trim_catalog_path(drive_path);
+    if let [letter, b':', b'\\'] = drive_path.as_bytes() {
+        if letter.is_ascii_alphabetic() {
+            // ']' immediately follows '\\', so each range seeks directly to
+            // one letter case in the existing binary path index.
+            let mut delete =
+                connection.prepare("DELETE FROM indexed_entries WHERE path >= ?1 AND path < ?2")?;
+            for letter in [letter.to_ascii_uppercase(), letter.to_ascii_lowercase()] {
+                let letter = char::from(letter);
+                delete.execute(params![format!("{letter}:\\"), format!("{letter}:]")])?;
+            }
+            return Ok(());
+        }
+    }
+
+    connection.execute(
+        "DELETE FROM indexed_entries WHERE path LIKE ?1 ESCAPE '\\'",
+        [build_drive_refresh_pattern(drive_path)],
+    )?;
+    Ok(())
+}
+
 impl IndexedCatalogWriter {
+    // A false result requires rolling back this writer and rescanning the
+    // volume. Some paths may already have been deleted in the transaction.
     pub(in crate::services::indexed_search) fn remove_path_trees(
         &mut self,
         paths: &[String],
-    ) -> Result<(), String> {
-        if paths.is_empty() {
-            return Ok(());
-        }
+    ) -> Result<bool, String> {
+        paths::remove_path_trees(&self.connection, paths, None)
+    }
 
-        let mut delete_tokens = self
-            .connection
-            .prepare(
-                "DELETE FROM indexed_entry_trigrams
-                 WHERE entry_id IN (
-                    SELECT entry_id
-                    FROM indexed_entries
-                    WHERE path = ?1 OR path LIKE ?2 ESCAPE '\\'
-                 )",
-            )
-            .map_err(|error| format!("Failed to prepare indexed-search token delete: {error}"))?;
-        let mut delete_entries = self
-            .connection
-            .prepare("DELETE FROM indexed_entries WHERE path = ?1 OR path LIKE ?2 ESCAPE '\\'")
-            .map_err(|error| format!("Failed to prepare indexed-search delete: {error}"))?;
-
-        for path in paths {
-            let trimmed = trim_catalog_path(path);
-            if trimmed.is_empty() {
-                continue;
-            }
-
-            let descendant_pattern = build_descendant_pattern(trimmed);
-            delete_tokens
-                .execute(params![trimmed, &descendant_pattern])
-                .map_err(|error| {
-                    format!("Failed to remove indexed-search tokens for {trimmed}: {error}")
-                })?;
-            delete_entries
-                .execute(params![trimmed, descendant_pattern])
-                .map_err(|error| {
-                    format!("Failed to remove indexed-search entries for {trimmed}: {error}")
-                })?;
-        }
-
-        Ok(())
+    pub(in crate::services::indexed_search) fn remove_watched_path_trees(
+        &mut self,
+        paths: &[String],
+        limit: usize,
+    ) -> Result<bool, String> {
+        paths::remove_path_trees(&self.connection, paths, Some(limit))
     }
 
     pub(in crate::services::indexed_search) fn insert_batch(
@@ -203,7 +139,8 @@ impl IndexedCatalogWriter {
 
         let mut insert_entry = self
             .connection
-            .prepare(
+            // Every catalog batch uses the same statement on this writer connection.
+            .prepare_cached(
                 "INSERT INTO indexed_entries (
                     path,
                     normalized_name,
@@ -211,16 +148,6 @@ impl IndexedCatalogWriter {
                 ) VALUES (?1, ?2, ?3)",
             )
             .map_err(|error| format!("Failed to prepare indexed-search insert: {error}"))?;
-        let mut insert_token = self
-            .connection
-            .prepare(
-                "INSERT OR IGNORE INTO indexed_entry_trigrams (
-                    token,
-                    entry_id
-                ) VALUES (?1, ?2)",
-            )
-            .map_err(|error| format!("Failed to prepare indexed-search token insert: {error}"))?;
-
         for entry in entries {
             insert_entry
                 .execute(params![
@@ -229,39 +156,117 @@ impl IndexedCatalogWriter {
                     kind_to_int(entry.kind),
                 ])
                 .map_err(|error| format!("Failed to insert indexed-search entry: {error}"))?;
-
-            let entry_id = self.connection.last_insert_rowid();
-            for token in collect_search_tokens(&entry.normalized_name) {
-                insert_token
-                    .execute(params![token, entry_id])
-                    .map_err(|error| {
-                        format!("Failed to insert indexed-search search token: {error}")
-                    })?;
-            }
         }
 
+        self.entries_written = self.entries_written.saturating_add(entries.len());
         Ok(())
     }
 
-    pub(in crate::services::indexed_search) fn finish(mut self) -> Result<(), String> {
-        schema::refresh_search_tokens_ready_meta(&self.connection)?;
+    pub(in crate::services::indexed_search) fn finish(self) -> Result<(), String> {
+        self.commit()
+    }
+
+    pub(in crate::services::indexed_search) fn advance_journal_checkpoint(
+        &mut self,
+        drive_path: &str,
+        volume_id: &str,
+        previous: JournalCheckpoint,
+        next: JournalCheckpoint,
+    ) -> Result<bool, String> {
+        if next.journal_id != previous.journal_id || next.next_usn < previous.next_usn {
+            return Ok(false);
+        }
+        // Journal IDs are unsigned Windows values. SQLite stores the same 64
+        // bits as a signed INTEGER, and the read path converts them back to u64.
+        let changed = self
+            .connection
+            .execute(
+                "UPDATE indexed_drive_catalog_state SET journal_next_usn = ?1
+                 WHERE drive_path = ?2 AND volume_id = ?3 AND lifecycle_state = ?4
+                   AND journal_id = ?5 AND journal_next_usn = ?6",
+                params![
+                    next.next_usn,
+                    drive_path,
+                    volume_id,
+                    schema::DRIVE_CATALOG_STATE_READY,
+                    previous.journal_id as i64,
+                    previous.next_usn,
+                ],
+            )
+            .map_err(|error| {
+                format!(
+                    "Failed to advance indexed-search journal checkpoint for {drive_path}: {error}"
+                )
+            })?;
+        Ok(changed == 1)
+    }
+
+    pub(in crate::services::indexed_search) fn finish_drive_refresh(
+        self,
+        drive_path: &str,
+        scan_source: &str,
+        started_at: u64,
+        volume_id: &str,
+        journal_checkpoint: Option<JournalCheckpoint>,
+        before_commit: impl FnOnce() -> Result<(), String>,
+    ) -> Result<(), String> {
+        if volume_id.is_empty() {
+            return Err(format!(
+                "Cannot finalize indexed-search drive {drive_path} without a volume identity."
+            ));
+        }
+        let completed_at = crate::services::indexed_search::state::now_epoch_ms();
+        self.connection
+            .execute(
+                "INSERT INTO indexed_drive_catalog_state (
+                    drive_path,
+                    lifecycle_state,
+                    last_scan_source,
+                    last_scan_started_at,
+                    last_scan_completed_at,
+                    volume_id,
+                    journal_id,
+                    journal_next_usn,
+                    saved_entry_count
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                 ON CONFLICT(drive_path) DO UPDATE SET
+                    lifecycle_state = excluded.lifecycle_state,
+                    last_scan_source = excluded.last_scan_source,
+                    last_scan_started_at = excluded.last_scan_started_at,
+                    last_scan_completed_at = excluded.last_scan_completed_at,
+                    volume_id = excluded.volume_id,
+                    journal_id = excluded.journal_id,
+                    journal_next_usn = excluded.journal_next_usn,
+                    saved_entry_count = excluded.saved_entry_count",
+                params![
+                    drive_path,
+                    schema::DRIVE_CATALOG_STATE_READY,
+                    scan_source,
+                    started_at as i64,
+                    completed_at as i64,
+                    volume_id,
+                    journal_checkpoint.map(|checkpoint| checkpoint.journal_id as i64),
+                    journal_checkpoint.map(|checkpoint| checkpoint.next_usn),
+                    self.entries_written,
+                ],
+            )
+            .map_err(|error| {
+                format!("Failed to finalize indexed-search drive state for {drive_path}: {error}")
+            })?;
+        recursive_build::retire(&self.connection, drive_path)
+            .map_err(|error| format!("Failed to retire recursive index progress: {error}"))?;
+        before_commit()?;
+        self.commit()
+    }
+
+    fn commit(mut self) -> Result<(), String> {
         self.connection.execute_batch("COMMIT").map_err(|error| {
             format!("Failed to commit indexed-search write transaction: {error}")
         })?;
         self.finished = true;
         Ok(())
     }
-
-    pub(in crate::services::indexed_search) fn checkpoint(&mut self) -> Result<(), String> {
-        schema::refresh_search_tokens_ready_meta(&self.connection)?;
-        self.connection
-            .execute_batch("COMMIT; BEGIN IMMEDIATE;")
-            .map_err(|error| {
-                format!("Failed to checkpoint indexed-search write transaction: {error}")
-            })
-    }
 }
-
 impl Drop for IndexedCatalogWriter {
     fn drop(&mut self) {
         if self.finished {
@@ -352,11 +357,6 @@ pub(super) fn drive_root_from_catalog_path(path: &str) -> Option<String> {
     Some(format!("{drive_letter}:\\"))
 }
 
-fn build_descendant_pattern(path: &str) -> String {
-    let escaped = escape_like_literal(path);
-    format!("{escaped}\\\\%")
-}
-
 fn build_drive_refresh_pattern(drive_path: &str) -> String {
     format!("{}%", escape_like_literal(trim_catalog_path(drive_path)))
 }
@@ -375,22 +375,6 @@ fn escape_like_literal(value: &str) -> String {
     escaped
 }
 
-fn mark_drive_scan_started(connection: &Connection, drive_path: &str) -> Result<(), String> {
-    let started_at = crate::services::indexed_search::state::now_epoch_ms() as i64;
-    connection
-        .execute(
-            "INSERT INTO indexed_drive_catalog_state (
-                drive_path,
-                lifecycle_state,
-                last_scan_started_at
-             ) VALUES (?1, ?2, ?3)
-             ON CONFLICT(drive_path) DO UPDATE SET
-                lifecycle_state = excluded.lifecycle_state,
-                last_scan_started_at = excluded.last_scan_started_at",
-            params![drive_path, schema::DRIVE_CATALOG_STATE_SCANNING, started_at,],
-        )
-        .map_err(|error| {
-            format!("Failed to mark indexed-search drive scan start for {drive_path}: {error}")
-        })?;
-    Ok(())
-}
+#[cfg(test)]
+#[path = "writer_tests.rs"]
+mod tests;

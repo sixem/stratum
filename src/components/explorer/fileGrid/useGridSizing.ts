@@ -7,6 +7,7 @@ import { GRID_AUTO_COLUMNS_MAX, GRID_AUTO_COLUMNS_MIN } from "@/modules";
 import type { GridSize, ThumbnailFit } from "@/modules";
 import { getFileViewLayoutMetrics } from "../fileViewLayoutMetrics";
 import { useGridViewportLayout } from "./useGridViewportLayout";
+import { useGridWheelSize } from "./useGridWheelSize";
 
 type GridPreset = {
   column: number;
@@ -282,6 +283,7 @@ export const useGridSizing = ({
 
   // When smooth scrolling is disabled, snap wheel input to a single grid row.
   useWheelSnap(viewportRef, smoothScroll ? 0 : rowHeight);
+  useGridWheelSize(viewportRef, viewKey);
   // Restore the stored scroll offset once the grid has a measurable height.
   useScrollRestore(viewportRef, {
     restoreKey: scrollRestoreKey,
@@ -289,18 +291,22 @@ export const useGridSizing = ({
     restoreReady: !loading && layoutReady,
   });
 
-  const lastLayoutRef = useRef({ gridSize, columnCount, rowHeight });
+  const lastLayoutRef = useRef({ gridSize, gridAutoColumns, columnCount, rowHeight });
 
   // Keep the same entries in view when density changes by anchoring the viewport center.
   useLayoutEffect(() => {
     const element = viewportRef.current;
     if (!element) {
-      lastLayoutRef.current = { gridSize, columnCount, rowHeight };
+      lastLayoutRef.current = { gridSize, gridAutoColumns, columnCount, rowHeight };
       return;
     }
     const last = lastLayoutRef.current;
-    const gridSizeChanged = last.gridSize !== gridSize;
-    if (gridSizeChanged && last.rowHeight > 0 && last.columnCount > 0 && viewItemsLength > 0) {
+    const densityChanged = last.gridSize !== gridSize ||
+      (gridSize === "auto" && last.gridAutoColumns !== gridAutoColumns);
+    if (
+      densityChanged && element.scrollTop > 0 &&
+      last.rowHeight > 0 && last.columnCount > 0 && viewItemsLength > 0
+    ) {
       const viewportHeight = Math.max(0, element.clientHeight);
       // Anchor to the middle of the viewport so the same items stay in view.
       const anchorOffset = viewportHeight * 0.5;
@@ -328,8 +334,8 @@ export const useGridSizing = ({
         element.scrollTop = clamped;
       }
     }
-    lastLayoutRef.current = { gridSize, columnCount, rowHeight };
-  }, [columnCount, gridSize, rowHeight, viewItemsLength]);
+    lastLayoutRef.current = { gridSize, gridAutoColumns, columnCount, rowHeight };
+  }, [columnCount, gridAutoColumns, gridSize, rowHeight, viewItemsLength]);
 
   useEffect(() => {
     if (!onGridColumnsChange) return;

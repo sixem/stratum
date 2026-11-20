@@ -6,7 +6,6 @@ import {
   useAppViewCleanupEffects,
   useAppWindowFocusEffects,
   useAppWindowTitleEffects,
-  useWindowsVersionEffects,
 } from "@/hooks/ui/app/effects";
 import {
   useAppAppearance,
@@ -142,5 +141,4 @@ export const useAppEffects = ({
     viewPath,
   });
   useAppWindowFocusEffects(isTauriEnv);
-  useWindowsVersionEffects(isTauriEnv);
 };

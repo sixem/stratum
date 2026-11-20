@@ -1,5 +1,5 @@
 // Shared breadcrumb helpers used by the crumb bar and trail navigation.
-import { normalizePath } from "./paths";
+import { folderPathKey } from "./paths";
 
 export type PathCrumb = {
   label: string;
@@ -71,9 +71,9 @@ export const resolvePathCrumbs = (
   const trimmedTrail = trailPath?.trim();
   const displayPath = trimmedTrail ? trimmedTrail : path;
   const trailCrumbs = buildPathCrumbs(displayPath);
-  const currentKey = normalizePath(trimmedPath);
+  const currentKey = folderPathKey(trimmedPath);
   const currentIndex = trailCrumbs.findIndex(
-    (crumb) => normalizePath(crumb.path) === currentKey,
+    (crumb) => folderPathKey(crumb.path) === currentKey,
   );
   if (currentIndex !== -1) {
     return { crumbs: trailCrumbs, activeIndex: currentIndex };

@@ -15,12 +15,6 @@ body {
   color: var(--text);
 }
 
-// Force a visible drag cursor during internal (in-app) file drags.
-body[data-internal-drag="true"],
-body[data-internal-drag="true"] * {
-  cursor: grabbing !important;
-}
-
 html,
 body,
 #root {

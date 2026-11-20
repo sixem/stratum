@@ -33,6 +33,10 @@ pub(crate) fn validate_destination(destination: &str) -> Result<PathBuf, String>
         return Err("Empty destination".to_string());
     }
     let target_path = PathBuf::from(target);
+    // In particular, Windows would resolve "C:" against the drive's working directory.
+    if !target_path.is_absolute() {
+        return Err("Destination must be an absolute path".to_string());
+    }
     if !target_path.exists() {
         return Err("Destination does not exist".to_string());
     }
@@ -200,6 +204,26 @@ mod tests {
     impl Drop for TestDir {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn validate_destination_requires_an_absolute_directory() {
+        for relative in ["C:", r"C:folder", r"\folder", "."] {
+            assert_eq!(
+                validate_destination(relative).unwrap_err(),
+                "Destination must be an absolute path"
+            );
+        }
+
+        let temp = TestDir::new();
+        let root = temp.path().ancestors().last().unwrap();
+        for absolute in [root, temp.path()] {
+            assert_eq!(
+                validate_destination(absolute.to_str().unwrap()).unwrap(),
+                absolute
+            );
         }
     }
 

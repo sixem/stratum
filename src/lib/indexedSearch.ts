@@ -28,14 +28,19 @@ export const isIndexedDriveActiveState = (
   state: IndexedDriveState | null | undefined,
 ) => state != null && ACTIVE_DRIVE_STATES.has(state);
 
+export const isIndexedDriveAttentionState = (state?: IndexedDriveState | null) =>
+  state === "stale" || state === "rescanrequired" || state === "error";
+
 export const formatIndexedDriveState = (state: IndexedDriveState) => {
   switch (state) {
     case "queued":
       return "Queued";
     case "scanning":
-      return "Scanning";
+      return "Indexing";
     case "ready":
       return "Ready";
+    case "saved":
+      return "Saved index";
     case "unsupported":
       return "Unsupported";
     case "unavailable":
@@ -43,7 +48,7 @@ export const formatIndexedDriveState = (state: IndexedDriveState) => {
     case "stale":
       return "Stale";
     case "rescanrequired":
-      return "Rescan required";
+      return "Refresh needed";
     case "error":
       return "Error";
     default:
@@ -61,7 +66,7 @@ export const formatIndexedDriveSourceLabel = (
     return "NTFS";
   }
   if (normalized === "recursive fallback") {
-    return "SCAN";
+    return "Filesystem";
   }
 
   return sourceLabel;
@@ -82,19 +87,19 @@ export const formatIndexedDriveSummary = (status: IndexedDriveStatus) => {
 export const formatIndexedSearchServiceState = (
   status: IndexedSearchServiceStatus | null,
 ) => {
-  if (!status) return "Unavailable";
+  if (!status) return "Index status unavailable";
 
   switch (status.state) {
     case "disabled":
-      return "Disabled";
+      return "Index off";
     case "starting":
-      return "Starting";
+      return "Checking index…";
     case "scanning":
-      return "Scanning";
+      return "Building index";
     case "error":
-      return "Error";
+      return "Index unavailable";
     default:
-      return "Idle";
+      return "No indexed entries";
   }
 };
 

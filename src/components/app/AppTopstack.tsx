@@ -1,5 +1,6 @@
 // Renders the app header stack (controls, inputs, tabs, crumbs).
 import type { ComponentProps } from "react";
+import { setBottomPaneActive } from "@/modules/bottomPaneStore";
 import { PathBar } from "@/components/explorer/PathBar";
 import { PathInputsBar } from "@/components/explorer/PathInputsBar";
 import { PathCrumbsBar } from "@/components/explorer/PathCrumbsBar";
@@ -19,7 +20,7 @@ export const AppTopstack = ({
   crumbsBar,
 }: AppTopstackProps) => {
   return (
-    <div className="topstack">
+    <div className="topstack" onPointerDownCapture={() => setBottomPaneActive(false)} onFocusCapture={() => setBottomPaneActive(false)}>
       <div className="header">
         <PathBar {...pathBar} />
         <div className="path-tabs">

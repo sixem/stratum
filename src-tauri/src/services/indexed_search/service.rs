@@ -3,18 +3,21 @@
 // This file owns construction, enable/disable state, shutdown state, and the
 // small mutation helpers shared by worker and reconcile modules. Backend scans,
 // path reconciliation, and query caching live beside it in focused modules.
-use std::sync::{
-    atomic::{AtomicBool, AtomicU64, Ordering},
-    Arc, Mutex,
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        Arc, Condvar, Mutex, OnceLock,
+    },
 };
 
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use crate::domain::indexed_search::{
     IndexedDriveState, IndexedDriveStatus, IndexedSearchServiceState, IndexedSearchServiceStatus,
 };
 
-use super::{catalog, query_cache::QueryCache, state};
+use super::{catalog, profile_catalog, query_cache::QueryCache, state, work_queue::WorkQueue};
 
 #[derive(Clone)]
 pub struct IndexedSearchHandle {
@@ -23,108 +26,134 @@ pub struct IndexedSearchHandle {
 
 pub(super) struct IndexedSearchInner {
     pub(super) state: Mutex<state::IndexedSearchState>,
-    pub(super) catalog: Option<catalog::IndexedCatalogStore>,
-    pub(super) catalog_error: Mutex<Option<String>>,
-    // SQLite gives us one writer at a time. Keep that rule explicit here so
-    // long scans, watcher-driven refreshes, and direct write-through updates
-    // do not fight each other and surface noisy "database is locked" errors.
-    pub(super) write_gate: Mutex<()>,
+    catalog_path: Result<PathBuf, String>,
+    pub(super) catalog: OnceLock<Result<catalog::IndexedCatalogStore, String>>,
+    pub(super) work_queue: Mutex<WorkQueue>,
+    pub(super) work_available: Condvar,
     pub(super) query_cache: Mutex<QueryCache>,
     pub(super) catalog_revision: AtomicU64,
     pub(super) enabled: AtomicBool,
+    pub(super) work_generation: AtomicU64,
     pub(super) shutting_down: AtomicBool,
 }
 
 impl IndexedSearchHandle {
     pub fn init(app_handle: AppHandle) -> Self {
-        let catalog = catalog::IndexedCatalogStore::open(resolve_catalog_path(&app_handle));
-        let discovered_statuses = discover_drive_statuses();
-        eprintln!(
-            "[indexed-search] init: discovered_drives={} catalog_available={}",
-            discovered_statuses.len(),
-            catalog.is_ok()
-        );
-        if let Err(error) = &catalog {
-            eprintln!("[indexed-search] init: catalog_open_error={error}");
-        }
-        let restored_statuses = match &catalog {
-            Ok(store) => restore_drive_statuses_from_catalog(discovered_statuses, store),
-            Err(_) => discovered_statuses,
-        };
-        eprintln!(
-            "[indexed-search] init: restored_drives={}",
-            restored_statuses.len()
-        );
-        let handle = Self {
+        Self::new(profile_catalog::path_for_app(&app_handle))
+    }
+
+    fn new(catalog_path: Result<PathBuf, String>) -> Self {
+        let mut state = state::IndexedSearchState::new();
+        state.update_service_status(IndexedSearchServiceState::Disabled, None);
+        Self {
             inner: Arc::new(IndexedSearchInner {
-                state: Mutex::new(state::IndexedSearchState::new()),
-                catalog: catalog.as_ref().ok().cloned(),
-                catalog_error: Mutex::new(catalog.as_ref().err().cloned()),
-                write_gate: Mutex::new(()),
+                state: Mutex::new(state),
+                catalog_path,
+                catalog: OnceLock::new(),
+                work_queue: Mutex::new(WorkQueue::default()),
+                work_available: Condvar::new(),
                 query_cache: Mutex::new(QueryCache::new()),
                 catalog_revision: AtomicU64::new(0),
                 enabled: AtomicBool::new(false),
+                work_generation: AtomicU64::new(0),
                 shutting_down: AtomicBool::new(false),
             }),
-        };
-
-        handle.initialize_drive_statuses(restored_statuses, IndexedSearchServiceState::Disabled);
-
-        match catalog {
-            Ok(_) => {}
-            Err(error) => handle.fail_initialization(error),
         }
+    }
 
-        handle
+    pub(super) fn initialize_catalog(&self) -> bool {
+        self.inner
+            .catalog
+            .get_or_init(|| {
+                // Open and load before any mount can be scheduled for a scan.
+                // No state or queue locks cover these blocking disk reads.
+                let store = profile_catalog::open(self.inner.catalog_path.clone()?)?;
+                let snapshots = store.load_ready_drive_snapshots()?;
+                self.inner
+                    .state
+                    .lock()
+                    .expect("indexed search state lock")
+                    .volumes
+                    .load_snapshots(snapshots);
+                Ok(store)
+            })
+            .is_ok()
     }
 
     pub fn service_status(&self) -> IndexedSearchServiceStatus {
         let guard = self.inner.state.lock().expect("indexed search state lock");
-        guard.service_status.clone()
+        let mut status = guard.service_status.clone();
+        status.catalog_revision = self.catalog_revision();
+        if self.is_enabled() {
+            status.searchable_drive_count = guard.volumes.verified.len();
+        }
+        status
     }
 
     pub fn set_enabled(&self, enabled: bool) {
+        let mut queue = self
+            .inner
+            .work_queue
+            .lock()
+            .expect("indexed search work queue");
         if self.is_shutting_down() {
-            eprintln!("[indexed-search] set_enabled: ignored during shutdown enabled={enabled}");
             return;
         }
 
-        let was_enabled = self.inner.enabled.swap(enabled, Ordering::SeqCst);
-        eprintln!(
-            "[indexed-search] set_enabled: requested={} previous={} catalog_available={}",
-            enabled,
-            was_enabled,
-            self.inner.catalog.is_some()
-        );
-        if was_enabled == enabled {
-            eprintln!("[indexed-search] set_enabled: no-op unchanged enabled={enabled}");
+        if self.inner.enabled.swap(enabled, Ordering::SeqCst) == enabled {
             return;
         }
+        self.inner.work_generation.fetch_add(1, Ordering::SeqCst);
 
         if enabled {
-            if !self.has_catalog() {
-                eprintln!("[indexed-search] set_enabled: catalog unavailable");
+            if self.catalog_error().is_some() {
                 self.mark_catalog_unavailable();
                 return;
             }
 
-            let pending_count = self.pending_scan_drive_paths().len();
-            eprintln!(
-                "[indexed-search] set_enabled: starting initial scan pending={pending_count}"
+            {
+                let mut state = self.inner.state.lock().expect("indexed search state lock");
+                state.volumes.verified.clear();
+                state.volumes.journal_rebuilds.clear();
+                for status in state.drive_statuses.values_mut() {
+                    if status.indexable && status.state == IndexedDriveState::Error {
+                        status.state = IndexedDriveState::Queued;
+                    }
+                }
+            }
+            queue.queue_volume_check();
+            queue.queue_search_backfill();
+            self.bump_catalog_revision();
+            self.set_service_state(
+                IndexedSearchServiceState::Starting,
+                Some("Checking saved indexes".to_string()),
             );
-            self.set_service_state(IndexedSearchServiceState::Idle, None);
-            self.spawn_initial_scan();
+            let _ = self.start_worker(&mut queue);
             return;
         }
 
-        self.clear_query_cache();
+        self.bump_catalog_revision();
         self.reset_disabled_drive_statuses();
         self.set_service_state(IndexedSearchServiceState::Disabled, None);
+        self.inner.work_available.notify_one();
     }
 
     pub fn shutdown(&self) {
-        if self.inner.shutting_down.swap(true, Ordering::SeqCst) {
-            return;
+        let thread = {
+            let mut queue = self
+                .inner
+                .work_queue
+                .lock()
+                .expect("indexed search work queue");
+            self.inner.shutting_down.store(true, Ordering::SeqCst);
+            self.inner.work_available.notify_one();
+            queue.thread.take()
+        };
+        // Do not hold the queue lock while the cancelled worker unwinds.
+        if let Some(thread) = thread {
+            if thread.join().is_err() {
+                eprintln!("[indexed-search] indexing worker panicked");
+            }
         }
     }
 
@@ -135,21 +164,6 @@ impl IndexedSearchHandle {
 
         let guard = self.inner.state.lock().expect("indexed search state lock");
         guard.drive_statuses_snapshot()
-    }
-
-    pub(super) fn initialize_drive_statuses(
-        &self,
-        statuses: Vec<IndexedDriveStatus>,
-        service_state: IndexedSearchServiceState,
-    ) {
-        let mut guard = self.inner.state.lock().expect("indexed search state lock");
-        guard.replace_drive_statuses(statuses, service_state, None);
-    }
-
-    pub(super) fn fail_initialization(&self, error: String) {
-        eprintln!("[indexed-search] fail_initialization: {error}");
-        self.remember_catalog_error(&error);
-        self.mark_catalog_unavailable();
     }
 
     pub(super) fn set_service_state(
@@ -171,67 +185,37 @@ impl IndexedSearchHandle {
         guard.transition_drive_state(drive_path, next_state, message);
     }
 
-    pub(super) fn pending_scan_drive_paths(&self) -> Vec<String> {
-        let guard = self.inner.state.lock().expect("indexed search state lock");
-        guard
-            .drive_statuses
-            .values()
-            .filter(|status| {
-                status.indexable
-                    && matches!(
-                        status.state,
-                        IndexedDriveState::Queued
-                            | IndexedDriveState::Stale
-                            | IndexedDriveState::RescanRequired
-                            | IndexedDriveState::Error
-                    )
-            })
-            .map(|status| status.drive_path.clone())
-            .collect()
-    }
-
     pub(super) fn touch_drive_status(&self, drive_path: &str) {
         let mut guard = self.inner.state.lock().expect("indexed search state lock");
         guard.touch_drive(drive_path);
-    }
-
-    pub(super) fn set_drive_summary(
-        &self,
-        drive_path: &str,
-        entry_count: Option<u64>,
-        source_label: Option<String>,
-    ) {
-        let mut guard = self.inner.state.lock().expect("indexed search state lock");
-        guard.set_drive_summary(drive_path, entry_count, source_label);
     }
 
     pub(super) fn is_shutting_down(&self) -> bool {
         self.inner.shutting_down.load(Ordering::SeqCst)
     }
 
-    pub(super) fn is_enabled(&self) -> bool {
+    pub(in crate::services) fn is_enabled(&self) -> bool {
         self.inner.enabled.load(Ordering::SeqCst)
     }
 
-    pub(super) fn should_cancel_scan(&self) -> bool {
-        self.is_shutting_down() || !self.is_enabled()
+    pub(super) fn should_cancel_work(&self, generation: u64) -> bool {
+        self.is_shutting_down()
+            || !self.is_enabled()
+            || generation != self.inner.work_generation.load(Ordering::SeqCst)
     }
 
-    pub(super) fn has_catalog(&self) -> bool {
-        self.inner.catalog.is_some()
+    pub(super) fn catalog(&self) -> Option<&catalog::IndexedCatalogStore> {
+        self.inner.catalog.get()?.as_ref().ok()
     }
 
-    pub(super) fn catalog_unavailable_message(&self) -> String {
-        self.inner
-            .catalog_error
-            .lock()
-            .expect("indexed search catalog error lock")
-            .clone()
-            .unwrap_or_else(|| "Indexed-search catalog is unavailable.".to_string())
+    pub(super) fn catalog_error(&self) -> Option<&str> {
+        self.inner.catalog.get()?.as_ref().err().map(String::as_str)
     }
 
     pub(super) fn mark_catalog_unavailable(&self) {
-        let reason = self.catalog_unavailable_message();
+        let reason = self
+            .catalog_error()
+            .unwrap_or("Indexed-search catalog is unavailable.");
         let drive_message = format!("Catalog initialization failed: {reason}");
         let activity_label = Some(format!("Indexed-search catalog unavailable: {reason}"));
 
@@ -255,72 +239,93 @@ impl IndexedSearchHandle {
             status.last_updated_at = state::now_epoch_ms();
         }
     }
-
-    fn remember_catalog_error(&self, error: &str) {
-        let mut guard = self
-            .inner
-            .catalog_error
-            .lock()
-            .expect("indexed search catalog error lock");
-        *guard = Some(error.to_string());
-    }
 }
 
-#[cfg(target_os = "windows")]
-fn discover_drive_statuses() -> Vec<IndexedDriveStatus> {
-    super::windows::discover_drive_statuses()
+pub fn catalog_path_for_app(app_handle: &AppHandle) -> Result<std::path::PathBuf, String> {
+    profile_catalog::path_for_app(app_handle)
 }
 
-#[cfg(not(target_os = "windows"))]
-fn discover_drive_statuses() -> Vec<IndexedDriveStatus> {
-    Vec::new()
-}
-
-fn resolve_catalog_path(app_handle: &AppHandle) -> std::path::PathBuf {
-    app_handle
-        .path()
-        .app_local_data_dir()
-        .unwrap_or_else(|_| std::env::temp_dir())
-        .join("indexed-search")
-        .join("catalog.db")
-}
-
-pub fn catalog_path_for_app(app_handle: &AppHandle) -> std::path::PathBuf {
-    resolve_catalog_path(app_handle)
-}
-
-fn restore_drive_statuses_from_catalog(
-    mut discovered_statuses: Vec<IndexedDriveStatus>,
-    catalog: &catalog::IndexedCatalogStore,
-) -> Vec<IndexedDriveStatus> {
-    let Ok(snapshots) = catalog.load_ready_drive_snapshots() else {
-        return discovered_statuses;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::indexed_search::IndexedPathQuery;
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
     };
 
-    let snapshot_map = snapshots
-        .into_iter()
-        .map(|snapshot| (state::normalize_drive_key(&snapshot.drive_path), snapshot))
-        .collect::<std::collections::BTreeMap<_, _>>();
+    struct Fixture(PathBuf);
 
-    for status in &mut discovered_statuses {
-        if !status.indexable {
-            continue;
+    impl Fixture {
+        fn new() -> Self {
+            let directory = std::env::temp_dir().join(format!(
+                "stratum-deferred-catalog-{}-{}",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos(),
+            ));
+            fs::create_dir(&directory).unwrap();
+            Self(directory)
         }
 
-        let key = state::normalize_drive_key(&status.drive_path);
-        let Some(snapshot) = snapshot_map.get(&key) else {
-            continue;
-        };
-
-        status.state = IndexedDriveState::Ready;
-        status.started_at = snapshot.last_scan_completed_at.or(status.started_at);
-        status.last_updated_at = snapshot
-            .last_scan_completed_at
-            .unwrap_or(status.last_updated_at);
-        status.entry_count = Some(snapshot.entry_count as u64);
-        status.source_label = snapshot.last_scan_source.clone();
-        status.message = None;
+        fn path(&self) -> PathBuf {
+            self.0.join("catalog-v2.db")
+        }
     }
 
-    discovered_statuses
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn query() -> IndexedPathQuery {
+        IndexedPathQuery {
+            query: "example".into(),
+            limit: Some(10),
+        }
+    }
+
+    #[test]
+    fn deferred_catalog_opens_and_installs_complete_snapshots_before_it_is_used() {
+        let fixture = Fixture::new();
+        let handle = IndexedSearchHandle::new(Ok(fixture.path()));
+        assert!(!fixture.path().exists());
+        assert!(handle.catalog().is_none());
+
+        let catalog = catalog::IndexedCatalogStore::open(fixture.path()).unwrap();
+        let drive = r"C:\";
+        catalog
+            .begin_drive_refresh(drive)
+            .unwrap()
+            .finish_drive_refresh(drive, "Filesystem scan", 1, "volume-id", None, || Ok(()))
+            .unwrap();
+        handle.inner.enabled.store(true, Ordering::SeqCst);
+        assert!(handle.query_paths(query()).unwrap().is_empty());
+        assert!(handle.initialize_catalog());
+        assert!(handle.catalog().is_some());
+        let state = handle.inner.state.lock().unwrap();
+        assert!(
+            state.volumes.snapshots[&state::normalize_drive_key(drive)]
+                .volume_id
+                .as_deref()
+                == Some("volume-id")
+        );
+        assert!(state.volumes.verified.is_empty());
+    }
+
+    #[test]
+    fn deferred_catalog_read_failure_is_not_an_empty_starting_catalog() {
+        let fixture = Fixture::new();
+        fs::write(fixture.path(), b"not a catalog".repeat(32)).unwrap();
+        let handle = IndexedSearchHandle::new(Ok(fixture.path()));
+        handle.inner.enabled.store(true, Ordering::SeqCst);
+        assert!(handle.query_paths(query()).unwrap().is_empty());
+        assert!(!handle.initialize_catalog());
+        assert!(handle.query_paths(query()).is_err());
+        assert!(handle.request_drive_rebuild(r"C:\".into()).is_err());
+        assert!(handle.inner.work_queue.lock().unwrap().is_empty());
+    }
 }

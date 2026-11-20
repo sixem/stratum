@@ -26,6 +26,7 @@ export const EntryCard = memo(({
   hideExtension,
   selected,
   isDeleting,
+  isCut,
   isTransferring,
   dropTarget,
   isRenaming,
@@ -131,12 +132,14 @@ export const EntryCard = memo(({
   return (
     <div
       className={cardClass}
+      data-drag-source={isInteractive}
       role={isInteractive ? "button" : undefined}
       tabIndex={isInteractive ? 0 : -1}
-      data-selectable={isRemoved ? "false" : "true"}
+      data-selectable={!isRemoved && !isBusy ? "true" : "false"}
       data-grid-tooltip={entry.isDir ? "false" : "true"}
       data-tooltip-disabled={tooltipDisabled ? "true" : "false"}
       data-path={entry.path}
+      data-cut={isCut || undefined}
       data-name={entry.name}
       data-index={index}
       data-is-dir={entry.isDir ? "true" : "false"}
@@ -188,7 +191,7 @@ export const EntryCard = memo(({
         {showInfo ? (
           <div className="thumb-info">
             {resolvedSizeLabel ? (
-              <span className="thumb-info-size">{resolvedSizeLabel}</span>
+              <span className="thumb-info-size tnum">{resolvedSizeLabel}</span>
             ) : null}
             {extensionLabel ? (
               <span className="thumb-info-ext">{extensionLabel}</span>

@@ -15,35 +15,38 @@ const LIST_DIR_CANCEL_CHECK_INTERVAL: usize = 32;
 const LIST_DIR_CANCEL_MESSAGE: &str = "Directory listing canceled";
 
 // Track the newest list_dir generation so older scans can stop early.
-static LIST_DIR_LATEST_GENERATION: AtomicU64 = AtomicU64::new(0);
+static LIST_DIR_LATEST_GENERATION: [AtomicU64; 2] = [AtomicU64::new(0), AtomicU64::new(0)];
 
 struct ScannedEntry {
     file_entry: FileEntry,
     normalized_name: String,
 }
 
-fn start_list_dir_generation(generation: Option<u64>) -> Result<Option<u64>, String> {
+type ScanGeneration = (&'static AtomicU64, u64);
+
+fn start_list_dir_generation(pane: super::super::FilePane, generation: Option<u64>) -> Result<Option<ScanGeneration>, String> {
     let generation = match generation {
         Some(value) => value,
         None => return Ok(None),
     };
 
     // fetch_max keeps the newest generation when requests overlap.
-    let previous = LIST_DIR_LATEST_GENERATION.fetch_max(generation, AtomicOrdering::Relaxed);
+    let latest = &LIST_DIR_LATEST_GENERATION[pane as usize];
+    let previous = latest.fetch_max(generation, AtomicOrdering::Relaxed);
     if previous > generation {
         return Err(LIST_DIR_CANCEL_MESSAGE.into());
     }
-    Ok(Some(generation))
+    Ok(Some((latest, generation)))
 }
 
-fn is_list_dir_generation_stale(generation: Option<u64>) -> bool {
+fn is_list_dir_generation_stale(generation: Option<ScanGeneration>) -> bool {
     match generation {
-        Some(value) => LIST_DIR_LATEST_GENERATION.load(AtomicOrdering::Relaxed) != value,
+        Some((latest, value)) => latest.load(AtomicOrdering::Relaxed) != value,
         None => false,
     }
 }
 
-fn should_cancel_list_dir(generation: Option<u64>, scanned: usize) -> bool {
+fn should_cancel_list_dir(generation: Option<ScanGeneration>, scanned: usize) -> bool {
     if scanned % LIST_DIR_CANCEL_CHECK_INTERVAL != 0 {
         return false;
     }
@@ -110,8 +113,9 @@ pub fn list_dir(path: String, options: Option<ListDirOptions>) -> Result<ListDir
         search: None,
         fast: None,
         generation: None,
+        pane: Default::default(),
     });
-    let generation = start_list_dir_generation(options.generation)?;
+    let generation = start_list_dir_generation(options.pane, options.generation)?;
     let sort = options.sort.unwrap_or_else(default_sort_state);
     let search = normalize_search(options.search);
     let fast = options.fast.unwrap_or(false);
@@ -147,12 +151,14 @@ pub fn list_dir(path: String, options: Option<ListDirOptions>) -> Result<ListDir
             compare_entry_fields(
                 EntrySortFields {
                     is_dir: left.file_entry.is_dir,
+                    name: &left.file_entry.name,
                     normalized_name: &left.normalized_name,
                     size: left.file_entry.size,
                     modified: left.file_entry.modified,
                 },
                 EntrySortFields {
                     is_dir: right.file_entry.is_dir,
+                    name: &right.file_entry.name,
                     normalized_name: &right.normalized_name,
                     size: right.file_entry.size,
                     modified: right.file_entry.modified,
@@ -162,6 +168,10 @@ pub fn list_dir(path: String, options: Option<ListDirOptions>) -> Result<ListDir
         });
     }
 
+    // Navigation can change while a large result is being sorted.
+    if is_list_dir_generation_stale(generation) {
+        return Err(LIST_DIR_CANCEL_MESSAGE.into());
+    }
     Ok(ListDirResult {
         entries: items.into_iter().map(|item| item.file_entry).collect(),
         total_count,

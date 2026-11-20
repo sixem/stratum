@@ -1,31 +1,40 @@
-// Fetches shell availability once on startup and caches it in a store.
-import { useEffect } from "react";
+// Recheck when the FFmpeg override changes or the user reopens Settings after installing it.
+import { useEffect, useRef } from "react";
 import { getShellAvailability } from "@/api";
 import { useShellStore } from "@/modules";
 
 type UseShellAvailabilityOptions = {
   enabled: boolean;
+  ffmpegPath: string;
+  settingsOpen: boolean;
 };
 
-export const useShellAvailability = ({ enabled }: UseShellAvailabilityOptions) => {
+export const useShellAvailability = ({ enabled, ffmpegPath, settingsOpen }: UseShellAvailabilityOptions) => {
   const availability = useShellStore((state) => state.availability);
   const setAvailability = useShellStore((state) => state.setAvailability);
+  const checkedPath = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!enabled || availability) return;
+    if (!enabled || (!settingsOpen && checkedPath.current === ffmpegPath)) return;
     let mounted = true;
-    void getShellAvailability()
+    checkedPath.current = null;
+    setAvailability(null);
+    void getShellAvailability(ffmpegPath)
       .then((result) => {
         if (!mounted) return;
+        checkedPath.current = ffmpegPath;
         setAvailability(result);
       })
       .catch(() => {
-        // Ignore shell detection errors for now.
+        if (mounted) setAvailability({
+          pwsh: false, wsl: false, ffmpeg: false, ffmpegPath: null,
+          ffmpegMessage: "Could not check FFmpeg on this computer.",
+        });
       });
     return () => {
       mounted = false;
     };
-  }, [availability, enabled, setAvailability]);
+  }, [enabled, ffmpegPath, settingsOpen, setAvailability]);
 
   return availability;
 };

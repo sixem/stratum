@@ -1,62 +1,56 @@
 // Centralizes app-level commands so App.tsx stays focused on orchestration.
 import { useCallback } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, RefObject, SetStateAction } from "react";
 import { clearThumbCache, getThumbCacheDir, openPath, openShell } from "@/api";
-import type { DropTarget } from "@/lib";
 import { usePromptStore } from "@/modules";
 import type { ShellKind } from "@/types";
 
 type UseAppCommandsOptions = {
+  viewVisit: RefObject<boolean>;
   browseFromView: (path: string) => void;
   queueCreateSelection: (createdPath: string, parentPath: string) => void;
   createFile: (parentPath: string, name: string) => Promise<string | null>;
   createFolder: (parentPath: string, name: string) => Promise<string | null>;
-  performDrop: (paths: string[], targetPath: string) => Promise<unknown>;
-  setDropTarget: (target: DropTarget | null) => void;
-  clearDragState: () => void;
   setThumbResetNonce: Dispatch<SetStateAction<number>>;
 };
 
 export const useAppCommands = ({
+  viewVisit,
   browseFromView,
   queueCreateSelection,
   createFile,
   createFolder,
-  performDrop,
-  setDropTarget,
-  clearDragState,
   setThumbResetNonce,
 }: UseAppCommandsOptions) => {
   const handleCreateFile = useCallback(
     async (parentPath: string, name: string) => {
       const createdPath = await createFile(parentPath, name);
-      if (createdPath) {
+      if (createdPath && viewVisit.current) {
         queueCreateSelection(createdPath, parentPath);
       }
       return createdPath;
     },
-    [createFile, queueCreateSelection],
+    [createFile, queueCreateSelection, viewVisit],
   );
 
   const handleCreateFolder = useCallback(
     async (parentPath: string, name: string) => {
       const createdPath = await createFolder(parentPath, name);
-      if (createdPath) {
+      if (createdPath && viewVisit.current) {
         queueCreateSelection(createdPath, parentPath);
       }
       return createdPath;
     },
-    [createFolder, queueCreateSelection],
+    [createFolder, queueCreateSelection, viewVisit],
   );
 
   const handleCreateFolderAndGo = useCallback(
     async (parentPath: string, name: string) => {
       const createdPath = await createFolder(parentPath, name);
-      if (!createdPath) return null;
-      browseFromView(createdPath);
+      if (createdPath && viewVisit.current) browseFromView(createdPath);
       return createdPath;
     },
-    [browseFromView, createFolder],
+    [browseFromView, createFolder, viewVisit],
   );
 
   const handleOpenShell = useCallback((kind: ShellKind, path: string) => {
@@ -75,22 +69,6 @@ export const useAppCommands = ({
       });
     });
   }, []);
-
-  const handleInternalDrop = useCallback(
-    (paths: string[], target: DropTarget | null) => {
-      clearDragState();
-      if (!target) return;
-      void performDrop(paths, target.path);
-    },
-    [clearDragState, performDrop],
-  );
-
-  const handleInternalHover = useCallback(
-    (target: DropTarget | null) => {
-      setDropTarget(target);
-    },
-    [setDropTarget],
-  );
 
   const handleOpenThumbCache = useCallback(async () => {
     try {
@@ -116,8 +94,6 @@ export const useAppCommands = ({
     handleCreateFolder,
     handleCreateFolderAndGo,
     handleOpenShell,
-    handleInternalDrop,
-    handleInternalHover,
     handleOpenThumbCache,
     handleClearThumbCache,
   };

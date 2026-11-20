@@ -14,9 +14,9 @@ export type FileViewLayoutMetrics = {
 };
 
 const DEFAULT_FILE_VIEW_LAYOUT_METRICS: FileViewLayoutMetrics = {
-  listRowHeight: 36,
-  listRowGap: 6,
-  gridCardBorder: 1,
+  listRowHeight: 30,
+  listRowGap: 1,
+  gridCardBorder: 2,
   gridCardPadding: 6,
   gridCardGap: 6,
   gridMetaGap: 6,

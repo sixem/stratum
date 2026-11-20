@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { formatBytes, getPlatformLabel } from "@/lib";
+import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PressButton } from "@/components/primitives/PressButton";
 import { usePromptStore, useSettingsStore, useShellStore } from "@/modules";
 
@@ -104,18 +105,10 @@ export const SettingsVitals = ({ open }: SettingsVitalsProps) => {
   const dprLabel = windowStats ? windowStats.dpr.toFixed(2) : "...";
   const heapLabel = heapUsageBytes == null ? "n/a" : formatBytes(heapUsageBytes);
   const uptimeLabel = formatUptime(uptimeMs);
-  const ffmpegCheckReady = shellAvailability !== null;
-  const ffmpegDetected = Boolean(shellAvailability?.ffmpeg) || Boolean(ffmpegPath);
-  const ffmpegStatus = shellAvailability
-    ? ffmpegDetected
-      ? "Available"
-      : "Not found"
-    : "Checking...";
-  const ffmpegStatusClass = ffmpegCheckReady
-    ? ffmpegDetected
-      ? "is-ok"
-      : "is-missing"
-    : "";
+  const ffmpegStatus = !shellAvailability ? "Checking…" : !shellAvailability.ffmpeg
+    ? "Unavailable" : shellAvailability.ffmpegMessage ? "Using automatic" : "Available";
+  const ffmpegStatusClass = shellAvailability ? (shellAvailability.ffmpeg ? "is-ok" : "is-missing") : "";
+  const ffmpegDetails = shellAvailability?.ffmpegMessage || shellAvailability?.ffmpegPath || undefined;
 
   const showLocatePrompt = () => {
     const initialValue = ffmpegPath;
@@ -164,7 +157,8 @@ export const SettingsVitals = ({ open }: SettingsVitalsProps) => {
           multiple: false,
           directory: false,
           title: "Locate FFmpeg",
-          defaultPath: ffmpegPath || undefined,
+          filters: [{ name: "Executable", extensions: ["exe"] }],
+          defaultPath: shellAvailability?.ffmpegPath || undefined,
         });
         if (typeof selection === "string" && selection.trim()) {
           updateSettings({ ffmpegPath: selection.trim() });
@@ -208,16 +202,21 @@ export const SettingsVitals = ({ open }: SettingsVitalsProps) => {
         </div>
         <div className="settings-stat">
           <span>FFmpeg</span>
-          <span className={`settings-stat-value ${ffmpegStatusClass}`}>{ffmpegStatus}</span>
+          <TooltipWrapper text={ffmpegDetails ?? ""}>
+            <span className={`settings-stat-value ${ffmpegStatusClass}`}>{ffmpegStatus}</span>
+          </TooltipWrapper>
         </div>
       </div>
-      {ffmpegCheckReady && !ffmpegDetected ? (
-        <div className="settings-vitals-actions">
-          <PressButton type="button" className="btn" onClick={handleLocateFfmpeg}>
-            Locate FFmpeg
+      <div className="settings-vitals-actions">
+        <PressButton type="button" className="btn" onClick={handleLocateFfmpeg}>
+          Locate FFmpeg
+        </PressButton>
+        {ffmpegPath && (
+          <PressButton type="button" className="btn" onClick={() => updateSettings({ ffmpegPath: "" })}>
+            Use automatic
           </PressButton>
-        </div>
-      ) : null}
+        )}
+      </div>
     </div>
   );
 };

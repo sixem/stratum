@@ -17,11 +17,17 @@ export type PlaceContextTarget = {
 };
 
 export type ContextMenuIcon =
+  | "open"
   | "open-external"
+  | "open-gallery"
   | "convert"
   | "quick-convert"
+  | "cut"
   | "copy"
-  | "delete";
+  | "delete"
+  | "rename"
+  | "properties"
+  | "more-options";
 
 export type ContextMenuItem =
   | {

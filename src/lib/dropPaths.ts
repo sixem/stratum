@@ -1,6 +1,6 @@
 // Shared helpers for normalizing drag/drop paths.
 // Centralizing this logic keeps drop handling consistent across UI surfaces.
-import { getParentPath, getPathName, normalizePath } from "./paths";
+import { getParentPath, getPathName, normalizePath } from "./paths.ts";
 
 export type DropCandidate = {
   path: string;
@@ -10,45 +10,26 @@ export type DropCandidate = {
 
 // Normalize drag/drop paths that may include URL or extended-length prefixes.
 export const sanitizeDropPath = (path: string) => {
-  let trimmed = path.trim();
-  if (!trimmed) return "";
-  if (trimmed.toLowerCase().startsWith("file://")) {
-    trimmed = trimmed.replace(/^file:\/*/i, "");
-    if (trimmed.toLowerCase().startsWith("localhost/")) {
-      trimmed = trimmed.slice("localhost/".length);
-    }
-    trimmed = trimmed.replace(/^\/+/, "");
-    try {
-      trimmed = decodeURIComponent(trimmed);
-    } catch {
-      // Ignore decode errors; we'll compare the raw value.
-    }
+  if (!path.trim()) return "";
+  if (!/^file:\/\//i.test(path)) return path;
+  try {
+    const url = new URL(path);
+    const name = decodeURIComponent(url.pathname).replace(/\//g, "\\");
+    if (url.hostname) return "\\\\" + url.hostname + name;
+    return name.replace(/^\\([a-z]:\\)/i, "$1");
+  } catch {
+    return "";
   }
-  if (trimmed.startsWith("\\\\?\\")) {
-    trimmed = trimmed.slice(4);
-  } else if (trimmed.startsWith("//?/")) {
-    trimmed = trimmed.slice(4);
-  }
-  const lower = trimmed.toLowerCase();
-  if (lower.startsWith("unc\\")) {
-    trimmed = `\\\\${trimmed.slice(4)}`;
-  } else if (lower.startsWith("unc/")) {
-    trimmed = `\\\\${trimmed.slice(4)}`;
-  }
-  return trimmed;
 };
 
 export const normalizeDropPath = (path: string) => {
   const cleaned = sanitizeDropPath(path);
   if (!cleaned) return "";
-  return normalizePath(cleaned);
-};
-
-const getNormalizedParentKey = (normalizedPath: string) => {
-  if (!normalizedPath) return "";
-  const parent = getParentPath(normalizedPath);
-  if (!parent) return "";
-  return normalizePath(parent);
+  // Strip equivalent prefixes only for comparisons. A volume GUID path has
+  // no usable drive-relative spelling, and long paths need their original prefix.
+  return normalizePath(cleaned)
+    .replace(/^\\\\\?\\unc\\/i, "\\\\")
+    .replace(/^\\\\\?\\([a-z]:)/i, "$1");
 };
 
 export const joinPath = (base: string, name: string) => {
@@ -64,9 +45,9 @@ export const buildDropCandidate = (
 ): DropCandidate | null => {
   const cleaned = sanitizeDropPath(path);
   if (!cleaned) return null;
-  const normalized = normalizePath(cleaned);
+  const normalized = normalizeDropPath(cleaned);
   if (!normalized) return null;
-  const parentKey = getNormalizedParentKey(normalized);
+  const parentKey = normalizeDropPath(getParentPath(cleaned) ?? "");
   const isSameDirectory =
     normalized === destinationKey ||
     (parentKey !== "" && parentKey === destinationKey);

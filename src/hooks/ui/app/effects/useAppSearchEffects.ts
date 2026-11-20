@@ -1,7 +1,7 @@
 // Search-field sync and filtered reload effects for the active tab.
 // This keeps the typing/search lifecycle separate from unrelated window and scroll work.
 import { useEffect, useRef } from "react";
-import { normalizePath } from "@/lib";
+import { folderPathKey } from "@/lib";
 import type { AppEffectActions, AppEffectView } from "./appEffectTypes";
 
 type UseAppSearchEffectsOptions = Pick<
@@ -62,8 +62,8 @@ export const useAppSearchEffects = ({
     if (!currentPath || loading) return;
     const activePath = activeTabPath ?? currentPath;
     if (!activePath) return;
-    const currentKey = normalizePath(currentPath);
-    const activeKey = normalizePath(activePath);
+    const currentKey = folderPathKey(currentPath);
+    const activeKey = folderPathKey(activePath);
     // Only refresh when the active tab path matches the current view.
     if (!currentKey || currentKey !== activeKey) return;
     if (deferredSearchValue !== activeSearch) return;

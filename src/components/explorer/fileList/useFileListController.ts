@@ -67,6 +67,7 @@ export const useFileListController = ({
 }: UseFileListControllerOptions) => {
   const isDeletePending = useCallback(
     (path: string) => {
+      if (selection.pendingDeletePaths.size === 0) return false;
       const key = normalizePath(path) ?? path.trim();
       return key ? selection.pendingDeletePaths.has(key) : false;
     },
@@ -74,6 +75,7 @@ export const useFileListController = ({
   );
   const isTransferPending = useCallback(
     (path: string) => {
+      if (selection.pendingTransferPaths.size === 0) return false;
       const key = normalizePath(path) ?? path.trim();
       return key ? selection.pendingTransferPaths.has(key) : false;
     },

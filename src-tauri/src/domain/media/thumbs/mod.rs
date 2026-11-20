@@ -66,6 +66,8 @@ pub struct ThumbnailState {
     queue: Mutex<ThumbQueue>,
     condvar: Condvar,
     trim_state: Mutex<CacheTrimState>,
+    // Serialize trimming and clearing without holding the growth accounting lock during I/O.
+    cache_maintenance: Mutex<()>,
     // Keep a lightweight in-memory view of generated files so scroll-driven
     // batches do not need to hit the filesystem for every cache lookup.
     cache_index: Mutex<HashSet<String>>,
@@ -99,6 +101,7 @@ pub fn init(app_handle: AppHandle) -> ThumbnailHandle {
             approx_total_bytes: None,
             pending_growth_bytes: 0,
         }),
+        cache_maintenance: Mutex::new(()),
         cache_index: Mutex::new(cache::load_cache_index(&cache_dir)),
     });
 

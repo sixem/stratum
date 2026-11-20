@@ -64,7 +64,7 @@ export const PreviewControls = ({
       >
         <PressButton
           type="button"
-          className="quick-preview-control-button quick-preview-control-volume-button"
+          className="quick-preview-control-button quick-preview-control-volume-button tnum"
           onClick={onToggleVolumePicker}
           ref={volumeButtonRef}
           aria-expanded={volumePickerOpen ? "true" : "false"}

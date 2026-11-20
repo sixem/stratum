@@ -49,7 +49,6 @@ export type Settings = {
   menuOpenWsl: boolean;
   menuShowConvert: boolean;
   indexedSearchEnabled: boolean;
-  acceleratedNtfsIndexing: boolean;
   thumbnailsEnabled: boolean;
   thumbnailSize: number;
   thumbnailQuality: number;

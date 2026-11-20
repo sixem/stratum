@@ -9,11 +9,20 @@ import {
   OpenExternalIcon,
   QuickConvertIcon,
 } from "@/components/icons";
+import {
+  ContextCutIcon,
+  ContextGalleryIcon,
+  ContextMoreOptionsIcon,
+  ContextOpenIcon,
+  ContextPropertiesIcon,
+  ContextRenameIcon,
+} from "@/components/icons/contextMenuIcons";
 import type { ContextMenuIcon, ContextMenuItem } from "@/types";
 import { CONTEXT_MENU_EDGE, CONTEXT_MENU_GAP, CONTEXT_SUBMENU_GAP } from "@/constants";
 import { PressButton } from "@/components/primitives/PressButton";
 import { alignFloatingAxis, clamp, getViewportSize } from "./overlayUtils";
 import { useOverlayDismiss } from "./useOverlayDismiss";
+import { focusFirstMenuItem, handleContextMenuKey } from "./contextMenuKeyboard";
 
 type ContextMenuProps = {
   open: boolean;
@@ -27,23 +36,23 @@ const MENU_EDGE = CONTEXT_MENU_EDGE;
 const MENU_GAP = CONTEXT_MENU_GAP;
 const SUBMENU_GAP = CONTEXT_SUBMENU_GAP;
 
+const contextIcons = {
+  open: ContextOpenIcon,
+  "open-external": OpenExternalIcon,
+  "open-gallery": ContextGalleryIcon,
+  convert: ConvertIcon,
+  "quick-convert": QuickConvertIcon,
+  cut: ContextCutIcon,
+  copy: CopyActionIcon,
+  delete: DeleteActionIcon,
+  rename: ContextRenameIcon,
+  properties: ContextPropertiesIcon,
+  "more-options": ContextMoreOptionsIcon,
+} satisfies Record<ContextMenuIcon, typeof CopyActionIcon>;
+
 const renderContextIcon = (icon: ContextMenuIcon) => {
-  if (icon === "copy") {
-    return <CopyActionIcon className="context-check-icon" />;
-  }
-  if (icon === "delete") {
-    return <DeleteActionIcon className="context-check-icon" />;
-  }
-  if (icon === "convert") {
-    return <ConvertIcon className="context-check-icon" />;
-  }
-  if (icon === "quick-convert") {
-    return <QuickConvertIcon className="context-check-icon" />;
-  }
-  if (icon === "open-external") {
-    return <OpenExternalIcon className="context-check-icon" />;
-  }
-  return null;
+  const Icon = contextIcons[icon];
+  return <Icon className="context-check-icon" />;
 };
 
 export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) => {
@@ -54,6 +63,20 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
   const [submenuSide, setSubmenuSide] = useState<"left" | "right">("right");
   const [submenuOffset, setSubmenuOffset] = useState(0);
   const lastOpenItemsRef = useRef<ContextMenuItem[]>(items);
+
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!open || !menu) return;
+    const previous = document.activeElement;
+    focusFirstMenuItem(menu);
+    return () => {
+      const active = document.activeElement;
+      if (previous instanceof HTMLElement && previous.isConnected &&
+          (menu.contains(active) || active === document.body)) {
+        previous.focus({ preventScroll: true });
+      }
+    };
+  }, [open]);
 
   useOverlayDismiss({
     enabled: open,
@@ -89,8 +112,12 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
   }, [closeSubmenu, open]);
 
   useEffect(() => {
-    closeSubmenu();
-  }, [closeSubmenu, items]);
+    if (!openSubmenuId) return;
+    // Clipboard refreshes and Open With lookups can replace the items while the menu is in use.
+    const available = items.some((item) =>
+      item.kind === "submenu" && item.id === openSubmenuId && !item.disabled);
+    if (!available) closeSubmenu();
+  }, [closeSubmenu, items, openSubmenuId]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -201,6 +228,7 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
           type="button"
           className={`context-item${item.active ? " is-active" : ""}`}
           pressOnPointerDown={false}
+          onPointerDown={(event) => event.preventDefault()}
           onClick={() => {
             item.onSelect();
             onClose();
@@ -234,6 +262,11 @@ export const ContextMenu = ({ open, x, y, items, onClose }: ContextMenuProps) =>
       style={menuStyle}
       role="menu"
       aria-hidden={!open}
+      inert={!open}
+      onKeyDown={handleContextMenuKey}
+      onBlur={(event) => {
+        if (open && event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) onClose();
+      }}
       onContextMenu={(event) => event.preventDefault()}
     >
       <div className="context-menu-list">{renderMenuItems(renderedItems)}</div>

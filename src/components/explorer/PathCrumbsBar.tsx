@@ -60,6 +60,8 @@ export const PathCrumbsBar = ({
             <PressButton
               type="button"
               className="crumb"
+              data-context-place="crumb"
+              data-context-name={crumb.label}
               data-is-dir="true"
               data-path={crumb.path}
               data-drop-target={dropTargetPath === crumb.path ? "true" : "false"}

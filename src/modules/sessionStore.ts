@@ -132,21 +132,22 @@ const parseStoredSession = (raw: string): SessionState => {
   return coerceSession(parsed);
 };
 
-const readStoredSession = () => {
+const readStoredSession = (key: string) => {
   try {
     if (!("localStorage" in globalThis)) {
       return DEFAULT_SESSION;
     }
     const storage = globalThis.localStorage;
-    const raw = storage.getItem(STORAGE_KEY);
+    const raw = storage.getItem(key);
     if (raw) {
       return parseStoredSession(raw);
     }
+    if (key !== STORAGE_KEY) return DEFAULT_SESSION;
     const legacy = storage.getItem(LEGACY_STORAGE_KEY);
     if (!legacy) return DEFAULT_SESSION;
     const session = parseStoredSession(legacy);
     // Migrate legacy storage to the new key so tab sort stays persistent.
-    writeStoredSession(session);
+    writeStoredSession(key, session);
     storage.removeItem(LEGACY_STORAGE_KEY);
     return session;
   } catch {
@@ -154,11 +155,11 @@ const readStoredSession = () => {
   }
 };
 
-const writeStoredSession = (session: SessionState) => {
+const writeStoredSession = (key: string, session: SessionState) => {
   try {
     if (!("localStorage" in globalThis)) return;
     const payload: StoredSession = { version: STORAGE_VERSION, session };
-    globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    globalThis.localStorage.setItem(key, JSON.stringify(payload));
   } catch {
     // Ignore storage errors.
   }
@@ -168,27 +169,33 @@ const applyUpdater = <T,>(value: T, updater: T | ((prev: T) => T)) => {
   return typeof updater === "function" ? (updater as (prev: T) => T)(value) : updater;
 };
 
-export const useSessionStore = createWithEqualityFn<SessionStore>((set) => ({
-  ...readStoredSession(),
-  setTabs: (updater) =>
-    set((state) => ({
-      tabs: applyUpdater(state.tabs, updater),
-    })),
-  setActiveTabId: (id) => set({ activeTabId: id }),
-  setRecentJumps: (updater) =>
-    set((state) => ({
-      recentJumps: applyUpdater(state.recentJumps, updater),
-    })),
-  updateSession: (patch) => set((state) => ({ ...state, ...patch })),
-  resetSession: () => set({ ...DEFAULT_SESSION }),
-}));
+const createSessionStore = (key: string) => {
+  const store = createWithEqualityFn<SessionStore>((set) => ({
+    ...readStoredSession(key),
+    setTabs: (updater) =>
+      set((state) => ({
+        tabs: applyUpdater(state.tabs, updater),
+      })),
+    setActiveTabId: (id) => set({ activeTabId: id }),
+    setRecentJumps: (updater) =>
+      set((state) => ({
+        recentJumps: applyUpdater(state.recentJumps, updater),
+      })),
+    updateSession: (patch) => set((state) => ({ ...state, ...patch })),
+    resetSession: () => set({ ...DEFAULT_SESSION }),
+  }));
 
-useSessionStore.subscribe((state) => {
-  writeStoredSession({
-    tabs: state.tabs,
-    activeTabId: state.activeTabId,
-    recentJumps: state.recentJumps,
+  store.subscribe((state) => {
+    writeStoredSession(key, {
+      tabs: state.tabs,
+      activeTabId: state.activeTabId,
+      recentJumps: state.recentJumps,
+    });
   });
-});
+  return store;
+};
+
+export const useSessionStore = createSessionStore(STORAGE_KEY);
+export const useBottomSessionStore = createSessionStore(STORAGE_KEY + ".bottom");
 
 export type { SessionState };

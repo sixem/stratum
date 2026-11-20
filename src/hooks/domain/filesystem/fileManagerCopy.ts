@@ -1,9 +1,13 @@
 // Handles copy/paste/duplicate operations for the file manager.
 import { useCallback, useRef } from "react";
 import type { RefObject } from "react";
-import { copyEntries, planCopyEntries } from "@/api";
-import { formatFailures } from "@/lib";
-import { usePromptStore, useTransferStore } from "@/modules";
+import { copyEntries, finishFileCut, planCopyEntries } from "@/api";
+import { formatFailures, normalizeDropPath } from "@/lib";
+import { refreshFileClipboard, usePromptStore, useTransferStore } from "@/modules";
+import type { UndoMoveEntry } from "./fileManagerUndo";
+import type { BeginFileActivity } from "./useFileActivity";
+import { planDropTransfer, resolveDropTransferConflicts } from "./dropTransferPlanning";
+import { runDropTransfer } from "./runDropTransfer";
 import { resolveCopyConflicts } from "@/hooks/domain/filesystem/copyConflictResolution";
 import {
   getTransferErrorMessage,
@@ -11,23 +15,28 @@ import {
 } from "@/hooks/domain/filesystem/transferJobErrors";
 
 type UseFileManagerCopyOptions = {
+  beginFileActivity: BeginFileActivity;
   currentPathRef: RefObject<string>;
   copyInFlightRef: RefObject<boolean>;
   refreshAfterChange: () => Promise<void>;
+  onRecordMoveUndo: (entries: UndoMoveEntry[]) => void;
   onDirectoryChildrenChanged?: (paths: string[]) => void;
   log?: (...args: unknown[]) => void;
 };
 
 export const useFileManagerCopy = ({
+  beginFileActivity,
   currentPathRef,
   copyInFlightRef,
   refreshAfterChange,
+  onRecordMoveUndo,
   onDirectoryChildrenChanged,
   log,
 }: UseFileManagerCopyOptions) => {
   // Track overlapping copy requests so the rest of the file manager can still
   // answer "is any copy-related work pending?" without blocking queueing.
   const activeCopyRequestCountRef = useRef(0);
+  const activeCuts = useRef(new Set<number>());
   const registerTransferJob = useTransferStore((state) => state.registerJob);
   const recordTransferJobOutcome = useTransferStore((state) => state.recordJobOutcome);
 
@@ -43,6 +52,7 @@ export const useFileManagerCopy = ({
       copyInFlightRef.current = true;
       const promptStore = usePromptStore.getState();
       let job: ReturnType<typeof registerTransferJob> | null = null;
+      const finishPreparing = beginFileActivity(`Preparing ${operationLabel.toLowerCase()} in ${target}`);
       try {
         const plan = await planCopyEntries(unique, target);
         const conflictResolution = await resolveCopyConflicts(
@@ -52,6 +62,7 @@ export const useFileManagerCopy = ({
         if (conflictResolution.cancelled) {
           return null;
         }
+        finishPreparing();
         job = registerTransferJob({
           label: operationLabel,
           items: unique,
@@ -107,6 +118,7 @@ export const useFileManagerCopy = ({
         });
         return null;
       } finally {
+        finishPreparing();
         activeCopyRequestCountRef.current = Math.max(
           activeCopyRequestCountRef.current - 1,
           0,
@@ -116,6 +128,7 @@ export const useFileManagerCopy = ({
     },
     [
       activeCopyRequestCountRef,
+      beginFileActivity,
       copyInFlightRef,
       currentPathRef,
       log,
@@ -127,18 +140,71 @@ export const useFileManagerCopy = ({
   );
 
   const duplicateEntriesInView = useCallback(
-    async (paths: string[]) =>
-      runCopyOperation(paths, currentPathRef.current, "Duplicate"),
+    async (paths: string[], destination = currentPathRef.current) =>
+      runCopyOperation(paths, destination, "Duplicate"),
     [currentPathRef, runCopyOperation],
   );
 
   const pasteEntriesInView = useCallback(
-    async (paths: string[], destination?: string) => {
-      const target = destination ?? currentPathRef.current;
-      // Use a clear transfer label for clipboard copies.
-      return runCopyOperation(paths, target, "Copy");
+    async (destination?: string) => {
+      const target = (destination ?? currentPathRef.current).trim();
+      if (!target) return;
+      const prompts = usePromptStore.getState();
+      let cutSequence: number | undefined;
+      let moved = false;
+      const finishPreparing = beginFileActivity(`Preparing to paste into ${target}`);
+      try {
+        const clipboard = await refreshFileClipboard();
+        if (!clipboard.paths.length) return;
+        if (clipboard.mode === "copy") return runCopyOperation(clipboard.paths, target, "Copy");
+        if (activeCuts.current.has(clipboard.sequence)) return;
+        cutSequence = clipboard.sequence;
+        activeCuts.current.add(cutSequence);
+        activeCopyRequestCountRef.current++;
+        copyInFlightRef.current = true;
+        const plan = planDropTransfer(clipboard.paths, target, "move");
+        if (!plan) return;
+        const resolved = await resolveDropTransferConflicts(plan, prompts);
+        if (!resolved) return;
+        finishPreparing();
+        const report = await runDropTransfer({
+          plan: resolved,
+          promptStore: prompts,
+          currentPathKey: normalizeDropPath(currentPathRef.current),
+          onRefresh: refreshAfterChange,
+          onRecordMoveUndo,
+          transferStore: {
+            registerTransferJob,
+            recordTransferJobOutcome,
+            updateTransferLabel: useTransferStore.getState().updateJobLabel,
+          },
+        });
+        if (report?.movedEntries.length) {
+          moved = true;
+          await finishFileCut(cutSequence, report.movedEntries.map((entry) => entry.sourcePath));
+          await refreshFileClipboard();
+        }
+        return report;
+      } catch (error) {
+        prompts.showPrompt({
+          title: moved ? "Couldn't update the cut selection" : "Paste failed",
+          content: getTransferErrorMessage(error, "Windows could not access the file clipboard."),
+          confirmLabel: "OK",
+          cancelLabel: null,
+        });
+      } finally {
+        finishPreparing();
+        if (cutSequence !== undefined) {
+          activeCuts.current.delete(cutSequence);
+          activeCopyRequestCountRef.current--;
+          copyInFlightRef.current = activeCopyRequestCountRef.current > 0;
+        }
+      }
     },
-    [currentPathRef, runCopyOperation],
+    [
+      beginFileActivity, copyInFlightRef, currentPathRef, onRecordMoveUndo,
+      recordTransferJobOutcome, refreshAfterChange, registerTransferJob, runCopyOperation,
+    ],
   );
 
   return {

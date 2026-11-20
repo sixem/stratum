@@ -2,7 +2,7 @@
 // the shell view. This hook intentionally works from the already-filtered data
 // pipeline so interaction code can focus on user intent instead of source
 // derivation.
-import { useCallback } from "react";
+import { useCallback, useLayoutEffect, useMemo } from "react";
 import { useDragOutHandler } from "@/hooks/ui/inputs";
 import { useFileViewInteractions, useFileViewModel } from "@/hooks/ui/view";
 import { useAppCommands } from "../useAppCommands";
@@ -16,6 +16,7 @@ import type { ShellViewDataPipeline } from "./useShellViewDataPipeline";
 
 type UseShellViewInteractionsOptions = Pick<
   UseShellViewModelOptions,
+  | "tauriEnv"
   | "promptOpen"
   | "menuState"
   | "fileManager"
@@ -37,6 +38,7 @@ type UseShellViewInteractionsOptions = Pick<
 };
 
 export const useShellViewInteractions = ({
+  tauriEnv,
   promptOpen,
   menuState,
   fileManager,
@@ -55,6 +57,14 @@ export const useShellViewInteractions = ({
   removePlace,
   dataPipeline,
 }: UseShellViewInteractionsOptions) => {
+  // Async file commands retain the visit that launched them. Returning to
+  // the same folder later starts a new visit with its own selection.
+  const viewVisit = useMemo(() => ({ current: false }), [resolvedView.viewKey]);
+  useLayoutEffect(() => {
+    viewVisit.current = true;
+    return () => { viewVisit.current = false; };
+  }, [viewVisit]);
+
   const viewModel = useFileViewModel(
     dataPipeline.sortedEntries,
     dataPipeline.viewParentPath,
@@ -69,6 +79,7 @@ export const useShellViewInteractions = ({
     previewOpen,
     previewPath,
     previewMeta,
+    previewGallery,
     openPreview,
     closePreview,
     handlePreviewPress,
@@ -114,11 +125,15 @@ export const useShellViewInteractions = ({
   const handlePreviewSelect = useCallback(
     (path: string) => {
       if (!path) return;
-      setSelection([path], path);
-      openPreview(path);
+      if (previewGallery) previewGallery.onSelectPath(path);
+      else setSelection([path], path);
+      openPreview(path, previewGallery);
     },
-    [openPreview, setSelection],
+    [openPreview, previewGallery, setSelection],
   );
+  const handleOpenGallery = useCallback((path: string) => {
+    if (viewVisit.current) openPreview(path);
+  }, [openPreview, viewVisit]);
   const closePreviewIfOpen = useCallback(() => {
     if (!previewOpen) return false;
     closePreview();
@@ -137,6 +152,7 @@ export const useShellViewInteractions = ({
     handleRenameCommit,
     handleRenameCancel,
   } = useAppRenameFlow({
+    viewVisit,
     entries: fileManager.entries,
     entryByPath: viewModel.entryByPath,
     indexMap: viewModel.indexMap,
@@ -177,10 +193,17 @@ export const useShellViewInteractions = ({
     fileDrop.clearDragState();
   }, [fileDrop]);
 
+  const { viewLoading, viewPath, sortState, activeSearch } = resolvedView;
+  const { loadingPath, loadDir } = fileManager;
+  const { handleRefresh } = navigationController;
   const handleManualRefresh = useCallback(() => {
-    handleClearSelection();
-    navigationController.handleRefresh();
-  }, [handleClearSelection, navigationController]);
+    // A restored tab whose folder failed to open can retry its displayed path.
+    if (viewLoading && !loadingPath && viewPath) {
+      void loadDir(viewPath, { sort: sortState, search: activeSearch, force: true });
+      return;
+    }
+    handleRefresh();
+  }, [activeSearch, handleRefresh, loadDir, loadingPath, sortState, viewLoading, viewPath]);
 
   const { queueCreateSelection } = usePendingCreateSelection({
     viewKey: resolvedView.viewKey,
@@ -196,26 +219,30 @@ export const useShellViewInteractions = ({
     handleCreateFolder,
     handleCreateFolderAndGo,
     handleOpenShell,
-    handleInternalDrop,
-    handleInternalHover,
     handleOpenThumbCache,
     handleClearThumbCache,
   } = useAppCommands({
+    viewVisit,
     browseFromView: viewState.browseFromView,
     queueCreateSelection,
     createFile: fileManager.createFile,
     createFolder: fileManager.createFolder,
-    performDrop: fileDrop.performDrop,
-    setDropTarget: fileDrop.setDropTarget,
-    clearDragState: fileDrop.clearDragState,
     setThumbResetNonce,
   });
 
   const handleStartDragOut = useDragOutHandler({
+    beginFileActivity: fileManager.beginFileActivity,
     viewParentPath: dataPipeline.viewParentPath,
-    onRefresh: fileManager.refresh,
+    onRefresh: fileManager.refreshAfterChange,
   });
+  const { refreshClipboardFromOs } = dataPipeline;
+  const { refreshAfterChange } = fileManager;
+  const onShellCommand = useCallback(() => {
+    void refreshClipboardFromOs();
+    if (viewVisit.current) void refreshAfterChange();
+  }, [refreshAfterChange, refreshClipboardFromOs, viewVisit]);
   const {
+    openKeyboardContextMenu,
     contextMenuItems,
     contextMenuOpen,
     handlePlaceTargetContextMenu,
@@ -225,7 +252,12 @@ export const useShellViewInteractions = ({
     handleEntryContextMenu,
     handleEntryContextMenuDown,
   } = useAppContextMenuSection({
+    windowsMenuEnabled: tauriEnv,
+    beginFileActivity: fileManager.beginFileActivity,
+    onShellCommand,
+    mainRef: viewState.mainRef,
     contextMenu: menuState.contextMenu,
+    openContextMenuAt: menuState.openContextMenuAt,
     openSortMenu: menuState.openSortMenu,
     openEntryMenu: menuState.openEntryMenu,
     openPlaceTargetMenu: menuState.openPlaceTargetMenu,
@@ -233,13 +265,10 @@ export const useShellViewInteractions = ({
     selected,
     entryByPath: viewModel.entryByPath,
     onSelectionChange: handleSelectionChange,
-    currentPath: fileManager.currentPath,
+    currentPath: resolvedView.viewLoading ? "" : resolvedView.viewPath,
     viewParentPath: dataPipeline.viewParentPath,
     sortState: resolvedView.sortState,
     onSortChange: navigationController.handleSortChange,
-    onPaste: (paths) => {
-      void fileManager.pasteEntries(paths);
-    },
     onCreateFolder: handleCreateFolder,
     onCreateFolderAndGo: handleCreateFolderAndGo,
     onCreateFile: handleCreateFile,
@@ -249,18 +278,16 @@ export const useShellViewInteractions = ({
     menuShowConvert: settings.menuShowConvert,
     onOpenShell: handleOpenShell,
     onOpenEntry: fileManager.openEntry,
+    onOpenGallery: handleOpenGallery,
     onOpenDir: viewState.browseFromView,
     onOpenDirNewTab: navigationController.handleOpenInNewTab,
     onDeleteEntries: fileManager.deleteEntries,
     confirmDelete: settings.confirmDelete,
     onClearSelection: handleClearSelection,
     onRenameEntry: handleRenameStart,
-    onPasteEntries: (paths, destination) => {
-      void fileManager.pasteEntries(paths, destination);
-    },
+    onPasteEntries: fileManager.pasteEntries,
     onOpenConvertModal: dataPipeline.openConversionModal,
     onQuickConvertImages: dataPipeline.handleQuickConvertImages,
-    ffmpegDetected: dataPipeline.ffmpegDetected,
     places,
     onAddPlace: addPlace,
     onPinPlace: pinPlace,
@@ -276,6 +303,8 @@ export const useShellViewInteractions = ({
     previewOpen,
     previewPath,
     previewMeta,
+    previewGallery,
+    openPreview,
     handlePreviewPress,
     handlePreviewRelease,
     handlePreviewSelect,
@@ -303,11 +332,10 @@ export const useShellViewInteractions = ({
     handleCreateFile,
     handleCreateFolder,
     handleCreateFolderAndGo,
-    handleInternalDrop,
-    handleInternalHover,
     handleOpenThumbCache,
     handleClearThumbCache,
     handleStartDragOut,
+    openKeyboardContextMenu,
     contextMenuItems,
     contextMenuOpen,
     handlePlaceTargetContextMenu,

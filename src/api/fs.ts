@@ -13,9 +13,7 @@ import type {
   ListDirResult,
   ListDirWithParentResult,
   Place,
-  RecycleEntry,
-  RestoreReport,
-  RestorePathsReport,
+  RestoreRecycleReport,
   TransferMode,
   TransferQueueSnapshot,
   TransferReport,
@@ -69,14 +67,16 @@ export const planCopyEntries = (paths: string[], destination: string) =>
 export const transferEntries = (
   paths: string[],
   destination: string,
-  options?: { mode?: TransferMode; overwrite?: boolean },
+  options?: { mode?: TransferMode; overwrite?: boolean; overwritePaths?: string[] },
   transferId?: string,
+  dropStage?: number,
 ) =>
   invoke<TransferReport>("transfer_entries", {
     paths,
     destination,
     options,
     transferId,
+    dropStage,
   });
 
 export const listTransferJobs = () =>
@@ -97,22 +97,21 @@ export const deleteEntries = (paths: string[], transferId?: string) =>
 export const trashEntries = (paths: string[], transferId?: string) =>
   invoke<TrashReport>("trash_entries", { paths, transferId });
 
-export const restoreRecycleEntries = (entries: RecycleEntry[]) =>
-  invoke<RestoreReport>("restore_recycle_entries", { entries });
-
-export const restoreRecyclePaths = (
-  paths: string[],
-  minDeletedAt?: number,
-) =>
-  invoke<RestorePathsReport>("restore_recycle_paths", {
-    paths,
-    minDeletedAt,
-  });
+export const restoreRecycleItems = (receiptId: string) =>
+  invoke<RestoreRecycleReport>("restore_recycle_items", { receiptId });
 
 export const renameEntry = (path: string, newName: string) =>
   invoke<string>("rename_entry", { path, newName });
 
-export const startDirWatch = (path: string) =>
-  invoke<void>("start_dir_watch", { path });
+// Blocking workers may finish out of order as navigation crosses slow drives.
+let watchGeneration = 0;
+const nextWatchGeneration = () => {
+  watchGeneration = Math.max(Date.now(), watchGeneration + 1);
+  return watchGeneration;
+};
 
-export const stopDirWatch = () => invoke<void>("stop_dir_watch");
+export const startDirWatch = (path: string, pane: "main" | "bottom" = "main") =>
+  invoke<void>("start_dir_watch", { path, pane, generation: nextWatchGeneration() });
+
+export const stopDirWatch = (pane: "main" | "bottom" = "main") =>
+  invoke<void>("stop_dir_watch", { pane, generation: nextWatchGeneration() });

@@ -24,6 +24,7 @@ type EntryRowProps = {
   hideExtension: boolean;
   selected: boolean;
   isDeleting: boolean;
+  isCut: boolean;
   isTransferring: boolean;
   dropTarget: boolean;
   isRenaming: boolean;
@@ -52,6 +53,7 @@ export const EntryRow = memo(({
   hideExtension,
   selected,
   isDeleting,
+  isCut,
   isTransferring,
   dropTarget,
   isRenaming,
@@ -153,6 +155,7 @@ export const EntryRow = memo(({
         }`}
         data-selectable={isSelectable ? "true" : "false"}
         data-path={entry.path}
+        data-cut={isCut || undefined}
         data-name={entry.name}
         data-index={index}
         data-is-dir={entry.isDir ? "true" : "false"}
@@ -184,11 +187,13 @@ export const EntryRow = memo(({
     <TooltipWrapper text={tooltipText} delayMs={FILE_TOOLTIP_DELAY_MS}>
       <button
         type="button"
+        data-drag-source={isInteractive}
         className={`row${entry.isDir ? " is-dir" : ""}${selected ? " is-selected" : ""}${
           isRemoved ? " is-removed" : ""
         }${isDeleting ? " is-deleting" : ""}${isTransferring ? " is-transferring" : ""}`}
         data-selectable={isSelectable ? "true" : "false"}
         data-path={entry.path}
+        data-cut={isCut || undefined}
         data-name={entry.name}
         data-index={index}
         data-is-dir={entry.isDir ? "true" : "false"}

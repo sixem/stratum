@@ -15,7 +15,7 @@ export const StatusBar = ({
   selectionLabel,
 }: StatusBarProps) => {
   return (
-    <footer className="statusbar tnum">
+    <footer className="statusbar">
       <div className="status-left">
         <span className="status-count tnum">{countLabel}</span>
         {selectionLabel ? <span className="status-selection tnum">{selectionLabel}</span> : null}

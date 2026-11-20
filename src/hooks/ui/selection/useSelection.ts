@@ -51,15 +51,16 @@ export const useSelection = ({ items, resetKey, indexMap }: UseSelectionOptions)
 
   useEffect(() => {
     const current = selectedRef.current;
-    if (current.size === 0) return;
-    const next = new Set<string>();
-    items.forEach((path) => {
-      if (current.has(path)) {
-        next.add(path);
+    // A refresh normally keeps the selection. Check just those paths in the
+    // existing index, even when the folder contains thousands of other files.
+    for (const path of current) {
+      if (!selectionIndexMap.has(path)) {
+        const remaining = items.filter((item) => current.has(item));
+        updateSelection(new Set(remaining));
+        break;
       }
-    });
-    updateSelection(next);
-  }, [items, updateSelection]);
+    }
+  }, [items, selectionIndexMap, updateSelection]);
 
   useEffect(() => {
     selectedRef.current = selected;

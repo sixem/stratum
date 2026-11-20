@@ -5,8 +5,8 @@ import {
   formatBytes,
   formatCount,
   formatDate,
-  getFileKind,
   getPathName,
+  isPreviewableEntry,
   splitNameExtension,
 } from "@/lib";
 import type { EntryMeta, FileEntry } from "@/types";
@@ -51,13 +51,7 @@ export const buildQuickPreviewDerivedState = ({
   canUseExternalActions,
 }: BuildQuickPreviewDerivedStateParams) => {
   const label = !open || !path ? "Media preview" : getPathName(path) || "Media preview";
-  const previewItems = !open
-    ? []
-    : items.filter((entry) => {
-        if (entry.isDir) return false;
-        const kind = getFileKind(entry.name);
-        return kind === "image" || kind === "video";
-      });
+  const previewItems = open ? items.filter(isPreviewableEntry) : [];
 
   const isReady = loadState === "ready" && loadedSrc === src;
   const isLoading = loadState === "loading" || (!isReady && loadState !== "error");

@@ -75,6 +75,10 @@ export const useWindowSize = () => {
   const lastSizeRef = useRef<WindowSizePayload | null>(null);
   // Expose a close-safe flush so other hooks can persist size on demand.
   const flushPersist = useCallback(() => {
+    if (persistTimerRef.current != null) {
+      window.clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
     const latest = lastSizeRef.current ?? readViewportSize();
     if (latest) {
       writeStoredSize(latest);
@@ -107,76 +111,71 @@ export const useWindowSize = () => {
   useEffect(() => {
     if (!isTauriEnv()) return;
     const appWindow = getCurrentWindow();
-    let unlistenResize: (() => void) | null = null;
-    let unlistenScale: (() => void) | null = null;
+    const unlisteners: (() => void)[] = [];
     let cancelled = false;
+    let scaleFactor: number | null = null;
+    let lastPhysicalSize: WindowSizePayload | null = null;
 
     const schedulePersist = (size: WindowSizePayload) => {
+      const previous = lastSizeRef.current;
+      if (previous?.width === size.width && previous.height === size.height) return;
       lastSizeRef.current = size;
-      if (persistTimerRef.current != null) return;
-      persistTimerRef.current = window.setTimeout(() => {
-        persistTimerRef.current = null;
-        const latest = lastSizeRef.current;
-        if (latest) {
-          writeStoredSize(latest);
-        }
-      }, PERSIST_DELAY_MS);
+      if (persistTimerRef.current != null) {
+        window.clearTimeout(persistTimerRef.current);
+      }
+      // Only write to local storage after the resize gesture settles.
+      persistTimerRef.current = window.setTimeout(flushPersist, PERSIST_DELAY_MS);
     };
 
     const handleViewportResize = () => {
+      // Fall back to the webview until native size and scale are available.
+      if (scaleFactor != null && lastPhysicalSize != null) return;
       const size = readViewportSize();
       if (size) {
         schedulePersist(size);
       }
     };
 
-    const handlePhysicalSize = async (size: { toLogical: (scale: number) => LogicalSize }) => {
-      try {
-        const scale = await appWindow.scaleFactor();
-        if (cancelled) return;
-        const logical = size.toLogical(scale);
-        schedulePersist({
-          width: clampSize(logical.width),
-          height: clampSize(logical.height),
-        });
-      } catch {
-        // Ignore resize conversion errors.
-      }
-    };
-
-    const setup = async () => {
-      unlistenResize = await appWindow.onResized((event) => {
-        void handlePhysicalSize(event.payload);
-      });
-      unlistenScale = await appWindow.onScaleChanged((event) => {
-        const logical = event.payload.size.toLogical(event.payload.scaleFactor);
-        schedulePersist({
-          width: clampSize(logical.width),
-          height: clampSize(logical.height),
-        });
+    const persistPhysicalSize = ({ width, height }: WindowSizePayload, scale: number) => {
+      schedulePersist({
+        width: clampSize(width / scale),
+        height: clampSize(height / scale),
       });
     };
 
+    const trackListener = (registration: Promise<() => void>) => {
+      void registration.then((unlisten) => {
+        if (cancelled) unlisten();
+        else unlisteners.push(unlisten);
+      }).catch(() => { /* Webview resize remains available. */ });
+    };
+
+    trackListener(appWindow.onResized(({ payload }) => {
+      if (cancelled) return;
+      lastPhysicalSize = payload;
+      if (scaleFactor != null) persistPhysicalSize(payload, scaleFactor);
+    }));
+    trackListener(appWindow.onScaleChanged(({ payload }) => {
+      if (cancelled) return;
+      scaleFactor = payload.scaleFactor;
+      if (lastPhysicalSize != null) lastPhysicalSize = payload.size;
+      persistPhysicalSize(payload.size, scaleFactor);
+    }));
+    // Resolve native DPI once. Moving between monitors supplies subsequent values.
+    void appWindow.scaleFactor().then((scale) => {
+      if (cancelled || scaleFactor != null) return;
+      scaleFactor = scale;
+      if (lastPhysicalSize != null) persistPhysicalSize(lastPhysicalSize, scale);
+    }).catch(() => { /* Webview resize remains available. */ });
     window.addEventListener("resize", handleViewportResize);
-
-    void setup();
 
     return () => {
       cancelled = true;
-      if (unlistenResize) {
-        unlistenResize();
-      }
-      if (unlistenScale) {
-        unlistenScale();
-      }
+      unlisteners.forEach((unlisten) => unlisten());
       window.removeEventListener("resize", handleViewportResize);
       flushPersist();
-      if (persistTimerRef.current != null) {
-        window.clearTimeout(persistTimerRef.current);
-        persistTimerRef.current = null;
-      }
     };
-  }, []);
+  }, [flushPersist]);
 
   return { flushPersist };
 };

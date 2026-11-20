@@ -4,7 +4,7 @@
 import type { MutableRefObject } from "react";
 import type { useFileManager } from "@/hooks/domain/filesystem";
 import type { useSettings, useTabSession } from "@/hooks/domain/session";
-import { normalizePath } from "@/lib";
+import { folderPathKey, getParentPath } from "@/lib";
 
 type FileManagerModel = ReturnType<typeof useFileManager>;
 type SettingsModel = ReturnType<typeof useSettings>;
@@ -23,10 +23,11 @@ export const resolveShellViewState = ({
   tabSession,
   lastViewRef,
 }: ResolveShellViewStateOptions) => {
-  const { currentPath, parentPath, entries, totalCount, loading } = fileManager;
+  const { currentPath, parentPath, entries, totalCount } = fileManager;
   const {
     activeTabId,
     activeTab,
+    displayPath: viewPath,
     viewMode,
     sortState,
     tabs,
@@ -38,22 +39,24 @@ export const resolveShellViewState = ({
 
   const activeSearch = activeTab?.search ?? "";
   const activeTabPath = activeTab?.path ?? "";
-  const viewPath = activeTabPath || currentPath;
   const crumbTrailPath = activeTab?.crumbTrailPath ?? viewPath;
-  const viewPathKey = normalizePath(viewPath ?? "");
-  const currentPathKey = normalizePath(currentPath);
-  const viewPending = Boolean(viewPathKey) && viewPathKey !== currentPathKey;
+  const viewPathKey = folderPathKey(viewPath);
+  const currentPathKey = folderPathKey(currentPath);
+  // File actions require the displayed folder to match the committed listing.
+  // Refreshing that same listing leaves its rows and selection usable.
+  const viewLoading = Boolean(viewPathKey) && viewPathKey !== currentPathKey;
   const cachedView =
-    viewPending && viewPathKey
+    viewLoading
       ? fileManager.peekDirCache(viewPath, { sort: sortState, search: activeSearch })
       : null;
-  const viewLoading = viewPending ? loading && !cachedView : loading;
-  const viewEntries = viewPending ? cachedView?.entries ?? [] : entries;
-  const viewTotalCount = viewPending ? cachedView?.totalCount ?? 0 : totalCount;
-  const viewParentPathBase = viewPending ? cachedView?.parentPath ?? null : parentPath;
+  const viewEntries = viewLoading ? cachedView?.entries ?? [] : entries;
+  const viewTotalCount = viewLoading ? cachedView?.totalCount ?? 0 : totalCount;
+  const viewParentPathBase = viewLoading
+    ? cachedView?.parentPath ?? getParentPath(viewPath)
+    : parentPath;
   const sidebarOpen = settings.sidebarOpen;
-  const canGoUp = Boolean(parentPath && parentPath !== currentPath);
-  const showLander = !viewPath.trim() && !viewLoading;
+  const canGoUp = Boolean(viewParentPathBase && folderPathKey(viewParentPathBase) !== viewPathKey);
+  const showLander = !viewPath.trim();
   const viewKey = `${activeTabId ?? "none"}:${viewPathKey}`;
   const lastView = lastViewRef.current;
   const shouldResetScroll =

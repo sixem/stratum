@@ -1,6 +1,6 @@
 // Resolves copy conflicts before the backend starts copying.
 // This keeps the native copy pass simple and lets the UI apply bulk decisions cleanly.
-import { getParentPath, getPathName, normalizePath } from "@/lib";
+import { getParentPath, getPathName } from "@/lib";
 import type { PromptConfig } from "@/modules/promptStore";
 import type { CopyConflict } from "@/types";
 
@@ -87,7 +87,7 @@ export const resolveCopyConflicts = async (
   for (let index = 0; index < conflicts.length; index += 1) {
     const conflict = conflicts[index];
     if (!conflict) continue;
-    const destinationKey = normalizePath(conflict.destinationPath);
+    const destinationKey = conflict.destinationPath;
 
     if (overwritePaths.has(destinationKey) || skipPaths.has(destinationKey)) {
       continue;

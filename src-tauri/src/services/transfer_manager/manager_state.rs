@@ -10,6 +10,8 @@ use crate::domain::filesystem::transfer::types::{
 use crate::domain::media::conversion_jobs;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(windows)]
+use std::sync::Arc;
 use std::sync::{mpsc, Condvar, Mutex};
 
 pub(super) const COMPLETED_JOB_HISTORY_LIMIT: usize = 20;
@@ -68,6 +70,10 @@ pub(super) enum TransferOperation {
         paths: Vec<String>,
         destination: String,
         options: Option<fs::TransferOptions>,
+        // A cancelled planning job may report completion before its worker
+        // unwinds. The worker's cloned request keeps the sources alive.
+        #[cfg(windows)]
+        drop_stage: Option<Arc<crate::platform::windows::dragdrop::DropStage>>,
     },
     Delete {
         paths: Vec<String>,
@@ -368,5 +374,31 @@ pub(super) fn snapshot_from_state(state: &TransferManagerState) -> TransferQueue
             .map(|job| job.request.snapshot.clone())
             .collect(),
         completed_jobs: state.completed_jobs.iter().cloned().collect(),
+    }
+}
+
+#[cfg(all(test, windows))]
+mod stage_tests {
+    use super::*;
+    use crate::platform::windows::dragdrop::claimed_test_file;
+    use std::{fs, path::Path};
+
+    #[test]
+    fn cancelling_a_queued_transfer_keeps_staged_data_alive_for_its_planner() {
+        let (stage, source) = claimed_test_file();
+        let queued_operation = TransferOperation::Transfer {
+            paths: vec![source.clone()],
+            destination: String::from(r"C:\destination"),
+            options: None,
+            drop_stage: Some(Arc::new(stage)),
+        };
+        let planning_operation = queued_operation.clone();
+
+        // The queue can signal cancellation while a worker still holds the
+        // operation it cloned to inspect source files for planning.
+        drop(queued_operation);
+        assert_eq!(fs::read(&source).unwrap(), b"sample");
+        drop(planning_operation);
+        assert!(!Path::new(&source).exists());
     }
 }

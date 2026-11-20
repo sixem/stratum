@@ -155,6 +155,21 @@ export const FilterIcon = ({ className }: IconProps) => {
   );
 };
 
+// Hourglass for queued work that is waiting to start.
+export const HourglassIcon = ({ className }: IconProps) => {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
+      <path
+        d="M5 3h14M5 21h14M7 3v4l5 5 5-5V3M7 21v-4l5-5 5 5v4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
+
 // Compact checkmark icon for success states and confirmations.
 export const CheckmarkIcon = ({ className }: IconProps) => {
   return (

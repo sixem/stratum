@@ -18,6 +18,8 @@ type HorizontalOverflowScrollState = {
   updateScrollState: () => void;
 };
 
+const NO_OVERFLOW = { canScrollLeft: false, canScrollRight: false, overflowed: false };
+
 // Tracks horizontal overflow affordances for compact strips like tabs and picker rows.
 // The hook keeps scroll state, resize observation, and stepped chevron scrolling together.
 export function useHorizontalOverflowScroll<T extends HTMLElement>(
@@ -31,24 +33,29 @@ export function useHorizontalOverflowScroll<T extends HTMLElement>(
     scrollStepRatio = 0.6,
   }: UseHorizontalOverflowScrollOptions = {},
 ): HorizontalOverflowScrollState {
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-  const [overflowed, setOverflowed] = useState(false);
+  const [overflow, setOverflow] = useState(NO_OVERFLOW);
 
   const updateScrollState = useCallback(() => {
     const container = containerRef.current;
     if (!enabled || !container) {
-      setCanScrollLeft(false);
-      setCanScrollRight(false);
-      setOverflowed(false);
+      setOverflow(NO_OVERFLOW);
       return;
     }
 
     const { scrollLeft, scrollWidth, clientWidth } = container;
-    const hasOverflow = scrollWidth > clientWidth + overflowThreshold;
-    setOverflowed(hasOverflow);
-    setCanScrollLeft(hasOverflow && scrollLeft > 0);
-    setCanScrollRight(hasOverflow && scrollLeft + clientWidth < scrollWidth - overflowThreshold);
+    const overflowed = scrollWidth > clientWidth + overflowThreshold;
+    const canScrollLeft = overflowed && scrollLeft > 0;
+    const canScrollRight = overflowed && scrollLeft + clientWidth < scrollWidth - overflowThreshold;
+    setOverflow((previous) => {
+      if (
+        previous.overflowed === overflowed &&
+        previous.canScrollLeft === canScrollLeft &&
+        previous.canScrollRight === canScrollRight
+      ) {
+        return previous;
+      }
+      return { canScrollLeft, canScrollRight, overflowed };
+    });
   }, [containerRef, enabled, overflowThreshold]);
 
   const scrollByDirection = useCallback(
@@ -72,13 +79,21 @@ export function useHorizontalOverflowScroll<T extends HTMLElement>(
       return;
     }
 
-    const handleScroll = () => updateScrollState();
-    container.addEventListener("scroll", handleScroll, { passive: true });
+    // One layout read covers both scroll and resize notifications for this frame.
+    let frame: number | null = null;
+    const scheduleUpdate = () => {
+      if (frame != null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        updateScrollState();
+      });
+    };
+    container.addEventListener("scroll", scheduleUpdate, { passive: true });
 
     const resizeObserver =
       typeof ResizeObserver === "undefined"
         ? null
-        : new ResizeObserver(() => updateScrollState());
+        : new ResizeObserver(scheduleUpdate);
 
     resizeObserver?.observe(container);
 
@@ -88,20 +103,19 @@ export function useHorizontalOverflowScroll<T extends HTMLElement>(
       });
     }
 
-    window.addEventListener("resize", updateScrollState);
+    window.addEventListener("resize", scheduleUpdate);
     updateScrollState();
 
     return () => {
-      container.removeEventListener("scroll", handleScroll);
+      container.removeEventListener("scroll", scheduleUpdate);
       resizeObserver?.disconnect();
-      window.removeEventListener("resize", updateScrollState);
+      window.removeEventListener("resize", scheduleUpdate);
+      if (frame != null) window.cancelAnimationFrame(frame);
     };
   }, [enabled, observeSelector, refreshKey, updateScrollState]);
 
   return {
-    canScrollLeft,
-    canScrollRight,
-    overflowed,
+    ...overflow,
     scrollByDirection,
     updateScrollState,
   };

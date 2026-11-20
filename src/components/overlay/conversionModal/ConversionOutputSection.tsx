@@ -1,12 +1,13 @@
 // Output mode and suffix controls for the conversion modal.
 import { PressButton } from "@/components/primitives";
 import type { ConversionItemDraft, ConversionOutputMode } from "@/types";
-import { buildExampleName } from "./conversionModalConfig";
+import { conversionFileName } from "@/hooks/ui/app/conversion/conversionNames";
 
 type ConversionOutputSectionProps = {
   outputMode: ConversionOutputMode;
   suffix: string;
   sampleItem: ConversionItemDraft | null;
+  sampleFormat: string | null;
   runInProgress: boolean;
   onOutputModeChange: (outputMode: ConversionOutputMode) => void;
   onSuffixChange: (suffix: string) => void;
@@ -16,6 +17,7 @@ export const ConversionOutputSection = ({
   outputMode,
   suffix,
   sampleItem,
+  sampleFormat,
   runInProgress,
   onOutputModeChange,
   onSuffixChange,
@@ -58,9 +60,10 @@ export const ConversionOutputSection = ({
           />
         </label>
       ) : null}
-      {outputMode === "create-new" && sampleItem ? (
+      {sampleItem && sampleFormat ? (
         <div className="conversion-suffix-preview">
-          Example: {buildExampleName(sampleItem, outputMode, suffix)}
+          {conversionFileName(sampleItem.name, sampleFormat, outputMode, suffix)}
+          {" · "}{outputMode === "create-new" ? "Saves beside the original" : "Replaces the original after success"}
         </div>
       ) : null}
     </div>

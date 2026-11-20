@@ -1,28 +1,26 @@
-// Shell, header, search input, and shared modal layout for indexed search.
-
+// Shell, search field, and shared layout for indexed search.
 @use "../control-recipes" as control;
 @use "./shared" as modal;
 
 .indexed-search-modal {
-  @include modal.overlay-shell(2350, 24px);
-  transition: none;
-}
-
-.indexed-search-modal[data-open="true"] {
-  @include modal.overlay-open();
+  --indexed-search-gutter: clamp(12px, 2.5vw, 28px);
+  @include modal.overlay-shell(2350, var(--indexed-search-gutter));
 }
 
 .indexed-search-panel {
   @include modal.panel-shell(
-    min(980px, calc(100vw - 40px)),
+    min(100%, 1020px),
     null,
     0,
     0,
     14px,
-    $height: min(78vh, 760px),
+    $height: min(720px, calc(100dvh - 2 * var(--indexed-search-gutter))),
     $overflow: hidden
   );
-  transition: none;
+}
+
+.indexed-search-modal[data-open="true"] {
+  @include modal.overlay-open();
 }
 
 .indexed-search-modal[data-open="true"] .indexed-search-panel {
@@ -31,210 +29,184 @@
 
 :where(.indexed-search-panel) {
   .indexed-search-header {
-    gap: 8px;
+    padding: 14px 20px 12px;
+    border: 0;
+    background: transparent;
   }
 
-  .indexed-search-title {
-    font-size: var(--font-size-2xl);
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: var(--text);
+  .indexed-search-header .overlay-panel-header-top {
+    align-items: center;
   }
 
-  .indexed-search-subtitle {
-    color: var(--muted);
-    font-size: var(--font-size-sm);
-    line-height: 1.4;
-  }
-
-  .indexed-search-close {
-    align-self: start;
-  }
-
-  .indexed-search-field,
-  .indexed-search-body {
-    padding-inline: 20px;
+  .indexed-search-header .overlay-panel-header-drag {
+    align-content: center;
+    min-height: 30px;
   }
 
   .indexed-search-field {
-    display: flex;
-    padding-top: 2px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #1c2537;
-  }
-
-  .indexed-search-body {
-    display: grid;
-    grid-template-columns: minmax(0, 1.3fr) minmax(250px, 0.78fr);
-    gap: 0;
-    padding-top: 12px;
-    padding-bottom: 20px;
-    min-height: 0;
-    flex: 1 1 auto;
-    align-items: stretch;
+    padding: 0 20px 14px;
   }
 
   .indexed-search-searchbox {
-    width: 100%;
-    display: grid;
-    gap: 8px;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .indexed-search-searchbox:focus-within {
-    box-shadow: none;
-  }
-
-  .indexed-search-searchbox-row {
+    @include control.control-surface(8px, var(--panel-deep));
     display: flex;
     align-items: center;
     gap: 12px;
-    min-width: 0;
-    padding: 10px 0 12px;
-    border-bottom: 1px solid #1c2537;
+    min-height: 48px;
+    padding: 0 10px 0 14px;
+  }
+
+  .indexed-search-searchbox:focus-within {
+    @include control.focus-ring(rgba(var(--accent-rgb), 0.64), rgba(var(--accent-rgb), 0.16));
   }
 
   .indexed-search-searchbox-icon {
     width: 18px;
     height: 18px;
     flex: 0 0 auto;
-    display: grid;
-    place-items: center;
-    border-radius: 0;
-    background: transparent;
-    color: #8e99ae;
-  }
-
-  .indexed-search-searchbox-icon-svg {
-    width: 16px;
-    height: 16px;
-    display: block;
+    color: var(--muted);
   }
 
   .indexed-search-input {
+    flex: 1 1 auto;
     width: 100%;
     min-width: 0;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
+    padding: 8px 0;
     color: var(--text);
-    font-size: var(--font-size-xl);
-    font-weight: 500;
-    line-height: 1.2;
+    font-size: var(--font-size-lg);
     user-select: text;
     -webkit-user-select: text;
-    box-shadow: none;
-  }
-
-  .indexed-search-input:focus {
-    outline: none;
   }
 
   .indexed-search-input::placeholder {
-    color: #7b869c;
-  }
-
-  .indexed-search-searchbox-hint {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding-top: 0;
-    border-top: 0;
     color: var(--muted);
-    font-size: var(--font-size-2xs);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
   }
 
-  .indexed-search-searchbox-hint-left,
-  .indexed-search-searchbox-hint-right {
+  // Use the same accessible clear button in every webview.
+  .indexed-search-input::-webkit-search-cancel-button {
+    appearance: none;
+  }
+
+  .indexed-search-clear {
+    @include control.icon-button-shell(28px, 5px);
+    flex: 0 0 auto;
+  }
+
+  .indexed-search-clear:hover {
+    background: var(--surface-control);
+    color: var(--text);
+  }
+
+  .indexed-search-clear svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .indexed-search-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(245px, 32%);
+    grid-template-rows: minmax(0, 1fr);
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 14px;
+    padding: 0 20px 14px;
+  }
+
+  .indexed-search-results,
+  .indexed-search-sidebar {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-height: 0;
+    @include control.panel-card(10px, var(--panel-deep));
   }
 
-  .indexed-search-searchbox-hint-right {
-    text-align: right;
-  }
-
-  .btn {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: color-mix(in srgb, var(--surface-control) 68%, black 32%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  }
-
-  .btn:hover:not(:disabled) {
-    border-color: rgba(255, 255, 255, 0.2);
-    background: color-mix(in srgb, var(--surface-control) 78%, black 22%);
-  }
-
-  .btn.ghost {
-    background: color-mix(in srgb, var(--surface-control-muted) 60%, black 40%);
+  .indexed-search-sidebar {
+    overflow: auto;
+    padding: 12px;
+    scrollbar-width: thin;
   }
 
   .indexed-search-section-head {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
   }
 
   .indexed-search-section-title {
-    @include control.eyebrow-label(var(--font-size-2xs), 0.11em, 700);
+    margin: 0;
+    color: var(--text);
+    font-size: var(--font-size-md);
+    font-weight: 650;
   }
 
-  .indexed-search-section-meta {
-    font-size: var(--font-size-2xs);
+  .indexed-search-section-meta,
+  .indexed-search-section-note {
     color: var(--muted);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: var(--font-size-xs);
   }
 
-  .indexed-search-section-body {
-    min-height: 0;
-    flex: 1 1 auto;
+  .indexed-search-section-note {
+    margin: 0 0 8px;
+    line-height: 1.4;
+    color: #f28b8b;
+    overflow-wrap: anywhere;
+  }
+
+  .btn:focus-visible,
+  .indexed-search-clear:focus-visible {
+    @include control.focus-ring(rgba(var(--accent-rgb), 0.75), rgba(var(--accent-rgb), 0.2));
+  }
+
+  .indexed-search-footer {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 20px;
+    border-top: 1px solid var(--stroke);
+    color: var(--muted);
+    font-size: var(--font-size-xs);
   }
 
-  .indexed-search-scroll,
-  .indexed-search-scroll-viewport {
-    min-height: 0;
-    flex: 1 1 auto;
+  .indexed-search-service-status {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .indexed-search-scroll-content {
-    min-height: 100%;
-    padding-right: 14px;
+  .indexed-search-shortcuts {
+    display: flex;
+    gap: 12px;
+    white-space: nowrap;
+  }
+
+  .indexed-search-shortcuts kbd {
+    display: inline-block;
+    min-width: 18px;
+    padding: 2px 4px;
+    border: 1px solid var(--stroke);
+    border-radius: 4px;
+    background: var(--surface-control-muted);
+    color: var(--text);
+    font: inherit;
+    text-align: center;
   }
 }
 
-@media (max-width: 840px) {
+@media (max-width: 640px) {
   :where(.indexed-search-panel) {
     .indexed-search-body {
-      grid-template-columns: 1fr;
-      gap: 18px;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+      gap: 10px;
     }
 
-    .indexed-search-input {
-      font-size: var(--font-size-lg);
-    }
-
-    .indexed-search-searchbox-hint {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .indexed-search-searchbox-hint-right {
-      text-align: left;
-      white-space: normal;
+    .indexed-search-header,
+    .indexed-search-field,
+    .indexed-search-body,
+    .indexed-search-footer {
+      padding-inline: 12px;
     }
   }
 }

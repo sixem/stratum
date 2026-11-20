@@ -2,6 +2,9 @@
 // This module owns callback bridging and root-level failure reconciliation so
 // the public entrypoint can focus on queueing and final reporting.
 use super::shell_items::read_shell_item_path;
+use crate::domain::filesystem::fs_recycle_windows::{
+    recycle_source_identity, FileIdentity, MAX_RECYCLED_ITEMS,
+};
 use crate::domain::filesystem::transfer::common::path_is_same_or_within;
 use crate::domain::filesystem::transfer::delete_discovery::DeleteDiscoveryRoot;
 use crate::domain::filesystem::{
@@ -25,7 +28,15 @@ pub(super) struct DeleteOperationState {
     pub on_control: Option<*mut TransferControlCallback>,
     pub roots: Vec<DeleteDiscoveryRoot>,
     pub root_failures: HashMap<String, String>,
+    pub recycle_source_ids: Option<HashMap<String, FileIdentity>>,
+    pub recycled_items: Vec<RecycledItem>,
     pub aborted: bool,
+}
+
+pub(super) struct RecycledItem {
+    pub original_path: String,
+    pub shell_path: String,
+    pub identity: FileIdentity,
 }
 
 impl DeleteOperationState {
@@ -191,6 +202,13 @@ impl IFileOperationProgressSink_Impl for ShellDeleteProgressSink_Impl {
         let mut state = self.state.lock().expect("delete progress lock");
         state.check_control()?;
         let path = ShellDeleteProgressSink::shell_item_path(psiitem);
+        if let (Some(ids), Some(path)) = (state.recycle_source_ids.as_mut(), path.as_ref()) {
+            if ids.len() < MAX_RECYCLED_ITEMS {
+                if let Ok(identity) = recycle_source_identity(Path::new(path)) {
+                    ids.insert(path.clone(), identity);
+                }
+            }
+        }
         state.current_path = path.clone();
         state.emit_progress(path);
         Ok(())
@@ -201,12 +219,29 @@ impl IFileOperationProgressSink_Impl for ShellDeleteProgressSink_Impl {
         _dwflags: u32,
         psiitem: windows::core::Ref<'_, IShellItem>,
         hrdelete: HRESULT,
-        _psinewlycreated: windows::core::Ref<'_, IShellItem>,
+        psinewlycreated: windows::core::Ref<'_, IShellItem>,
     ) -> WinResult<()> {
         let mut state = self.state.lock().expect("delete progress lock");
         let path = ShellDeleteProgressSink::shell_item_path(psiitem);
+        let identity = path
+            .as_ref()
+            .and_then(|path| state.recycle_source_ids.as_mut()?.remove(path));
         if hrdelete.is_err() {
             state.record_failure(path.as_deref(), hrdelete);
+        } else if state.recycled_items.len() < MAX_RECYCLED_ITEMS {
+            // A new Shell item identifies the physical Recycle Bin entry from this operation.
+            if let (Some(identity), Some(original_path), Some(shell_path)) = (
+                identity,
+                path.as_ref()
+                    .filter(|path| state.root_for_path(path).is_some()),
+                ShellDeleteProgressSink::shell_item_path(psinewlycreated),
+            ) {
+                state.recycled_items.push(RecycledItem {
+                    original_path: original_path.clone(),
+                    shell_path,
+                    identity,
+                });
+            }
         }
         state.mark_processed(path);
         Ok(())

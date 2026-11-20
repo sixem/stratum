@@ -2,12 +2,12 @@
 use crate::domain::filesystem as fs;
 use serde::Deserialize;
 use std::fs as std_fs;
-use std::io::{BufRead, BufReader, Read};
+mod process;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
-use std::thread;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 
@@ -67,10 +67,11 @@ pub(crate) struct VideoProgressUpdate {
 
 pub(crate) type VideoProgressCallback<'callback> = dyn FnMut(VideoProgressUpdate) + 'callback;
 
-pub fn convert_video(
+pub(super) fn convert_video(
     path: String,
     destination: String,
     options: VideoConvertOptions,
+    tools: &super::ffmpeg::FfmpegTools,
     mut on_progress: Option<&mut VideoProgressCallback<'_>>,
     mut on_control: Option<&mut fs::TransferControlCallback>,
 ) -> Result<(), String> {
@@ -107,14 +108,16 @@ pub fn convert_video(
 
     validate_encoder_for_format(options.format, options.encoder)?;
     let quality = clamp_quality(options.encoder, options.quality);
-    let ffmpeg_bin = resolve_ffmpeg_binary(options.ffmpeg_path.as_deref());
-    let duration_seconds = probe_input_duration(source_path, options.ffmpeg_path.as_deref());
     let progress_context = options
         .progress
         .as_ref()
         .filter(|value| value.total_items > 0);
 
-    let mut command = Command::new(ffmpeg_bin);
+    let duration_seconds = match (progress_context, tools.ffprobe.as_deref()) {
+        (Some(_), Some(binary)) => probe_input_duration(source_path, binary, &mut on_control)?,
+        _ => None,
+    };
+    let mut command = Command::new(&tools.ffmpeg);
     command
         .arg(if overwrite { "-y" } else { "-n" })
         .arg("-hide_banner")
@@ -122,12 +125,16 @@ pub fn convert_video(
         .arg("error")
         .arg("-nostdin")
         .arg("-nostats")
+        // An empty encoded stream can otherwise return success and replace its source.
+        .args(["-abort_on", "empty_output_stream"])
         .arg("-stats_period")
         .arg("0.25")
         .arg("-progress")
         .arg("pipe:1")
         .arg("-i")
-        .arg(source_path);
+        .arg(source_path)
+        // Capital V excludes embedded cover art and thumbnails.
+        .args(["-map", "0:V:0"]);
 
     push_video_args(&mut command, options.encoder, options.speed, quality);
     push_audio_args(
@@ -142,137 +149,29 @@ pub fn convert_video(
     configure_media_command(&mut command);
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
 
-    let mut child = command
-        .spawn()
-        .map_err(|err| format!("Failed to launch ffmpeg: {err}"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "Failed to capture ffmpeg progress output".to_string())?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| "Failed to capture ffmpeg error output".to_string())?;
-    let stderr_handle = thread::spawn(move || {
-        let mut buffer = String::new();
-        let mut reader = BufReader::new(stderr);
-        let _ = reader.read_to_string(&mut buffer);
-        buffer
-    });
-
-    let progress_reader = BufReader::new(stdout);
-    let mut snapshot = FfmpegProgressSnapshot::default();
-    let mut saw_progress_end = false;
-    let mut cancelled_error: Option<String> = None;
-    for line in progress_reader.lines() {
-        let line = line.map_err(|err| err.to_string())?;
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let Some((key, value)) = trimmed.split_once('=') else {
-            continue;
-        };
-        snapshot.apply(key.trim(), value.trim());
-        if key.trim() != "progress" {
-            continue;
-        }
-        let is_end = value.trim() == "end";
+    let child = command.spawn().map_err(|err| {
+        format!(
+            "Could not start FFmpeg at {}: {err}",
+            tools.ffmpeg.display()
+        )
+    })?;
+    process::run(child, &mut on_control, |snapshot| {
         emit_conversion_progress(
             &mut on_progress,
             progress_context,
             source_path,
             duration_seconds,
             &snapshot,
-            is_end,
+            false,
         );
-        if is_end {
-            saw_progress_end = true;
-            break;
-        }
-        snapshot = FfmpegProgressSnapshot::default();
-
-        if let Some(control) = on_control.as_mut() {
-            if let Err(error) = control() {
-                cancel_child_process(&mut child);
-                cancelled_error = Some(error);
-                break;
-            }
-        }
-    }
-
-    if cancelled_error.is_none() {
-        if let Some(control) = on_control.as_mut() {
-            if let Err(error) = control() {
-                cancel_child_process(&mut child);
-                cancelled_error = Some(error);
-            }
-        }
-    }
-
-    let status = child.wait().map_err(|err| err.to_string())?;
-    let detail = stderr_handle
-        .join()
-        .unwrap_or_else(|_| String::new())
-        .trim()
-        .to_string();
-    if let Some(error) = cancelled_error {
-        return Err(error);
-    }
-    if status.success() {
-        if !saw_progress_end {
-            emit_completion_progress(
-                &mut on_progress,
-                progress_context,
-                source_path,
-                duration_seconds,
-            );
-        }
-        return Ok(());
-    }
-
-    if detail.is_empty() {
-        Err("ffmpeg conversion failed".to_string())
-    } else {
-        Err(detail)
-    }
-}
-
-fn cancel_child_process(child: &mut Child) {
-    let _ = child.kill();
-}
-
-fn resolve_ffmpeg_binary(explicit_path: Option<&str>) -> String {
-    let trimmed = explicit_path.unwrap_or_default().trim();
-    if trimmed.is_empty() {
-        return ffmpeg_binary_name().to_string();
-    }
-    let candidate = Path::new(trimmed);
-    if candidate.is_dir() {
-        return candidate
-            .join(ffmpeg_binary_name())
-            .to_string_lossy()
-            .to_string();
-    }
-    trimmed.to_string()
-}
-
-fn resolve_ffprobe_binary(explicit_path: Option<&str>) -> String {
-    let trimmed = explicit_path.unwrap_or_default().trim();
-    if trimmed.is_empty() {
-        return ffprobe_binary_name().to_string();
-    }
-    let candidate = Path::new(trimmed);
-    if candidate.is_dir() {
-        return candidate
-            .join(ffprobe_binary_name())
-            .to_string_lossy()
-            .to_string();
-    }
-    candidate
-        .with_file_name(ffprobe_binary_name())
-        .to_string_lossy()
-        .to_string()
+    })?;
+    emit_completion_progress(
+        &mut on_progress,
+        progress_context,
+        source_path,
+        duration_seconds,
+    );
+    Ok(())
 }
 
 fn validate_encoder_for_format(
@@ -313,6 +212,8 @@ fn push_video_args(command: &mut Command, encoder: VideoEncoder, speed: VideoSpe
             command
                 .arg("-c:v")
                 .arg("libx264")
+                // 4:2:0 requires even dimensions. Preserve every original pixel.
+                .args(["-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0"])
                 .arg("-preset")
                 .arg(preset)
                 .arg("-crf")
@@ -346,12 +247,18 @@ fn push_audio_args(command: &mut Command, format: VideoTargetFormat, audio_enabl
         command.arg("-an");
         return;
     }
+    command.args(["-map", "0:a:0?"]);
     match format {
         VideoTargetFormat::Webm => {
             command.arg("-c:a").arg("libopus").arg("-b:a").arg("128k");
         }
         VideoTargetFormat::Avi => {
-            command.arg("-c:a").arg("mp3").arg("-b:a").arg("192k");
+            command
+                .args(["-af", "aformat=channel_layouts=mono|stereo"])
+                .arg("-c:a")
+                .arg("mp3")
+                .arg("-b:a")
+                .arg("192k");
         }
         VideoTargetFormat::Mp4 | VideoTargetFormat::Mkv | VideoTargetFormat::Mov => {
             command.arg("-c:a").arg("aac").arg("-b:a").arg("192k");
@@ -359,46 +266,59 @@ fn push_audio_args(command: &mut Command, format: VideoTargetFormat, audio_enabl
     }
 }
 
-#[cfg(target_os = "windows")]
-fn ffmpeg_binary_name() -> &'static str {
-    "ffmpeg.exe"
-}
-
-#[cfg(not(target_os = "windows"))]
-fn ffmpeg_binary_name() -> &'static str {
-    "ffmpeg"
-}
-
-#[cfg(target_os = "windows")]
-fn ffprobe_binary_name() -> &'static str {
-    "ffprobe.exe"
-}
-
-#[cfg(not(target_os = "windows"))]
-fn ffprobe_binary_name() -> &'static str {
-    "ffprobe"
-}
-
-fn probe_input_duration(source_path: &str, explicit_ffmpeg_path: Option<&str>) -> Option<f64> {
-    let mut command = Command::new(resolve_ffprobe_binary(explicit_ffmpeg_path));
+// Duration is optional. A slow probe must leave the job cancellable and must
+// never prevent the main encoder from trying a playable file.
+fn probe_input_duration(
+    source: &str,
+    ffprobe: &Path,
+    control: &mut Option<&mut fs::TransferControlCallback>,
+) -> Result<Option<f64>, String> {
+    use std::io::Read;
+    let mut command = Command::new(ffprobe);
     command
-        .arg("-v")
-        .arg("error")
-        .arg("-show_entries")
-        .arg("format=duration")
-        .arg("-of")
-        .arg("default=noprint_wrappers=1:nokey=1")
-        .arg(source_path);
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+        ])
+        .arg(source)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
     configure_media_command(&mut command);
-    let output = command.output().ok()?;
-    if !output.status.success() {
-        return None;
+    let Ok(mut child) = command.spawn() else {
+        return Ok(None);
+    };
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        if let Some(check) = control.as_deref_mut() {
+            if let Err(error) = check() {
+                process::stop(&mut child);
+                return Err(error);
+            }
+        }
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => break,
+            Ok(Some(_)) => return Ok(None),
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(40)),
+            _ => {
+                process::stop(&mut child);
+                return Ok(None);
+            }
+        }
     }
-    String::from_utf8_lossy(&output.stdout)
+    let mut duration = String::new();
+    if let Some(pipe) = child.stdout.take() {
+        let _ = pipe.take(128).read_to_string(&mut duration);
+    }
+    Ok(duration
         .trim()
         .parse::<f64>()
         .ok()
-        .filter(|value| value.is_finite() && *value > 0.0)
+        .filter(|value| value.is_finite() && *value > 0.0))
 }
 
 #[derive(Default)]

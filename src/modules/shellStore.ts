@@ -4,7 +4,7 @@ import type { ShellAvailability } from "@/types";
 
 type ShellState = {
   availability: ShellAvailability | null;
-  setAvailability: (availability: ShellAvailability) => void;
+  setAvailability: (availability: ShellAvailability | null) => void;
 };
 
 export const useShellStore = createWithEqualityFn<ShellState>((set) => ({

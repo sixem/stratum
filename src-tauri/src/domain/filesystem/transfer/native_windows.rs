@@ -13,7 +13,7 @@ use windows::Win32::Storage::FileSystem::{
     CopyFile2, COPYFILE2_CALLBACK_CHUNK_FINISHED, COPYFILE2_CALLBACK_STREAM_FINISHED,
     COPYFILE2_EXTENDED_PARAMETERS, COPYFILE2_MESSAGE, COPYFILE2_MESSAGE_ACTION,
     COPYFILE2_PROGRESS_CANCEL, COPYFILE2_PROGRESS_CONTINUE, COPYFILE_FLAGS, COPY_FILE_COPY_SYMLINK,
-    COPY_FILE_DIRECTORY, COPY_FILE_OPEN_AND_COPY_REPARSE_POINT,
+    COPY_FILE_DIRECTORY, COPY_FILE_FAIL_IF_EXISTS, COPY_FILE_OPEN_AND_COPY_REPARSE_POINT,
 };
 
 use super::common::TransferEntryKind;
@@ -60,7 +60,7 @@ impl NativeCopyContext {
 }
 
 fn copy_flags_for(kind: TransferEntryKind) -> COPYFILE_FLAGS {
-    let mut flags = COPYFILE_FLAGS(0);
+    let mut flags = COPY_FILE_FAIL_IF_EXISTS;
     if matches!(
         kind,
         TransferEntryKind::SymlinkFile | TransferEntryKind::SymlinkDirectory

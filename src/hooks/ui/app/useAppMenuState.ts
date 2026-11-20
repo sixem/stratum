@@ -61,6 +61,7 @@ export const useAppMenuState = () => {
 
   return {
     contextMenu,
+    openContextMenuAt: setContextMenu,
     settingsOpen,
     openSortMenu,
     openEntryMenu,

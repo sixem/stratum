@@ -13,36 +13,23 @@ type UseEntryMetaCacheOptions = {
 };
 
 export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions) => {
-  const [entryMeta, setEntryMeta] = useState<Map<string, EntryMeta>>(new Map());
+  const [entryMeta, setEntryMeta] = useState(() => new Map<string, EntryMeta>());
   const entryMetaRef = useRef(entryMeta);
   const pendingMetaRef = useRef(new Set<string>());
   const metaCacheRef = useRef<Map<string, EntryMeta>>(new Map());
-  const metaDirtyRef = useRef(false);
+  const metaUpdatesRef = useRef(new Map<string, EntryMeta>());
   const metaFlushTimerRef = useRef<number | null>(null);
 
   const trimMetaCache = useCallback((cache: Map<string, EntryMeta>) => {
+    const keys = cache.keys();
     while (cache.size > META_CACHE_LIMIT) {
-      const oldest = cache.keys().next().value;
-      if (!oldest) break;
+      const oldest = keys.next().value;
+      if (oldest === undefined) break;
       cache.delete(oldest);
     }
   }, []);
 
-  const scheduleMetaFlush = useCallback(() => {
-    if (metaFlushTimerRef.current != null) return;
-    metaFlushTimerRef.current = window.setTimeout(() => {
-      metaFlushTimerRef.current = null;
-      if (!metaDirtyRef.current) return;
-      metaDirtyRef.current = false;
-      // De-prioritize meta commits so scrolling and interaction stay responsive.
-      startTransition(() => {
-        setEntryMeta(entryMetaRef.current);
-      });
-    }, META_FLUSH_INTERVAL_MS);
-  }, []);
-
-  const resetMetaFlush = useCallback(() => {
-    metaDirtyRef.current = false;
+  const clearMetaFlushTimer = useCallback(() => {
     if (metaFlushTimerRef.current != null) {
       window.clearTimeout(metaFlushTimerRef.current);
       metaFlushTimerRef.current = null;
@@ -50,37 +37,55 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
   }, []);
 
   const flushEntryMeta = useCallback(() => {
-    if (!metaDirtyRef.current) return;
-    resetMetaFlush();
-    // Flush meta updates without blocking input/scroll work.
+    clearMetaFlushTimer();
+    const updates = metaUpdatesRef.current;
+    if (updates.size === 0) return;
+    // Publish one immutable directory snapshot for all completed stat batches.
+    const next = new Map(entryMetaRef.current);
+    for (const [path, meta] of updates) next.set(path, meta);
+    updates.clear();
+    entryMetaRef.current = next;
     startTransition(() => {
-      setEntryMeta(entryMetaRef.current);
+      setEntryMeta(next);
     });
-  }, [resetMetaFlush]);
+  }, [clearMetaFlushTimer]);
+
+  const scheduleMetaFlush = useCallback(() => {
+    if (metaFlushTimerRef.current != null) return;
+    metaFlushTimerRef.current = window.setTimeout(flushEntryMeta, META_FLUSH_INTERVAL_MS);
+  }, [flushEntryMeta]);
 
   const primeEntryMeta = useCallback(
     (items: FileEntry[]) => {
-      resetMetaFlush();
-      pendingMetaRef.current.clear();
+      clearMetaFlushTimer();
+      metaUpdatesRef.current.clear();
+      pendingMetaRef.current = new Set();
       const cache = metaCacheRef.current;
       const next = new Map<string, EntryMeta>();
       items.forEach((entry) => {
-        const fromEntry = getInlineEntryMeta(entry);
-        const cached = cache.get(entry.path);
-        const meta = fromEntry ?? cached;
-        if (!meta) return;
-        cache.delete(entry.path);
-        cache.set(entry.path, meta);
-        next.set(entry.path, meta);
+        const meta = getInlineEntryMeta(entry) ?? cache.get(entry.path);
+        if (meta) next.set(entry.path, meta);
       });
-      trimMetaCache(cache);
+      if (next.size >= META_CACHE_LIMIT) {
+        // This listing replaces the entire warm cache. Keep just its newest
+        // entries without inserting and evicting every row of a huge folder.
+        const recent = next.entries();
+        for (let i = next.size - META_CACHE_LIMIT; i > 0; i--) recent.next();
+        metaCacheRef.current = new Map(recent);
+      } else {
+        for (const [path, meta] of next) {
+          cache.delete(path);
+          cache.set(path, meta);
+        }
+        trimMetaCache(cache);
+      }
       entryMetaRef.current = next;
       // Treat large metadata refreshes as non-urgent UI work.
       startTransition(() => {
         setEntryMeta(next);
       });
     },
-    [resetMetaFlush, trimMetaCache],
+    [clearMetaFlushTimer, trimMetaCache],
   );
 
   const requestEntryMeta = useCallback(
@@ -88,14 +93,16 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
       if (paths.length === 0) return [];
       const unique = new Set(paths.map((path) => path.trim()).filter(Boolean));
       const meta = entryMetaRef.current;
+      const updates = metaUpdatesRef.current;
+      const pending = pendingMetaRef.current;
       const missing = Array.from(unique).filter(
         (path) =>
-          !pendingMetaRef.current.has(path) && (options?.force ? true : !meta.has(path)),
+          !pending.has(path) && (options?.force || (!meta.has(path) && !updates.has(path))),
       );
       if (missing.length === 0) return [];
 
       const batch = missing.slice(0, 120);
-      batch.forEach((path) => pendingMetaRef.current.add(path));
+      batch.forEach((path) => pending.add(path));
       const currentLoad = loadIdRef.current;
       if (perf.enabled) {
         perf("stat_entries queued: batch=%d missing=%d", batch.length, missing.length);
@@ -104,7 +111,7 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
       try {
         const start = perf.enabled ? performance.now() : 0;
         const results = await statEntries(batch);
-        if (loadIdRef.current !== currentLoad) return [];
+        if (loadIdRef.current !== currentLoad || pendingMetaRef.current !== pending) return [];
         if (results.length === 0) return [];
         if (perf.enabled) {
           perf(
@@ -114,15 +121,12 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
           );
         }
         const cache = metaCacheRef.current;
-        const next = new Map(entryMetaRef.current);
         results.forEach((nextMeta) => {
           cache.delete(nextMeta.path);
           cache.set(nextMeta.path, nextMeta);
-          next.set(nextMeta.path, nextMeta);
+          updates.set(nextMeta.path, nextMeta);
         });
         trimMetaCache(cache);
-        entryMetaRef.current = next;
-        metaDirtyRef.current = true;
         if (!options?.defer) {
           scheduleMetaFlush();
         }
@@ -133,7 +137,7 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
         }
         return [];
       } finally {
-        batch.forEach((path) => pendingMetaRef.current.delete(path));
+        batch.forEach((path) => pending.delete(path));
       }
     },
     [loadIdRef, perf, scheduleMetaFlush, trimMetaCache],
@@ -141,13 +145,15 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
 
   useEffect(() => {
     return () => {
-      resetMetaFlush();
+      clearMetaFlushTimer();
+      metaUpdatesRef.current.clear();
+      // An old IPC response may still arrive after this pane unmounts.
+      pendingMetaRef.current = new Set();
     };
-  }, [resetMetaFlush]);
+  }, [clearMetaFlushTimer]);
 
   return {
     entryMeta,
-    entryMetaRef,
     primeEntryMeta,
     requestEntryMeta,
     flushEntryMeta,

@@ -29,6 +29,8 @@ type MetaRequestOptions = {
 };
 
 type UseDirWatchOptions = {
+  pane?: "main" | "bottom";
+  sharesWatch?: boolean;
   enabled: boolean;
   activeTabId: string | null;
   activeTabPath: string;
@@ -57,6 +59,8 @@ const REFRESH_BACKOFF_STEPS_MS = [1000, 2000, 4000];
 const log = makeDebug("watch");
 
 export const useDirWatch = ({
+  pane = "main",
+  sharesWatch = false,
   enabled,
   activeTabId,
   activeTabPath,
@@ -217,7 +221,9 @@ export const useDirWatch = ({
     }
     const pending = Array.from(pendingPathsRef.current);
     pendingPathsRef.current.clear();
-    if (pending.length > 0) {
+    // The main subscriber observes events from both native watches. Publish each
+    // shared folder revision once, while both panes update their own tab state.
+    if (pane === "main" && pending.length > 0) {
       bumpDirectoryChildVersions(pending);
     }
     const metaPaths = Array.from(pendingEntryPathsRef.current)
@@ -244,7 +250,7 @@ export const useDirWatch = ({
       // Force metadata refresh for changed entries so thumbnail signatures update.
       void requestEntryMetaRef.current?.(metaPaths, { force: true }).catch(() => {});
     }
-  }, []);
+  }, [pane]);
 
   const scheduleFlush = useCallback(() => {
     if (flushTimerRef.current != null) return;
@@ -260,9 +266,11 @@ export const useDirWatch = ({
       change.renamePaths.forEach((path) => {
         pendingRenamePathsRef.current.add(path);
       });
-      change.entryPaths.forEach((path) => {
-        pendingEntryPathsRef.current.add(path);
-      });
+      if (normalizePath(change.watchedPath) === normalizePath(currentPathRef.current)) {
+        change.entryPaths.forEach((path) => {
+          pendingEntryPathsRef.current.add(path);
+        });
+      }
       scheduleFlush();
     },
     [scheduleFlush],
@@ -293,19 +301,19 @@ export const useDirWatch = ({
   }, [enabled, queueWatchChange]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || sharesWatch) return;
     const target = activeTabPath.trim();
     if (!target) {
-      void stopDirWatch();
+      void stopDirWatch(pane);
       return;
     }
-    void startDirWatch(target).catch((error) => {
+    void startDirWatch(target, pane).catch((error) => {
       log("start watch failed: %o", error);
     });
     return () => {
-      void stopDirWatch();
+      void stopDirWatch(pane);
     };
-  }, [activeTabPath, enabled]);
+  }, [activeTabPath, enabled, pane, sharesWatch]);
 
   useEffect(() => {
     // Drop stale IDs when tabs close so dirty/refresh maps stay bounded.

@@ -113,9 +113,7 @@ export const ScrollArea = forwardRef<HTMLDivElement, ScrollAreaProps>(
     }, [thumbMinSize]);
 
     const scheduleUpdate = useCallback(() => {
-      if (rafRef.current != null) {
-        window.cancelAnimationFrame(rafRef.current);
-      }
+      if (rafRef.current != null) return;
       rafRef.current = window.requestAnimationFrame(() => {
         rafRef.current = null;
         updateThumb();

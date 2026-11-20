@@ -4,6 +4,7 @@
 use super::super::common::emit_transfer_progress;
 use super::super::manifest::TransferManifestEntry;
 use crate::domain::filesystem::{TransferProgressCallback, TransferProgressUpdate};
+use std::path::Path;
 
 pub(super) fn emit_root_completion(
     on_progress: &mut Option<&mut TransferProgressCallback>,
@@ -25,8 +26,8 @@ pub(super) fn emit_root_completion(
     );
 }
 
-pub(super) fn emit_directory_progress(
-    entry: &TransferManifestEntry,
+pub(super) fn emit_path_progress(
+    source: &Path,
     processed: usize,
     total: usize,
     on_progress: &mut Option<&mut TransferProgressCallback>,
@@ -36,7 +37,7 @@ pub(super) fn emit_directory_progress(
         TransferProgressUpdate {
             processed,
             total,
-            current_path: Some(entry.source.to_string_lossy().to_string()),
+            current_path: Some(source.to_string_lossy().into_owned()),
             current_bytes: None,
             current_total_bytes: None,
             progress_percent: None,

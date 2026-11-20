@@ -9,6 +9,7 @@ import { useFileManagerCopy } from "./fileManagerCopy";
 import { useFileManagerCreate } from "./fileManagerCreate";
 import { useFileManagerDelete } from "./fileManagerDelete";
 import { useFileManagerUndo } from "./fileManagerUndo";
+import type { BeginFileActivity } from "./useFileActivity";
 import type { UndoAction, UndoMoveEntry } from "./fileManagerUndo";
 import type {
   FileManagerDebug,
@@ -18,12 +19,14 @@ import type {
 } from "./fileManager.types";
 
 type UseFileMutationsOptions = {
+  beginFileActivity: BeginFileActivity;
   currentPathRef: RefObject<string>;
   refreshAfterChange: () => Promise<void>;
   log: FileManagerDebug;
 };
 
 export const useFileMutations = ({
+  beginFileActivity,
   currentPathRef,
   refreshAfterChange,
   log,
@@ -72,6 +75,7 @@ export const useFileMutations = ({
   }, []);
 
   const { createFolderInView, createFileInView } = useFileManagerCreate({
+    beginFileActivity,
     currentPathRef,
     createInFlightRef,
     refreshAfterChange,
@@ -79,9 +83,11 @@ export const useFileMutations = ({
   });
 
   const { duplicateEntriesInView, pasteEntriesInView } = useFileManagerCopy({
+    beginFileActivity,
     currentPathRef,
     copyInFlightRef,
     refreshAfterChange,
+    onRecordMoveUndo: recordMoveUndo,
     onDirectoryChildrenChanged: notifyDirectoryChildrenChanged,
     log,
   });
@@ -145,6 +151,9 @@ export const useFileMutations = ({
       });
       if (nextRenames.length === 0) return null;
       renameInFlightRef.current = true;
+      const finish = beginFileActivity(nextRenames.length === 1
+        ? `Renaming ${tabLabel(nextRenames[0].path)}`
+        : `Renaming ${nextRenames.length} items`);
       const failures: RenameFailure[] = [];
       const renamed = new Map<string, string>();
       try {
@@ -197,10 +206,11 @@ export const useFileMutations = ({
         }
         return { renamed, failures };
       } finally {
+        finish();
         renameInFlightRef.current = false;
       }
     },
-    [notifyDirectoryChildrenChanged, pushUndo, refreshAfterChange],
+    [beginFileActivity, notifyDirectoryChildrenChanged, pushUndo, refreshAfterChange],
   );
 
   const renameEntryInView = useCallback(

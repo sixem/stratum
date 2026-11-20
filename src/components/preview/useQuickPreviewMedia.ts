@@ -2,11 +2,12 @@
 // by the overlay. The heavy state logic lives in smaller hooks and a pure
 // derived-state builder.
 import { useMemo } from "react";
-import { buildPreviewUrl, getFileKind, getPathName } from "@/lib";
+import { getFileKind, getPathName } from "@/lib";
 import type { EntryMeta, FileEntry } from "@/types";
 import type { RefObject } from "react";
 import { buildQuickPreviewDerivedState } from "./quickPreviewDerivedState";
 import { usePreviewMediaLifecycle } from "./usePreviewMediaLifecycle";
+import { usePreviewSource } from "./usePreviewSource";
 import { usePreviewVolumeController } from "./usePreviewVolumeController";
 
 type UseQuickPreviewMediaOptions = {
@@ -35,10 +36,7 @@ export const useQuickPreviewMedia = ({
   fitMediaToViewport,
 }: UseQuickPreviewMediaOptions) => {
   const previewSessionKey = open ? `open:${path ?? ""}` : "closed";
-  const src = useMemo(() => {
-    if (!open || !path) return "";
-    return buildPreviewUrl(path);
-  }, [open, path]);
+  const { src, failed: sourceFailed } = usePreviewSource(open ? path : null);
   const isVideo = useMemo(() => {
     if (!open || !path) return false;
     return getFileKind(getPathName(path)) === "video";
@@ -58,6 +56,7 @@ export const useQuickPreviewMedia = ({
     videoVolume: volume.videoVolume,
     canUseExternalActions,
   });
+  const loadState = sourceFailed ? "error" : src ? lifecycle.loadState : "loading";
 
   const derivedState = useMemo(
     () =>
@@ -70,7 +69,7 @@ export const useQuickPreviewMedia = ({
         items,
         thumbnails,
         zoom,
-        loadState: lifecycle.loadState,
+        loadState,
         loadedSrc: lifecycle.loadedSrc,
         mediaSize: lifecycle.mediaSize,
         videoVolume: volume.videoVolume,
@@ -80,9 +79,9 @@ export const useQuickPreviewMedia = ({
       canUseExternalActions,
       isVideo,
       items,
-      lifecycle.loadState,
       lifecycle.loadedSrc,
       lifecycle.mediaSize,
+      loadState,
       meta,
       open,
       path,
@@ -95,7 +94,7 @@ export const useQuickPreviewMedia = ({
 
   return {
     ...derivedState,
-    loadState: lifecycle.loadState,
+    loadState,
     videoPaused: lifecycle.videoPaused,
     videoVolume: volume.videoVolume,
     volumePickerOpen: volume.volumePickerOpen,

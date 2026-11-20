@@ -1,15 +1,20 @@
 // List layout, virtualization surfaces, and list-only variants.
 @use "../control-recipes" as control;
-@use "./shared" as shared;
 
 .file-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
+  background: var(--panel-deep);
+  border: 1px solid var(--stroke);
+  border-radius: 5px;
+  overflow: hidden;
   min-height: 0;
   flex: 1;
   padding: 0;
   --list-columns: 1fr 90px 150px;
+  --list-inset-start: 10px;
+  --list-inset-end: 4px;
   --list-scrollbar-gap: 8px;
 }
 
@@ -22,8 +27,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding-left: 10px;
-    padding-right: 4px;
+    padding-inline: var(--list-inset-start) var(--list-inset-end);
   }
 
   .list-content {
@@ -49,9 +53,13 @@
     display: grid;
     grid-template-columns: var(--list-columns);
     align-items: center;
-    padding: 4px 8px;
+    gap: 8px;
+    // Match the row inset and reserve the same space as the scroll gutter.
+    padding-block: 4px;
+    padding-inline: calc(11px + var(--list-inset-start))
+      calc(11px + var(--list-inset-end) + var(--list-scrollbar-gap) + 7px);
     border-bottom: 1px solid var(--stroke);
-    background: rgba(12, 16, 24, 0.6);
+    background: var(--panel-2);
   }
 
   .list-header-button {
@@ -193,8 +201,8 @@
     gap: 8px;
     padding: 6px 10px;
     height: var(--list-row-height, var(--file-view-list-row-height));
-    border-radius: 6px;
-    background: var(--surface-control-muted);
+    border-radius: 2px;
+    background: transparent;
     --list-dot-color: var(--accent);
     border: 1px solid transparent;
     text-align: left;
@@ -302,7 +310,7 @@
     align-items: center;
     gap: 8px;
     font-size: var(--font-size-md);
-    font-weight: 600;
+    font-weight: 500;
     min-width: 0;
   }
 
@@ -378,57 +386,6 @@
 
 :where(.file-list) .list-shell[data-category-tint="true"] .row[data-kind="executable"] {
   --list-dot-color: rgba(var(--accent-rgb), 0.85);
-}
-
-// Ambient mode lets list rows carry a slightly stronger tint as well, not just the dot.
-:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
-  .row[data-kind="document"]:not(.is-selected):not([data-drop-target="true"]) {
-  @include shared.entry-state-surface(rgba(82, 132, 255, 0.18), rgba(82, 132, 255, 0.055));
-  --list-dot-color: rgba(110, 154, 255, 0.9);
-}
-
-:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
-  .row[data-kind="image"]:not(.is-selected):not([data-drop-target="true"]) {
-  @include shared.entry-state-surface(rgba(56, 201, 198, 0.18), rgba(56, 201, 198, 0.055));
-  --list-dot-color: rgba(88, 223, 219, 0.9);
-}
-
-:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
-  .row[data-kind="video"]:not(.is-selected):not([data-drop-target="true"]) {
-  @include shared.entry-state-surface(rgba(255, 140, 61, 0.2), rgba(255, 140, 61, 0.06));
-  --list-dot-color: rgba(255, 166, 103, 0.9);
-}
-
-:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
-  .row[data-kind="executable"]:not(.is-selected):not([data-drop-target="true"]) {
-  @include shared.entry-state-surface(
-    rgba(var(--accent-rgb), 0.18),
-    rgba(var(--accent-rgb), 0.055)
-  );
-  --list-dot-color: rgba(var(--accent-rgb), 0.9);
-}
-
-:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
-  .row[data-kind="document"]:not(.is-selected):not([data-drop-target="true"]):hover {
-  @include shared.entry-state-surface(rgba(82, 132, 255, 0.22), rgba(82, 132, 255, 0.08));
-}
-
-:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
-  .row[data-kind="image"]:not(.is-selected):not([data-drop-target="true"]):hover {
-  @include shared.entry-state-surface(rgba(56, 201, 198, 0.22), rgba(56, 201, 198, 0.08));
-}
-
-:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
-  .row[data-kind="video"]:not(.is-selected):not([data-drop-target="true"]):hover {
-  @include shared.entry-state-surface(rgba(255, 140, 61, 0.24), rgba(255, 140, 61, 0.09));
-}
-
-:root[data-ambient="true"] :where(.file-list) .list-shell[data-category-tint="true"]
-  .row[data-kind="executable"]:not(.is-selected):not([data-drop-target="true"]):hover {
-  @include shared.entry-state-surface(
-    rgba(var(--accent-rgb), 0.22),
-    rgba(var(--accent-rgb), 0.08)
-  );
 }
 
 @media (max-width: 720px) {

@@ -1,6 +1,7 @@
 // Shared labels, dropdown groups, and small presentation helpers for the
 // conversion modal feature folder.
 import type { DropdownGroup } from "@/components/primitives";
+import { invalidConversionSuffix } from "@/hooks/ui/app/conversion/conversionNames";
 import {
   CONVERT_FORMAT_LABELS,
   CONVERT_TARGET_GROUPS,
@@ -14,7 +15,6 @@ import type {
   ConversionMediaKind,
   ConversionModalDraft,
   ConversionModalRequest,
-  ConversionOutputMode,
   ConversionVideoEncoder,
   ConversionVideoFormat,
   ConversionVideoSpeed,
@@ -42,9 +42,9 @@ export const FORMAT_DETAIL_LABELS: Record<string, string> = {
 
 export const RUN_PHASE_LABELS = {
   idle: "Ready",
-  running: "Converting",
+  running: "Preparing",
   completed: "Completed",
-  failed: "Completed with issues",
+  failed: "Couldn’t queue conversion",
 } as const;
 
 export const ITEM_STATUS_LABELS = {
@@ -154,29 +154,15 @@ export const buildValidationMessage = (
   request: ConversionModalRequest,
   draft: ConversionModalDraft,
 ) => {
-  if (draft.outputMode === "create-new" && draft.suffix.trim().length === 0) {
-    return "Suffix is required when using Create new output mode.";
+  if (draft.outputMode === "create-new" && invalidConversionSuffix(draft.suffix)) {
+    return "Use a filename suffix without Windows path separators or reserved characters.";
   }
   for (const kind of request.sourceKinds) {
     const format = findRuleFormat(draft, kind);
-    if (format) continue;
+    if (format || draft.items.every(item => item.kind !== kind || item.override?.targetFormat)) continue;
     return `Select a default target format for ${KIND_LABELS[kind].toLowerCase()}.`;
   }
   return null;
-};
-
-export const buildExampleName = (
-  item: ConversionItemDraft,
-  mode: ConversionOutputMode,
-  suffix: string,
-) => {
-  const sourceExt = item.sourceExt ? `.${item.sourceExt}` : "";
-  const baseName =
-    sourceExt && item.name.endsWith(sourceExt)
-      ? item.name.slice(0, -sourceExt.length)
-      : item.name;
-  if (mode === "replace") return item.name;
-  return `${baseName}${suffix}${sourceExt}`;
 };
 
 export const formatQualityNormalized = (quality: number) => {

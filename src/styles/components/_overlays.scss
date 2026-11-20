@@ -27,22 +27,13 @@
   transition: opacity 120ms ease;
   line-height: 1.4;
   overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .tooltip.is-visible {
   opacity: 1;
   visibility: visible;
-}
-
-.tooltip.is-singleline {
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.tooltip.is-multiline {
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: anywhere;
 }
 
 .context-menu,
@@ -187,7 +178,7 @@
     overflow: hidden;
   }
 
-  .context-item:hover {
+  .context-item:hover, .context-item:focus-visible {
     background: #ffffff0f;
   }
 

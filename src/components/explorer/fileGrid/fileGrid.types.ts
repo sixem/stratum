@@ -5,7 +5,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import type { DropTarget, EntryItem } from "@/lib";
+import type { EntryItem } from "@/lib";
 import type { GridNameEllipsis, GridSize, ThumbnailFit } from "@/modules";
 import type { EntryMeta, FileEntry, RenameCommitReason, ThumbnailRequest } from "@/types";
 
@@ -17,7 +17,7 @@ export type FileGridEntryContextTarget = {
 
 export type FileGridViewProps = {
   currentPath: string;
-  entries: FileEntry[];
+  entryByPath: Map<string, FileEntry>;
   items: EntryItem[];
   indexMap?: Map<string, number>;
   loading: boolean;
@@ -108,8 +108,6 @@ export type FileGridPreviewProps = {
 export type FileGridDragDropProps = {
   dropTargetPath?: string | null;
   onStartDragOut?: (paths: string[]) => void;
-  onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
-  onInternalHover?: (target: DropTarget | null) => void;
 };
 
 export type FileGridCreationProps = {

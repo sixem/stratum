@@ -28,34 +28,11 @@ pub(super) fn resolve_cache_dir(app_handle: &AppHandle) -> PathBuf {
 
 pub(super) fn load_cache_index(cache_dir: &Path) -> HashSet<String> {
     let mut index = HashSet::new();
-    let mut stack = vec![cache_dir.to_path_buf()];
-
-    while let Some(dir) = stack.pop() {
-        let read_dir = match fs::read_dir(&dir) {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
-        for item in read_dir {
-            let entry = match item {
-                Ok(value) => value,
-                Err(_) => continue,
-            };
-            let path = entry.path();
-            let metadata = match entry.metadata() {
-                Ok(value) => value,
-                Err(_) => continue,
-            };
-            if metadata.is_dir() {
-                stack.push(path);
-                continue;
-            }
-            let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
-                continue;
-            };
-            index.insert(file_name.to_string());
+    visit_cache_files(cache_dir, |entry, _| {
+        if let Ok(file_name) = entry.file_name().into_string() {
+            index.insert(file_name);
         }
-    }
-
+    });
     index
 }
 
@@ -85,10 +62,7 @@ pub(super) fn maybe_trim_cache(state: &ThumbnailState, limit_mb: u32, added_byte
     }
 
     let now = SystemTime::now();
-    let mut should_scan = false;
-    let mut force_scan = false;
-    let pending_for_scan: u64;
-    {
+    let (_maintenance, pending_for_scan) = {
         let mut trim_state = state.trim_state.lock().expect("thumb trim lock");
 
         if added_bytes > 0 {
@@ -100,24 +74,18 @@ pub(super) fn maybe_trim_cache(state: &ThumbnailState, limit_mb: u32, added_byte
         if pending_growth == 0 {
             return;
         }
-        pending_for_scan = pending_growth;
 
-        match trim_state.approx_total_bytes {
+        let (should_scan, force_scan) = match trim_state.approx_total_bytes {
             Some(approx_total) => {
                 let projected_total = approx_total.saturating_add(pending_growth);
                 let threshold = limit_bytes.saturating_mul(TRIM_SCAN_THRESHOLD_PERCENT) / 100;
-                if projected_total >= threshold {
-                    should_scan = true;
-                    force_scan = projected_total >= limit_bytes;
-                }
+                (projected_total >= threshold, projected_total >= limit_bytes)
             }
             None => {
                 let unknown_threshold = TRIM_UNKNOWN_SCAN_GROWTH_BYTES.min(limit_bytes);
-                if pending_growth >= unknown_threshold {
-                    should_scan = true;
-                }
+                (pending_growth >= unknown_threshold, false)
             }
-        }
+        };
 
         if !should_scan {
             return;
@@ -133,8 +101,13 @@ pub(super) fn maybe_trim_cache(state: &ThumbnailState, limit_mb: u32, added_byte
             }
         }
 
+        // Other renders keep their growth recorded and can continue without scanning.
+        let Ok(maintenance) = state.cache_maintenance.try_lock() else {
+            return;
+        };
         trim_state.last_trim = Some(now);
-    }
+        (maintenance, pending_growth)
+    };
 
     let (mut entries, mut total) = collect_cache_entries(&state.cache_dir);
     if total <= limit_bytes {
@@ -179,26 +152,27 @@ pub(super) fn get_cache_dir(app_handle: &AppHandle) -> PathBuf {
 }
 
 pub(super) fn clear_cache(state: &ThumbnailState) -> Result<(), String> {
+    let _maintenance = state
+        .cache_maintenance
+        .lock()
+        .expect("thumb maintenance lock");
     if state.cache_dir.exists() {
         fs::remove_dir_all(&state.cache_dir).map_err(|err| err.to_string())?;
     }
     fs::create_dir_all(&state.cache_dir).map_err(|err| err.to_string())?;
 
-    state
-        .cache_index
-        .lock()
-        .expect("thumb cache index lock")
-        .clear();
+    *state.cache_index.lock().expect("thumb cache index lock") = HashSet::new();
     reset_trim_state(&state.trim_state);
     Ok(())
 }
 
 pub(super) fn get_cache_size(app_handle: &AppHandle) -> Result<u64, String> {
     let cache_dir = resolve_cache_dir(app_handle);
-    if !cache_dir.exists() {
-        return Ok(0);
-    }
-    let (_, total) = collect_cache_entries(&cache_dir);
+    let mut total = 0u64;
+    // The settings view needs just the total. Avoid retaining file paths and timestamps.
+    visit_cache_files(&cache_dir, |_, metadata| {
+        total = total.saturating_add(metadata.len());
+    });
     Ok(total)
 }
 
@@ -211,7 +185,20 @@ fn reset_trim_state(trim_state: &std::sync::Mutex<CacheTrimState>) {
 
 fn collect_cache_entries(cache_dir: &Path) -> (Vec<CacheEntry>, u64) {
     let mut entries = Vec::new();
-    let mut total: u64 = 0;
+    let mut total = 0u64;
+    visit_cache_files(cache_dir, |entry, metadata| {
+        let size = metadata.len();
+        total = total.saturating_add(size);
+        entries.push(CacheEntry {
+            path: entry.path(),
+            modified: metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH),
+            size,
+        });
+    });
+    (entries, total)
+}
+
+fn visit_cache_files(cache_dir: &Path, mut visit: impl FnMut(fs::DirEntry, fs::Metadata)) {
     let mut stack = vec![cache_dir.to_path_buf()];
 
     while let Some(dir) = stack.pop() {
@@ -224,25 +211,15 @@ fn collect_cache_entries(cache_dir: &Path) -> (Vec<CacheEntry>, u64) {
                 Ok(value) => value,
                 Err(_) => continue,
             };
-            let path = entry.path();
             let metadata = match entry.metadata() {
                 Ok(value) => value,
                 Err(_) => continue,
             };
             if metadata.is_dir() {
-                stack.push(path);
-                continue;
+                stack.push(entry.path());
+            } else {
+                visit(entry, metadata);
             }
-            let size = metadata.len();
-            total = total.saturating_add(size);
-            let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-            entries.push(CacheEntry {
-                path,
-                modified,
-                size,
-            });
         }
     }
-
-    (entries, total)
 }

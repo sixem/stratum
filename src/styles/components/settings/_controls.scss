@@ -236,7 +236,7 @@
     min-width: 120px;
     padding: 4px 10px;
     border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: var(--surface-border-width) solid rgba(255, 255, 255, 0.1);
     background: color-mix(in srgb, var(--surface-control-muted) 62%, black 38%);
     font-size: var(--font-size-xs);
     font-weight: 600;

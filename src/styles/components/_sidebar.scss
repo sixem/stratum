@@ -251,8 +251,12 @@
 }
 
 :where(.sidebar) .place.is-empty {
-  padding-inline: 6px;
+  padding: 4px 6px;
   background: transparent;
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.35;
+  opacity: 1;
 }
 
 :where(.sidebar) .sidebar-places-list {

@@ -15,7 +15,7 @@
   $radius,
   $background,
   $border-color: var(--stroke),
-  $border-width: 1px
+  $border-width: var(--surface-border-width)
 ) {
   border-radius: $radius;
   border: $border-width solid $border-color;

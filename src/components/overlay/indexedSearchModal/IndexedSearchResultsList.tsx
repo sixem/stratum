@@ -2,105 +2,121 @@
 //
 // This component only renders the current query state. Fetching, debounce, and
 // keyboard movement live in hooks so the list stays predictable and reusable.
-import type { RefObject } from "react";
+import type { KeyboardEvent, RefObject } from "react";
 
-import { EmptyState, PressButton, ScrollArea } from "@/components/primitives";
+import loader from "@/assets/icons/loaders/ring.svg";
+import { BinocularsIcon, ErrorIcon, FallbackFileIcon, FolderIcon } from "@/components/icons";
+import { TooltipWrapper } from "@/components/overlay/Tooltip";
+import { PressButton, ScrollArea } from "@/components/primitives";
 import type { IndexedPathMatch } from "@/types";
-import {
-  normalizeIndexedPathKey,
-  type IndexedSelection,
-} from "./indexedSearchModalTypes";
+import { INDEXED_SEARCH_RESULT_LIMIT } from "./indexedSearchModalConfig";
 
 type IndexedSearchResultsListProps = {
+  catalogPending: boolean;
   onOpenResult: (path: string) => void;
-  onSelectResult: (result: IndexedPathMatch, index: number) => void;
+  onResultKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
+  onSelectResult: (result: IndexedPathMatch) => void;
   resultRefs: RefObject<Array<HTMLButtonElement | null>>;
   results: IndexedPathMatch[];
   resultsError: string | null;
   resultsViewportRef: RefObject<HTMLDivElement | null>;
-  selection: IndexedSelection | null;
-  shownResultCount: number;
+  searching: boolean;
+  selectedPath: string | undefined;
   trimmedQuery: string;
 };
 
 export const IndexedSearchResultsList = ({
+  catalogPending,
   onOpenResult,
+  onResultKeyDown,
   onSelectResult,
   resultRefs,
   results,
   resultsError,
   resultsViewportRef,
-  selection,
-  shownResultCount,
+  searching,
+  selectedPath,
   trimmedQuery,
 }: IndexedSearchResultsListProps) => {
-  const resultsMetaLabel = `${shownResultCount} shown`;
-  const showResultsEmptyState =
-    resultsError || trimmedQuery.length === 0 || results.length === 0;
-  const resultsEmptyTitle = resultsError
+  const hasQuery = trimmedQuery.length > 0;
+  const resultCount = results.length;
+  const loading = !resultsError && (catalogPending || searching);
+  const resultsMetaLabel = resultCount === INDEXED_SEARCH_RESULT_LIMIT
+    ? `${resultCount} shown · display limit`
+    : `${resultCount} ${resultCount === 1 ? "match" : "matches"}`;
+  const emptyTitle = resultsError
     ? "Search unavailable"
-    : trimmedQuery.length === 0
-      ? "Start an indexed search"
-      : "No indexed matches yet";
-  const resultsEmptySubtitle = resultsError
-    ? resultsError
-    : trimmedQuery.length === 0
-      ? "Search indexed files and folders by name. Wildcards like * and ? are supported."
-      : `Nothing matched "${trimmedQuery}" in the current index yet.`;
+    : catalogPending
+      ? "Preparing the index…"
+      : searching
+        ? "Searching the index…"
+        : hasQuery
+          ? "No matches"
+          : "Find a file or folder";
+  const emptyHint = resultsError ?? (hasQuery
+    ? "Try a shorter name or a wildcard pattern."
+    : "Enter part of a name or use a wildcard like *.pdf.");
 
   return (
     <section className="indexed-search-results" aria-label="Indexed results">
       <div className="indexed-search-section-head">
-        <div className="indexed-search-section-title">Results</div>
-        <div className="indexed-search-section-meta">{resultsMetaLabel}</div>
+        <h3 className="indexed-search-section-title">Results</h3>
+        <span className="indexed-search-section-meta tnum" role="status">
+          {hasQuery ? (resultCount === 0 && (loading || resultsError) ? emptyTitle : resultsMetaLabel) : null}
+        </span>
       </div>
 
-      <div className="indexed-search-section-body">
-        {showResultsEmptyState ? (
-          <div className="indexed-search-empty">
-            <EmptyState title={resultsEmptyTitle} subtitle={resultsEmptySubtitle} />
+      {resultCount === 0 ? (
+        <div className="indexed-search-empty">
+          <div className="indexed-search-empty-symbol">
+            {loading ? <img src={loader} alt="" /> : (resultsError ? <ErrorIcon /> : <BinocularsIcon />)}
           </div>
-        ) : (
-          <ScrollArea
-            ref={resultsViewportRef}
-            className="indexed-search-scroll"
-            viewportClassName="indexed-search-scroll-viewport"
-            contentClassName="indexed-search-scroll-content indexed-search-result-list"
-            scrollbarVariant="overlay"
-          >
-            {results.map((result, index) => {
-              const isSelected =
-                selection?.kind === "result" &&
-                normalizeIndexedPathKey(selection.path) ===
-                  normalizeIndexedPathKey(result.path);
+          <p className="indexed-search-empty-title">{emptyTitle}</p>
+          {loading ? null : <p className="indexed-search-empty-hint">{emptyHint}</p>}
+        </div>
+      ) : (
+        <ScrollArea
+          ref={resultsViewportRef}
+          className="indexed-search-scroll"
+          contentClassName="indexed-search-result-list"
+          scrollbarVariant="overlay"
+        >
+          {results.map((result, index) => {
+            const isSelected = selectedPath === result.path;
+            const isDirectory = result.kind === "directory";
 
-              return (
+            return (
+              <TooltipWrapper key={result.path} text={result.path}>
                 <PressButton
-                  key={result.path}
                   type="button"
                   ref={(element) => {
                     resultRefs.current[index] = element;
                   }}
                   className="indexed-search-result"
-                  data-selected={isSelected}
+                  aria-pressed={isSelected}
+                  tabIndex={isSelected || (selectedPath == null && index === 0) ? 0 : -1}
                   pressOnPointerDown={false}
-                  onClick={() => onSelectResult(result, index)}
-                  onFocus={() => onSelectResult(result, index)}
-                  onDoubleClick={() => {
-                    onOpenResult(result.path);
-                  }}
+                  onClick={() => onSelectResult(result)}
+                  onFocus={() => onSelectResult(result)}
+                  onKeyDown={onResultKeyDown}
+                  onDoubleClick={() => onOpenResult(result.path)}
                 >
-                  <div className="indexed-search-result-head">
+                  <span className="indexed-search-result-icon" data-kind={result.kind}>
+                    {isDirectory ? <FolderIcon /> : <FallbackFileIcon />}
+                  </span>
+                  <span className="indexed-search-result-copy">
                     <span className="indexed-search-result-name">{result.name}</span>
-                    <span className="indexed-search-result-kind">{result.kind}</span>
-                  </div>
-                  <div className="indexed-search-result-path">{result.path}</div>
+                    <span className="indexed-search-result-path">
+                      {result.parentPath || result.path}
+                    </span>
+                  </span>
+                  <span className="indexed-search-result-kind">{isDirectory ? "Folder" : "File"}</span>
                 </PressButton>
-              );
-            })}
-          </ScrollArea>
-        )}
-      </div>
+              </TooltipWrapper>
+            );
+          })}
+        </ScrollArea>
+      )}
     </section>
   );
 };

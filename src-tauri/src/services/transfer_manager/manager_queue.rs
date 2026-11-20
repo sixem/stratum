@@ -72,6 +72,7 @@ impl TransferManagerHandle {
         destination: String,
         options: Option<fs::TransferOptions>,
         transfer_id: Option<String>,
+        #[cfg(windows)] drop_stage: Option<crate::platform::windows::dragdrop::DropStage>,
     ) -> Result<fs::TransferReport, String> {
         let snapshot = build_initial_snapshot(
             &self.inner.next_job_id,
@@ -88,6 +89,8 @@ impl TransferManagerHandle {
                 paths,
                 destination,
                 options,
+                #[cfg(windows)]
+                drop_stage: drop_stage.map(Arc::new),
             },
             completion_tx,
             control: TransferJobControlHandle::new(),

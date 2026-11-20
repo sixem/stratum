@@ -224,10 +224,6 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.indexedSearchEnabled === "boolean"
         ? value.indexedSearchEnabled
         : DEFAULT_SETTINGS.indexedSearchEnabled,
-    acceleratedNtfsIndexing:
-      typeof value?.acceleratedNtfsIndexing === "boolean"
-        ? value.acceleratedNtfsIndexing
-        : DEFAULT_SETTINGS.acceleratedNtfsIndexing,
     thumbnailsEnabled:
       typeof value?.thumbnailsEnabled === "boolean"
         ? value.thumbnailsEnabled

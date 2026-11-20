@@ -19,11 +19,13 @@ pub enum IndexedSearchServiceState {
 #[serde(rename_all = "camelCase")]
 pub struct IndexedSearchServiceStatus {
     pub state: IndexedSearchServiceState,
+    pub catalog_revision: u64,
     pub activity_label: Option<String>,
     pub started_at: u64,
     pub last_updated_at: u64,
     pub drive_count: usize,
     pub indexable_drive_count: usize,
+    pub searchable_drive_count: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize)]
@@ -33,6 +35,7 @@ pub enum IndexedDriveState {
     Queued,
     Scanning,
     Ready,
+    Saved,
     Unsupported,
     Unavailable,
     Stale,

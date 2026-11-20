@@ -3,7 +3,7 @@ import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { Fragment, useRef, useState } from "react";
 import { usePinnedPlaceDragDrop } from "@/hooks";
-import { handleMiddleClick, normalizePath, tabLabel } from "@/lib";
+import { folderPathKey, handleMiddleClick, tabLabel } from "@/lib";
 import type { SidebarSectionId } from "@/modules";
 import {
   getSessionHint,
@@ -88,6 +88,8 @@ const SidebarItem = ({
       className={`place${isRecent ? " is-recent" : ""}${isActive ? " is-active" : ""}${isDragging ? " is-dragging" : ""}${canReorder ? " is-reorderable" : ""}`}
       data-pinned={isPinned ? "true" : "false"}
       data-place-kind={isPinned && !isRecent ? "pinned" : isRecent ? "recent" : "place"}
+      data-context-place={source}
+      data-context-name={title}
       data-is-dir="true"
       data-path={path}
       data-drop-target={isDropTarget ? "true" : "false"}
@@ -146,8 +148,8 @@ export const Sidebar = ({
   const [placesOpen, setPlacesOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
   const placesListRef = useRef<HTMLDivElement | null>(null);
-  const activeKey = normalizePath(activePath);
-  const dropTargetKey = dropTargetPath ? normalizePath(dropTargetPath) : null;
+  const activeKey = folderPathKey(activePath);
+  const dropTargetKey = dropTargetPath ? folderPathKey(dropTargetPath) : null;
   const orderedSections = normalizeSidebarSectionOrder(sectionOrder);
   const hiddenSectionIds = normalizeSidebarHiddenSections(hiddenSections);
   const hiddenSectionSet = new Set(hiddenSectionIds);
@@ -179,8 +181,8 @@ export const Sidebar = ({
                     path={place.path}
                     title={place.name}
                     subtitle={place.path}
-                    isActive={activeKey === normalizePath(place.path)}
-                    isDropTarget={dropTargetKey === normalizePath(place.path)}
+                    isActive={activeKey === folderPathKey(place.path)}
+                    isDropTarget={dropTargetKey === folderPathKey(place.path)}
                     isPinned={place.pinned === true}
                     isDragging={draggingPath === place.path}
                     pinnedDropPosition={
@@ -222,8 +224,8 @@ export const Sidebar = ({
                   path={path}
                   title={tabLabel(path)}
                   subtitle={path}
-                  isActive={activeKey === normalizePath(path)}
-                  isDropTarget={dropTargetKey === normalizePath(path)}
+                  isActive={activeKey === folderPathKey(path)}
+                  isDropTarget={dropTargetKey === folderPathKey(path)}
                   isRecent
                   onSelect={onSelectRecent}
                   onSelectNewTab={onSelectNewTab}

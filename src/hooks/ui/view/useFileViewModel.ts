@@ -1,6 +1,5 @@
 // Builds per-directory view data shared by list/grid, selection, and typeahead.
 import { useMemo } from "react";
-import type { TypeaheadItem } from "../selection/useTypeaheadSelection";
 import type { FileEntry } from "@/types";
 import type { EntryItem } from "@/lib";
 
@@ -9,7 +8,6 @@ export type FileViewModel = {
   itemPaths: string[];
   indexMap: Map<string, number>;
   entryByPath: Map<string, FileEntry>;
-  typeaheadItems: TypeaheadItem[];
   parentPath: string | null;
 };
 
@@ -22,7 +20,6 @@ export const useFileViewModel = (
     const itemPaths: string[] = [];
     const indexMap = new Map<string, number>();
     const entryByPath = new Map<string, FileEntry>();
-    const typeaheadItems: TypeaheadItem[] = [];
 
     // Build items and lookup tables together so folder refreshes do one pass.
     const pushItem = (item: EntryItem, index: number) => {
@@ -32,11 +29,6 @@ export const useFileViewModel = (
       indexMap.set(path, index);
       if (item.type === "entry") {
         entryByPath.set(item.entry.path, item.entry);
-        typeaheadItems.push({
-          path: item.entry.path,
-          index,
-          label: item.entry.name.toLowerCase(),
-        });
       }
     };
 
@@ -68,7 +60,6 @@ export const useFileViewModel = (
       itemPaths,
       indexMap,
       entryByPath,
-      typeaheadItems,
       parentPath,
     };
   }, [entries, parentPath]);

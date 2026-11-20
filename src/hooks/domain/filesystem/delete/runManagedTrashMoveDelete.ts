@@ -3,7 +3,7 @@ import { ensureDir, statEntries } from "@/api";
 import {
   isManagedJobCancelledError,
 } from "@/hooks/domain/filesystem/transferJobErrors";
-import { entryExists, formatFailures, getPathName, joinPath, tabLabel, toMessage } from "@/lib";
+import { entryExists, formatFailures, tabLabel, toMessage } from "@/lib";
 import type { UndoTrashEntry } from "../fileManagerUndo";
 import {
   buildDeleteReport,
@@ -58,9 +58,15 @@ export const runManagedTrashMoveDelete = async ({
     const batchDir = locations.buildTrashBatchDir(trashRoot);
     await ensureDir(batchDir);
 
+    const pending = new Set(trashCandidates);
     try {
       const report = await operations.runManagedTrashMove(trashCandidates, batchDir);
       transferFailures.push(...report.failures);
+      for (const entry of report.movedEntries) {
+        moved.push({ originalPath: entry.sourcePath, trashPath: entry.destinationPath });
+        pending.delete(entry.sourcePath);
+      }
+      cancelled = report.cancelled;
     } catch (error) {
       if (!isManagedJobCancelledError(error)) {
         showDeleteError(
@@ -73,24 +79,18 @@ export const runManagedTrashMoveDelete = async ({
       cancelled = true;
     }
 
-    // Verify what actually disappeared from the source path before we mark it as trashed.
-    const originalMeta = await statEntries(trashCandidates);
-    originalMeta.forEach((meta, index) => {
-      const path = trashCandidates[index] ?? "";
-      if (!path) return;
-      if (entryExists(meta)) {
-        remaining.add(path);
-        return;
-      }
-      moved.push({
-        originalPath: path,
-        trashPath: joinPath(batchDir, getPathName(path)),
-      });
-    });
+    if (cancelled) break;
+    if (pending.size === 0) continue;
 
-    if (cancelled) {
-      break;
-    }
+    // A new file may already occupy a successfully trashed source path.
+    const pendingPaths = Array.from(pending);
+    const originalMeta = await statEntries(pendingPaths);
+    originalMeta.forEach((meta, index) => {
+      const path = pendingPaths[index] ?? "";
+      if (path && entryExists(meta)) {
+        remaining.add(path);
+      }
+    });
   }
 
   if (moved.length > 0) {

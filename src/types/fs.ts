@@ -15,6 +15,7 @@ export type ListDirOptions = {
   fast?: boolean;
   // Optional request generation so the backend can cancel stale scans.
   generation?: number;
+  pane?: "main" | "bottom";
 };
 
 export type ListDirResult = {
@@ -98,6 +99,7 @@ export type TransferReport = {
   copied: number;
   moved: number;
   skipped: number;
+  cancelled: boolean;
   failures: string[];
   movedEntries: MovedTransferEntry[];
 };
@@ -172,34 +174,19 @@ export type DeleteReport = {
   failures: string[];
 };
 
-export type RecycleEntry = {
-  originalPath: string;
-  infoPath: string;
-  dataPath: string;
-  deletedAt?: number | null;
-};
-
 export type TrashReport = {
   deleted: number;
   skipped: number;
   cancelled: boolean;
   failures: string[];
   failedPaths: string[];
-  recycled: RecycleEntry[];
+  recycleUndoReceipt: string | null;
 };
 
-export type RestoreReport = {
-  restored: number;
-  skipped: number;
+export type RestoreRecycleReport = {
+  restoredPaths: string[];
   failures: string[];
-  remaining: RecycleEntry[];
-};
-
-export type RestorePathsReport = {
-  restored: number;
-  skipped: number;
-  failures: string[];
-  remainingPaths: string[];
+  canRetry: boolean;
 };
 
 // Emitted when the native watcher detects a change in a watched directory.

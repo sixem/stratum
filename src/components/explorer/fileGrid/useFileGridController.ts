@@ -10,7 +10,6 @@ import { useCallback, useMemo } from "react";
 import { useCreateEntryPrompt } from "@/hooks";
 import { getEmptyMessage, handleMiddleClick, normalizePath } from "@/lib";
 import { EmptyState } from "@/components/primitives/EmptyState";
-import type { FileEntry } from "@/types";
 import type {
   FileGridContextMenuProps,
   FileGridCreationProps,
@@ -68,6 +67,7 @@ export const useFileGridController = ({
 }: UseFileGridControllerOptions) => {
   const isDeletePending = useCallback(
     (path: string) => {
+      if (selection.pendingDeletePaths.size === 0) return false;
       const key = normalizePath(path) ?? path.trim();
       return key ? selection.pendingDeletePaths.has(key) : false;
     },
@@ -75,6 +75,7 @@ export const useFileGridController = ({
   );
   const isTransferPending = useCallback(
     (path: string) => {
+      if (selection.pendingTransferPaths.size === 0) return false;
       const key = normalizePath(path) ?? path.trim();
       return key ? selection.pendingTransferPaths.has(key) : false;
     },
@@ -91,13 +92,6 @@ export const useFileGridController = ({
     });
     return map;
   }, [view.indexMap, view.items]);
-  const entryByPath = useMemo(() => {
-    const map = new Map<string, FileEntry>();
-    view.entries.forEach((entry) => {
-      map.set(entry.path, entry);
-    });
-    return map;
-  }, [view.entries]);
 
   const handleCardSelect = useCallback(
     (event: ReactMouseEvent) => {
@@ -209,7 +203,6 @@ export const useFileGridController = ({
     emptyMessage,
     emptyActions,
     resolvedIndexMap,
-    entryByPath,
     handleCardSelect,
     handleCardOpen,
     handleCardOpenNewTab,

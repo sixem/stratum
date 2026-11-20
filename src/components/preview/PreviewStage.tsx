@@ -74,7 +74,7 @@ export const PreviewStage = ({
         className="quick-preview-pan"
         style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0)` }}
       >
-        {isVideo ? (
+        {!src ? null : isVideo ? (
           <video
             key={src}
             className="quick-preview-media is-video"

@@ -2,13 +2,13 @@
 import { useCallback } from "react";
 import type { RefObject } from "react";
 import type { SortState } from "@/types";
-import { normalizePath } from "@/lib";
+import { folderPathKey } from "@/lib";
 
 type UseAppHandlersOptions = {
   activeTabId: string | null;
   activeTabPath: string;
   currentPath: string;
-  loading: boolean;
+  viewLoading: boolean;
   activeSearch: string;
   mainRef: RefObject<HTMLElement | null>;
   refresh: () => void | Promise<void>;
@@ -31,7 +31,7 @@ export const useAppHandlers = ({
   activeTabId,
   activeTabPath,
   currentPath,
-  loading,
+  viewLoading,
   activeSearch,
   mainRef,
   refresh,
@@ -111,26 +111,16 @@ export const useAppHandlers = ({
     void refresh();
   }, [refresh]);
 
-  const handleBack = useCallback(() => {
-    if (loading) return;
-    goBack();
-  }, [goBack, loading]);
-
-  const handleForward = useCallback(() => {
-    if (loading) return;
-    goForward();
-  }, [goForward, loading]);
-
   const handleSortChange = useCallback(
     (next: SortState) => {
       setSort(next);
-      if (!currentPath || loading) return;
-      const activeKey = normalizePath(activeTabPath);
-      const currentKey = normalizePath(currentPath);
+      if (!currentPath || viewLoading) return;
+      const activeKey = folderPathKey(activeTabPath);
+      const currentKey = folderPathKey(currentPath);
       if (!currentKey || currentKey !== activeKey) return;
-      void loadDir(currentPath, { sort: next, search: activeSearch, silent: true });
+      void loadDir(currentPath, { sort: next, search: activeSearch });
     },
-    [activeSearch, activeTabPath, currentPath, loadDir, loading, setSort],
+    [activeSearch, activeTabPath, currentPath, loadDir, setSort, viewLoading],
   );
 
   return {
@@ -145,8 +135,8 @@ export const useAppHandlers = ({
     handleOpenAbout,
     handleCloseAbout,
     handleRefresh,
-    handleBack,
-    handleForward,
+    handleBack: goBack,
+    handleForward: goForward,
     handleSortChange,
   };
 };

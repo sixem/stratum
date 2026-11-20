@@ -1,15 +1,8 @@
-// Global frame accents that should remain visible above fullscreen overlays.
+// The app-owned frame sits above overlays without intercepting pointer events.
 .app-window-frame {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
+  inset: 0;
+  border: 1px solid var(--window-frame-edge);
   pointer-events: none;
   z-index: 2500;
-  background: var(--window-frame-edge);
-}
-
-:root[data-windows-version="11"] .app-window-frame {
-  display: none;
 }

@@ -9,6 +9,7 @@ type TooltipState = {
   y: number;
   tooltipDelay: number;
   tooltipElement: HTMLDivElement | null;
+  anchor: Element | null;
   nonce: number;
   blockUntilPointerMove: boolean;
   hoverSession: number;
@@ -18,6 +19,7 @@ type TooltipCoords = {
   text: string;
   x: number;
   y: number;
+  anchor?: Element;
 };
 
 type TooltipStore = TooltipState & {
@@ -38,6 +40,7 @@ export const useTooltipStore = createWithEqualityFn<TooltipStore>((set, _get) =>
   y: 0,
   tooltipDelay: DEFAULT_TOOLTIP_DELAY_MS,
   tooltipElement: null,
+  anchor: null,
   nonce: 0,
   blockUntilPointerMove: false,
   hoverSession: 0,
@@ -48,12 +51,13 @@ export const useTooltipStore = createWithEqualityFn<TooltipStore>((set, _get) =>
       if (state.text === text) return state;
       return { ...state, text };
     }),
-  showTooltip: ({ text, x, y }) =>
+  showTooltip: ({ text, x, y, anchor = null }) =>
     set({
       visible: true,
       text,
       x,
       y,
+      anchor,
     }),
   hideTooltip: () =>
     set((state) => {
@@ -61,7 +65,7 @@ export const useTooltipStore = createWithEqualityFn<TooltipStore>((set, _get) =>
       if (!state.visible && !state.text) {
         return { ...state, nonce: nextNonce };
       }
-      return { ...state, visible: false, text: "", nonce: nextNonce };
+      return { ...state, visible: false, text: "", anchor: null, nonce: nextNonce };
     }),
   blockTooltips: () => set({ blockUntilPointerMove: true }),
   clearTooltipBlock: () => set({ blockUntilPointerMove: false }),

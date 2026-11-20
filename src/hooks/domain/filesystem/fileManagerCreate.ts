@@ -2,10 +2,12 @@
 import { useCallback } from "react";
 import type { RefObject } from "react";
 import { createFile, createFolder } from "@/api";
-import { joinPath, normalizePath, toMessage } from "@/lib";
+import { folderPathKey, joinPath, toMessage } from "@/lib";
 import { usePromptStore } from "@/modules";
+import type { BeginFileActivity } from "./useFileActivity";
 
 type UseFileManagerCreateOptions = {
+  beginFileActivity: BeginFileActivity;
   currentPathRef: RefObject<string>;
   createInFlightRef: RefObject<boolean>;
   refreshAfterChange: () => Promise<void>;
@@ -13,6 +15,7 @@ type UseFileManagerCreateOptions = {
 };
 
 export const useFileManagerCreate = ({
+  beginFileActivity,
   currentPathRef,
   createInFlightRef,
   refreshAfterChange,
@@ -26,15 +29,14 @@ export const useFileManagerCreate = ({
       if (!parent || !trimmedName) return null;
       const targetPath = joinPath(parent, trimmedName);
       createInFlightRef.current = true;
+      const finish = beginFileActivity(`Creating ${trimmedName}`);
       try {
         if (kind === "folder") {
           await createFolder(targetPath);
         } else {
           await createFile(targetPath);
         }
-        const parentKey = normalizePath(parent);
-        const currentKey = normalizePath(currentPathRef.current);
-        if (parentKey && currentKey && parentKey === currentKey) {
+        if (folderPathKey(parent) === folderPathKey(currentPathRef.current)) {
           await refreshAfterChange();
         }
         onDirectoryChildrenChanged?.([parent]);
@@ -49,10 +51,11 @@ export const useFileManagerCreate = ({
         });
         return null;
       } finally {
+        finish();
         createInFlightRef.current = false;
       }
     },
-    [createInFlightRef, currentPathRef, onDirectoryChildrenChanged, refreshAfterChange],
+    [beginFileActivity, createInFlightRef, currentPathRef, onDirectoryChildrenChanged, refreshAfterChange],
   );
 
   const createFolderInView = useCallback(

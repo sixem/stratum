@@ -1,10 +1,7 @@
 // Selection and drag-out wiring for list rows.
 import type { RefObject } from "react";
 import { useEntryDragOut, useSelectionDrag } from "@/hooks";
-import type { DropTarget } from "@/lib";
 import { VIEW_INSET } from "../fileView/constants";
-
-const noop = () => {};
 
 type UseListSelectionOptions = {
   listRef: RefObject<HTMLDivElement | null>;
@@ -15,8 +12,6 @@ type UseListSelectionOptions = {
   onSetSelection: (paths: string[], anchor?: string) => void;
   onClearSelection: () => void;
   onStartDragOut?: (paths: string[]) => void;
-  onInternalDrop?: (paths: string[], target: DropTarget | null) => void;
-  onInternalHover?: (target: DropTarget | null) => void;
   loading: boolean;
 };
 
@@ -29,8 +24,6 @@ export const useListSelection = ({
   onSetSelection,
   onClearSelection,
   onStartDragOut,
-  onInternalDrop,
-  onInternalHover,
   loading,
 }: UseListSelectionOptions) => {
   const { selectionBox } = useSelectionDrag(listRef, {
@@ -47,16 +40,12 @@ export const useListSelection = ({
     },
   });
 
-  const dragEnabled = Boolean(onStartDragOut) && !loading;
-  useEntryDragOut(listRef, {
+  const dragHandlers = useEntryDragOut({
     selected: selectedPaths,
     onSetSelection,
-    onStartDrag: onStartDragOut ?? noop,
-    onInternalDrop,
-    onInternalHover,
-    itemSelector: "[data-selectable=\"true\"]",
-    enabled: dragEnabled,
+    onStartDrag: onStartDragOut,
+    loading,
   });
 
-  return { selectionBox };
+  return { selectionBox, dragHandlers };
 };

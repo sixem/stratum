@@ -67,7 +67,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
         <div>
           <div className="settings-label">Grid size</div>
           <div className="settings-desc">
-            Choose a preset size or let the grid auto-fit by column count.
+            Choose a preset size or let the grid auto-fit by column count. Hold Ctrl and scroll over thumbnails to resize them.
           </div>
         </div>
         <div className="settings-pills" role="group" aria-label="Grid size">

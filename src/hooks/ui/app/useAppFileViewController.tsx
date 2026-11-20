@@ -24,10 +24,9 @@ export const useAppFileViewController = ({
   fileViewOptions,
 }: UseAppFileViewControllerOptions) => {
   // Gate layout-level context menu handlers when there is no file surface to target.
-  const layoutContextMenu =
-    showLander || showEmptyFolder ? undefined : onLayoutContextMenu;
-  const layoutContextMenuDown =
-    showLander || showEmptyFolder ? undefined : onLayoutContextMenuDown;
+  const layoutMenuAvailable = !showLander && !showEmptyFolder && !fileViewOptions.view.loading;
+  const layoutContextMenu = layoutMenuAvailable ? onLayoutContextMenu : undefined;
+  const layoutContextMenuDown = layoutMenuAvailable ? onLayoutContextMenuDown : undefined;
 
   const fileViewProps = useAppFileViewProps({
     ...fileViewOptions,

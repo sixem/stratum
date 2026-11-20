@@ -16,7 +16,6 @@ import type {
 
 type BuildEntryConvertItemsOptions = {
   selectionSummary: EntryMenuSelectionSummary;
-  ffmpegDetected: boolean;
   menuShowConvert: boolean;
   onOpenConvertModal: (request: ConversionModalRequest) => void;
   onQuickConvertImages: (
@@ -57,7 +56,6 @@ const buildQuickConvertItems = (
 
 export const buildEntryConvertItems = ({
   selectionSummary,
-  ffmpegDetected,
   menuShowConvert,
   onOpenConvertModal,
   onQuickConvertImages,
@@ -66,13 +64,11 @@ export const buildEntryConvertItems = ({
   const conversionRequest = selectionSummary.conversionRequest;
   const canOpenConvertModal =
     menuShowConvert &&
-    selectionSummary.canOpenConvertModal &&
-    (!selectionSummary.hasVideo || ffmpegDetected);
+    selectionSummary.canOpenConvertModal;
   const canQuickConvert =
     menuShowConvert &&
     quickConvertKind !== null &&
-    conversionRequest !== null &&
-    (quickConvertKind === "image" || ffmpegDetected);
+    conversionRequest !== null;
 
   const quickConvertItems =
     canQuickConvert && quickConvertKind && conversionRequest

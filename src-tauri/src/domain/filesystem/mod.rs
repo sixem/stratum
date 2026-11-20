@@ -1,5 +1,7 @@
 // Filesystem helpers backing the Tauri commands.
 // This module is intentionally a narrow export map so contracts and behavior stay easy to scan.
+pub(crate) mod file_identity;
+pub(crate) mod staging;
 mod entry_mutations;
 mod fs_delete;
 mod fs_list;
@@ -18,10 +20,10 @@ pub use fs_list::{
     list_folder_thumb_samples_batch, parent_dir, stat_entries,
 };
 pub(crate) use fs_trash::trash_entries;
-pub use fs_trash::{restore_recycle_entries, restore_recycle_paths};
+pub use fs_trash::restore_recycle_items;
 pub use reports::{
     CopyConflict, CopyConflictKind, CopyPlan, CopyReport, DeleteReport, MovedTransferEntry,
-    RecycleEntry, RestorePathsReport, RestoreReport, TransferProgress, TransferReport, TrashReport,
+    RestoreRecycleReport, TransferProgress, TransferReport, TrashReport,
 };
 pub(crate) use reports::{
     TransferControlCallback, TransferProgressCallback, TransferProgressUpdate,
@@ -30,6 +32,7 @@ pub(crate) use time::to_epoch_ms;
 pub use transfer::types::TransferQueueSnapshot;
 pub use transfer::{copy_entries, plan_copy_entries, transfer_entries};
 pub use types::{
+    FilePane,
     CopyOptions, DriveInfo, EntryMeta, FileEntry, FolderThumbSampleBatchOptions,
     FolderThumbSampleBatchResult, FolderThumbSampleStatus, ListDirOptions, ListDirResult,
     ListDirWithParentResult, Place, SortDir, SortKey, SortState, TransferMode, TransferOptions,

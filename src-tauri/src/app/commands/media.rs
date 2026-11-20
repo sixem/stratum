@@ -1,6 +1,40 @@
 // Media-oriented command handlers (thumbnails, icons, conversion).
 use crate::domain::media::{conversion_jobs, file_icons, images, thumbs};
+use crate::services::preview_protocol::PreviewGrants;
 use crate::services::transfer_manager;
+use std::path::Path;
+
+#[tauri::command]
+pub async fn create_preview_grant(
+    path: String,
+    webview: tauri::Webview,
+    grants: tauri::State<'_, PreviewGrants>,
+) -> Result<String, String> {
+    let request = grants.begin(webview.label(), webview.window().label())?;
+    // The installed UI is the authority for selecting a preview path.
+    #[cfg(windows)]
+    {
+        let url = webview
+            .url()
+            .map_err(|_| "Could not authorize this preview.")?;
+        if !crate::platform::windows::webview_navigation::allows_app_navigation(&webview, &url) {
+            return Err("Could not authorize this preview.".into());
+        }
+    }
+    let grants = grants.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || grants.create(request, Path::new(&path)))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub fn release_preview_grant(
+    token: String,
+    webview: tauri::Webview,
+    grants: tauri::State<'_, PreviewGrants>,
+) {
+    grants.release(webview.label(), &token);
+}
 
 #[tauri::command]
 pub async fn request_thumbnails(

@@ -5,9 +5,12 @@ use crate::domain::indexed_search::{
     IndexedDriveState, IndexedDriveStatus, IndexedSearchServiceState, IndexedSearchServiceStatus,
 };
 
+use super::volume_tracking::VolumeTracking;
+
 pub(super) struct IndexedSearchState {
     pub(super) service_status: IndexedSearchServiceStatus,
     pub(super) drive_statuses: BTreeMap<String, IndexedDriveStatus>,
+    pub(super) volumes: VolumeTracking,
 }
 
 impl IndexedSearchState {
@@ -16,31 +19,21 @@ impl IndexedSearchState {
         Self {
             service_status: IndexedSearchServiceStatus {
                 state: IndexedSearchServiceState::Starting,
+                catalog_revision: 0,
                 activity_label: None,
                 started_at: now,
                 last_updated_at: now,
                 drive_count: 0,
                 indexable_drive_count: 0,
+                searchable_drive_count: 0,
             },
             drive_statuses: BTreeMap::new(),
+            volumes: VolumeTracking::default(),
         }
     }
 
     pub(super) fn drive_statuses_snapshot(&self) -> Vec<IndexedDriveStatus> {
         self.drive_statuses.values().cloned().collect()
-    }
-
-    pub(super) fn replace_drive_statuses(
-        &mut self,
-        statuses: Vec<IndexedDriveStatus>,
-        service_state: IndexedSearchServiceState,
-        activity_label: Option<String>,
-    ) {
-        self.drive_statuses = statuses
-            .into_iter()
-            .map(|status| (normalize_drive_key(&status.drive_path), status))
-            .collect();
-        self.update_service_status(service_state, activity_label);
     }
 
     pub(super) fn update_service_status(
@@ -51,6 +44,7 @@ impl IndexedSearchState {
         let now = now_epoch_ms();
         self.service_status = IndexedSearchServiceStatus {
             state,
+            catalog_revision: self.service_status.catalog_revision,
             activity_label,
             started_at: self.service_status.started_at,
             last_updated_at: now,
@@ -60,6 +54,8 @@ impl IndexedSearchState {
                 .values()
                 .filter(|status| status.indexable)
                 .count(),
+            // Filled from the verified mounts when status is requested.
+            searchable_drive_count: 0,
         };
     }
 

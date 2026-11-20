@@ -27,106 +27,43 @@ fn compare_numbers(a: Option<u64>, b: Option<u64>) -> Ordering {
     }
 }
 
-#[derive(Clone, Copy)]
-enum Segment<'a> {
-    Digits {
-        value: Option<u64>,
-        len: usize,
-        raw: &'a str,
-    },
-    Text(&'a str),
+fn split_name_segment(value: &str, digits: bool) -> (&str, &str) {
+    // All boundaries between ASCII digits and UTF-8 text are character boundaries.
+    let end = value
+        .bytes()
+        .position(|byte| byte.is_ascii_digit() != digits)
+        .unwrap_or(value.len());
+    value.split_at(end)
 }
 
-impl<'a> Segment<'a> {
-    fn as_str(&self) -> &str {
-        match self {
-            Segment::Digits { raw, .. } => raw,
-            Segment::Text(value) => value,
+fn compare_digit_segments(left: &str, right: &str) -> Ordering {
+    let number_order = compare_numbers(left.parse::<u64>().ok(), right.parse::<u64>().ok());
+    number_order
+        .then_with(|| left.len().cmp(&right.len()))
+        .then_with(|| left.cmp(right))
+}
+
+pub(super) fn compare_normalized_names(mut left: &str, mut right: &str) -> Ordering {
+    while !left.is_empty() && !right.is_empty() {
+        let first_left = left.as_bytes()[0];
+        let first_right = right.as_bytes()[0];
+        let digits = first_left.is_ascii_digit() && first_right.is_ascii_digit();
+        if !digits && first_left != first_right {
+            return first_left.cmp(&first_right);
         }
-    }
-}
-
-fn next_segment<'a>(value: &'a str, start: usize) -> (Segment<'a>, usize) {
-    let mut iter = value[start..].char_indices();
-    let (_first_offset, first_char) = iter
-        .next()
-        .map(|(offset, ch)| (offset, ch))
-        .unwrap_or((0, '\0'));
-    let is_digit = first_char.is_ascii_digit();
-    let mut end = start + first_char.len_utf8();
-    for (offset, ch) in iter {
-        if ch.is_ascii_digit() != is_digit {
-            break;
+        let (left_segment, left_rest) = split_name_segment(left, digits);
+        let (right_segment, right_rest) = split_name_segment(right, digits);
+        if left_segment != right_segment {
+            return if digits {
+                compare_digit_segments(left_segment, right_segment)
+            } else {
+                left_segment.cmp(right_segment)
+            };
         }
-        end = start + offset + ch.len_utf8();
+        left = left_rest;
+        right = right_rest;
     }
-    let segment = &value[start..end];
-    if is_digit {
-        let parsed = segment.parse::<u64>().ok();
-        (
-            Segment::Digits {
-                value: parsed,
-                len: segment.len(),
-                raw: segment,
-            },
-            end,
-        )
-    } else {
-        (Segment::Text(segment), end)
-    }
-}
-
-// Approximate Intl.Collator numeric + case-insensitive ordering from the UI.
-fn natural_compare(left: &str, right: &str) -> Ordering {
-    let mut left_index = 0;
-    let mut right_index = 0;
-    let left_len = left.len();
-    let right_len = right.len();
-
-    while left_index < left_len && right_index < right_len {
-        let (left_segment, next_left) = next_segment(left, left_index);
-        let (right_segment, next_right) = next_segment(right, right_index);
-        left_index = next_left;
-        right_index = next_right;
-
-        let ordering = match (left_segment, right_segment) {
-            (
-                Segment::Digits {
-                    value: left_value,
-                    len: left_len,
-                    raw: left_raw,
-                },
-                Segment::Digits {
-                    value: right_value,
-                    len: right_len,
-                    raw: right_raw,
-                },
-            ) => match (left_value, right_value) {
-                (Some(l), Some(r)) if l != r => l.cmp(&r),
-                (Some(_), None) => Ordering::Less,
-                (None, Some(_)) => Ordering::Greater,
-                _ => {
-                    if left_len != right_len {
-                        left_len.cmp(&right_len)
-                    } else {
-                        left_raw.cmp(right_raw)
-                    }
-                }
-            },
-            (Segment::Text(left_text), Segment::Text(right_text)) => left_text.cmp(right_text),
-            (left_segment, right_segment) => left_segment.as_str().cmp(right_segment.as_str()),
-        };
-
-        if ordering != Ordering::Equal {
-            return ordering;
-        }
-    }
-
-    left_len.cmp(&right_len)
-}
-
-pub(super) fn compare_normalized_names(left: &str, right: &str) -> Ordering {
-    natural_compare(left, right)
+    left.len().cmp(&right.len())
 }
 
 fn apply_sort_dir(ordering: Ordering, dir: SortDir) -> Ordering {
@@ -138,6 +75,7 @@ fn apply_sort_dir(ordering: Ordering, dir: SortDir) -> Ordering {
 
 pub(super) struct EntrySortFields<'a> {
     pub is_dir: bool,
+    pub name: &'a str,
     pub normalized_name: &'a str,
     pub size: Option<u64>,
     pub modified: Option<u64>,
@@ -157,24 +95,80 @@ pub(super) fn compare_entry_fields(
         };
     }
 
+    let names = || {
+        compare_normalized_names(left.normalized_name, right.normalized_name)
+            .then_with(|| left.name.cmp(right.name))
+    };
     match sort.key {
-        SortKey::Name => apply_sort_dir(
-            compare_normalized_names(left.normalized_name, right.normalized_name),
-            sort.dir,
-        ),
+        SortKey::Name => apply_sort_dir(names(), sort.dir),
         SortKey::Size => {
             let size_order = compare_numbers(left.size, right.size);
             if size_order != Ordering::Equal {
                 return apply_sort_dir(size_order, sort.dir);
             }
-            compare_normalized_names(left.normalized_name, right.normalized_name)
+            names()
         }
         SortKey::Modified => {
             let modified_order = compare_numbers(left.modified, right.modified);
             if modified_order != Ordering::Equal {
                 return apply_sort_dir(modified_order, sort.dir);
             }
-            compare_normalized_names(left.normalized_name, right.normalized_name)
+            names()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn natural_order_handles_numeric_runs_unicode_and_overflow() {
+        let ordered = [
+            "a",
+            "a2",
+            "a02",
+            "a10",
+            "a18446744073709551616",
+            "aa2",
+            "å2",
+            "å10",
+            "日本語1",
+            "日本語20",
+        ];
+        for (index, left) in ordered.iter().enumerate() {
+            for (other, right) in ordered.iter().enumerate() {
+                assert_eq!(compare_normalized_names(left, right), index.cmp(&other));
+            }
+        }
+    }
+
+    #[test]
+    fn equal_metadata_keeps_natural_name_order_and_breaks_case_ties() {
+        let fields = |name| EntrySortFields {
+            is_dir: false,
+            name,
+            normalized_name: "file",
+            size: Some(1),
+            modified: Some(5),
+        };
+        for key in [SortKey::Size, SortKey::Modified] {
+            let sort = SortState {
+                key,
+                dir: SortDir::Desc,
+            };
+            assert_eq!(
+                compare_entry_fields(fields("FILE"), fields("file"), &sort),
+                Ordering::Less
+            );
+        }
+        let sort = SortState {
+            key: SortKey::Name,
+            dir: SortDir::Desc,
+        };
+        assert_eq!(
+            compare_entry_fields(fields("FILE"), fields("file"), &sort),
+            Ordering::Greater
+        );
     }
 }

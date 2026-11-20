@@ -1,6 +1,8 @@
 // Shared filesystem contracts used by listing, mutations, and command boundaries.
 // Keeping these shapes in one place makes the module easier to scan from the outside.
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::path::PathBuf;
 
 // Listing and metadata types shared with the UI.
 #[derive(Clone, Serialize)]
@@ -35,6 +37,14 @@ pub struct SortState {
     pub dir: SortDir,
 }
 
+#[derive(Clone, Copy, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FilePane {
+    #[default]
+    Main,
+    Bottom,
+}
+
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListDirOptions {
@@ -43,6 +53,8 @@ pub struct ListDirOptions {
     pub fast: Option<bool>,
     // Generation counter from the UI; newer generations cancel older scans.
     pub generation: Option<u64>,
+    #[serde(default)]
+    pub pane: FilePane,
 }
 
 #[derive(Clone, Serialize)]
@@ -122,9 +134,10 @@ pub enum TransferMode {
     Auto,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransferOptions {
     pub mode: Option<TransferMode>,
     pub overwrite: Option<bool>,
+    pub overwrite_paths: Option<HashSet<PathBuf>>,
 }

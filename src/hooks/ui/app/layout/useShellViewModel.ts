@@ -45,6 +45,7 @@ export const useShellViewModel = ({
   });
 
   const interactionModel = useShellViewInteractions({
+    tauriEnv,
     promptOpen,
     menuState,
     fileManager,
@@ -66,6 +67,7 @@ export const useShellViewModel = ({
 
   useShellViewBindings({
     tauriEnv,
+    aboutOpen,
     promptOpen,
     menuState,
     fileManager,

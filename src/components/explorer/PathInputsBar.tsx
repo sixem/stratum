@@ -31,7 +31,6 @@ export const PathInputsBar = ({
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (loading) return;
     onSubmit();
   };
 
@@ -39,7 +38,6 @@ export const PathInputsBar = ({
     // Enter in the path input should navigate immediately.
     if (event.key !== "Enter") return;
     event.preventDefault();
-    if (loading) return;
     onSubmit();
   };
 
@@ -85,6 +83,7 @@ export const PathInputsBar = ({
           <PressButton
             type="button"
             className="inputbar-indexed-search"
+            pressOnPointerDown={false}
             onClick={openIndexedSearch}
             aria-label="Open indexed search"
           >

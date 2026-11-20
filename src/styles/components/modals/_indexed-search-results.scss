@@ -1,123 +1,146 @@
-// Result column, empty state, and result rows for indexed search.
-
+// Results, query feedback, and keyboard selection in indexed search.
 @use "../control-recipes" as control;
 
 :where(.indexed-search-panel) {
   .indexed-search-results {
-    min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding-top: 8px;
-    padding-right: 16px;
+    overflow: hidden;
+  }
+
+  .indexed-search-results .indexed-search-section-head {
+    padding: 11px 12px 10px;
+    border-bottom: 1px solid var(--stroke);
+  }
+
+  .indexed-search-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .indexed-search-result-list {
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .indexed-search-empty {
-    min-height: 0;
-    flex: 1 1 auto;
     display: grid;
-    place-items: center;
-    padding: 18px;
-  }
-
-  .indexed-search-empty .empty-state {
-    width: min(100%, 420px);
-    padding: 14px 16px;
-    border-style: solid;
-    border-color: rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.02);
-    text-align: center;
-  }
-
-  .indexed-search-empty .empty-title,
-  .indexed-search-empty .empty-subtitle {
-    text-align: center;
-  }
-
-  .indexed-search-empty .empty-title {
-    font-size: var(--font-size-sm);
-  }
-
-  .indexed-search-empty .empty-subtitle {
-    font-size: var(--font-size-sm);
-    line-height: 1.45;
+    align-content: start;
+    gap: 3px;
+    padding: 6px 12px 6px 6px;
   }
 
   .indexed-search-result {
+    @include control.control-surface(6px, transparent, transparent);
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
     width: 100%;
     min-width: 0;
-    cursor: pointer;
+    padding: 5px 9px 5px 6px;
     text-align: left;
-    display: grid;
-    gap: 4px;
-    padding: 9px 10px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
+    cursor: pointer;
   }
 
   .indexed-search-result:hover {
-    background: #161b29;
+    background: var(--surface-control-muted);
   }
 
-  .indexed-search-result[data-selected="true"] {
-    @include control.active-surface(
-      #161b29,
-      inherit,
-      rgba(255, 255, 255, 0.04),
-      none
-    );
+  .indexed-search-result[aria-pressed="true"] {
+    background: rgba(var(--accent-rgb), 0.09);
+    border-color: rgba(var(--accent-rgb), 0.4);
   }
 
-  .indexed-search-result-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
+  .indexed-search-result:focus-visible {
+    border-color: rgba(var(--accent-rgb), 0.78);
+  }
+
+  .indexed-search-result-icon {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 5px;
+    background: var(--surface-control-strong);
+    color: #a7b7d2;
+  }
+
+  .indexed-search-result-icon[data-kind="directory"] {
+    background: rgba(240, 201, 107, 0.09);
+    color: #f0c96b;
+  }
+
+  .indexed-search-result-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .indexed-search-result-copy {
+    display: grid;
+    gap: 3px;
     min-width: 0;
+  }
+
+  .indexed-search-result-name,
+  .indexed-search-result-path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .indexed-search-result-name {
-    display: block;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     color: var(--text);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-md);
     font-weight: 600;
   }
 
+  .indexed-search-result-path,
   .indexed-search-result-kind {
-    flex: 0 0 auto;
-    color: color-mix(in srgb, var(--accent) 72%, white 28%);
-    font-size: var(--font-size-2xs);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .indexed-search-result-path {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
     color: var(--muted);
     font-size: var(--font-size-xs);
-    line-height: 1.4;
-    white-space: nowrap;
+    line-height: 1.3;
   }
-}
 
-@media (max-width: 840px) {
-  :where(.indexed-search-panel) {
-    .indexed-search-results {
-      padding-right: 0;
-    }
+  .indexed-search-empty {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: safe center;
+    gap: 6px;
+    min-height: 0;
+    overflow: auto;
+    padding: 14px;
+    text-align: center;
+  }
+
+  .indexed-search-empty-symbol {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    margin-bottom: 4px;
+    @include control.panel-card(9px, var(--surface-control-muted));
+    color: var(--muted);
+  }
+
+  .indexed-search-empty-symbol :is(svg, img) {
+    width: 18px;
+    height: 18px;
+  }
+
+  .indexed-search-empty-title,
+  .indexed-search-empty-hint {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .indexed-search-empty-title {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+  }
+
+  .indexed-search-empty-hint {
+    max-width: 38ch;
+    color: var(--muted);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
   }
 }
