@@ -78,7 +78,7 @@ fn parse_svg_tree(data: &[u8]) -> Result<usvg::Tree, String> {
             resolve_data: Box::new(move |mime, data, _| {
                 // SVG references can repeat embedded data in the converted tree.
                 remaining_image_bytes
-                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
+                    .try_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
                         remaining.checked_sub(data.len())
                     })
                     .ok()?;
