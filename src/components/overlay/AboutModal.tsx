@@ -5,7 +5,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { APP_ISSUES_URL, APP_REPO_URL } from "@/constants";
 import { isEditableElement } from "@/lib";
 import { useModalFocusTrap } from "@/hooks";
-import { OpenExternalIcon, StratumBrandIcon } from "@/components/icons";
+import { OpenExternalIcon } from "@/components/icons";
+import stratumLogo from "@/assets/stratum-logo.webp";
 import { DialogCloseButton } from "./DialogCloseButton";
 
 type AboutModalProps = {
@@ -108,7 +109,7 @@ export const AboutModal = ({
           onClose={onClose}
         />
         <header className="about-header">
-          <StratumBrandIcon className="about-logo" />
+          <img className="about-logo" src={stratumLogo} alt="" width={64} height={64} />
           <h2 className="about-title" id={titleId}>{appName}</h2>
           <p className="about-version">Version <span className="tnum">{version}</span></p>
         </header>

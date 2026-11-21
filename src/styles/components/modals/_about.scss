@@ -49,8 +49,7 @@
   .about-logo {
     width: 64px;
     height: 64px;
-    color: color-mix(in srgb, var(--accent) 60%, var(--text));
-    filter: drop-shadow(0 4px 12px rgba(var(--accent-rgb), 0.26));
+    filter: drop-shadow(0 4px 12px rgba(222, 159, 10, 0.24));
   }
 
   .about-title {
