@@ -62,6 +62,7 @@ export const useShellViewBindings = ({
     settings: {
       confirmClose: settings.confirmClose,
       accentTheme: settings.accentTheme,
+      darkMode: settings.darkMode,
       ambientBackground: settings.ambientBackground,
       blurOverlays: settings.blurOverlays,
       gridRounded: settings.gridRounded,

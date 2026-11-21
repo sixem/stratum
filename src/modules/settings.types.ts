@@ -30,6 +30,7 @@ export type Settings = {
   smoothScroll: boolean;
   smartTabJump: boolean;
   accentTheme: AccentTheme;
+  darkMode: boolean;
   categoryTinting: boolean;
   showParentEntry: boolean;
   confirmDelete: boolean;

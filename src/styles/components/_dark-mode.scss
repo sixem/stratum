@@ -1,0 +1,220 @@
+// Dark Mode overrides for component-specific surfaces and control states.
+:root[data-dark-mode="true"] {
+  --scrollbar-thumb: #262629;
+  --scrollbar-thumb-hover: #38383c;
+
+  :is(.file-list, .view-lander) {
+    background: var(--bg);
+  }
+
+  :is(.sidebar, .pathbar-shell, .path-tabs, .statusbar) {
+    border-color: var(--stroke);
+  }
+
+  :is(.pathbar-shell, .statusbar, .quick-preview-topbar-shell, .overlay-panel-header) {
+    background: var(--panel-2);
+  }
+
+  .indexed-search-header {
+    background: transparent;
+  }
+
+  :is(.sidebar, .settings-item, .settings-pills, .conversion-mode-toggle, .transfer-popover,
+      .drop-submenu, .conversion-override-select-menu) {
+    background: var(--panel);
+    border-color: var(--stroke);
+  }
+
+  :is(.section-toggle, .sidebar-tips, .drop-submenu-title, .conversion-video-meta) {
+    border-color: var(--stroke);
+  }
+
+  .pane-stack {
+    --pane-active-edge: var(--dark-hover-stroke);
+  }
+
+  .sidebar-divider:is(:hover, :focus-visible, [data-resizing])::before {
+    background: var(--dark-hover-stroke);
+  }
+
+  .quick-preview {
+    --quick-preview-divider: var(--surface-border-width) solid var(--stroke);
+  }
+
+  :is(.quick-preview-info, .quick-preview-controls, .quick-preview-strip,
+      .quick-preview-error-card) {
+    background: var(--panel-deep);
+    border-color: var(--stroke);
+  }
+
+  .about-panel {
+    background: var(--panel-deep);
+  }
+
+  .conversion-right {
+    --conversion-field-surface: var(--surface-control);
+    --conversion-field-surface-hover: var(--surface-control);
+    --conversion-field-surface-focus: var(--surface-control);
+  }
+
+  :is(.path-input, .search-field, .search-input, .bottom-search, .bottom-search input,
+      .indexed-search-searchbox, .indexed-search-input, .prompt-input, .rename-input) {
+    background: var(--surface-control);
+    transition: none;
+  }
+
+  // Bordered controls stay black when the pointer enters them. A brighter
+  // edge gives immediate feedback without changing their size or fill.
+  :is(.btn, .view-btn, .inputbar-refresh, .inputbar-indexed-search, .tab-new,
+      .empty-action, .quick-preview-control-button, .transfer-popover-clear,
+      .transfer-item-action, .settings-nav-item, .settings-pill, .settings-toggle,
+      .conversion-mode-btn, .ui-select-trigger, .indexed-search-drive) {
+    background: var(--surface-control);
+    border-color: var(--stroke);
+    transition: none;
+
+    &:hover:not(:disabled) {
+      border-color: var(--dark-hover-stroke);
+    }
+  }
+
+  :is(.inputbar-refresh, .inputbar-indexed-search, .view-btn:not(.is-active),
+      .settings-nav-item:not(.is-active), .settings-pill:not(.is-active),
+      .conversion-mode-btn:not(.is-active)) {
+    color: var(--muted);
+  }
+
+  :is(.view-btn.is-active, .settings-nav-item.is-active, .settings-pill.is-active,
+      .conversion-mode-btn.is-active, .conversion-primary-btn, .indexed-search-drive[aria-pressed="true"]) {
+    color: var(--text);
+    border-color: var(--dark-selected-stroke);
+
+    &:hover:not(:disabled) {
+      border-color: var(--accent);
+    }
+  }
+
+  .settings-toggle:has(input:checked) {
+    border-color: var(--dark-selected-stroke);
+
+    &:hover {
+      border-color: var(--accent);
+    }
+  }
+
+  .settings-toggle:has(input:not(:checked)) span {
+    background: #29292d;
+    border-color: #3c3c40;
+  }
+
+  .settings-toggle span {
+    transition: none;
+  }
+
+  // The drive toggle and transfer button also have unfocused-window styles.
+  .pathbar-shell :is(.drive-toggle-body, .transfer-button) {
+    background: var(--surface-control);
+    border-color: var(--stroke);
+    transition: none;
+  }
+
+  .pathbar-shell :is(.drive-toggle-body:has(.drive-picker-button:hover:not(:disabled)),
+      .transfer-button:not(.is-open):hover) {
+    border-color: var(--dark-hover-stroke);
+  }
+
+  .pathbar-shell .transfer-button.is-open {
+    border-color: var(--dark-selected-stroke);
+
+    &:hover {
+      border-color: var(--accent);
+    }
+  }
+
+  .pathbar .drive-picker-button {
+    background: var(--surface-control);
+  }
+
+  // Borderless actions use an inset edge so hover cannot shift nearby content.
+  :is(.path-controls > .btn, .quick-preview-topbar-nav > .btn, .window-control-button,
+      .drive-picker-item, .drive-picker-scroll-button, .tab-close, .tab-scroll-button,
+      .quick-preview-strip-toggle, .indexed-search-clear, .pathbar-brand) {
+    background: var(--surface-control);
+    transition: none;
+
+    &:hover:not(:disabled) {
+      box-shadow: inset 0 0 0 1px var(--dark-hover-stroke);
+    }
+  }
+
+  :is(.drive-picker-item.is-active, .window-control-button.is-close:hover:not(:disabled)) {
+    box-shadow: inset 0 0 0 1px var(--dark-selected-stroke);
+  }
+
+  .tab:not(.is-active):hover {
+    background: transparent;
+    border-top-color: var(--dark-hover-stroke);
+  }
+
+  .tab.is-active,
+  .sidebar .place.is-active,
+  :is(.drop-submenu-item, .tab, .place)[data-drop-target="true"] {
+    background: var(--dark-selection);
+  }
+
+  .tab[data-tab-kind="untitled"]:not(.is-active):not([data-drop-target="true"]) {
+    background: var(--panel-deep);
+  }
+
+  .sidebar .place:not(.is-active):not(.is-empty):not([data-drop-target="true"]):hover {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--dark-hover-stroke);
+  }
+
+  :is(.lander-drive, .crumb:not([data-drop-target="true"])):hover {
+    background: transparent;
+    border-color: var(--dark-hover-stroke);
+  }
+
+  // Keep file-category accents, active rows, and drop targets independent of
+  // the neutral base palette.
+  .thumb-card.is-dir:not(.is-selected):not([data-drop-target="true"]) {
+    background: var(--surface-card);
+    border-color: var(--stroke);
+  }
+
+  :where(.thumb-shell:not([data-category-tint="true"]))
+    .thumb-card:not(.is-selected):not([data-drop-target="true"]) {
+    background: var(--surface-card);
+  }
+
+  :is(.thumb-card, .row):not(.is-selected):not([data-drop-target="true"]):hover {
+    border-color: var(--dark-hover-stroke);
+  }
+
+  :is(.indexed-search-result:not([aria-pressed="true"]), .context-item,
+      .context-item-group.is-open > .context-item, .ui-select-option:not(.is-selected)):is(:hover, :focus-visible) {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--dark-hover-stroke);
+  }
+
+  .context-divider {
+    background: var(--stroke);
+  }
+}
+
+:root[data-dark-mode="true"]:not([data-blur-overlays="true"]) :is(.context-menu, .context-submenu, .tooltip) {
+  background: var(--panel);
+  border-color: var(--stroke);
+}
+
+:root[data-dark-mode="true"][data-blur-overlays="true"] {
+  :is(.context-menu, .context-submenu, .tooltip) {
+    border-color: var(--stroke);
+  }
+
+  .tooltip.is-visible,
+  :where(.context-menu[data-open="true"], .context-item-group.is-open > .context-submenu)::before {
+    background: rgb(8 8 8 / 92%);
+  }
+}

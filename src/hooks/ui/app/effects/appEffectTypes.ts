@@ -13,6 +13,7 @@ export type AppEffectRefs = {
 export type AppEffectSettings = {
   confirmClose: boolean;
   accentTheme: AccentTheme;
+  darkMode: boolean;
   ambientBackground: boolean;
   blurOverlays: boolean;
   gridRounded: boolean;

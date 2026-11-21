@@ -31,6 +31,7 @@ export const useAppEffects = ({
   const {
     confirmClose,
     accentTheme,
+    darkMode,
     ambientBackground,
     blurOverlays,
     gridRounded,
@@ -91,6 +92,7 @@ export const useAppEffects = ({
   });
   useAppAppearance({
     accentTheme,
+    darkMode,
     ambientBackground,
     blurOverlays,
     gridRounded,

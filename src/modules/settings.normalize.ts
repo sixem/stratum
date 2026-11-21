@@ -162,6 +162,8 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
         ? value.smartTabJump
         : DEFAULT_SETTINGS.smartTabJump,
     accentTheme: coerceAccentTheme(value?.accentTheme),
+    darkMode:
+      typeof value?.darkMode === "boolean" ? value.darkMode : DEFAULT_SETTINGS.darkMode,
     categoryTinting:
       typeof value?.categoryTinting === "boolean"
         ? value.categoryTinting

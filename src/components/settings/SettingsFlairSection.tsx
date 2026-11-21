@@ -1,4 +1,5 @@
-// Visual flair toggles (accent + ambient effects).
+// Visual flair toggles for the palette, accent, and ambient effects.
+import { useId } from "react";
 import { shallow } from "zustand/shallow";
 import type { AccentTheme } from "@/modules";
 import { PressButton } from "@/components/primitives/PressButton";
@@ -19,8 +20,11 @@ const ACCENT_THEMES: { id: AccentTheme; label: string }[] = [
 ];
 
 export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) => {
+  const darkModeId = useId();
+  const darkModeDescriptionId = `${darkModeId}-description`;
   const {
     accentTheme,
+    darkMode,
     categoryTinting,
     ambientBackground,
     blurOverlays,
@@ -28,6 +32,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
   } = useSettingsStore(
     (state) => ({
       accentTheme: state.accentTheme,
+      darkMode: state.darkMode,
       categoryTinting: state.categoryTinting,
       ambientBackground: state.ambientBackground,
       blurOverlays: state.blurOverlays,
@@ -39,6 +44,22 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Flair</div>
+      <div className="settings-item">
+        <div>
+          <label className="settings-label" htmlFor={darkModeId}>Dark Mode</label>
+          <div className="settings-desc" id={darkModeDescriptionId}>Use a darker, neutral palette.</div>
+        </div>
+        <div className="settings-toggle">
+          <input
+            type="checkbox"
+            id={darkModeId}
+            aria-describedby={darkModeDescriptionId}
+            checked={darkMode}
+            onChange={(event) => updateSettings({ darkMode: event.currentTarget.checked })}
+          />
+          <span aria-hidden="true" />
+        </div>
+      </div>
       <div className="settings-item">
         <div>
           <div className="settings-label">Accent color</div>

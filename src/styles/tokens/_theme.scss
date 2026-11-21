@@ -104,3 +104,26 @@ $accent-themes: (
   --ambient-glow-mid: rgba(var(--accent-rgb), 0.24);
   --ambient-glow-soft: rgba(var(--accent-rgb), 0.12);
 }
+
+:root[data-dark-mode="true"] {
+  --bg: #000;
+  --panel: #080808;
+  --panel-2: #06060a;
+  --panel-deep: #010000;
+  --surface-card: var(--panel);
+  --surface-nav: var(--panel);
+  --surface-control-muted: var(--panel);
+  --surface-control: #000;
+  --surface-control-strong: var(--surface-control);
+  --overlay-scrim: rgb(0 0 0 / 72%);
+  --stroke: #1b1b1b;
+  --window-frame-edge: var(--stroke);
+  --dark-hover-stroke: #36363a;
+  --dark-selection: #111112;
+  --dark-selected-stroke: rgba(var(--accent-rgb), 0.62);
+  --text: #e5e5e9;
+  --muted: #98989f;
+  --ambient-glow-strong: rgba(var(--accent-rgb), 0.12);
+  --ambient-glow-mid: rgba(var(--accent-rgb), 0.08);
+  --ambient-glow-soft: rgba(var(--accent-rgb), 0.04);
+}
