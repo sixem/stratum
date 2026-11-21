@@ -8,7 +8,6 @@ import type { GridSize, ThumbnailFit } from "@/modules";
 import { VIEW_INSET } from "../fileView/constants";
 import { getFileViewLayoutMetrics } from "../fileViewLayoutMetrics";
 import { useGridViewportLayout } from "./useGridViewportLayout";
-import { useGridWheelSize } from "./useGridWheelSize";
 
 type GridPreset = {
   column: number;
@@ -285,7 +284,6 @@ export const useGridSizing = ({
 
   // When smooth scrolling is disabled, snap wheel input to a single grid row.
   useWheelSnap(viewportRef, smoothScroll ? 0 : rowHeight);
-  useGridWheelSize(viewportRef, viewKey);
   // Restore the stored scroll offset once the grid has a measurable height.
   useScrollRestore(viewportRef, {
     restoreKey: scrollRestoreKey,

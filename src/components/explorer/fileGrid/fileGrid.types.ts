@@ -76,6 +76,7 @@ export type FileGridThumbProps = {
 
 export type FileGridLayoutProps = {
   gridSize: GridSize;
+  pane: "main" | "bottom";
   gridAutoColumns: number;
   gridGap: number;
   gridShowSize: boolean;

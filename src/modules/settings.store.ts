@@ -94,6 +94,7 @@ useSettingsStore.subscribe((state) => {
     blurOverlays: state.blurOverlays,
     keybinds: state.keybinds,
     gridSize: state.gridSize,
+    rememberTabGridSize: state.rememberTabGridSize,
     gridAutoColumns: state.gridAutoColumns,
     gridGap: state.gridGap,
     gridRounded: state.gridRounded,

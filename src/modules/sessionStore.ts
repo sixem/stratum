@@ -3,6 +3,9 @@ import { createWithEqualityFn } from "zustand/traditional";
 import type { SortDir, SortKey, SortState, Tab, ViewMode } from "@/types";
 import type { TabHistory } from "@/types/tabs";
 import { createTab, DEFAULT_SORT, getDefaultSortDir } from "@/lib";
+import { useSettingsStore } from "./settings.store";
+import type { FixedGridSize } from "./settings.types";
+import { coerceTabGridSize, fillTabGridSizes, getDefaultTabGridSize, getTabGridSizeOnEnable } from "./tabGridSize";
 import {
   SESSION_LEGACY_STORAGE_KEY,
   SESSION_STORAGE_KEY,
@@ -28,6 +31,7 @@ type SessionRuntimeState = SessionState & { closedTabs: ClosedTab[]; restoreRevi
 
 type SessionStore = SessionRuntimeState & {
   setTabs: (updater: Tab[] | ((prev: Tab[]) => Tab[])) => void;
+  setTabGridSize: (id: string, gridSize: FixedGridSize) => void;
   setActiveTabId: (id: string | null) => void;
   setRecentJumps: (updater: string[] | ((prev: string[]) => string[])) => void;
   updateSession: (patch: Partial<SessionRuntimeState>) => void;
@@ -49,6 +53,11 @@ const DEFAULT_SESSION: SessionState = {
   activeTabId: null,
   recentJumps: [],
 };
+
+export const createSessionTab = (...args: Parameters<typeof createTab>): Tab => ({
+  ...createTab(...args),
+  gridSize: getDefaultTabGridSize(useSettingsStore.getState()),
+});
 
 const coerceViewMode = (value: unknown): ViewMode => {
   return value === "list" ? "list" : "thumbs";
@@ -95,13 +104,14 @@ const coerceScrollTop = (value: unknown): number => {
 const coerceTabs = (value: unknown) => {
   if (!Array.isArray(value)) return [];
   return value
-    .map((item) => {
+    .map<Tab | null>((item) => {
       if (!item || typeof item !== "object") return null;
       const tab = item as {
         id?: unknown;
         path?: unknown;
         crumbTrailPath?: unknown;
         viewMode?: unknown;
+        gridSize?: unknown;
         sort?: unknown;
         search?: unknown;
         scrollTop?: unknown;
@@ -112,6 +122,7 @@ const coerceTabs = (value: unknown) => {
         path: tab.path,
         crumbTrailPath: coerceCrumbTrailPath(tab.crumbTrailPath, tab.path),
         viewMode: coerceViewMode(tab.viewMode),
+        gridSize: coerceTabGridSize(tab.gridSize),
         sort: coerceSort(tab.sort),
         search: coerceSearch(tab.search),
         scrollTop: coerceScrollTop(tab.scrollTop),
@@ -194,6 +205,13 @@ const createSessionStore = (key: string) => {
       set((state) => ({
         tabs: applyUpdater(state.tabs, updater),
       })),
+    setTabGridSize: (id, gridSize) => set((state) => {
+      const index = state.tabs.findIndex(tab => tab.id === id);
+      if (index < 0 || state.tabs[index].gridSize === gridSize) return state;
+      const tabs = state.tabs.slice();
+      tabs[index] = { ...tabs[index], gridSize };
+      return { tabs };
+    }),
     setActiveTabId: (id) => set({ activeTabId: id }),
     setRecentJumps: (updater) =>
       set((state) => ({
@@ -203,7 +221,8 @@ const createSessionStore = (key: string) => {
     restoreSession: (layout) => {
       const activeIndex = layout.tabs.findIndex((tab) => tab.id === layout.activeTabId);
       // Each restore is a new visit, even if it reopens the same saved tab.
-      const tabs = layout.tabs.map((tab) => ({ ...tab, id: createTab(tab.path).id, sort: { ...tab.sort } }));
+      const tabs = fillTabGridSizes(layout.tabs, getDefaultTabGridSize(useSettingsStore.getState()))
+        .map((tab) => ({ ...tab, id: createTab(tab.path).id, sort: { ...tab.sort } }));
       set((state) => ({
         tabs,
         activeTabId: (tabs[activeIndex] ?? tabs[0])?.id ?? null,
@@ -222,10 +241,25 @@ const createSessionStore = (key: string) => {
       recentJumps: state.recentJumps,
     });
   });
+  const fillGridSizes = (gridSize: FixedGridSize | undefined) => {
+    if (!gridSize) return;
+    store.setState((state) => {
+      const tabs = fillTabGridSizes(state.tabs, gridSize);
+      const closedTabs = state.closedTabs.some(({ tab }) => !tab.gridSize)
+        ? state.closedTabs.map(closed => closed.tab.gridSize ? closed : { ...closed, tab: { ...closed.tab, gridSize } })
+        : state.closedTabs;
+      return tabs === state.tabs && closedTabs === state.closedTabs ? state : { tabs, closedTabs };
+    });
+  };
+  fillGridSizes(getDefaultTabGridSize(useSettingsStore.getState()));
+  useSettingsStore.subscribe((next, previous) => fillGridSizes(getTabGridSizeOnEnable(next, previous)));
   return store;
 };
 
 export const useSessionStore = createSessionStore(STORAGE_KEY);
 export const useBottomSessionStore = createSessionStore(STORAGE_KEY + ".bottom");
+
+export const getPaneSessionStore = (pane: "main" | "bottom") =>
+  pane === "bottom" ? useBottomSessionStore : useSessionStore;
 
 export type { SessionState };

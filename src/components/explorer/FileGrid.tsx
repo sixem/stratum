@@ -1,6 +1,10 @@
 // Virtualized grid view for file entries.
 import { useMemo } from "react";
+import { shallow } from "zustand/shallow";
 import { useEntryPresence, useScrollToIndex } from "@/hooks";
+import { useSettingsStore } from "@/modules";
+import { getPaneSessionStore } from "@/modules/sessionStore";
+import { getDefaultTabGridSize } from "@/modules/tabGridSize";
 import { EmptyState } from "@/components/primitives/EmptyState";
 import { EntryCard, ParentCard } from "./fileGrid/index";
 import { ThumbViewport } from "./fileGrid/ThumbViewport";
@@ -12,6 +16,7 @@ import { useGridSizing } from "./fileGrid/useGridSizing";
 import { useGridThumbRequests } from "./fileGrid/useGridThumbRequests";
 import { useGridTooltip } from "./fileGrid/useGridTooltip";
 import { useGridVirtual } from "./fileGrid/useGridVirtual";
+import { useGridWheelSize } from "./fileGrid/useGridWheelSize";
 import { useCutEntries } from "./fileView/useCutEntries";
 
 const FileGrid = ({
@@ -28,6 +33,12 @@ const FileGrid = ({
   creation,
 }: FileGridProps) => {
   const isCut = useCutEntries();
+  const usePaneSession = getPaneSessionStore(grid.pane);
+  const defaultTabGridSize = useSettingsStore(getDefaultTabGridSize);
+  const [tabId, tabGridSize] = usePaneSession(state => [
+    state.activeTabId,
+    defaultTabGridSize ? state.tabs.find(tab => tab.id === state.activeTabId)?.gridSize : undefined,
+  ] as const, shallow);
   const {
     isDeletePending,
     isTransferPending,
@@ -81,7 +92,7 @@ const FileGrid = ({
     gridMetaEnabled,
     isResizing,
   } = useGridSizing({
-    gridSize: grid.gridSize,
+    gridSize: defaultTabGridSize ? tabGridSize ?? defaultTabGridSize : grid.gridSize,
     gridAutoColumns: grid.gridAutoColumns,
     gridGap: grid.gridGap,
     gridShowSize: grid.gridShowSize,
@@ -98,6 +109,7 @@ const FileGrid = ({
     onGridColumnsChange: grid.onGridColumnsChange,
     viewItemsLength: viewItems.length,
   });
+  useGridWheelSize(viewportRef, view.viewKey, usePaneSession, tabId);
 
   // Reposition before the virtual range reads the new scroll offset.
   useGridScrollAnchor({

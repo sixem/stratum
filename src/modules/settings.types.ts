@@ -4,7 +4,8 @@ import type { KeybindMap } from "./keybinds";
 
 export type ThumbnailFormat = "webp" | "jpeg";
 export type ThumbnailFit = "cover" | "contain";
-export type GridSize = "small" | "normal" | "large" | "auto";
+export type FixedGridSize = "small" | "normal" | "large";
+export type GridSize = FixedGridSize | "auto";
 export type GridNameEllipsis = "end" | "middle";
 export type AccentTheme =
   | "red"
@@ -44,6 +45,7 @@ export type Settings = {
   blurOverlays: boolean;
   keybinds: KeybindMap;
   gridSize: GridSize;
+  rememberTabGridSize: boolean;
   gridAutoColumns: number;
   gridGap: number;
   gridRounded: boolean;

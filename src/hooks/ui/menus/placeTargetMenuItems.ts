@@ -5,6 +5,7 @@ import type { ContextMenuItem, PlaceContextTarget, Place } from "@/types";
 type BuildPlaceTargetMenuItemsOptions = {
   target: PlaceContextTarget | null;
   places: Place[];
+  tabAction?: ContextMenuItem;
   onOpenPath?: (path: string) => void;
   onOpenPathNewTab?: (path: string) => void;
   onAddPlace: (path: string, name?: string, options?: { pinned?: boolean }) => void;
@@ -41,6 +42,7 @@ const buildPinLabel = (source: PlaceContextTarget["source"], exists: boolean, pi
 export const buildPlaceTargetMenuItems = ({
   target,
   places,
+  tabAction,
   onOpenPath,
   onOpenPathNewTab,
   onAddPlace,
@@ -52,7 +54,9 @@ export const buildPlaceTargetMenuItems = ({
 }: BuildPlaceTargetMenuItemsOptions): ContextMenuItem[] => {
   if (!target) return [];
   const path = target.path.trim();
-  if (!path) return [];
+  const items: ContextMenuItem[] = tabAction ? [tabAction] : [];
+  if (!path) return items;
+  if (tabAction) items.push({ kind: "divider", id: "place-target-divider-tab" });
   const key = placeKey(path);
   const map = buildPlacesMap(places);
   const existing = map.get(key) ?? null;
@@ -62,7 +66,6 @@ export const buildPlaceTargetMenuItems = ({
     onAddPlace(path, target.name, options);
   };
 
-  const items: ContextMenuItem[] = [];
   const hasOpenActions = Boolean(onOpenPath) || Boolean(onOpenPathNewTab);
 
   if (onOpenPath) {

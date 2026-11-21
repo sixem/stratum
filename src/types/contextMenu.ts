@@ -14,6 +14,7 @@ export type PlaceContextTarget = {
   name: string;
   path: string;
   source: PlaceContextSource;
+  tabId?: string;
 };
 
 export type ContextMenuIcon =

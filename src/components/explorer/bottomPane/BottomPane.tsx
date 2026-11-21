@@ -282,7 +282,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       }}>
       {busy && <div className="folder-load-progress" role="progressbar" aria-label="Loading bottom folder" />}
       {!ready && tabs.displayPath ? <div className="pane-loading">{busy ? "Loading folder…" : <button className="btn ghost" type="button" onClick={() => navigate(tabs.displayPath)}>Retry opening folder</button>}</div> :
-      <FileView {...upper} {...model} dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null} currentPath={path} viewMode={tabs.viewMode} viewKey={viewKey}
+      <FileView {...upper} {...model} pane="bottom" dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null} currentPath={path} viewMode={tabs.viewMode} viewKey={viewKey}
         showLander={!path} recentJumps={tabs.recentJumps} onOpenPlace={navigate} onOpenRecent={navigate} onOpenDrive={navigate}
         onOpenDriveNewTab={openNew} onOpenPlaceNewTab={openNew} onOpenRecentNewTab={openNew}
         searchQuery={tabs.searchValue} loading={busy} scrollRestoreKey={viewKey} scrollRestoreTop={tabs.activeTab?.scrollTop ?? 0}

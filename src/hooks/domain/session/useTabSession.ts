@@ -2,8 +2,9 @@
 import { useCallback, useMemo } from "react";
 import { shallow } from "zustand/shallow";
 import type { ListDirOptions, SortState, Tab, ViewMode } from "@/types";
-import { createTab, DEFAULT_TAB_STATE, makeDebug, folderPathKey } from "@/lib";
+import { DEFAULT_TAB_STATE, makeDebug, folderPathKey } from "@/lib";
 import { useSessionStore } from "@/modules";
+import { createSessionTab } from "@/modules/sessionStore";
 import { useTabHistory } from "./tabHistory";
 import { usePendingJump } from "./tabNavigation";
 import { useTabPersistence } from "./useTabPersistence";
@@ -124,7 +125,7 @@ export const useTabSession = ({
         setActiveTabId(fallback.id);
         return fallback.id;
       }
-      const nextTab = createTab(
+      const nextTab = createSessionTab(
         path,
         { viewMode, sort: sortState, search: searchValue },
         defaultTabState,
@@ -219,7 +220,7 @@ export const useTabSession = ({
 
   const newTab = useCallback(() => {
     log("new tab -> empty");
-    const nextTab = createTab("", { viewMode: nextViewMode, sort: sortState }, defaultTabState);
+    const nextTab = createSessionTab("", { viewMode: nextViewMode, sort: sortState }, defaultTabState);
     emptyTabIdsRef.current.add(nextTab.id);
     pendingNavigationRef.current = null;
     setTabs((prev) => [...prev, nextTab]);
@@ -232,7 +233,7 @@ export const useTabSession = ({
       const target = path.trim();
       if (!target) return;
       log("open in new tab -> %s", target);
-      const nextTab = createTab(target, { viewMode: nextViewMode, sort: sortState }, defaultTabState);
+      const nextTab = createSessionTab(target, { viewMode: nextViewMode, sort: sortState }, defaultTabState);
       emptyTabIdsRef.current.delete(nextTab.id);
       setTabs((prev) => {
         const index = activeTabId ? prev.findIndex((tab) => tab.id === activeTabId) : -1;

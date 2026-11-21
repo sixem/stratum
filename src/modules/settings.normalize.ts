@@ -210,6 +210,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
         : DEFAULT_SETTINGS.blurOverlays,
     keybinds: coerceKeybinds(value?.keybinds),
     gridSize: coerceGridSize(value?.gridSize),
+    rememberTabGridSize: value?.rememberTabGridSize === true,
     gridAutoColumns: coerceGridAutoColumns(value?.gridAutoColumns),
     gridGap: coerceGridGap(value?.gridGap),
     gridRounded:

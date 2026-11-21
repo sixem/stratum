@@ -1,9 +1,8 @@
 // Layout preferences are separate from the two folder tab sessions.
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { createTab } from "@/lib/tabs";
 import type { ViewMode } from "@/types";
-import { useBottomSessionStore, useSessionStore } from "./sessionStore";
+import { createSessionTab, useBottomSessionStore, useSessionStore } from "./sessionStore";
 
 export const PANE_DIVIDER_HEIGHT = 4;
 export const MIN_MAIN_PANE_HEIGHT = 120;
@@ -69,7 +68,7 @@ export const showBottomPane = (path?: string, newTab = true) => {
   if (!bottom.tabs.length) {
     const main = useSessionStore.getState();
     const initial = path ?? main.tabs.find(tab => tab.id === main.activeTabId)?.path ?? "";
-    const tab = createTab(initial, { viewMode: preferences.defaultViewMode });
+    const tab = createSessionTab(initial, { viewMode: preferences.defaultViewMode });
     bottom.updateSession({ tabs: [tab], activeTabId: tab.id });
     // A mounted pane needs an explicit navigation for its new tab.
     if (!preferences.open) path = undefined;

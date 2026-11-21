@@ -17,6 +17,8 @@ import type { PlaceContextTarget, Tab } from "@/types";
 import { PlusIcon, TabCloseIcon } from "@/components/icons";
 import { HorizontalChevronButton, PressButton } from "@/components/primitives";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
+import { useSettingsStore } from "@/modules";
+import { getDefaultTabGridSize } from "@/modules/tabGridSize";
 
 type TabsBarProps = {
   leading?: ReactNode;
@@ -55,6 +57,7 @@ type TabItemProps = {
   showIndex: boolean;
   showClose: boolean;
   fixedWidthTabs: boolean;
+  untitledMenu: boolean;
   onContextMenu?: (event: PointerEvent<HTMLDivElement>, target: PlaceContextTarget) => void;
   onContextMenuDown?: (
     event: PointerEvent<HTMLDivElement>,
@@ -75,11 +78,14 @@ const TabItem = ({
   showIndex,
   showClose,
   fixedWidthTabs,
+  untitledMenu,
   onContextMenu,
   onContextMenuDown,
 }: TabItemProps) => {
   const label = tabLabel(tab.path);
   const isUntitled = tab.path.trim().length === 0;
+  const hasMenu = !isUntitled || untitledMenu;
+  const menuTarget: PlaceContextTarget = { name: label, path: tab.path, source: "tab", tabId: tab.id };
   return (
     <div
       className={`tab${isActive ? " is-active" : ""}${isDragging ? " is-dragging" : ""}${isUntitled ? " is-untitled" : ""}`}
@@ -92,12 +98,8 @@ const TabItem = ({
       data-context-name={label}
       data-tab-kind={isUntitled ? "untitled" : "directory"}
       onPointerDown={(event) => {
-        if (event.button === 2 && !isUntitled) {
-          onContextMenuDown?.(event, {
-            name: label,
-            path: tab.path,
-            source: "tab",
-          });
+        if (event.button === 2 && hasMenu) {
+          onContextMenuDown?.(event, menuTarget);
           return;
         }
         const target = event.target as HTMLElement | null;
@@ -108,12 +110,8 @@ const TabItem = ({
         onPointerDown(event, tab.id);
       }}
       onPointerUp={(event) => {
-        if (event.button !== 2 || isUntitled) return;
-        onContextMenu?.(event, {
-          name: label,
-          path: tab.path,
-          source: "tab",
-        });
+        if (event.button !== 2 || !hasMenu) return;
+        onContextMenu?.(event, menuTarget);
       }}
       onMouseDown={(event) => {
         handleMiddleClick(event, () => onClose(tab.id));
@@ -174,6 +172,7 @@ export const TabsBar = ({
   onTabContextMenu,
   onTabContextMenuDown,
 }: TabsBarProps) => {
+  const untitledMenu = useSettingsStore(state => Boolean(getDefaultTabGridSize(state)));
   // Container ref lets the reorder hook measure tab positions.
   const tabsRef = useRef<HTMLDivElement | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
@@ -267,6 +266,7 @@ export const TabsBar = ({
                 fixedWidthTabs={fixedWidthTabs}
                 onContextMenu={onTabContextMenu}
                 onContextMenuDown={onTabContextMenuDown}
+                untitledMenu={untitledMenu}
               />
             </Fragment>
           ))}

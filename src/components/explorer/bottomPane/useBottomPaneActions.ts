@@ -97,6 +97,7 @@ export function useBottomPaneActions({
 
   const context = useAppContextMenus({
     ...menu,
+    pane: "bottom",
     mainRef: files,
     contextMenu: ready || menu.contextMenu?.kind === "place-target" ? menu.contextMenu : null,
     onShellCommand: () => {

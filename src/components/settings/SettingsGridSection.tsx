@@ -20,6 +20,12 @@ export const GRID_SETTINGS_ITEMS = {
     description: "Choose a preset size or let the grid auto-fit by column count. Hold Ctrl and scroll over thumbnails to resize them.",
     keywords: "auto columns",
   },
+  rememberTabSize: {
+    label: "Remember thumbnail size per tab",
+    description: "Ctrl + scroll resizes the tab under the pointer. The preset applies to new tabs.",
+    keywords: "fixed grid size workspace",
+    requiresAutoGrid: false,
+  },
   autoColumns: {
     label: "Auto columns",
     description: "Pick how many columns the grid should fit across the view.",
@@ -66,6 +72,7 @@ const GRID_NAME_ELLIPSIS: { id: GridNameEllipsis; label: string }[] = [
 export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => {
   const {
     gridSize,
+    rememberTabGridSize,
     gridAutoColumns,
     gridGap,
     gridRounded,
@@ -77,6 +84,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
   } = useSettingsStore(
     (state) => ({
       gridSize: state.gridSize,
+      rememberTabGridSize: state.rememberTabGridSize,
       gridAutoColumns: state.gridAutoColumns,
       gridGap: state.gridGap,
       gridRounded: state.gridRounded,
@@ -106,6 +114,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
             <PressButton
               key={size.id}
               type="button"
+              aria-pressed={gridSize === size.id}
               className={`settings-pill${gridSize === size.id ? " is-active" : ""}`}
               onClick={() => updateSettings({ gridSize: size.id })}
             >
@@ -128,7 +137,19 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
             <span className="settings-value">{autoColumnsRange.draft}</span>
           </div>
         </SettingsItem>
-      ) : null}
+      ) : (
+        <SettingsItem item={GRID_SETTINGS_ITEMS.rememberTabSize}>
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              aria-label={GRID_SETTINGS_ITEMS.rememberTabSize.label}
+              checked={rememberTabGridSize}
+              onChange={(event) => updateSettings({ rememberTabGridSize: event.currentTarget.checked })}
+            />
+            <span />
+          </label>
+        </SettingsItem>
+      )}
       <SettingsItem item={GRID_SETTINGS_ITEMS.gap}>
         <div className="settings-range">
           <input

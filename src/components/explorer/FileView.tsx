@@ -27,6 +27,7 @@ const FileList = lazy(loadFileList);
 const FileGrid = lazy(loadFileGrid);
 
 type FileViewProps = {
+  pane?: "main" | "bottom";
   viewMode: ViewMode;
   currentPath: string;
   entryByPath: Map<string, FileEntry>;
@@ -111,6 +112,7 @@ type FileViewProps = {
 };
 
 export const FileView = ({
+  pane = "main",
   viewMode,
   currentPath,
   showLander,
@@ -250,6 +252,7 @@ export const FileView = ({
               presenceEnabled,
             }}
             grid={{
+              pane,
               gridSize,
               gridAutoColumns,
               gridGap,

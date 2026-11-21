@@ -1,15 +1,16 @@
 // Named workspaces are explicit snapshots. Keep a draft when leaving a changed workspace.
 import { createWithEqualityFn } from "zustand/traditional";
 import { folderPathKey } from "@/lib/paths";
-import { createTab } from "@/lib/tabs";
 import type { Place } from "@/types";
 import { coerceBottomPaneHeight, DEFAULT_BOTTOM_PANE_LAYOUT, useBottomPaneStore } from "./bottomPaneStore";
 import type { BottomPaneLayout } from "./bottomPaneStore";
 import { coercePlacesState, DEFAULT_PLACES_STATE, usePlacesStore } from "./placesStore";
 import type { PlacesState } from "./placesStore";
-import { coerceSession, useBottomSessionStore, useSessionStore } from "./sessionStore";
+import { coerceSession, createSessionTab, useBottomSessionStore, useSessionStore } from "./sessionStore";
 import type { SessionState } from "./sessionStore";
 import { useSettingsStore } from "./settings.store";
+import type { FixedGridSize } from "./settings.types";
+import { fillTabGridSizes, getDefaultTabGridSize, getTabGridSizeOnEnable } from "./tabGridSize";
 
 export type WorkspaceLayout = {
   main: SessionState;
@@ -109,6 +110,34 @@ const persist = (next: WorkspaceState) => {
   useWorkspaceStore.setState(next);
 };
 
+// Saved layouts must keep their baseline even when the preset changes while they are inactive.
+const fillWorkspaceGridSizes = (gridSize: FixedGridSize | undefined) => {
+  if (!gridSize) return;
+  const state = useWorkspaceStore.getState();
+  const fillLayout = <T extends { layout: WorkspaceLayout }>(entry: T): T => {
+    const { layout } = entry;
+    const main = fillTabGridSizes(layout.main.tabs, gridSize);
+    const bottom = fillTabGridSizes(layout.bottom.tabs, gridSize);
+    if (main === layout.main.tabs && bottom === layout.bottom.tabs) return entry;
+    return { ...entry, layout: { ...layout, main: { ...layout.main, tabs: main }, bottom: { ...layout.bottom, tabs: bottom } } };
+  };
+  const workspaces = state.workspaces.map(fillLayout);
+  const drafts = state.drafts.map(fillLayout);
+  const previousLayout = state.previous && fillLayout(state.previous);
+  if (previousLayout === state.previous && workspaces.every((item, index) => item === state.workspaces[index]) &&
+      drafts.every((item, index) => item === state.drafts[index])) return;
+
+  const updated = { ...state, workspaces, drafts, previous: previousLayout };
+  try {
+    persist(updated);
+  } catch {
+    // Keep the live layout consistent if local storage is unavailable.
+    useWorkspaceStore.setState(updated);
+  }
+};
+fillWorkspaceGridSizes(getDefaultTabGridSize(useSettingsStore.getState()));
+useSettingsStore.subscribe((next, previous) => fillWorkspaceGridSizes(getTabGridSizeOnEnable(next, previous)));
+
 const defineWorkspace = (workspaces: Workspace[], name: string, layout: WorkspaceLayout, existingId?: string): Workspace => {
   const trimmed = name.trim();
   if (!trimmed) throw new Error("Enter a workspace name.");
@@ -125,7 +154,7 @@ const sameTabs = (saved: SessionState, current: SessionState) =>
   saved.tabs.length === current.tabs.length && saved.tabs.every((tab, index) => {
     const other = current.tabs[index];
     const samePath = tab.path === other.path || folderPathKey(tab.path) === folderPathKey(other.path);
-    return samePath && tab.viewMode === other.viewMode && tab.search === other.search &&
+    return samePath && tab.viewMode === other.viewMode && tab.gridSize === other.gridSize && tab.search === other.search &&
       tab.sort.key === other.sort.key && tab.sort.dir === other.sort.dir;
   });
 
@@ -213,7 +242,7 @@ export const switchWorkspace = (target: WorkspaceSession, outgoing: WorkspaceLay
 
 export const createFreshWorkspace = (name: string, outgoing: WorkspaceLayout) => {
   const state = useWorkspaceStore.getState();
-  const start = createTab("", { viewMode: useSettingsStore.getState().defaultViewMode });
+  const start = createSessionTab("", { viewMode: useSettingsStore.getState().defaultViewMode });
   const layout: WorkspaceLayout = {
     main: { tabs: [start], activeTabId: start.id, recentJumps: [] },
     bottom: { tabs: [], activeTabId: null, recentJumps: [] },

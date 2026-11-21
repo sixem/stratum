@@ -2,22 +2,25 @@ import type { ShellMenuTarget } from "@/api";
 import type { PlaceContextTarget } from "@/types";
 
 type MenuRequest = {
-  target: ShellMenuTarget;
+  target: ShellMenuTarget | null;
   place?: PlaceContextTarget;
   point: { x: number; y: number };
 };
 
-export const getFileCommandFocus = (main: HTMLElement | null) => {
+export const getFileCommandFocus = (main: HTMLElement | null, allowUntitledTab = false) => {
   if (!main) return null;
   const active = document.activeElement;
   if (!active || active === document.body || active === document.documentElement || main.contains(active)) {
     return "view" as const;
   }
   const element = active.closest<HTMLElement>("[data-context-place]");
-  const path = element?.dataset.dropPath || element?.dataset.path;
+  const path = element?.dataset.dropPath || element?.dataset.path || "";
   const source = element?.dataset.contextPlace as PlaceContextTarget["source"] | undefined;
-  if (!element || !path || !source) return null;
-  return { element, place: { path, source, name: element.dataset.contextName || path } };
+  const tabId = source === "tab" ? element?.dataset.tabId : undefined;
+  if (!element || !source || (!path && !(allowUntitledTab && tabId))) return null;
+  const place: PlaceContextTarget = { path, source, name: element.dataset.contextName || path };
+  if (tabId) place.tabId = tabId;
+  return { element, place };
 };
 
 // Arrow keys move Stratum's selection without moving DOM focus between virtual rows.
@@ -26,13 +29,14 @@ export const getKeyboardMenuRequest = (
   currentPath: string,
   selectedPaths: string[],
   parentPath: string | null,
+  allowUntitledTab = false,
 ): MenuRequest | null => {
-  const focus = getFileCommandFocus(main);
+  const focus = getFileCommandFocus(main, allowUntitledTab);
   if (!focus) return null;
   if (focus !== "view") {
     const rect = focus.element.getBoundingClientRect();
     return {
-      target: { paths: [focus.place.path] },
+      target: focus.place.path ? { paths: [focus.place.path] } : null,
       place: focus.place,
       point: { x: rect.left, y: rect.bottom },
     };

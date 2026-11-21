@@ -46,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   blurOverlays: true,
   keybinds: DEFAULT_KEYBINDS,
   gridSize: "auto",
+  rememberTabGridSize: false,
   gridAutoColumns: GRID_AUTO_COLUMNS_DEFAULT,
   gridGap: GRID_GAP_DEFAULT,
   gridRounded: true,

@@ -5,8 +5,10 @@ import { flushSync } from "react-dom";
 import { openPathProperties, type ShellMenuTarget } from "@/api";
 import type { BeginFileActivity } from "@/hooks/domain/filesystem/useFileActivity";
 import { getSelectionTargets, isEditableElement, toMessage } from "@/lib";
-import { usePromptStore } from "@/modules";
+import { usePromptStore, useSettingsStore } from "@/modules";
 import { showBottomPane } from "@/modules/bottomPaneStore";
+import { getPaneSessionStore } from "@/modules/sessionStore";
+import { getDefaultTabGridSize } from "@/modules/tabGridSize";
 import type {
   ConversionModalRequest,
   ContextMenuItem,
@@ -32,6 +34,7 @@ type ContextMenuState = ReturnType<typeof useAppMenuState>["contextMenu"];
 const eventPoint = (event: ReactPointerEvent) => ({ x: event.clientX, y: event.clientY });
 
 type UseAppContextMenusOptions = {
+  pane?: "main" | "bottom";
   windowsMenuEnabled: boolean;
   beginFileActivity: BeginFileActivity;
   onShellCommand: () => void;
@@ -88,6 +91,7 @@ export type BottomMenuBindings = ContextMenuServices & ReturnType<typeof useAppM
 };
 
 export const useAppContextMenus = ({
+  pane = "main",
   windowsMenuEnabled,
   beginFileActivity,
   onShellCommand,
@@ -132,6 +136,11 @@ export const useAppContextMenus = ({
   onRemovePlace,
   onRemoveRecentJump,
 }: UseAppContextMenusOptions) => {
+  const defaultTabGridSize = useSettingsStore(getDefaultTabGridSize);
+  const usePaneSession = getPaneSessionStore(pane);
+  const tabId = contextMenu?.kind === "place-target" && contextMenu.target.source === "tab"
+    ? contextMenu.target.tabId : undefined;
+  const menuTab = usePaneSession(state => tabId ? state.tabs.find(tab => tab.id === tabId) : undefined);
   const openWindowsMenu = useWindowsContextMenu({
     enabled: windowsMenuEnabled, beginFileActivity, closeContextMenu, onCommand: onShellCommand,
   });
@@ -146,7 +155,7 @@ export const useAppContextMenus = ({
       case "entry":
         return { paths: resolveContextTargets(contextMenu.entry, selected, viewParentPath) };
       case "place-target":
-        return { paths: [contextMenu.target.path] };
+        return contextMenu.target.path ? { paths: [contextMenu.target.path] } : null;
       case "sort":
         return currentPath ? { backgroundPath: currentPath } : null;
     }
@@ -161,16 +170,17 @@ export const useAppContextMenus = ({
     const main = mainRef.current;
     if (!main) return false;
     const paths = getSelectionTargets(selected, viewParentPath);
-    const request = getKeyboardMenuRequest(main, currentPath, paths, viewParentPath);
+    const request = getKeyboardMenuRequest(main, currentPath, paths, viewParentPath, Boolean(defaultTabGridSize));
     if (!request) return false;
     const { target, point, place } = request;
     if (native) {
+      if (!target) return false;
       const entry = !place && "paths" in target ? entryByPath.get(target.paths[0]) : undefined;
       return openWindowsMenu(target, point, false, galleryAction(entry, target));
     }
     if (place) {
       openContextMenuAt({ kind: "place-target", target: place, ...point });
-    } else if ("paths" in target) {
+    } else if (target && "paths" in target) {
       const entry = entryByPath.get(target.paths[0]);
       if (!entry) return false;
       if (!selected.has(entry.path)) onSelectionChange([entry.path], entry.path);
@@ -179,7 +189,7 @@ export const useAppContextMenus = ({
       openContextMenuAt({ kind: "sort", ...point });
     }
     return true;
-  }, [contextMenu, currentPath, entryByPath, galleryAction, mainRef, menuTarget, onSelectionChange,
+  }, [contextMenu, currentPath, defaultTabGridSize, entryByPath, galleryAction, mainRef, menuTarget, onSelectionChange,
     openContextMenuAt, openWindowsMenu, selected, viewParentPath]);
 
   const handlePlaceTargetContextMenuDown = useCallback(
@@ -197,7 +207,7 @@ export const useAppContextMenus = ({
       if (event.button !== 2) return;
       event.preventDefault();
       event.stopPropagation();
-      if (event.shiftKey && openWindowsMenu({ paths: [target.path] }, eventPoint(event), true)) return;
+      if (event.shiftKey && target.path && openWindowsMenu({ paths: [target.path] }, eventPoint(event), true)) return;
       openPlaceTargetMenu(event, target);
     },
     [openPlaceTargetMenu, openWindowsMenu],
@@ -298,6 +308,12 @@ export const useAppContextMenus = ({
   const placeTargetMenuItems = buildPlaceTargetMenuItems({
     target: contextMenu?.kind === "place-target" ? contextMenu.target : null,
     places,
+    tabAction: menuTab && defaultTabGridSize ? {
+      id: "reset-tab-grid-size",
+      label: "Reset thumbnail size",
+      disabled: (menuTab.gridSize ?? defaultTabGridSize) === defaultTabGridSize,
+      onSelect: () => usePaneSession.getState().setTabGridSize(menuTab.id, defaultTabGridSize),
+    } : undefined,
     onOpenPath: onOpenDir,
     onOpenPathNewTab: onOpenDirNewTab,
     onAddPlace,

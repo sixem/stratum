@@ -117,7 +117,7 @@ export const searchSettingsSections = (query: string, autoGrid: boolean) => {
 
   return SETTINGS_SECTION_DEFINITIONS.flatMap((section) => {
     const items = section.items.filter((item) => {
-      if (item.requiresAutoGrid && !autoGrid) return false;
+      if (item.requiresAutoGrid !== undefined && item.requiresAutoGrid !== autoGrid) return false;
       const searchable = [section.label, item.label, item.description, item.keywords].join(" ").toLowerCase();
       return terms.every((term) => searchable.includes(term));
     });
