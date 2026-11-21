@@ -113,7 +113,6 @@ export const SettingsVitals = ({ open }: SettingsVitalsProps) => {
   const showLocatePrompt = () => {
     const initialValue = ffmpegPath;
     const pathRef = { current: initialValue };
-    const inputId = `ffmpeg-path-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const runSave = () => {
       updateSettings({ ffmpegPath: pathRef.current.trim() });
     };
@@ -122,13 +121,11 @@ export const SettingsVitals = ({ open }: SettingsVitalsProps) => {
       title: "Locate FFmpeg",
       content: (
         <div className="prompt-field">
-          <label className="prompt-label" htmlFor={inputId}>
-            FFmpeg path
-          </label>
+          <span className="prompt-label">FFmpeg path</span>
           <input
-            id={inputId}
             className="prompt-input"
             type="text"
+            aria-label="FFmpeg path"
             placeholder="C:\\Tools\\ffmpeg\\bin\\ffmpeg.exe"
             defaultValue={initialValue}
             autoFocus

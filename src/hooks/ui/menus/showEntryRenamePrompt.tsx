@@ -14,11 +14,12 @@ export const showEntryRenamePrompt = (
   const prompt: PromptConfig = {
     title: "Rename item",
     content: (
-      <label className="prompt-field">
+      <div className="prompt-field">
         <span className="prompt-label">Name</span>
         <input
           className="prompt-input"
           type="text"
+          aria-label="Name"
           defaultValue={target.name}
           onChange={(event) => { name = event.currentTarget.value; }}
           onKeyDown={(event) => {
@@ -29,7 +30,7 @@ export const showEntryRenamePrompt = (
             if (closed && event.key === "Enter") rename();
           }}
         />
-      </label>
+      </div>
     ),
     confirmLabel: "Rename",
     cancelLabel: "Cancel",

@@ -62,7 +62,6 @@
   transition: none;
 
   &:hover:not(:disabled):not(.is-active) {
-    background: transparent;
     border-color: var(--dark-hover-stroke);
   }
 
@@ -70,6 +69,10 @@
     background: var(--dark-selection);
     border-color: var(--dark-selected-stroke);
     box-shadow: none;
+
+    &:hover:not(:disabled) {
+      border-color: var(--dark-selected-hover-stroke);
+    }
   }
 }
 

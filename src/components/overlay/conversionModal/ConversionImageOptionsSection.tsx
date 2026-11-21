@@ -18,14 +18,15 @@ export const ConversionImageOptionsSection = ({
 }: ConversionImageOptionsSectionProps) => {
   return (
     <div className="conversion-block">
-      <label className="conversion-quality-field">
+      <div className="conversion-quality-field">
         <div className="conversion-quality-row">
           <span>Image quality</span>
           <output className="tnum">{qualityNormalized}</output>
         </div>
         <input
           type="range"
-          className="conversion-quality-slider"
+          className="ui-range"
+          aria-label="Image quality"
           min={1}
           max={100}
           step={1}
@@ -34,7 +35,7 @@ export const ConversionImageOptionsSection = ({
           onBlur={onCommitQuality}
           disabled={runInProgress}
         />
-      </label>
+      </div>
       <div className="conversion-rule-note">
         {imageQualityLabel}. Applies to JPG/JPEG/JFIF quality and PNG compression.
       </div>

@@ -19,9 +19,6 @@ export const useCreateEntryPrompt = () => {
       if (!target) return;
       const defaultName = kind === "folder" ? "New folder" : "New file.txt";
       const nameRef = { current: defaultName };
-      const inputId = `prompt-${kind}-${Date.now()}-${Math.random()
-        .toString(16)
-        .slice(2)}`;
       const runCreate = () => {
         const trimmed = nameRef.current.trim();
         if (!trimmed) return;
@@ -46,13 +43,11 @@ export const useCreateEntryPrompt = () => {
         title: kind === "folder" ? "New folder" : "New file",
         content: (
           <div className="prompt-field">
-            <label className="prompt-label" htmlFor={inputId}>
-              Name
-            </label>
+            <span className="prompt-label">Name</span>
             <input
-              id={inputId}
               className="prompt-input"
               type="text"
+              aria-label="Name"
               defaultValue={defaultName}
               autoFocus
               onFocus={(event) => {

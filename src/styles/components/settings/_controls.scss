@@ -68,7 +68,7 @@
     position: relative;
     width: 44px;
     height: 24px;
-    border-radius: 999px;
+    border-radius: 7px;
     background: #0f1420;
     border: var(--surface-border-width) solid #1d2434;
     cursor: pointer;
@@ -80,7 +80,6 @@
   }
 
   .settings-toggle:has(input:checked) {
-    background: #0f1420;
     border-color: #273049;
   }
 
@@ -105,8 +104,8 @@
     left: 2px;
     width: 16px;
     height: 16px;
-    border-radius: 999px;
-    border: 1px solid #313a4f;
+    border-radius: 4px;
+    border: var(--surface-border-width) solid #313a4f;
     background: #2a3142;
     transition:
       transform 0.16s ease,
@@ -129,25 +128,10 @@
   }
 
   .settings-range .ui-range {
+    --range-track-border: rgba(255, 255, 255, 0.1);
+    --range-track-background: color-mix(in srgb, var(--surface-control-muted) 62%, black 38%);
+    --range-progress-background: rgba(var(--accent-rgb), 0.58);
     width: 160px;
-  }
-
-  .settings-range .ui-range::-webkit-slider-runnable-track {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: color-mix(in srgb, var(--surface-control-muted) 62%, black 38%);
-  }
-
-  .settings-range .ui-range::-moz-range-track {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: color-mix(in srgb, var(--surface-control-muted) 62%, black 38%);
-  }
-
-  .settings-range .ui-range::-moz-range-progress {
-    background: rgba(var(--accent-rgb), 0.58);
-  }
-
-  .settings-range .ui-range:disabled {
-    opacity: 0.5;
   }
 
   .settings-value {

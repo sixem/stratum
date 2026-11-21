@@ -121,7 +121,7 @@
   gap: 4px;
   align-items: center;
   padding: 3px;
-  @include control-surface(999px, #101521, #1b2232);
+  @include control-surface(9px, #101521, #1b2232);
 }
 
 @mixin pill-option() {
@@ -129,18 +129,12 @@
   align-items: center;
   gap: 6px;
   padding: 4px 11px;
-  @include control-surface(999px, transparent, transparent);
+  @include control-surface(5px, transparent, transparent);
   font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--muted);
   cursor: pointer;
-  transition: color 0.14s ease, background-color 0.14s ease, border-color 0.14s ease;
-
-  &:hover:not(:disabled):not(.is-active) {
-    color: var(--text);
-    background: #141a28;
-    border-color: rgba(255, 255, 255, 0.05);
-  }
+  transition: border-color 0.14s ease;
 
   &.is-active {
     @include active-surface(
@@ -149,6 +143,10 @@
       rgba(255, 255, 255, 0.08),
       inset 0 0 0 1px rgba(255, 255, 255, 0.03)
     );
+  }
+
+  &:hover:not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.18);
   }
 
   &:disabled {

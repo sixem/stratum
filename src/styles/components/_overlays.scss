@@ -218,7 +218,7 @@
   }
 
   .context-divider {
-    height: 1px;
+    height: var(--surface-border-width);
     margin: 4px 6px;
     background: #1a2232;
     border-radius: 999px;

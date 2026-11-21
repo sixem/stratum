@@ -77,7 +77,7 @@ export const PreviewControls = ({
           <input
             ref={volumeRangeRef}
             id="quick-preview-volume-range"
-            className="quick-preview-control-range"
+            className="ui-range quick-preview-control-range"
             type="range"
             min={0}
             max={1}

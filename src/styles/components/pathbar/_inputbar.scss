@@ -5,7 +5,7 @@
 .path-inputbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(160px, 220px);
-  gap: 10px;
+  gap: 10px 4px;
   align-items: center;
   padding: 6px 10px 0 10px;
   background: transparent;

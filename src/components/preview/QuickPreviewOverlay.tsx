@@ -12,6 +12,16 @@ import { PreviewStage } from "./PreviewStage";
 import { useQuickPreviewInput } from "./useQuickPreviewInput";
 import { useQuickPreviewMedia } from "./useQuickPreviewMedia";
 
+const PREVIEW_STRIP_OPEN_KEY = "stratum.preview.strip-open";
+
+const readPreviewStripOpen = () => {
+  try {
+    return globalThis.localStorage?.getItem(PREVIEW_STRIP_OPEN_KEY) !== "false";
+  } catch {
+    return true;
+  }
+};
+
 export type QuickPreviewOverlayProps = {
   open: boolean;
   path: string | null;
@@ -47,7 +57,7 @@ const QuickPreviewOverlayContent = ({
   smartTabJump,
   smartTabBlocked,
 }: QuickPreviewOverlayContentProps) => {
-  const [stripOpen, setStripOpen] = useState(true);
+  const [stripOpen, setStripOpen] = useState(readPreviewStripOpen);
   const stripId = useId();
   const stripToggleRef = useRef<HTMLButtonElement>(null);
   const previewPathIsVideo = useMemo(() => {
@@ -118,6 +128,16 @@ const QuickPreviewOverlayContent = ({
     if (!next) return;
     onSelectPreview(next.path);
   }, [activePreviewIndex, canGoPreviewForward, onSelectPreview, preview.previewItems]);
+
+  const handleToggleStrip = () => {
+    const next = !stripOpen;
+    setStripOpen(next);
+    try {
+      globalThis.localStorage?.setItem(PREVIEW_STRIP_OPEN_KEY, String(next));
+    } catch {
+      // The current gallery can still be toggled if storage is unavailable.
+    }
+  };
 
   return (
     <div
@@ -233,7 +253,7 @@ const QuickPreviewOverlayContent = ({
         stripOpen={stripOpen}
         stripId={stripId}
         stripToggleRef={stripToggleRef}
-        onToggleStrip={() => setStripOpen((value) => !value)}
+        onToggleStrip={handleToggleStrip}
       />
     </div>
   );

@@ -73,18 +73,19 @@ export const ConversionOutputSection = ({
         ) : null}
       </div>
       {outputMode === "create-new" ? (
-        <label className="conversion-suffix-field">
+        <div className="conversion-suffix-field">
           <span>Suffix</span>
           <input
             type="text"
             className="prompt-input"
+            aria-label="Suffix"
             value={suffix}
             spellCheck={false}
             onChange={(event) => onSuffixChange(event.target.value)}
             placeholder="_converted"
             disabled={runInProgress}
           />
-        </label>
+        </div>
       ) : null}
       {sampleItem && sampleFormat ? (
         <div className="conversion-suffix-preview">

@@ -328,7 +328,6 @@ export const QuickPreviewTimeline = ({
         onKeyDown={handleKeyDown}
       >
         <div className="quick-preview-timeline-rail" aria-hidden="true" />
-        <div className="quick-preview-timeline-fill" aria-hidden="true" />
         <div className="quick-preview-timeline-thumb" aria-hidden="true" />
       </div>
       <div className="quick-preview-control-time quick-preview-control-time-remaining">

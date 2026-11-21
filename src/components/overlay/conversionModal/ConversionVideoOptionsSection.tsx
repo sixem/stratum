@@ -50,7 +50,7 @@ export const ConversionVideoOptionsSection = ({
     <div className="conversion-block">
       <div className="conversion-video-panel">
         <div className="conversion-video-settings">
-          <label className="conversion-field">
+          <div className="conversion-field">
             <span>Preset</span>
             <DropdownSelect
               value={presetId}
@@ -59,8 +59,8 @@ export const ConversionVideoOptionsSection = ({
               onChange={onPresetChange}
               disabled={runInProgress}
             />
-          </label>
-          <label className="conversion-field">
+          </div>
+          <div className="conversion-field">
             <span>Encoder</span>
             <DropdownSelect
               value={encoder}
@@ -69,8 +69,8 @@ export const ConversionVideoOptionsSection = ({
               onChange={onEncoderChange}
               disabled={runInProgress}
             />
-          </label>
-          <label className="conversion-field">
+          </div>
+          <div className="conversion-field">
             <span>Speed</span>
             <DropdownSelect
               value={speed}
@@ -79,17 +79,18 @@ export const ConversionVideoOptionsSection = ({
               onChange={onSpeedChange}
               disabled={runInProgress}
             />
-          </label>
+          </div>
         </div>
         <div className="conversion-video-meta">
-          <label className="conversion-quality-field conversion-video-quality-field">
+          <div className="conversion-quality-field conversion-video-quality-field">
             <div className="conversion-quality-row">
               <span>{videoQualityLabel}</span>
               <output className="tnum">{videoQualityValue}</output>
             </div>
             <input
               type="range"
-              className="conversion-quality-slider"
+              className="ui-range"
+              aria-label={videoQualityLabel}
               min={videoQualityRange.min}
               max={videoQualityRange.max}
               step={videoQualityRange.step}
@@ -98,7 +99,7 @@ export const ConversionVideoOptionsSection = ({
               onBlur={onCommitQuality}
               disabled={runInProgress}
             />
-          </label>
+          </div>
           <div className="conversion-video-meta-footer">
             <div className="conversion-video-note-stack">
               <span className="conversion-rule-note">{videoQualityHint}</span>
