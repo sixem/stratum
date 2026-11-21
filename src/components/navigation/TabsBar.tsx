@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { DropTarget, TabDropSubmenuState } from "@/lib";
 import { handleMiddleClick, tabLabel } from "@/lib";
+import { registerTabLocationDrop } from "@/lib/tabLocationDrop";
 import { useHorizontalOverflowScroll, useTabDragDrop } from "@/hooks";
 import { DropTargetSubmenu } from "@/components/overlay/DropTargetSubmenu";
 import type { PlaceContextTarget, Tab } from "@/types";
@@ -30,6 +31,7 @@ type TabsBarProps = {
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onNew: () => void;
+  onOpenLocation: (path: string) => void;
   onReorder: (fromId: string, toIndex: number) => void;
   onSubmenuHoverTargetChange?: (target: DropTarget | null) => void;
   onSubmenuCloseRequest?: () => void;
@@ -165,6 +167,7 @@ export const TabsBar = ({
   onSelect,
   onClose,
   onNew,
+  onOpenLocation,
   onReorder,
   onSubmenuHoverTargetChange,
   onSubmenuCloseRequest,
@@ -173,6 +176,7 @@ export const TabsBar = ({
 }: TabsBarProps) => {
   // Container ref lets the reorder hook measure tab positions.
   const tabsRef = useRef<HTMLDivElement | null>(null);
+  const stripRef = useRef<HTMLDivElement | null>(null);
   const [submenuAnchorElement, setSubmenuAnchorElement] = useState<HTMLElement | null>(null);
   const {
     draggingId,
@@ -189,6 +193,10 @@ export const TabsBar = ({
       observeSelector: ".tab[data-tab-id]",
       refreshKey: tabs,
     });
+
+  useLayoutEffect(() => {
+    if (stripRef.current) return registerTabLocationDrop(stripRef.current, onOpenLocation);
+  }, [onOpenLocation]);
 
   useEffect(() => {
     if (!activeId) return;
@@ -222,7 +230,7 @@ export const TabsBar = ({
   }, [tabDropSubmenu?.hostTabId, tabs]);
 
   return (
-    <div className="tabsbar">
+    <div className="tabsbar" data-tab-location-strip="true" ref={stripRef}>
       {leading}
       <div
         className="tabs-scroll-wrap"

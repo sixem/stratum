@@ -6,7 +6,7 @@ import { DRAG_THRESHOLD_PX } from "@/constants";
 type EntryDragOptions = {
   selected: Set<string>;
   onSetSelection: (paths: string[], anchor?: string) => void;
-  onStartDrag?: (paths: string[]) => void;
+  onStartDrag?: (paths: string[], folderPath?: string) => void;
   loading: boolean;
 };
 
@@ -14,6 +14,7 @@ type Press = {
   id: number;
   source: Element;
   path: string;
+  isFolder: boolean;
   x: number;
   y: number;
   selection: Set<string> | null;
@@ -52,14 +53,15 @@ export const useEntryDragOut = ({ selected, onSetSelection, onStartDrag, loading
     if (event.pointerType === "touch") return;
     const source = event.target;
     if (loading || !onStartDrag || !(source instanceof Element)) return;
-    const path = source.closest<HTMLElement>('[data-drag-source="true"]')?.dataset.path;
+    const entry = source.closest<HTMLElement>('[data-drag-source="true"]');
+    const path = entry?.dataset.path;
     if (!path) return;
 
     // Capture on the original child so a fast exit still delivers movement and
     // ordinary clicks, double-clicks and row selection keep their original target.
     source.setPointerCapture(event.pointerId);
     press.current = {
-      id: event.pointerId, source, path, x: event.clientX, y: event.clientY,
+      id: event.pointerId, source, path, isFolder: entry.dataset.isDir === "true", x: event.clientX, y: event.clientY,
       selection: selected.has(path) ? selected : null,
     };
   };
@@ -81,7 +83,7 @@ export const useEntryDragOut = ({ selected, onSetSelection, onStartDrag, loading
     release();
     suppressClick.current = true;
     if (selection !== selected || !selected.has(start.path)) onSetSelection(paths, start.path);
-    onStartDrag(paths);
+    onStartDrag(paths, start.isFolder ? start.path : undefined);
   };
 
   const endPress = (event: PointerEvent) => {

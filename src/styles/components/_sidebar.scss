@@ -234,8 +234,9 @@
   background: transparent;
 }
 
-:where(.sidebar) .place:hover {
+:where(.sidebar) .place:not(.is-empty):hover {
   background: #161b29;
+  box-shadow: inset 0 0 0 2px var(--stroke);
 }
 
 :where(.sidebar) .place.is-active {

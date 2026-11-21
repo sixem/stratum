@@ -9,6 +9,7 @@ import {
   normalizePath,
 } from "@/lib";
 import { useHorizontalOverflowScroll } from "@/hooks";
+import { useLocationDrag } from "@/hooks/ui/inputs/useLocationDrag";
 import type { DriveInfo, IndexedDriveState, IndexedSearchServiceState } from "@/types";
 import { HorizontalChevronButton, PressButton } from "@/components/primitives";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
@@ -106,6 +107,7 @@ export const DrivePicker = ({
     });
   const canDrag = expanded && overflowed;
   const { dragging, dragHandlers } = useDrivePickerDragScroll(canDrag);
+  const locationDrag = useLocationDrag(canDrag);
 
   useEffect(() => {
     if (!expanded) return;
@@ -183,6 +185,11 @@ export const DrivePicker = ({
                 data-window-drag-ignore={canDrag ? "true" : undefined}
                 data-dragging={dragging ? "true" : undefined}
                 {...dragHandlers}
+                onPointerDownCapture={locationDrag.onPointerDownCapture}
+                onClickCapture={(event) => {
+                  locationDrag.onClickCapture(event);
+                  if (!event.defaultPrevented) dragHandlers.onClickCapture(event);
+                }}
               >
                 {drives.map((drive) => {
                   const driveKey = normalizePath(drive);
@@ -197,6 +204,7 @@ export const DrivePicker = ({
                         type="button"
                         role="menuitem"
                         className={`drive-picker-item${isActive ? " is-active" : ""}`}
+                        data-location-path={drive}
                         aria-label={buildDriveAriaLabel(driveLabel, indexedState)}
                         pressOnPointerDown={false}
                         onClick={() => onSelect(drive)}

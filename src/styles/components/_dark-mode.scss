@@ -262,7 +262,11 @@
 
   .sidebar .place:not(.is-active):not(.is-empty):not([data-drop-target="true"]):hover {
     background: transparent;
-    box-shadow: inset 0 0 0 1px var(--dark-hover-stroke);
+    box-shadow: inset 0 0 0 2px var(--dark-hover-stroke);
+  }
+
+  .sidebar .place.is-active:not([data-drop-target="true"]):hover {
+    box-shadow: inset 0 0 0 2px var(--dark-hover-stroke), var(--navigation-item-shadow);
   }
 
   .lander-drive:hover:not(:focus-visible) {

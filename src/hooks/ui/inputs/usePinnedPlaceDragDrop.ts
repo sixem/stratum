@@ -2,6 +2,8 @@
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
+import { DRAG_THRESHOLD_PX } from "@/constants";
+import { createTabLocationHover, getTabLocationDropTarget, openDroppedLocation } from "@/lib/tabLocationDrop";
 
 type PinnedDropPosition = "before" | "after";
 
@@ -17,6 +19,7 @@ type DragState = {
   startX: number;
   startY: number;
   path: string | null;
+  source: HTMLButtonElement | null;
 };
 
 type DropTarget = {
@@ -24,7 +27,6 @@ type DropTarget = {
   position: PinnedDropPosition;
 } | null;
 
-const DRAG_THRESHOLD = 4;
 const SUPPRESS_TIMEOUT_MS = 400;
 
 export const usePinnedPlaceDragDrop = ({
@@ -33,6 +35,7 @@ export const usePinnedPlaceDragDrop = ({
 }: UsePinnedPlaceDragDropOptions) => {
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget>(null);
+  const [highlightTabs] = useState(createTabLocationHover);
   const dropTargetRef = useRef<DropTarget>(null);
   const dragRef = useRef<DragState>({
     active: false,
@@ -41,6 +44,7 @@ export const usePinnedPlaceDragDrop = ({
     startX: 0,
     startY: 0,
     path: null,
+    source: null,
   });
   const onReorderRef = useRef(onReorder);
   const windowTrackingRef = useRef<AbortController | null>(null);
@@ -85,17 +89,21 @@ export const usePinnedPlaceDragDrop = ({
       startX: 0,
       startY: 0,
       path: null,
+      source: null,
     };
   };
 
   const stopWindowTracking = () => {
     windowTrackingRef.current?.abort();
     windowTrackingRef.current = null;
+    highlightTabs(null);
+    const { source, pointerId } = dragRef.current;
+    if (pointerId != null && source?.hasPointerCapture(pointerId)) source.releasePointerCapture(pointerId);
   };
 
-  const computeDropTarget = (clientY: number): DropTarget => {
+  const computeDropTarget = (point: PointerEvent): DropTarget => {
     const container = containerRef.current;
-    if (!container) return null;
+    if (!container?.contains(document.elementFromPoint(point.clientX, point.clientY))) return null;
     const places = Array.from(
       container.querySelectorAll<HTMLElement>(".place[data-place-kind='pinned']"),
     );
@@ -106,7 +114,7 @@ export const usePinnedPlaceDragDrop = ({
       const path = place.dataset.path;
       if (!path) continue;
       const midpoint = rect.top + rect.height / 2;
-      if (clientY < midpoint) {
+      if (point.clientY < midpoint) {
         return { path, position: "before" };
       }
     }
@@ -119,17 +127,21 @@ export const usePinnedPlaceDragDrop = ({
   const handlePointerMove = (event: PointerEvent) => {
     const drag = dragRef.current;
     if (!drag.active || drag.pointerId !== event.pointerId) return;
+    if (!(event.buttons & 1) || !drag.source?.isConnected) return handlePointerCancel(event);
     const dx = Math.abs(event.clientX - drag.startX);
     const dy = Math.abs(event.clientY - drag.startY);
-    if (!drag.dragging && dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) {
+    if (!drag.dragging && dx < DRAG_THRESHOLD_PX && dy < DRAG_THRESHOLD_PX) {
       return;
     }
     if (!drag.dragging) {
       drag.dragging = true;
+      drag.source?.setPointerCapture(event.pointerId);
       setDraggingPath(drag.path);
       armSuppress();
     }
-    const nextTarget = computeDropTarget(event.clientY);
+    const tabStrip = getTabLocationDropTarget(event.clientX, event.clientY);
+    highlightTabs(tabStrip);
+    const nextTarget = tabStrip ? null : computeDropTarget(event);
     if (!nextTarget || nextTarget.path === drag.path) {
       setDropTargetValue(null);
       return;
@@ -142,28 +154,32 @@ export const usePinnedPlaceDragDrop = ({
     if (drag.pointerId !== event.pointerId) return;
     const wasDragging = drag.dragging;
     const sourcePath = drag.path;
-    const nextTarget = dropTargetRef.current;
-    stopWindowTracking();
-    resetDrag();
-    if (wasDragging && sourcePath && nextTarget) {
+    const tabStrip = wasDragging ? getTabLocationDropTarget(event.clientX, event.clientY) : null;
+    const nextTarget = wasDragging && !tabStrip ? computeDropTarget(event) : null;
+    if (wasDragging) armSuppress();
+    clearDrag();
+    if (!sourcePath) return;
+    if (tabStrip) openDroppedLocation(tabStrip, sourcePath);
+    else if (nextTarget && nextTarget.path !== sourcePath) {
       onReorderRef.current(sourcePath, nextTarget.path, nextTarget.position);
     }
+  };
+
+  const clearDrag = () => {
+    stopWindowTracking();
+    resetDrag();
     setDraggingPath(null);
     setDropTargetValue(null);
   };
 
   const handlePointerCancel = (event: PointerEvent) => {
-    const drag = dragRef.current;
-    if (drag.pointerId !== event.pointerId) return;
-    stopWindowTracking();
-    resetDrag();
-    setDraggingPath(null);
-    setDropTargetValue(null);
+    if (dragRef.current.pointerId === event.pointerId) clearDrag();
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>, path: string) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || !event.isPrimary) return;
     stopWindowTracking();
+    clearSuppress();
     dragRef.current = {
       active: true,
       dragging: false,
@@ -171,6 +187,7 @@ export const usePinnedPlaceDragDrop = ({
       startX: event.clientX,
       startY: event.clientY,
       path,
+      source: event.currentTarget,
     };
     const tracking = new AbortController();
     windowTrackingRef.current = tracking;
@@ -178,10 +195,19 @@ export const usePinnedPlaceDragDrop = ({
     window.addEventListener("pointermove", handlePointerMove, { signal });
     window.addEventListener("pointerup", handlePointerUp, { signal });
     window.addEventListener("pointercancel", handlePointerCancel, { signal });
+    window.addEventListener("keydown", (key) => {
+      if (key.key === "Escape" && dragRef.current.dragging) {
+        key.preventDefault();
+        key.stopPropagation();
+        armSuppress();
+        clearDrag();
+      }
+    }, { signal, capture: true });
+    window.addEventListener("blur", clearDrag, { signal });
   };
 
   const handleSuppressClick = (event: ReactMouseEvent) => {
-    if (!suppressClickRef.current) return;
+    if (!suppressClickRef.current || event.detail === 0) return;
     event.preventDefault();
     event.stopPropagation();
     clearSuppress();

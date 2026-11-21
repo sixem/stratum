@@ -14,6 +14,7 @@ import {
 } from "@/lib";
 import { usePromptStore, useTransferStore } from "@/modules";
 import type { DropTarget } from "@/lib";
+import { createTabLocationHover, getTabLocationDropTarget, openDroppedLocation } from "@/lib/tabLocationDrop";
 import {
   planDropTransfer,
   resolveDropTransferConflicts,
@@ -70,6 +71,7 @@ export const useFileDrop = ({
   const currentPathKeyRef = useRef(normalizeDropPath(currentPath));
   const refreshRef = useRef(onRefresh);
   const [dropQueue] = useState(() => new FileDropQueue());
+  const [highlightTabStrip] = useState(createTabLocationHover);
   const promptStore = useMemo(() => usePromptStore.getState(), []);
   const registerTransferJob = useTransferStore((state) => state.registerJob);
   const updateTransferLabel = useTransferStore((state) => state.updateJobLabel);
@@ -109,10 +111,11 @@ export const useFileDrop = ({
   }, [updateTabDropSubmenuTarget]);
 
   const clearDragState = useCallback(() => {
+    highlightTabStrip(null);
     setDragPoint(null);
     setDropTarget(null);
     closeTabDropSubmenu();
-  }, [closeTabDropSubmenu, setDropTarget]);
+  }, [closeTabDropSubmenu, highlightTabStrip, setDropTarget]);
 
   useLayoutEffect(() => {
     currentPathKeyRef.current = normalizeDropPath(currentPath);
@@ -229,18 +232,31 @@ export const useFileDrop = ({
         clearDragState();
         return;
       }
+      const point = getClientPoint(payload.position);
+      const strip = payload.canOpenFolderTab ? getTabLocationDropTarget(point.x, point.y, false) : null;
       if (payload.type === "drop") {
         try {
-          const point = getClientPoint(payload.position);
-          const target = getDropTargetFromPoint(point.x, point.y);
+          const target = strip ? null : getDropTargetFromPoint(point.x, point.y);
           clearDragState();
+          if (strip && payload.paths.length === 1 && payload.stage == null) {
+            openDroppedLocation(strip, payload.paths[0]);
+            return;
+          }
           if (target) await performDrop(payload.paths, target.path, payload.mode, payload.stage ?? undefined);
         } finally {
           if (payload.stage != null) await releaseDropStage(payload.stage).catch((error) => log("release drop stage: %o", error));
         }
         return;
       }
-      const point = getClientPoint(payload.position);
+      const stripChanged = highlightTabStrip(strip);
+      if (strip) {
+        if (stripChanged) {
+          setDragPoint(null);
+          setDropTarget(null);
+          closeTabDropSubmenu();
+        }
+        return;
+      }
       const target = getDropTargetFromPoint(point.x, point.y);
       // Only the optional tab submenu uses coordinates to scroll. Ordinary
       // file drags need a render when the hovered destination changes.
@@ -249,7 +265,7 @@ export const useFileDrop = ({
       }
       setDropTarget(target);
     };
-  }, [clearDragState, enableTabDropSubfolders, performDrop, queueDropError, setDropTarget]);
+  }, [clearDragState, closeTabDropSubmenu, enableTabDropSubfolders, highlightTabStrip, performDrop, queueDropError, setDropTarget]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -265,9 +281,10 @@ export const useFileDrop = ({
     }).catch((error) => log("drop listener failed: %o", error));
     return () => {
       active = false;
+      highlightTabStrip(null);
       unlisten?.();
     };
-  }, [enabled]);
+  }, [enabled, highlightTabStrip]);
 
   return {
     hoveredPane,

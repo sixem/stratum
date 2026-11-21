@@ -29,7 +29,13 @@ mod source {
     use windows::Win32::UI::Shell::SHDoDragDrop;
     use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_SWAPBUTTON};
 
-    thread_local! { static ACTIVE: Cell<bool> = const { Cell::new(false) }; }
+    #[derive(Clone, Copy)]
+    enum ActiveDrag {
+        Entries,
+        Folder,
+    }
+
+    thread_local! { static ACTIVE: Cell<Option<ActiveDrag>> = const { Cell::new(None) }; }
 
     // A cancel can reach the IPC worker before the corresponding start.
     // IDs increase for each gesture and never cancel an active OLE drag.
@@ -44,13 +50,18 @@ mod source {
     }
 
     pub(crate) fn is_stratum_drag_active() -> bool {
-        ACTIVE.get()
+        ACTIVE.get().is_some()
+    }
+
+    pub(crate) fn can_open_folder_tab() -> bool {
+        // The in-process drop target can recognize this source without opening the data object on hover.
+        matches!(ACTIVE.get(), Some(ActiveDrag::Folder))
     }
 
     struct DragGuard;
     impl Drop for DragGuard {
         fn drop(&mut self) {
-            ACTIVE.set(false);
+            ACTIVE.set(None);
             unsafe { OleUninitialize() };
         }
     }
@@ -63,6 +74,7 @@ mod source {
         prepared: PreparedDrag,
         hwnd: Option<HWND>,
         id: Option<u64>,
+        single_folder: bool,
     ) -> Result<DragOutcome, String> {
         if is_stratum_drag_active() || start_was_canceled(id) {
             return Ok(DragOutcome::None);
@@ -80,7 +92,11 @@ mod source {
         if start_was_canceled(id) || unsafe { GetAsyncKeyState(primary.0.into()) } >= 0 {
             return Ok(DragOutcome::None);
         }
-        ACTIVE.set(true);
+        ACTIVE.set(Some(if single_folder {
+            ActiveDrag::Folder
+        } else {
+            ActiveDrag::Entries
+        }));
         // The Shell supplies its standard drop source, cursors and drag image.
         let effect = unsafe { SHDoDragDrop(hwnd, &data, None::<&IDropSource>, DRAG_EFFECTS) }
             .map_err(|err| err.to_string())?;
@@ -102,7 +118,7 @@ mod source {
 
 #[cfg(target_os = "windows")]
 pub(crate) use source::{
-    cancel_drag_start, is_stratum_drag_active, start_drag, start_was_canceled,
+    can_open_folder_tab, cancel_drag_start, is_stratum_drag_active, start_drag, start_was_canceled,
 };
 
 #[cfg(all(target_os = "windows", test))]

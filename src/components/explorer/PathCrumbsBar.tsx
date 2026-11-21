@@ -6,6 +6,7 @@ import type {
 } from "react";
 import { handleMiddleClick, resolvePathCrumbs } from "@/lib";
 import { useHorizontalWheelScroll } from "@/hooks";
+import { useLocationDrag } from "@/hooks/ui/inputs/useLocationDrag";
 import { PressButton } from "@/components/primitives/PressButton";
 import type { PlaceContextTarget } from "@/types";
 
@@ -37,6 +38,7 @@ export const PathCrumbsBar = ({
   );
   const trimmedPath = path.trim();
   const crumbsRef = useRef<HTMLDivElement>(null);
+  const locationDrag = useLocationDrag();
   useHorizontalWheelScroll(crumbsRef, Boolean(trimmedPath));
   if (!trimmedPath) {
     return reserveSpace ? <div className="crumbbar" aria-hidden="true" /> : null;
@@ -58,6 +60,7 @@ export const PathCrumbsBar = ({
       data-is-dir="true"
       data-path={path}
       data-drop-target={isBarDropTarget ? "true" : "false"}
+      {...locationDrag}
     >
       <div className="crumbs" ref={crumbsRef}>
         {crumbs.map((crumb, index) => (
@@ -69,11 +72,13 @@ export const PathCrumbsBar = ({
               data-context-name={crumb.label}
               data-is-dir="true"
               data-path={crumb.path}
+              data-location-path={crumb.path}
               data-drop-target={dropTargetPath === crumb.path ? "true" : "false"}
               data-future={
                 activeIndex >= 0 && index > activeIndex ? "true" : "false"
               }
               onClick={() => onNavigate(crumb.path)}
+              pressOnPointerDown={false}
               onMouseDown={(event) => handleCrumbMouseDown(event, crumb.path)}
               onPointerDown={(event) => {
                 if (event.button !== 2) return;

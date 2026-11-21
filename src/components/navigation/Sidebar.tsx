@@ -3,6 +3,7 @@ import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { Fragment, useRef, useState } from "react";
 import { usePinnedPlaceDragDrop } from "@/hooks";
+import { useLocationDrag } from "@/hooks/ui/inputs/useLocationDrag";
 import { folderPathKey, handleMiddleClick, tabLabel } from "@/lib";
 import type { SidebarSectionId } from "@/modules";
 import {
@@ -92,10 +93,11 @@ const SidebarItem = ({
       data-context-name={title}
       data-is-dir="true"
       data-path={path}
+      data-location-path={canReorder ? undefined : path}
       data-drop-target={isDropTarget ? "true" : "false"}
       data-pinned-drop={pinnedDropPosition ? "true" : "false"}
       data-pinned-drop-position={pinnedDropPosition ?? undefined}
-      pressOnPointerDown={!canReorder}
+      pressOnPointerDown={false}
       onClickCapture={onSuppressClick}
       onClick={() => onSelect(path)}
       onMouseDown={handleMiddle}
@@ -154,6 +156,7 @@ export const Sidebar = ({
   const hiddenSectionIds = normalizeSidebarHiddenSections(hiddenSections);
   const hiddenSectionSet = new Set(hiddenSectionIds);
   const [hint, setHint] = useState(() => getSessionHint());
+  const locationDrag = useLocationDrag();
   const { draggingPath, dropTarget, handlePointerDown, handleSuppressClick } =
     usePinnedPlaceDragDrop({
       onReorder: (fromPath, toPath, position) => {
@@ -266,7 +269,7 @@ export const Sidebar = ({
   }, []);
 
   return (
-    <aside id="app-sidebar" className="sidebar">
+    <aside id="app-sidebar" className="sidebar" {...locationDrag}>
       <ScrollArea
         className="sidebar-scroll"
         viewportClassName="sidebar-viewport"

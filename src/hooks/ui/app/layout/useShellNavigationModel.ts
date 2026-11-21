@@ -3,6 +3,7 @@
 // topstack and sidebar props into the shape App.tsx renders.
 import { useCallback } from "react";
 import { APP_NAME } from "@/constants";
+import { setBottomPaneActive } from "@/modules/bottomPaneStore";
 import type { Place } from "@/types";
 import type { useFileDrop, useFileManager } from "@/hooks/domain/filesystem";
 import type { useSettings, useTabSession } from "@/hooks/domain/session";
@@ -89,6 +90,11 @@ export const useShellNavigationModel = ({
       onSelect: navigationController.handleSelectTab,
       onClose: navigationController.handleCloseTab,
       onNew: navigationController.handleNewTab,
+      onOpenLocation: (path) => {
+        setBottomPaneActive(false);
+        viewState.mainRef.current?.focus({ preventScroll: true });
+        navigationController.handleOpenInNewTab(path);
+      },
       onReorder: tabSession.reorderTabs,
       onSubmenuHoverTargetChange: fileDrop.setDropTarget,
       onSubmenuCloseRequest: fileDrop.clearDragState,

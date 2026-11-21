@@ -107,7 +107,7 @@ type FileViewProps = {
   onEntryPreviewPress?: (path: string) => boolean;
   onEntryPreviewRelease?: (path: string) => boolean;
   dropTargetPath?: string | null;
-  onStartDragOut?: (paths: string[]) => void;
+  onStartDragOut?: (paths: string[], folderPath?: string) => void;
 };
 
 export const FileView = ({

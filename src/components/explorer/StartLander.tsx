@@ -1,5 +1,6 @@
 // Landing content shown when no folder is selected in the active tab.
 import { buildDriveTooltip, formatBytes, handleMiddleClick, normalizePath } from "@/lib";
+import { useLocationDrag } from "@/hooks/ui/inputs/useLocationDrag";
 import type { DriveInfo, Place } from "@/types";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PinIcon } from "@/components/icons";
@@ -120,8 +121,9 @@ export const StartLander = ({
   const visiblePlaces = places;
   const driveInfoMap = buildDriveInfoMap(driveInfo);
   const storageSummary = summarizeStorage(drives, driveInfoMap);
+  const locationDrag = useLocationDrag();
   return (
-    <div className="view-lander">
+    <div className="view-lander" {...locationDrag}>
       <div className="lander-panel">
         <EmptyState
           title="Start browsing"
@@ -163,6 +165,8 @@ export const StartLander = ({
                       <PressButton
                         type="button"
                         className="lander-drive"
+                        data-location-path={drive}
+                        pressOnPointerDown={false}
                         onClick={() => onOpenDrive(drive)}
                         onMouseDown={(event) => {
                           if (!onOpenDriveNewTab) return;
@@ -218,6 +222,8 @@ export const StartLander = ({
                       key={path}
                       type="button"
                       className="place lander-place"
+                      data-location-path={path}
+                      pressOnPointerDown={false}
                       onClick={() => onOpenRecent(path)}
                       onMouseDown={(event) => {
                         if (!onOpenRecentNewTab) return;
@@ -253,6 +259,8 @@ export const StartLander = ({
                     key={place.path}
                     type="button"
                     className="place lander-place"
+                    data-location-path={place.path}
+                    pressOnPointerDown={false}
                     data-pinned={place.pinned ? "true" : "false"}
                     onClick={() => onOpenPlace(place.path)}
                     onMouseDown={(event) => {

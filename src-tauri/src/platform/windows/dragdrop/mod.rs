@@ -24,7 +24,7 @@ pub use leases::IncomingDrops;
 pub use registration::{register_drop_target, unregister_drop_target};
 pub(crate) use staging::DropStage;
 
-use crate::platform::drag::is_stratum_drag_active;
+use crate::platform::drag::{can_open_folder_tab, is_stratum_drag_active};
 use data::{
     extract_hdrop_paths, materialize_virtual_paths, supports_hdrop, supports_virtual_drop,
     DropDataError,
@@ -61,13 +61,19 @@ struct DragPosition {
 }
 
 #[derive(Serialize, Clone)]
-#[serde(tag = "type", rename_all = "lowercase")]
+#[serde(
+    tag = "type",
+    rename_all = "lowercase",
+    rename_all_fields = "camelCase"
+)]
 enum FileDrag {
     Enter {
         position: DragPosition,
+        can_open_folder_tab: bool,
     },
     Over {
         position: DragPosition,
+        can_open_folder_tab: bool,
     },
     Leave,
     Drop {
@@ -75,6 +81,7 @@ enum FileDrag {
         position: DragPosition,
         mode: DropAction,
         stage: Option<u64>,
+        can_open_folder_tab: bool,
     },
     Error {
         message: &'static str,
@@ -149,7 +156,10 @@ impl IDropTarget_Impl for DropTarget_Impl {
         // to extract an archive or wait on a network share.
         if self.supported.get() {
             if let Some(position) = self.position(pt) {
-                self.emit(FileDrag::Enter { position });
+                self.emit(FileDrag::Enter {
+                    position,
+                    can_open_folder_tab: can_open_folder_tab(),
+                });
             }
         }
         Ok(())
@@ -168,7 +178,10 @@ impl IDropTarget_Impl for DropTarget_Impl {
         }
         if self.supported.get() {
             if let Some(position) = self.position(pt) {
-                self.emit(FileDrag::Over { position });
+                self.emit(FileDrag::Over {
+                    position,
+                    can_open_folder_tab: can_open_folder_tab(),
+                });
             }
         }
         Ok(())
@@ -248,6 +261,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
                 position,
                 mode,
                 stage,
+                can_open_folder_tab: can_open_folder_tab(),
             }) {
                 *effect = mode.completion_effect();
             } else if let Some(id) = stage {

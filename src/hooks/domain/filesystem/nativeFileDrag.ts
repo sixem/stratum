@@ -2,11 +2,13 @@
 // to the drop event so releasing a modifier after the mouse has no effect.
 import type { TransferMode } from "@/types";
 
+type PositionedDrag = { position: { x: number; y: number }; canOpenFolderTab?: boolean };
+
 export type NativeFileDrag =
-  | { type: "enter" | "over"; position: { x: number; y: number } }
+  | (PositionedDrag & { type: "enter" | "over" })
   | { type: "leave" }
   | { type: "error"; message: string }
-  | { type: "drop"; position: { x: number; y: number }; paths: string[]; mode: TransferMode; stage: number | null };
+  | (PositionedDrag & { type: "drop"; paths: string[]; mode: TransferMode; stage: number | null });
 
 // Prompts and transfers run in release order. A rejection leaves the queue usable.
 export class FileDropQueue {

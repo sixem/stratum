@@ -7,6 +7,7 @@ type Drag = {
   pointerId: number;
   element: HTMLDivElement;
   startX: number;
+  startY: number;
   startScrollLeft: number;
   moved: boolean;
 };
@@ -34,6 +35,7 @@ export const useDrivePickerDragScroll = (enabled: boolean) => {
       pointerId: event.pointerId,
       element: event.currentTarget,
       startX: event.clientX,
+      startY: event.clientY,
       startScrollLeft: event.currentTarget.scrollLeft,
       moved: false,
     };
@@ -55,6 +57,8 @@ export const useDrivePickerDragScroll = (enabled: boolean) => {
     }
     const delta = event.clientX - drag.startX;
     if (!drag.moved) {
+      const dy = Math.abs(event.clientY - drag.startY);
+      if (dy >= DRAG_THRESHOLD_PX && dy > Math.abs(delta)) return finish(event);
       if (Math.abs(delta) < DRAG_THRESHOLD_PX) return;
       drag.moved = true;
       suppressClickRef.current = true;

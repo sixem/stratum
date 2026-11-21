@@ -131,6 +131,10 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     tabs.browseTo(next);
   };
   const openNew = tabs.openInNewTab;
+  const openDroppedTab = useCallback((location: string) => {
+    focusFiles();
+    openNew(location);
+  }, [focusFiles, openNew]);
   const dragOut = useDragOutHandler({
     beginFileActivity: actions.beginFileActivity, viewParentPath: dir.parentPath, onRefresh: dir.refreshAfterChange,
   });
@@ -246,6 +250,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     </nav>
     <TabsBar tabs={tabs.tabs} activeId={tabs.activeTabId} showTabNumbers={tabNumbers} fixedWidthTabs={fixedWidth}
       onSelect={tabs.selectTab} onClose={closeTab} onNew={tabs.newTab} onReorder={tabs.reorderTabs}
+      onOpenLocation={openDroppedTab}
       onTabContextMenu={paneActions.handlePlaceTargetContextMenu}
       onTabContextMenuDown={paneActions.handlePlaceTargetContextMenuDown}
       dropTargetId={drop.dropTargetTabId} dropTargetPath={drop.dropTargetPath} tabDropSubmenu={drop.tabDropSubmenu}

@@ -76,6 +76,7 @@ pub async fn start_drag(
     window: tauri::Window,
     paths: Vec<String>,
     id: Option<u64>,
+    can_open_folder_tab: Option<bool>,
 ) -> Result<drag::DragOutcome, String> {
     #[cfg(target_os = "windows")]
     {
@@ -84,6 +85,7 @@ pub async fn start_drag(
         }
         // Shell path resolution may wait on a drive or a network share. The
         // modal OLE gesture itself belongs to the window's STA.
+        let single_folder = can_open_folder_tab == Some(true) && paths.len() == 1;
         let prepared = tauri::async_runtime::spawn_blocking(move || drag::prepare_drag(paths))
             .await
             .map_err(|err| err.to_string())?;
@@ -95,7 +97,12 @@ pub async fn start_drag(
         let source = window.clone();
         window
             .run_on_main_thread(move || {
-                let _ = tx.try_send(drag::start_drag(prepared, source.hwnd().ok(), id));
+                let _ = tx.try_send(drag::start_drag(
+                    prepared,
+                    source.hwnd().ok(),
+                    id,
+                    single_folder,
+                ));
             })
             .map_err(|err| err.to_string())?;
         rx.recv()
@@ -105,7 +112,7 @@ pub async fn start_drag(
 
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = (paths, window, id);
+        let _ = (paths, window, id, can_open_folder_tab);
         Err("Drag is only supported on Windows".into())
     }
 }

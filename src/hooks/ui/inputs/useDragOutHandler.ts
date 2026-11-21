@@ -23,7 +23,7 @@ export const useDragOutHandler = ({
   useEffect(() => () => active.current?.(), []);
 
   return useCallback(
-    async (paths: string[]) => {
+    async (paths: string[], folderPath?: string) => {
       if (active.current) return;
       const unique = Array.from(new Set(paths.filter((path) => path && path !== viewParentPath)));
       if (unique.length === 0) return;
@@ -54,7 +54,7 @@ export const useDragOutHandler = ({
       }
       let outcome;
       try {
-        outcome = await startDrag(unique, id);
+        outcome = await startDrag(unique, id, unique.length === 1 && unique[0] === folderPath);
       } catch (error) {
         const message = toMessage(error, "Failed to start drag.");
         log("drag-out: failed %s", message);

@@ -14,7 +14,7 @@ type UseGridSelectionOptions = {
   rowGap: number;
   onSetSelection: (paths: string[], anchor?: string) => void;
   onClearSelection: () => void;
-  onStartDragOut?: (paths: string[]) => void;
+  onStartDragOut?: (paths: string[], folderPath?: string) => void;
   loading: boolean;
 };
 
