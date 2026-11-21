@@ -66,7 +66,11 @@ export const IndexedSearchSelectionDetail = ({
   const selectedDriveSummary = selectedDrive
     ? formatIndexedDriveSummary(selectedDrive)
     : null;
-  const selectedDriveWarning = selectedDrive && isIndexedDriveAttentionState(selectedDrive.state)
+  const selectedDriveNote = selectedDrive && (
+    isIndexedDriveAttentionState(selectedDrive.state) ||
+    selectedDrive.state === "saved" ||
+    selectedDrive.state === "scanning"
+  )
     ? selectedDrive.message?.trim()
     : null;
 
@@ -152,9 +156,9 @@ export const IndexedSearchSelectionDetail = ({
             </div>
           ) : null}
 
-          {selectedDriveWarning ? (
+          {selectedDriveNote ? (
             <div className="indexed-search-section-note">
-              {selectedDriveWarning}
+              {selectedDriveNote}
             </div>
           ) : null}
 

@@ -154,12 +154,23 @@ impl IndexedSearchState {
         self.mark_verified_mount(mount, next_state, warning)
     }
 
-    pub(super) fn mark_saved_volume_verified(&mut self, mount: &VolumeMount) -> bool {
-        self.mark_verified_mount(
-            mount,
-            IndexedDriveState::Saved,
-            Some("Using the saved index. Stratum updates open folders and file operations. Refresh the index to scan the whole drive.".to_owned()),
-        )
+    pub(super) fn mark_saved_volume_verified(
+        &mut self,
+        mount: &VolumeMount,
+        message: Option<String>,
+    ) -> bool {
+        self.mark_verified_mount(mount, IndexedDriveState::Saved, message)
+    }
+
+    pub(super) fn tracks_changes(&self, key: &str) -> bool {
+        self.volumes.verified.contains(key)
+            && self.drive_statuses[key].state == IndexedDriveState::Ready
+            && self
+                .volumes
+                .mounted
+                .get(key)
+                .and_then(|mount| self.volumes.matching_snapshot(mount))
+                .is_some_and(|snapshot| snapshot.journal_checkpoint.is_some())
     }
 
     fn mark_verified_mount(

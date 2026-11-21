@@ -4,14 +4,17 @@ use std::path::Path;
 
 use super::{
     catalog::{IndexedCatalogStore, IndexedCatalogWriter},
-    journal_batch::{JournalBatch, JournalChangeKind},
     scan,
     volume_tracking::VolumeMount,
     work_queue::{coalesce_paths, normalize_path},
 };
 
+#[cfg(test)]
+use super::journal_batch::{JournalBatch, JournalChangeKind};
+
 // Avoid creating new journal noise just to checkpoint small batches containing
 // only content writes or excluded catalog files.
+#[cfg(test)]
 const JOURNAL_CHECKPOINT_GRANULARITY: i64 = 64 * 1024;
 
 pub(super) enum ReconcileOutcome {
@@ -20,6 +23,7 @@ pub(super) enum ReconcileOutcome {
     NeedsRebuild,
     Committed {
         changed_paths: bool,
+        #[cfg(test)]
         pending_renames: bool,
     },
 }
@@ -39,6 +43,7 @@ pub(super) fn reconcile_paths(
     })
 }
 
+#[cfg(test)]
 pub(super) fn reconcile_journal_batch(
     catalog: &IndexedCatalogStore,
     mount: &VolumeMount,
@@ -86,7 +91,7 @@ fn apply_paths(
     mount: &VolumeMount,
     paths: Vec<String>,
     journal_writer: Option<IndexedCatalogWriter>,
-    pending_renames: bool,
+    _pending_renames: bool,
     should_cancel: &impl Fn() -> bool,
     verify_mount: impl Fn() -> Result<(), String>,
 ) -> Result<ReconcileOutcome, String> {
@@ -151,6 +156,7 @@ fn apply_paths(
     writer.finish()?;
     Ok(ReconcileOutcome::Committed {
         changed_paths: !paths.is_empty(),
-        pending_renames,
+        #[cfg(test)]
+        pending_renames: _pending_renames,
     })
 }

@@ -15,7 +15,7 @@ use crate::domain::indexed_search::{IndexedDriveState, IndexedSearchServiceState
 
 use super::{
     catalog::DriveCatalogSnapshot,
-    journal_tracking::{capture_checkpoint, AMBIGUOUS_PATH_MESSAGE, JOURNAL_PAUSED},
+    journal_tracking::{capture_checkpoint, AMBIGUOUS_PATH_MESSAGE},
     scan,
     service::IndexedSearchHandle,
     state,
@@ -97,6 +97,13 @@ impl IndexedSearchHandle {
                 continue;
             }
 
+            if status.tracks_changes(&key) {
+                // Replay this operation promptly through the same writer that
+                // handles external changes and advances the saved cursor.
+                queue.queue_journal_continuation(drive);
+                continue;
+            }
+
             if queue.queue_path(drive.clone(), path) && queue.active_drive.as_ref() != Some(&drive)
             {
                 status.transition_drive_state(&drive, IndexedDriveState::Queued, None);
@@ -117,11 +124,12 @@ impl IndexedSearchHandle {
         }
         let state = self.inner.state.lock().expect("indexed search state lock");
         for (drive, path) in paths.iter().filter_map(|path| normalize_path(path)) {
+            let key = state::normalize_drive_key(&drive);
+            if state.tracks_changes(&key) {
+                continue;
+            }
             if state.service_status.state == IndexedSearchServiceState::Starting
-                || state
-                    .volumes
-                    .verified
-                    .contains(&state::normalize_drive_key(&drive))
+                || state.volumes.verified.contains(&key)
             {
                 queue.queue_watched_path(&drive, path);
             }
@@ -226,20 +234,28 @@ impl IndexedSearchHandle {
                     | Work::BackfillSearch => {}
                     Work::Rebuild(drive) => {
                         let mut state = self.inner.state.lock().expect("indexed search state lock");
-                        let has_snapshot = state
+                        let existing_index = state
                             .volumes
                             .active_mount(drive)
-                            .is_some_and(|mount| state.volumes.matching_snapshot(&mount).is_some());
-                        let action = if has_snapshot {
+                            .and_then(|mount| state.volumes.matching_snapshot(&mount));
+                        let action = if existing_index.is_some() {
                             "Rebuilding"
                         } else {
                             "Building"
                         };
+                        let message = existing_index.map(|snapshot| {
+                            if snapshot.journal_checkpoint.is_none() {
+                                "Establishing change tracking. Saved results stay available."
+                            } else {
+                                "Refreshing the index. Saved results stay available."
+                            }
+                            .to_string()
+                        });
                         state.update_service_status(
                             IndexedSearchServiceState::Scanning,
                             Some(format!("{action} index for {drive}")),
                         );
-                        state.transition_drive_state(drive, IndexedDriveState::Scanning, None);
+                        state.transition_drive_state(drive, IndexedDriveState::Scanning, message);
                     }
                     Work::Reconcile(_) => self.set_service_state(
                         IndexedSearchServiceState::Scanning,
@@ -374,16 +390,13 @@ impl IndexedSearchHandle {
                 .active_drive = None;
             return;
         };
-        let checkpoint = (!JOURNAL_PAUSED).then(|| capture_checkpoint(&mount));
+        let checkpoint = capture_checkpoint(&mount);
         let started = state::now_epoch_ms();
         let capture = scan::DriveScanCapture {
             drive_path: &mount.drive_path,
             volume_guid: &mount.guid,
             volume_id: &mount.identity,
-            checkpoint: checkpoint
-                .as_ref()
-                .and_then(|probe| probe.as_ref().ok())
-                .copied(),
+            checkpoint: checkpoint.as_ref().ok().copied(),
             excluded_directory: catalog.directory(),
         };
         let scanned = scan::scan_drive_into_catalog(
@@ -406,10 +419,10 @@ impl IndexedSearchHandle {
                 DriveCatalogSnapshot {
                     drive_path: drive.clone(),
                     entry_count: Some(summary.entries_indexed),
-                    last_scan_source: Some(summary.source.label().to_string()),
+                    last_scan_source: Some(scan::FILESYSTEM_SCAN_SOURCE.to_string()),
                     last_scan_completed_at: Some(state::now_epoch_ms().max(started)),
                     volume_id: Some(mount.identity.clone()),
-                    journal_checkpoint: capture.checkpoint,
+                    journal_checkpoint: summary.checkpoint,
                     pending_renames: false,
                 },
             );
@@ -432,29 +445,20 @@ impl IndexedSearchHandle {
                 status.set_drive_summary(
                     &drive,
                     Some(summary.entries_indexed as u64),
-                    Some(summary.source.label().to_string()),
+                    Some(scan::FILESYSTEM_SCAN_SOURCE.to_string()),
                 );
-                if JOURNAL_PAUSED {
-                    status.mark_saved_volume_verified(&mount);
-                } else if capture.checkpoint.is_some() {
-                    if status.volumes.verified.contains(&mount.key()) {
-                        status.mark_volume_verified(&mount, None);
-                    } else {
-                        status.transition_drive_state(
-                            &drive,
-                            IndexedDriveState::Stale,
-                            Some("Checking changes that occurred during the scan.".to_string()),
-                        );
-                    }
+                if summary.checkpoint.is_some() {
+                    status.mark_saved_volume_verified(
+                        &mount,
+                        Some("Checking changes made during the scan.".to_string()),
+                    );
                     queue.queue_volume_check();
                 } else {
-                    let warning = checkpoint.and_then(Result::err).map(|error| {
-                        format!(
-                            "Change journal unavailable. Showing the last complete index. {error}"
-                        )
+                    let warning = checkpoint.err().map(|error| {
+                        format!("Live updates unavailable. Showing saved results. {error}")
                     });
                     status.volumes.journal_rebuilds.remove(&mount.key());
-                    status.mark_volume_verified(&mount, warning);
+                    status.mark_saved_volume_verified(&mount, warning);
                 }
             }
             Err(error) => status.transition_drive_state(

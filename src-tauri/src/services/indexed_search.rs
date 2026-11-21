@@ -5,6 +5,7 @@
 // and query-cache-backed reads.
 #[path = "indexed_search/catalog.rs"]
 mod catalog;
+#[cfg(test)]
 #[path = "indexed_search/journal_batch.rs"]
 mod journal_batch;
 #[path = "indexed_search/journal_tracking.rs"]
@@ -24,6 +25,9 @@ mod scan;
 mod service;
 #[path = "indexed_search/state.rs"]
 mod state;
+#[cfg(windows)]
+#[path = "indexed_search/user_journal_reconcile.rs"]
+mod user_journal_reconcile;
 #[path = "indexed_search/volume_tracking.rs"]
 mod volume_tracking;
 #[cfg(windows)]
@@ -38,9 +42,12 @@ mod windows_backlog_stress;
 #[cfg(target_os = "windows")]
 #[path = "indexed_search/windows_journal.rs"]
 mod windows_journal;
-#[cfg(target_os = "windows")]
-#[path = "indexed_search/windows_ntfs.rs"]
-mod windows_ntfs;
+#[cfg(windows)]
+#[path = "indexed_search/windows_user_journal.rs"]
+mod windows_user_journal;
+#[cfg(all(test, windows))]
+#[path = "indexed_search/windows_user_journal_integration.rs"]
+mod windows_user_journal_integration;
 #[path = "indexed_search/work_queue.rs"]
 mod work_queue;
 #[path = "indexed_search/workers.rs"]

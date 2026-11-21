@@ -1,43 +1,52 @@
-// Read-only access to an NTFS change journal and resolution of changed paths
-// on the same volume. The caller owns catalog updates and its durable cursor.
-use std::{
-    collections::{btree_map::Entry, BTreeMap, HashMap},
-    io, mem,
-};
+// Shared journal query and handle helpers. The named raw-volume reader is
+// retained for the opt-in tests that exercise a disposable NTFS volume.
+#[cfg(test)]
+use std::collections::{btree_map::Entry, BTreeMap, HashMap};
+use std::{io, mem};
+
 use windows_sys::Win32::{
-    Foundation::{
-        CloseHandle, ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER,
-        ERROR_JOURNAL_DELETE_IN_PROGRESS, ERROR_JOURNAL_ENTRY_DELETED, ERROR_JOURNAL_NOT_ACTIVE,
-        ERROR_MORE_DATA, ERROR_PRIVILEGE_NOT_HELD, HANDLE, INVALID_HANDLE_VALUE,
-    },
+    Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
     Storage::FileSystem::{
-        CreateFileW, FileIdType, GetFileInformationByHandle, GetFinalPathNameByHandleW,
-        OpenFileById, BY_HANDLE_FILE_INFORMATION, FILE_ACCESS_RIGHTS, FILE_ATTRIBUTE_DIRECTORY,
-        FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAGS_AND_ATTRIBUTES, FILE_FLAG_BACKUP_SEMANTICS,
-        FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_DESCRIPTOR, FILE_ID_DESCRIPTOR_0,
-        FILE_NAME_NORMALIZED, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
-        FILE_SHARE_WRITE, OPEN_EXISTING, VOLUME_NAME_NONE,
+        CreateFileW, FILE_ACCESS_RIGHTS, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_DELETE,
+        FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
     },
     System::{
-        Ioctl::{
-            FSCTL_QUERY_USN_JOURNAL, FSCTL_READ_USN_JOURNAL, READ_USN_JOURNAL_DATA_V1,
-            USN_JOURNAL_DATA_V1,
-        },
+        Ioctl::{FSCTL_QUERY_USN_JOURNAL, USN_JOURNAL_DATA_V1},
         IO::DeviceIoControl,
     },
 };
+#[cfg(test)]
+use windows_sys::Win32::{
+    Foundation::{
+        ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER, ERROR_JOURNAL_DELETE_IN_PROGRESS,
+        ERROR_JOURNAL_ENTRY_DELETED, ERROR_JOURNAL_NOT_ACTIVE, ERROR_MORE_DATA,
+        ERROR_PRIVILEGE_NOT_HELD,
+    },
+    Storage::FileSystem::{
+        FileIdType, GetFileInformationByHandle, GetFinalPathNameByHandleW, OpenFileById,
+        BY_HANDLE_FILE_INFORMATION, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_DESCRIPTOR,
+        FILE_ID_DESCRIPTOR_0, FILE_NAME_NORMALIZED, FILE_READ_ATTRIBUTES, VOLUME_NAME_NONE,
+    },
+    System::Ioctl::{FSCTL_READ_USN_JOURNAL, READ_USN_JOURNAL_DATA_V1},
+};
 
+#[cfg(test)]
 use super::{
     catalog::JournalCheckpoint,
     journal_batch::{JournalBatch, JournalPathChange},
 };
 
+#[cfg(test)]
 #[path = "windows_journal_records.rs"]
 mod records;
 
 const OPEN_SHARE: u32 = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+#[cfg(test)]
 const READ_BUFFER_SIZE: usize = 64 * 1024;
+#[cfg(test)]
 const MAX_READ_BATCHES: usize = 16;
+#[cfg(test)]
 const MAX_PATH_LENGTH: usize = 32_767;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -47,6 +56,7 @@ pub(super) struct JournalSnapshot {
     pub(super) next_usn: i64,
 }
 
+#[cfg(test)]
 #[derive(Debug)]
 pub(super) enum JournalChanges {
     Batch(JournalBatch),
@@ -54,15 +64,13 @@ pub(super) enum JournalChanges {
     Cancelled,
 }
 
+#[cfg(test)]
 pub(super) fn snapshot(volume_guid: &str) -> Result<JournalSnapshot, String> {
     let volume = open_volume(volume_guid).map_err(describe_journal_error)?;
-    snapshot_for_open_volume(&volume)
-}
-
-pub(super) fn snapshot_for_open_volume(volume: &OwnedHandle) -> Result<JournalSnapshot, String> {
     query_journal(volume.raw()).map_err(describe_journal_error)
 }
 
+#[cfg(test)]
 pub(super) fn read_changes(
     drive_root: &str,
     volume_guid: &str,
@@ -119,10 +127,11 @@ pub(super) fn read_changes(
 }
 
 impl JournalSnapshot {
-    fn can_resume(self, journal_id: u64, next_usn: i64) -> bool {
+    pub(super) fn can_resume(self, journal_id: u64, next_usn: i64) -> bool {
         journal_id == self.journal_id && (self.first_usn..=self.next_usn).contains(&next_usn)
     }
 
+    #[cfg(test)]
     fn batch(self, previous: JournalCheckpoint, cursor: i64) -> JournalBatch {
         JournalBatch {
             previous,
@@ -136,18 +145,8 @@ impl JournalSnapshot {
     }
 }
 
-#[cfg(not(test))]
-pub(super) fn open_volume(_volume_guid: &str) -> io::Result<OwnedHandle> {
-    // Volume-wide enumeration can bypass directory ACLs. Keep raw reads out
-    // of desktop indexing until a separate reader can enforce the user scope.
-    Err(io::Error::new(
-        io::ErrorKind::Unsupported,
-        "Volume-wide indexing is paused.",
-    ))
-}
-
 #[cfg(test)]
-pub(super) fn open_volume(volume_guid: &str) -> io::Result<OwnedHandle> {
+fn open_volume(volume_guid: &str) -> io::Result<OwnedHandle> {
     use windows_sys::Win32::Foundation::GENERIC_READ;
     // A trailing slash opens the volume's root directory, not the volume.
     // Open by GUID so a drive-letter reassignment can't redirect journal reads.
@@ -162,7 +161,7 @@ pub(super) fn open_volume(volume_guid: &str) -> io::Result<OwnedHandle> {
     OwnedHandle::open(device_path, GENERIC_READ, 0)
 }
 
-fn query_journal(volume: HANDLE) -> io::Result<JournalSnapshot> {
+pub(super) fn query_journal(volume: HANDLE) -> io::Result<JournalSnapshot> {
     let mut data: USN_JOURNAL_DATA_V1 = unsafe { mem::zeroed() };
     let mut bytes_returned = 0;
     let succeeded = unsafe {
@@ -187,8 +186,7 @@ fn query_journal(volume: HANDLE) -> io::Result<JournalSnapshot> {
     if (bytes_returned as usize) < version_bytes
         || first_usn < 0
         || data.NextUsn < first_usn
-        || !(data.MinSupportedMajorVersion..=data.MaxSupportedMajorVersion)
-            .contains(&records::RECORD_MAJOR_VERSION)
+        || !(data.MinSupportedMajorVersion..=data.MaxSupportedMajorVersion).contains(&2)
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -203,6 +201,7 @@ fn query_journal(volume: HANDLE) -> io::Result<JournalSnapshot> {
     })
 }
 
+#[cfg(test)]
 fn read_batch<'a>(
     volume: HANDLE,
     journal_id: u64,
@@ -249,6 +248,7 @@ fn read_batch<'a>(
     })
 }
 
+#[cfg(test)]
 fn resolve_changes(
     volume: HANDLE,
     drive_root: &str,
@@ -295,6 +295,7 @@ fn resolve_changes(
     }
 }
 
+#[cfg(test)]
 fn insert_projected_path<'a>(paths: &mut BTreeMap<String, &'a str>, path: &'a str) -> bool {
     match paths.entry(path.to_ascii_lowercase()) {
         // Windows can resolve both spellings to the same file while the
@@ -308,6 +309,7 @@ fn insert_projected_path<'a>(paths: &mut BTreeMap<String, &'a str>, path: &'a st
     }
 }
 
+#[cfg(test)]
 fn resolve_parent(volume: HANDLE, file_id: u64) -> Option<String> {
     let id = FILE_ID_DESCRIPTOR {
         dwSize: mem::size_of::<FILE_ID_DESCRIPTOR>() as u32,
@@ -361,10 +363,12 @@ fn resolve_parent(volume: HANDLE, file_id: u64) -> Option<String> {
     String::from_utf16(&output[..len]).ok()
 }
 
+#[cfg(test)]
 fn win32_code(error: &io::Error) -> u32 {
     error.raw_os_error().unwrap_or(0) as u32
 }
 
+#[cfg(test)]
 fn journal_history_changed(error: &io::Error) -> bool {
     matches!(
         win32_code(error),
@@ -375,7 +379,8 @@ fn journal_history_changed(error: &io::Error) -> bool {
     )
 }
 
-pub(super) fn describe_journal_error(error: io::Error) -> String {
+#[cfg(test)]
+fn describe_journal_error(error: io::Error) -> String {
     match win32_code(&error) {
         ERROR_ACCESS_DENIED | ERROR_PRIVILEGE_NOT_HELD => {
             "Reading the NTFS change journal requires administrator access.".to_string()
@@ -410,7 +415,7 @@ impl OwnedHandle {
         Self::from_raw(raw)
     }
 
-    fn from_raw(raw: HANDLE) -> io::Result<Self> {
+    pub(super) fn from_raw(raw: HANDLE) -> io::Result<Self> {
         if raw == INVALID_HANDLE_VALUE || raw == 0 {
             return Err(io::Error::last_os_error());
         }

@@ -59,7 +59,7 @@ pub struct IndexedDriveStatus {
     pub message: Option<String>,
 }
 
-#[derive(Clone, Copy, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum IndexedEntryKind {
     File,

@@ -15,7 +15,7 @@ use super::{
     },
     scan::{
         can_descend_into, ensure_scan_not_cancelled, excluded_path, DriveScanCapture,
-        DriveScanSource, DriveScanSummary,
+        DriveScanSummary, FILESYSTEM_SCAN_SOURCE,
     },
     watched_paths::{has_exact_name, pin_directory},
 };
@@ -32,8 +32,13 @@ pub(super) fn scan(
 ) -> Result<Option<DriveScanSummary>, String> {
     ensure_scan_not_cancelled(should_cancel)?;
     validate_mount()?;
-    let Some(mut build) =
-        RecursiveBuild::open(catalog, capture.drive_path, capture.volume_id, started_at)?
+    let Some(mut build) = RecursiveBuild::open(
+        catalog,
+        capture.drive_path,
+        capture.volume_id,
+        started_at,
+        capture.checkpoint,
+    )?
     else {
         // A complete snapshot must stay readable until its atomic refresh
         // publishes; never expose chunks written for its replacement.
@@ -59,8 +64,7 @@ pub(super) fn scan(
             validate_mount,
         )?;
     }
-    let source = DriveScanSource::RecursiveFallback;
-    build.publish(source.label(), || {
+    build.publish(FILESYSTEM_SCAN_SOURCE, || {
         ensure_scan_not_cancelled(should_cancel)?;
         validate_mount()
     })?;
@@ -70,7 +74,7 @@ pub(super) fn scan(
     );
     Ok(Some(DriveScanSummary {
         entries_indexed: build.entries,
-        source,
+        checkpoint: build.checkpoint,
     }))
 }
 
@@ -165,7 +169,7 @@ fn scan_directory(
     Ok(())
 }
 
-fn open_frontier(volume: &Path, relative: &str) -> Option<(PathBuf, Vec<File>, usize)> {
+pub(super) fn open_frontier(volume: &Path, relative: &str) -> Option<(PathBuf, Vec<File>, usize)> {
     let mut path = volume.to_path_buf();
     let mut pinned = Vec::new();
     if !relative.is_empty() {

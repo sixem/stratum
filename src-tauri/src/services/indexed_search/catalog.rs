@@ -9,6 +9,7 @@ mod query;
 mod ranking;
 #[path = "catalog/recursive_build.rs"]
 pub(super) mod recursive_build;
+#[cfg(test)]
 #[path = "catalog/renames.rs"]
 mod renames;
 #[path = "catalog/schema.rs"]

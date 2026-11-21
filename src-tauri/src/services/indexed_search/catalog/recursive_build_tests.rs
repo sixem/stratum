@@ -62,7 +62,11 @@ fn find(catalog: &IndexedCatalogStore, name: &str, volume: &str) -> Vec<String> 
 fn interrupted_first_scan_keeps_finished_directories_and_hides_all_staged_rows() {
     let fixture = Fixture::new();
     let catalog = fixture.catalog();
-    let mut scan = RecursiveBuild::open(&catalog, DRIVE, VOLUME, 1)
+    let first_checkpoint = JournalCheckpoint {
+        journal_id: 42,
+        next_usn: 256,
+    };
+    let mut scan = RecursiveBuild::open(&catalog, DRIVE, VOLUME, 1, Some(first_checkpoint))
         .unwrap()
         .unwrap();
     scan.clear_interrupted_directory(&|| false).unwrap();
@@ -93,7 +97,11 @@ fn interrupted_first_scan_keeps_finished_directories_and_hides_all_staged_rows()
     drop(catalog);
 
     let catalog = fixture.catalog();
-    let mut scan = RecursiveBuild::open(&catalog, DRIVE, VOLUME, 2)
+    let later_checkpoint = JournalCheckpoint {
+        next_usn: 512,
+        ..first_checkpoint
+    };
+    let mut scan = RecursiveBuild::open(&catalog, DRIVE, VOLUME, 2, Some(later_checkpoint))
         .unwrap()
         .unwrap();
     assert_eq!(scan.entries, 2);
@@ -118,13 +126,14 @@ fn interrupted_first_scan_keeps_finished_directories_and_hides_all_staged_rows()
     let snapshots = catalog.load_ready_drive_snapshots().unwrap();
     assert_eq!(snapshots.len(), 1);
     assert_eq!(snapshots[0].entry_count, Some(3));
+    assert_eq!(snapshots[0].journal_checkpoint, Some(first_checkpoint));
     assert_eq!(find(&catalog, "done", VOLUME), [r"C:\done.txt"]);
     assert_eq!(
         find(&catalog, "current", VOLUME),
         [r"C:\pending\current.txt"]
     );
     assert!(find(&catalog, "obsolete", VOLUME).is_empty());
-    assert!(RecursiveBuild::open(&catalog, DRIVE, VOLUME, 3)
+    assert!(RecursiveBuild::open(&catalog, DRIVE, VOLUME, 3, None)
         .unwrap()
         .is_none());
 }
@@ -133,7 +142,7 @@ fn interrupted_first_scan_keeps_finished_directories_and_hides_all_staged_rows()
 fn a_replacement_volume_discards_partial_rows_and_invalidates_the_old_attempt() {
     let fixture = Fixture::new();
     let catalog = fixture.catalog();
-    let mut original = RecursiveBuild::open(&catalog, DRIVE, VOLUME, 1)
+    let mut original = RecursiveBuild::open(&catalog, DRIVE, VOLUME, 1, None)
         .unwrap()
         .unwrap();
     original.clear_interrupted_directory(&|| false).unwrap();
@@ -148,7 +157,7 @@ fn a_replacement_volume_discards_partial_rows_and_invalidates_the_old_attempt() 
         .unwrap();
 
     let replacement_volume = "replacement-volume";
-    let mut replacement = RecursiveBuild::open(&catalog, DRIVE, replacement_volume, 2)
+    let mut replacement = RecursiveBuild::open(&catalog, DRIVE, replacement_volume, 2, None)
         .unwrap()
         .unwrap();
     assert!(original.publish("recursive fallback", || Ok(())).is_err());

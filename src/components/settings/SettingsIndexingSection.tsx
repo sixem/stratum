@@ -58,7 +58,8 @@ export const SettingsIndexingSection = ({
         <div>
           <div className="settings-label">Enable indexed search</div>
           <div className="settings-desc">
-            Indexes files your standard Windows account can browse. Accelerated NTFS indexing is temporarily paused.
+            Indexes files your Windows account can browse. On supported NTFS drives, the index
+            catches up with changes made while Stratum was closed.
           </div>
         </div>
         <label className="settings-toggle">

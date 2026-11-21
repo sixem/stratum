@@ -5,6 +5,8 @@
 // catalog in its previous coherent state.
 use std::path::Path;
 
+#[cfg(windows)]
+use rusqlite::OptionalExtension;
 use rusqlite::{params, Connection};
 
 use crate::domain::indexed_search::IndexedEntryKind;
@@ -112,6 +114,41 @@ fn delete_drive_entries(connection: &Connection, drive_path: &str) -> rusqlite::
 }
 
 impl IndexedCatalogWriter {
+    #[cfg(windows)]
+    pub(in crate::services::indexed_search) fn indexed_children(
+        &self,
+        parent: &str,
+    ) -> Result<std::collections::BTreeMap<String, Option<IndexedEntryKind>>, String> {
+        paths::indexed_children(&self.connection, parent)
+    }
+
+    #[cfg(windows)]
+    pub(in crate::services::indexed_search) fn remove_exact_path_tree(
+        &mut self,
+        path: &str,
+    ) -> Result<usize, String> {
+        paths::remove_exact_path_tree(&self.connection, path)
+    }
+
+    #[cfg(windows)]
+    pub(in crate::services::indexed_search) fn adjust_saved_entry_count(
+        &self,
+        drive: &str,
+        removed: usize,
+    ) -> Result<Option<usize>, String> {
+        self.connection
+            .query_row(
+                "UPDATE indexed_drive_catalog_state
+                 SET saved_entry_count = MAX(0, saved_entry_count + ?2 - ?3)
+                 WHERE drive_path = ?1 AND saved_entry_count IS NOT NULL
+                 RETURNING saved_entry_count",
+                params![drive, self.entries_written, removed],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| format!("Failed to adjust indexed-search entry count: {error}"))
+    }
+
     // A false result requires rolling back this writer and rescanning the
     // volume. Some paths may already have been deleted in the transaction.
     pub(in crate::services::indexed_search) fn remove_path_trees(

@@ -16,13 +16,10 @@ pub(super) const SCAN_CANCELLED_MESSAGE: &str = "Indexed-search scan cancelled";
 
 pub(super) struct DriveScanSummary {
     pub(super) entries_indexed: usize,
-    pub(super) source: DriveScanSource,
+    pub(super) checkpoint: Option<JournalCheckpoint>,
 }
 
-pub(super) enum DriveScanSource {
-    NtfsFastPath,
-    RecursiveFallback,
-}
+pub(super) const FILESYSTEM_SCAN_SOURCE: &str = "Filesystem scan";
 
 pub(super) struct DriveScanCapture<'a> {
     pub(super) drive_path: &'a str,
@@ -30,15 +27,6 @@ pub(super) struct DriveScanCapture<'a> {
     pub(super) volume_id: &'a str,
     pub(super) checkpoint: Option<JournalCheckpoint>,
     pub(super) excluded_directory: Option<&'a Path>,
-}
-
-impl DriveScanSource {
-    pub(super) fn label(&self) -> &'static str {
-        match self {
-            Self::NtfsFastPath => "NTFS fast path",
-            Self::RecursiveFallback => "recursive fallback",
-        }
-    }
 }
 
 // Scans run on background threads, but they still need to exit promptly when
@@ -55,58 +43,13 @@ pub(super) fn scan_drive_into_catalog(
     let drive_path = capture.drive_path;
     let started_at = now_epoch_ms();
 
-    #[cfg(target_os = "windows")]
-    if !super::journal_tracking::JOURNAL_PAUSED {
-        eprintln!("[indexed-search] scan: trying NTFS fast path drive={drive_path}");
-        match super::windows_ntfs::scan_drive_into_catalog_fast(
-            catalog,
-            capture,
-            started_at,
-            should_cancel,
-            validate_mount,
-        ) {
-            Ok(entries_indexed) => {
-                eprintln!(
-                    "[indexed-search] scan: NTFS fast path ok drive={} entries={}",
-                    drive_path, entries_indexed
-                );
-                return Ok(DriveScanSummary {
-                    entries_indexed,
-                    source: DriveScanSource::NtfsFastPath,
-                });
-            }
-            Err(super::windows_ntfs::NtfsFastScanError::Cancelled) => {
-                eprintln!("[indexed-search] scan: NTFS fast path cancelled drive={drive_path}");
-                return Err(SCAN_CANCELLED_MESSAGE.to_string());
-            }
-            Err(super::windows_ntfs::NtfsFastScanError::Unavailable(reason)) => {
-                eprintln!(
-                    "[indexed-search] scan: NTFS fast path unavailable drive={} reason={}",
-                    drive_path, reason
-                );
-            }
-            Err(super::windows_ntfs::NtfsFastScanError::Failed(error)) => {
-                eprintln!(
-                    "Indexed-search NTFS fast scan failed for {}. Falling back to recursive scan: {}",
-                    drive_path, error
-                );
-            }
-        }
-    }
-
     ensure_scan_not_cancelled(should_cancel)?;
-    eprintln!("[indexed-search] scan: recursive fallback start drive={drive_path}");
+    eprintln!("[indexed-search] scan: filesystem baseline start drive={drive_path}");
     #[cfg(windows)]
-    if capture.checkpoint.is_none() {
-        if let Some(summary) = super::resumable_scan::scan(
-            catalog,
-            capture,
-            started_at,
-            should_cancel,
-            validate_mount,
-        )? {
-            return Ok(summary);
-        }
+    if let Some(summary) =
+        super::resumable_scan::scan(catalog, capture, started_at, should_cancel, validate_mount)?
+    {
+        return Ok(summary);
     }
     // Scan the captured volume even if the drive letter moves mid-scan. The
     // stored paths still use the letter and publication rechecks the binding.
@@ -124,6 +67,17 @@ pub(super) fn scan_drive_into_catalog(
     while let Some(directory) = stack.pop() {
         ensure_scan_not_cancelled(should_cancel)?;
         directories_seen = directories_seen.saturating_add(1);
+
+        #[cfg(windows)]
+        let Some((_directory, _pinned, _depth)) = directory
+            .strip_prefix(drive_root)
+            .ok()
+            .and_then(Path::to_str)
+            .and_then(|relative| super::resumable_scan::open_frontier(drive_root, relative))
+        else {
+            // A queued path may have become a junction since its parent was read.
+            continue;
+        };
 
         let read_dir = match fs::read_dir(&directory) {
             Ok(value) => value,
@@ -205,10 +159,9 @@ pub(super) fn scan_drive_into_catalog(
         writer.insert_batch(&batch)?;
         entries_indexed = entries_indexed.saturating_add(batch.len());
     }
-    let source = DriveScanSource::RecursiveFallback;
     writer.finish_drive_refresh(
         drive_path,
-        source.label(),
+        FILESYSTEM_SCAN_SOURCE,
         started_at,
         capture.volume_id,
         capture.checkpoint,
@@ -218,13 +171,13 @@ pub(super) fn scan_drive_into_catalog(
         },
     )?;
     eprintln!(
-        "[indexed-search] scan: recursive fallback ok drive={} entries={} seen={} dirs={}",
+        "[indexed-search] scan: filesystem baseline complete drive={} entries={} seen={} dirs={}",
         drive_path, entries_indexed, entries_seen, directories_seen
     );
 
     Ok(DriveScanSummary {
         entries_indexed,
-        source,
+        checkpoint: capture.checkpoint,
     })
 }
 

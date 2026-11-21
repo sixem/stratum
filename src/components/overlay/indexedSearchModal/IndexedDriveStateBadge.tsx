@@ -11,7 +11,9 @@ type IndicatorState = IndexedDriveState | "checking";
 
 const statusDescriptions: Partial<Record<IndicatorState, string>> = {
   checking: "Verifying the saved index for this drive.",
-  saved: "A complete saved index is available. Open folders and Stratum file operations keep affected paths up to date.",
+  ready: "The index tracks NTFS changes across the drive.",
+  saved: "Saved results are available. Drive-wide updates depend on the NTFS change journal.",
+  scanning: "Stratum is scanning this drive in the background.",
   rescanrequired: "This drive needs a fresh index.",
   stale: "The saved index may be out of date.",
   unavailable: "Stratum couldn't access this drive.",

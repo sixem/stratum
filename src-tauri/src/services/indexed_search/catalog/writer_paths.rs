@@ -1,8 +1,12 @@
 // Reconcile paths through the catalog's existing binary path index.
+#[cfg(windows)]
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use rusqlite::{params, Connection, OptionalExtension, Statement};
 
+#[cfg(windows)]
+use super::{int_to_kind, IndexedEntryKind};
 use super::{kind_to_int, trim_catalog_path, CatalogEntryRecord};
 
 pub(super) const DELETE_PATH_TREE: &str =
@@ -14,6 +18,61 @@ pub(super) const FIND_PATH_TREE: &str =
 pub(super) const READ_PATH_TREE: &str = "SELECT path, normalized_name, kind FROM indexed_entries
                                        WHERE path = ?1 OR (path >= ?2 AND path < ?3) LIMIT ?4";
 const MAX_CASE_PROBE_SEEKS: usize = 64;
+
+#[cfg(windows)]
+pub(super) fn indexed_children(
+    connection: &Connection,
+    parent: &str,
+) -> Result<BTreeMap<String, Option<IndexedEntryKind>>, String> {
+    let read = || -> rusqlite::Result<_> {
+        let mut seek = connection.prepare_cached(
+            "SELECT path, kind FROM indexed_entries
+             WHERE path >= ?1 AND path < ?2 ORDER BY path LIMIT 1",
+        )?;
+        let mut children = BTreeMap::new();
+        let parent = trim_catalog_path(parent);
+        for spelling in drive_spellings(parent) {
+            let prefix = format!("{}\\", spelling.trim_end_matches('\\'));
+            let end = format!("{}]", spelling.trim_end_matches('\\'));
+            let mut start = prefix.clone();
+            while let Some((path, kind)) = seek
+                .query_row(params![start, end], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+                })
+                .optional()?
+            {
+                let relative = &path[prefix.len()..];
+                if let Some((name, _)) = relative.split_once('\\') {
+                    // Jump over this subtree without walking its descendants.
+                    children.entry(name.to_owned()).or_insert(None);
+                    start = format!("{prefix}{name}]");
+                } else {
+                    children.insert(relative.to_owned(), Some(int_to_kind(kind)));
+                    // A NUL follows the exact filename and precedes every
+                    // possible continuation of that name in the binary index.
+                    start = format!("{path}\0");
+                }
+            }
+        }
+        Ok(children)
+    };
+    read().map_err(|error| format!("Failed to read indexed-search direct children: {error}"))
+}
+
+#[cfg(windows)]
+pub(super) fn remove_exact_path_tree(connection: &Connection, path: &str) -> Result<usize, String> {
+    let path = validated_path_tree(path)?;
+    let delete = || -> rusqlite::Result<usize> {
+        let mut statement = connection.prepare_cached(DELETE_PATH_TREE)?;
+        let mut removed = 0;
+        for path in drive_spellings(path) {
+            let (first_child, after_children) = path_tree_bounds(&path);
+            removed += statement.execute(params![path, first_child, after_children])?;
+        }
+        Ok(removed)
+    };
+    delete().map_err(|error| format!("Failed to remove indexed-search subtree: {error}"))
+}
 
 // Compare the rows a watcher would replace, including the drive spelling.
 // The read is bounded even if a directory grew beyond the watcher budget.
@@ -249,6 +308,49 @@ fn ascii_spelling(bytes: Vec<u8>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn catalog_children_skip_descendants_and_keep_case_and_punctuation() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE indexed_entries (path TEXT PRIMARY KEY, kind INTEGER NOT NULL)",
+            )
+            .unwrap();
+        for (path, kind) in [
+            (r"C:\a", 1),
+            (r"C:\a2", 0),
+            (r"C:\a\descendant\leaf", 0),
+            (r"C:\a]", 0),
+            (r"C:\Case", 0),
+            (r"C:\case", 0),
+            (r"c:\orphan\descendant", 0),
+        ] {
+            connection
+                .execute(
+                    "INSERT INTO indexed_entries VALUES (?1, ?2)",
+                    params![path, kind],
+                )
+                .unwrap();
+        }
+        let children = indexed_children(&connection, r"C:\").unwrap();
+        assert_eq!(
+            children,
+            BTreeMap::from([
+                ("Case".to_owned(), Some(IndexedEntryKind::File)),
+                ("a".to_owned(), Some(IndexedEntryKind::Directory)),
+                ("a2".to_owned(), Some(IndexedEntryKind::File)),
+                ("a]".to_owned(), Some(IndexedEntryKind::File)),
+                ("case".to_owned(), Some(IndexedEntryKind::File)),
+                ("orphan".to_owned(), None),
+            ]),
+        );
+        assert_eq!(remove_exact_path_tree(&connection, r"C:\Case").unwrap(), 1);
+        assert!(indexed_children(&connection, r"C:\")
+            .unwrap()
+            .contains_key("case"));
+    }
 
     #[test]
     fn ascii_case_successor_skips_to_the_next_possible_index_key() {

@@ -3,7 +3,8 @@
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 
 use super::{
-    schema::DRIVE_CATALOG_STATE_READY, writer::kind_to_int, CatalogEntryRecord, IndexedCatalogStore,
+    schema::DRIVE_CATALOG_STATE_READY, writer::kind_to_int, CatalogEntryRecord,
+    IndexedCatalogStore, JournalCheckpoint,
 };
 use crate::services::indexed_search::{scan::SCAN_CANCELLED_MESSAGE, state::now_epoch_ms};
 
@@ -17,6 +18,7 @@ pub(in crate::services::indexed_search) struct RecursiveBuild {
     attempt: [u8; 16],
     active: Option<String>,
     pub(in crate::services::indexed_search) entries: usize,
+    pub(in crate::services::indexed_search) checkpoint: Option<JournalCheckpoint>,
 }
 
 impl RecursiveBuild {
@@ -25,6 +27,7 @@ impl RecursiveBuild {
         drive: &str,
         volume_id: &str,
         started_at: u64,
+        checkpoint: Option<JournalCheckpoint>,
     ) -> Result<Option<Self>, String> {
         if !matches!(drive.as_bytes(), [letter, b':', b'\\'] if letter.is_ascii_uppercase())
             || volume_id.is_empty()
@@ -41,28 +44,39 @@ impl RecursiveBuild {
         connection
             .pragma_update(None, "synchronous", "NORMAL")
             .map_err(database_error)?;
-        let (active, entries) = {
+        let (active, entries, checkpoint) = {
             let tx = connection
                 .transaction_with_behavior(TransactionBehavior::Immediate)
                 .map_err(database_error)?;
-            let state: Option<(String, Option<String>)> = tx
+            let state: Option<(String, Option<String>, Option<i64>, Option<i64>)> = tx
                 .query_row(
-                    "SELECT lifecycle_state, volume_id FROM indexed_drive_catalog_state WHERE drive_path = ?1",
+                    "SELECT lifecycle_state, volume_id, journal_id, journal_next_usn
+                     FROM indexed_drive_catalog_state WHERE drive_path = ?1",
                     [drive],
-                    |row| Ok((row.get(0)?, row.get(1)?)),
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
                 )
                 .optional()
                 .map_err(database_error)?;
             if state
                 .as_ref()
-                .is_some_and(|(state, _)| state == DRIVE_CATALOG_STATE_READY)
+                .is_some_and(|(state, ..)| state == DRIVE_CATALOG_STATE_READY)
             {
                 return Ok(None);
             }
-            let prior: Option<(Option<String>, usize)> = if state
-                .as_ref()
-                .is_some_and(|(state, id)| state == BUILDING && id.as_deref() == Some(volume_id))
-            {
+            let prior_checkpoint = state.as_ref().and_then(|(_, _, id, usn)| {
+                Some(JournalCheckpoint {
+                    journal_id: (*id)? as u64,
+                    next_usn: (*usn)?,
+                })
+            });
+            // Keep the cursor from before the first directory was scanned.
+            // A newly available or replaced journal requires a new baseline.
+            let can_resume = state.as_ref().is_some_and(|(state, id, ..)| {
+                state == BUILDING && id.as_deref() == Some(volume_id)
+            }) && checkpoint.is_none_or(|current| {
+                prior_checkpoint.is_some_and(|saved| saved.journal_id == current.journal_id)
+            });
+            let prior: Option<(Option<String>, usize)> = if can_resume {
                 tx.query_row(
                     "SELECT active_dir, completed_entries FROM indexed_recursive_builds WHERE drive_path = ?1",
                     [drive],
@@ -73,25 +87,31 @@ impl RecursiveBuild {
             } else {
                 None
             };
-            let (active, entries) = if let Some(prior) = prior {
+            let (active, entries, checkpoint) = if let Some((active, entries)) = prior {
                 tx.execute(
                     "UPDATE indexed_recursive_builds SET attempt = ?2 WHERE drive_path = ?1",
                     params![drive, attempt.as_slice()],
                 )
                 .map_err(database_error)?;
-                prior
+                (active, entries, prior_checkpoint)
             } else {
                 tx.execute(
                     "INSERT INTO indexed_drive_catalog_state (
-                        drive_path, lifecycle_state, volume_id, last_scan_started_at
-                    ) VALUES (?1, ?2, ?3, ?4)
+                        drive_path, lifecycle_state, volume_id, last_scan_started_at,
+                        journal_id, journal_next_usn
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                     ON CONFLICT(drive_path) DO UPDATE SET
                         lifecycle_state = excluded.lifecycle_state,
                         volume_id = excluded.volume_id,
                         last_scan_started_at = excluded.last_scan_started_at,
                         last_scan_completed_at = NULL, last_scan_source = NULL,
-                        journal_id = NULL, journal_next_usn = NULL, saved_entry_count = NULL",
-                    params![drive, BUILDING, volume_id, started_at],
+                        journal_id = excluded.journal_id, journal_next_usn = excluded.journal_next_usn,
+                        saved_entry_count = NULL",
+                    params![
+                        drive, BUILDING, volume_id, started_at,
+                        checkpoint.map(|cursor| cursor.journal_id as i64),
+                        checkpoint.map(|cursor| cursor.next_usn),
+                    ],
                 )
                 .map_err(database_error)?;
                 tx.execute(
@@ -113,10 +133,10 @@ impl RecursiveBuild {
                 .map_err(database_error)?;
                 // An empty relative path is the drive root. Cleanup discards
                 // any old or orphaned partial rows before beginning there.
-                (Some(String::new()), 0)
+                (Some(String::new()), 0, checkpoint)
             };
             tx.commit().map_err(database_error)?;
-            (active, entries)
+            (active, entries, checkpoint)
         };
         Ok(Some(Self {
             connection,
@@ -125,6 +145,7 @@ impl RecursiveBuild {
             attempt,
             active,
             entries,
+            checkpoint,
         }))
     }
 

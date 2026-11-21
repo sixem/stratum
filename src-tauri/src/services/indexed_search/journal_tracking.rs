@@ -1,42 +1,35 @@
-// Check mounted volumes and replay structural NTFS changes on the catalog writer.
+// Verify mounted volumes and maintain the standard user's saved index.
 use crate::domain::indexed_search::{IndexedDriveState, IndexedSearchServiceState};
-
-pub(super) const AMBIGUOUS_PATH_MESSAGE: &str =
-    "A changed path could not be matched safely to its indexed spelling.";
-// Production cannot open the raw volume. Keep the journal probe and replay
-// usable in the explicitly opt-in native tests.
-pub(super) const JOURNAL_PAUSED: bool = cfg!(all(windows, not(test)));
 
 use super::{
     catalog::JournalCheckpoint,
-    journal_batch::JournalBatch,
-    reconcile,
     service::IndexedSearchHandle,
     state::IndexedSearchState,
     volume_tracking::{discover_drives, VolumeMount},
     work_queue::WorkQueue,
 };
 
-#[cfg(target_os = "windows")]
-use super::windows_journal::{self, JournalChanges, JournalSnapshot};
+#[cfg(windows)]
+use super::{
+    user_journal_reconcile::{reconcile_user_journal_batch, UserReconcileOutcome},
+    windows_user_journal::{self, UserJournalBatch, UserJournalChanges},
+};
+
+pub(super) const AMBIGUOUS_PATH_MESSAGE: &str =
+    "A changed path could not be matched safely to its indexed spelling.";
 
 pub(super) fn capture_checkpoint(mount: &VolumeMount) -> Result<JournalCheckpoint, String> {
-    #[cfg(target_os = "windows")]
+    #[cfg(windows)]
     {
-        return windows_journal::snapshot(&mount.guid).map(checkpoint);
+        windows_user_journal::snapshot(&mount.guid).map(|snapshot| JournalCheckpoint {
+            journal_id: snapshot.journal_id,
+            next_usn: snapshot.next_usn,
+        })
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(windows))]
     {
         let _ = mount;
-        Err("NTFS change journal is unavailable.".to_string())
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn checkpoint(snapshot: JournalSnapshot) -> JournalCheckpoint {
-    JournalCheckpoint {
-        journal_id: snapshot.journal_id,
-        next_usn: snapshot.next_usn,
+        Err("NTFS change tracking is unavailable.".to_string())
     }
 }
 
@@ -48,11 +41,11 @@ fn prepare_volume_checks(
     for (key, mount) in &state.volumes.mounted {
         let failed = state.drive_statuses[key].state == IndexedDriveState::Error;
         if let Some(snapshot) = state.volumes.matching_snapshot(mount) {
-            // A failed journal-gap rebuild waits for a request, re-enable, or remount.
             if !failed || state.volumes.verified.contains(key) {
-                // Snapshot identity, rather than a journal cursor, decides whether
-                // there is already a complete index to check for this mount.
-                mounts_to_check.push((mount.clone(), snapshot.journal_checkpoint));
+                let checkpoint = snapshot
+                    .journal_checkpoint
+                    .filter(|_| !snapshot.pending_renames);
+                mounts_to_check.push((mount.clone(), checkpoint));
             }
         } else if !failed {
             queue.queue_rebuild(mount.drive_path.clone());
@@ -61,26 +54,23 @@ fn prepare_volume_checks(
     mounts_to_check
 }
 
-fn verify_saved_volumes(
+fn expose_saved_volumes(
     state: &mut IndexedSearchState,
     queue: &mut WorkQueue,
     checks: &[(VolumeMount, Option<JournalCheckpoint>)],
 ) -> bool {
     let mut visibility_changed = false;
     for (mount, _) in checks {
-        // Preserve explicit refresh work and stronger warnings. A rescan
-        // requirement can make a previously saved index unsafe to reuse.
-        if matches!(
-            state.drive_statuses[&mount.key()].state,
-            IndexedDriveState::Error
-                | IndexedDriveState::RescanRequired
-                | IndexedDriveState::Scanning
-        ) || queue.has_queued_rebuild(&mount.drive_path)
-        {
-            continue;
-        }
-        if state.mark_saved_volume_verified(mount) {
-            queue.queue_drive_count(mount.drive_path.clone());
+        // Discovery matched the volume's identity. Keep its saved results
+        // searchable during replay and while an atomic baseline scan runs.
+        if state.volumes.verified.insert(mount.key()) {
+            if state
+                .volumes
+                .matching_snapshot(mount)
+                .is_some_and(|snapshot| snapshot.entry_count.is_none())
+            {
+                queue.queue_drive_count(mount.drive_path.clone());
+            }
             visibility_changed = true;
         }
     }
@@ -107,14 +97,9 @@ impl IndexedSearchHandle {
             }
             let mut state = self.inner.state.lock().expect("indexed search state lock");
             let changed = state.update_mounts(drives);
-            let mounts_to_check = prepare_volume_checks(&state, &mut queue);
-            // Discovery already verified each mounted identity. In saved
-            // mode there is no journal work or second mount probe to run.
-            let newly_verified =
-                JOURNAL_PAUSED && verify_saved_volumes(&mut state, &mut queue, &mounts_to_check);
-            if JOURNAL_PAUSED && state.service_status.state == IndexedSearchServiceState::Starting {
-                state.update_service_status(IndexedSearchServiceState::Idle, None);
-            }
+            let mut mounts_to_check = prepare_volume_checks(&state, &mut queue);
+            let newly_verified = expose_saved_volumes(&mut state, &mut queue, &mounts_to_check);
+            mounts_to_check.retain(|(mount, _)| !queue.has_queued_rebuild(&mount.drive_path));
             drop(state);
             if changed || newly_verified {
                 self.bump_catalog_revision();
@@ -122,9 +107,6 @@ impl IndexedSearchHandle {
             mounts_to_check
         };
 
-        if JOURNAL_PAUSED {
-            return;
-        }
         for (mount, previous) in mounts_to_check {
             if self.should_cancel_work(generation) {
                 return;
@@ -134,8 +116,6 @@ impl IndexedSearchHandle {
     }
 
     pub(super) fn continue_volume_journal(&self, drive: &str, generation: u64) {
-        // Other writer work or a remount may have superseded the queued
-        // continuation. Always resume from the current volume's last commit.
         let (mount, previous) = {
             let state = self.inner.state.lock().expect("indexed search state lock");
             let Some(mount) = state.volumes.active_mount(drive) else {
@@ -156,42 +136,40 @@ impl IndexedSearchHandle {
         generation: u64,
     ) {
         let Some(previous) = previous else {
-            // Starting at the current end would skip all changes since an
-            // untracked scan. Establish a new baseline with a complete rebuild.
+            // Jumping to the current cursor would miss changes made between
+            // the saved scan and this launch. Capture a cursor before rescanning.
             match capture_checkpoint(mount) {
                 Ok(_) => self.require_volume_rebuild(
                     mount,
                     generation,
-                    "Establishing a change journal baseline.",
+                    "Establishing change tracking. Saved results stay available.",
                 ),
-                Err(error) => self.report_journal_unavailable(mount, generation, &error),
+                Err(error) => self.report_journal_unavailable(mount, generation, &error, false),
             }
             return;
         };
 
-        #[cfg(target_os = "windows")]
-        match windows_journal::read_changes(&mount.drive_path, &mount.guid, previous, &|| {
+        #[cfg(windows)]
+        match windows_user_journal::read_changes(&mount.guid, previous, &|| {
             self.should_cancel_work(generation)
         }) {
-            Ok(JournalChanges::Batch(batch)) => {
+            Ok(UserJournalChanges::Batch(batch)) => {
                 self.apply_journal_changes(mount, batch, generation)
             }
-            Ok(JournalChanges::NeedsRebuild) => {
-                self.require_volume_rebuild(
-                    mount,
-                    generation,
-                    "The saved change journal history cannot be replayed.",
-                );
-            }
-            Ok(JournalChanges::Cancelled) => {}
-            Err(error) => self.report_journal_unavailable(mount, generation, &error),
+            Ok(UserJournalChanges::NeedsRebuild) => self.require_volume_rebuild(
+                mount,
+                generation,
+                "Change history is incomplete. The index needs a new baseline.",
+            ),
+            Ok(UserJournalChanges::Cancelled) => {}
+            Err(error) => self.report_journal_unavailable(mount, generation, &error, true),
         }
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(not(windows))]
         let _ = previous;
     }
 
-    #[cfg(target_os = "windows")]
-    fn apply_journal_changes(&self, mount: &VolumeMount, batch: JournalBatch, generation: u64) {
+    #[cfg(windows)]
+    fn apply_journal_changes(&self, mount: &VolumeMount, batch: UserJournalBatch, generation: u64) {
         let catalog = self.catalog().expect("journal tracking has a catalog");
         let next = batch.next;
         let has_more = batch.has_more;
@@ -201,52 +179,40 @@ impl IndexedSearchHandle {
                 Some(format!("Applying changes on {}", mount.drive_path)),
             );
         }
-        let pending_renames = match reconcile::reconcile_journal_batch(
-            catalog,
-            mount,
-            batch,
-            &|| self.should_cancel_work(generation),
-            &|| mount.verify(),
-        ) {
-            Ok(reconcile::ReconcileOutcome::Committed {
+        match reconcile_user_journal_batch(catalog, mount, batch, &|| {
+            self.should_cancel_work(generation)
+        }) {
+            Ok(UserReconcileOutcome::Committed {
                 changed_paths,
-                pending_renames,
+                entry_count,
             }) => {
-                if changed_paths {
-                    self.bump_catalog_revision();
-                }
-                // Persisted checkpoint and in-memory cursor still need to
-                // agree if enable/disable happened just after COMMIT.
+                // Update the in-memory cursor even if enable/disable happened
+                // just after the catalog transaction committed.
                 let mut state = self.inner.state.lock().expect("indexed search state lock");
                 if let Some(snapshot) = state.volumes.snapshots.get_mut(&mount.key()) {
                     if snapshot.volume_id.as_deref() == Some(&mount.identity) {
                         snapshot.journal_checkpoint = Some(next);
-                        snapshot.pending_renames = pending_renames;
+                        snapshot.pending_renames = false;
+                        if let Some(count) = entry_count {
+                            snapshot.entry_count = Some(count);
+                            let source = snapshot.last_scan_source.clone();
+                            state.set_drive_summary(&mount.drive_path, Some(count as u64), source);
+                        }
                     }
                 }
-                pending_renames
+                if changed_paths {
+                    self.bump_catalog_revision();
+                }
             }
-            Ok(reconcile::ReconcileOutcome::Unchanged) => {
-                // No catalog transaction ran. Its checkpoint and pending
-                // renames still match the snapshot loaded or last committed.
-                let state = self.inner.state.lock().expect("indexed search state lock");
-                let Some(snapshot) = state.volumes.matching_snapshot(mount) else {
-                    return;
-                };
-                snapshot.pending_renames
-            }
-            Ok(reconcile::ReconcileOutcome::Cancelled) => return,
-            Ok(reconcile::ReconcileOutcome::NeedsRebuild) => {
-                self.require_volume_rebuild(mount, generation, AMBIGUOUS_PATH_MESSAGE);
-                return;
-            }
+            Ok(UserReconcileOutcome::Unchanged) => {}
+            Ok(UserReconcileOutcome::Cancelled) => return,
             Err(error) => {
-                self.require_volume_rebuild(mount, generation, &error);
+                self.report_journal_unavailable(mount, generation, &error, true);
                 return;
             }
-        };
-        if !has_more && !pending_renames {
-            self.verify_journal_snapshot(mount, None, generation);
+        }
+        if !has_more {
+            self.finish_journal_check(mount, generation, None, true);
             return;
         }
 
@@ -260,17 +226,13 @@ impl IndexedSearchHandle {
         }
         let mut state = self.inner.state.lock().expect("indexed search state lock");
         let key = mount.key();
-        if state.volumes.mounted.get(&key) != Some(mount) {
+        if state.volumes.mounted.get(&key) != Some(mount)
+            || queue.has_queued_rebuild(&mount.drive_path)
+        {
             return;
         }
-        let message = if has_more {
-            queue.queue_journal_continuation(mount.drive_path.clone());
-            "Catching up on change journal records."
-        } else {
-            // The captured journal may end between two rename records. The
-            // ordinary volume poll will pick up its destination when it arrives.
-            "Waiting for a rename to finish in the change journal."
-        };
+        queue.queue_journal_continuation(mount.drive_path.clone());
+        let message = "Catching up on change journal records.";
         let status = &state.drive_statuses[&key];
         if status.state != IndexedDriveState::Stale || status.message.as_deref() != Some(message) {
             state.transition_drive_state(
@@ -281,20 +243,14 @@ impl IndexedSearchHandle {
         }
     }
 
-    fn verify_journal_snapshot(
+    fn finish_journal_check(
         &self,
         mount: &VolumeMount,
-        warning: Option<String>,
         generation: u64,
+        warning: Option<String>,
+        has_checkpoint: bool,
     ) {
-        if mount.verify().is_err() {
-            self.require_volume_rebuild(
-                mount,
-                generation,
-                "The volume changed while checking its journal.",
-            );
-            return;
-        }
+        let still_mounted = mount.verify().is_ok();
         let mut queue = self
             .inner
             .work_queue
@@ -304,26 +260,47 @@ impl IndexedSearchHandle {
             return;
         }
         let mut state = self.inner.state.lock().expect("indexed search state lock");
-        if warning.is_none() && state.volumes.mounted.get(&mount.key()) == Some(mount) {
-            state.volumes.journal_rebuilds.remove(&mount.key());
+        let key = mount.key();
+        if state.volumes.mounted.get(&key) != Some(mount) {
+            return;
         }
-        let changed = state.mark_volume_verified(mount, warning);
-        drop(state);
+        if !still_mounted {
+            if state.volumes.verified.remove(&key) {
+                self.bump_catalog_revision();
+            }
+            queue.queue_volume_check();
+            return;
+        }
+        if queue.has_queued_rebuild(&mount.drive_path) {
+            return;
+        }
+        if warning.is_none() {
+            state.volumes.journal_rebuilds.remove(&key);
+        }
+        let changed = if has_checkpoint {
+            state.mark_volume_verified(mount, warning)
+        } else {
+            state.mark_saved_volume_verified(mount, warning)
+        };
         if changed {
-            queue.queue_drive_count(mount.drive_path.clone());
             self.bump_catalog_revision();
         }
     }
 
-    fn report_journal_unavailable(&self, mount: &VolumeMount, generation: u64, error: &str) {
-        // A complete snapshot for this same physical volume remains useful,
-        // with an explicit stale status until Windows permits journal access.
-        self.verify_journal_snapshot(
+    fn report_journal_unavailable(
+        &self,
+        mount: &VolumeMount,
+        generation: u64,
+        error: &str,
+        has_checkpoint: bool,
+    ) {
+        self.finish_journal_check(
             mount,
-            Some(format!(
-                "Change journal unavailable. Showing the last complete index. {error}"
-            )),
             generation,
+            Some(format!(
+                "Live updates unavailable. Showing saved results. {error}"
+            )),
+            has_checkpoint,
         );
     }
 
@@ -342,30 +319,29 @@ impl IndexedSearchHandle {
             return;
         }
         let mut state = self.inner.state.lock().expect("indexed search state lock");
-        if state.volumes.mounted.get(&mount.key()) != Some(mount) {
+        let key = mount.key();
+        if state.volumes.mounted.get(&key) != Some(mount)
+            || queue.has_queued_rebuild(&mount.drive_path)
+        {
             return;
         }
-        let changed = state.volumes.verified.remove(&mount.key());
-        if state.drive_statuses[&mount.key()].state != IndexedDriveState::Error {
-            let status = &state.drive_statuses[&mount.key()];
-            if status.state != IndexedDriveState::RescanRequired
-                || status.message.as_deref() != Some(message)
-            {
-                state.transition_drive_state(
-                    &mount.drive_path,
-                    IndexedDriveState::RescanRequired,
-                    Some(message.to_string()),
-                );
-            }
-            // A busy volume can outrun a full scan. Give each recovery one
-            // automatic attempt until journal replay succeeds or it remounts.
-            if state.volumes.journal_rebuilds.insert(mount.key()) {
-                queue.queue_rebuild(mount.drive_path.clone());
-            }
+        let status = &state.drive_statuses[&key];
+        if status.state == IndexedDriveState::Error {
+            return;
         }
-        drop(state);
-        if changed {
-            self.bump_catalog_revision();
+        if status.state != IndexedDriveState::RescanRequired
+            || status.message.as_deref() != Some(message)
+        {
+            state.transition_drive_state(
+                &mount.drive_path,
+                IndexedDriveState::RescanRequired,
+                Some(message.into()),
+            );
+        }
+        // Try one automatic rebuild for this gap. If the drive outruns that
+        // scan as well, leave it searchable and wait for a manual refresh.
+        if state.volumes.journal_rebuilds.insert(key) {
+            queue.queue_rebuild(mount.drive_path.clone());
         }
     }
 }
@@ -429,20 +405,19 @@ mod tests {
         assert!(saved.state == IndexedDriveState::Stale);
         assert_eq!(saved.entry_count, Some(25));
         assert_eq!(saved.message.as_deref(), Some("Checking the saved index."));
-        assert!(verify_saved_volumes(&mut state, &mut queue, &checks));
-        assert!(!verify_saved_volumes(&mut state, &mut queue, &checks));
+        assert!(expose_saved_volumes(&mut state, &mut queue, &checks));
+        assert!(!expose_saved_volumes(&mut state, &mut queue, &checks));
         let saved = &state.drive_statuses[&mount.key()];
-        assert!(saved.state == IndexedDriveState::Saved);
+        assert!(saved.state == IndexedDriveState::Stale);
         assert_eq!(state.volumes.verified_mounts(), [mount]);
         assert_eq!(saved.entry_count, Some(25));
         assert_eq!(queue.next(), Some(Work::Rebuild(r"D:\".into())));
         assert_eq!(queue.next(), Some(Work::Rebuild(r"E:\".into())));
-        assert_eq!(queue.next(), Some(Work::RefreshDriveCount(r"C:\".into())));
         assert!(queue.is_empty());
     }
 
     #[test]
-    fn routine_saved_verification_leaves_explicit_refresh_and_rescan_states_in_place() {
+    fn saved_results_remain_searchable_during_refresh_and_rescan() {
         let mut state = IndexedSearchState::new();
         let drive = r"C:\";
         state
@@ -453,23 +428,22 @@ mod tests {
         let key = mount.key();
         let mut queue = WorkQueue::default();
         let checks = prepare_volume_checks(&state, &mut queue);
-        assert!(verify_saved_volumes(&mut state, &mut queue, &checks));
+        assert!(expose_saved_volumes(&mut state, &mut queue, &checks));
 
         assert!(queue.queue_rebuild(drive.into()));
         state.transition_drive_state(drive, IndexedDriveState::Queued, None);
-        assert!(!verify_saved_volumes(&mut state, &mut queue, &checks));
+        assert!(!expose_saved_volumes(&mut state, &mut queue, &checks));
         assert!(state.drive_statuses[&key].state == IndexedDriveState::Queued);
         assert!(state.volumes.verified.contains(&key));
         assert_eq!(queue.next(), Some(Work::Rebuild(drive.into())));
 
-        state.volumes.verified.remove(&key);
         state.transition_drive_state(
             drive,
             IndexedDriveState::RescanRequired,
             Some("Changed paths".into()),
         );
-        assert!(!verify_saved_volumes(&mut state, &mut queue, &checks));
+        assert!(!expose_saved_volumes(&mut state, &mut queue, &checks));
         assert!(state.drive_statuses[&key].state == IndexedDriveState::RescanRequired);
-        assert!(!state.volumes.verified.contains(&key));
+        assert!(state.volumes.verified.contains(&key));
     }
 }
