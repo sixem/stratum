@@ -5,7 +5,7 @@
 import type { KeyboardEvent, RefObject } from "react";
 
 import loader from "@/assets/icons/loaders/ring.svg";
-import { BinocularsIcon, ErrorIcon, FileTypeIcon } from "@/components/icons";
+import { ErrorIcon, FileTypeIcon, LibraryIcon } from "@/components/icons";
 import { PressButton, ScrollArea } from "@/components/primitives";
 import { getExtension, getFileKind } from "@/lib/fileKind";
 import type { IndexedPathMatch } from "@/types";
@@ -73,7 +73,7 @@ export const IndexedSearchResultsList = ({
       {resultCount === 0 ? (
         <div className="indexed-search-empty">
           <div className="indexed-search-empty-symbol">
-            {loading ? <img src={loader} alt="" /> : (resultsError ? <ErrorIcon /> : <BinocularsIcon />)}
+            {loading ? <img src={loader} alt="" /> : (resultsError ? <ErrorIcon /> : <LibraryIcon />)}
           </div>
           <p className="indexed-search-empty-title">{emptyTitle}</p>
           {loading ? null : <p className="indexed-search-empty-hint">{emptyHint}</p>}

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { SettingsVitals } from "@/components/settings/SettingsVitals";
 import { OverlayPanelHeader } from "@/components/overlay/OverlayPanelHeader";
+import { DialogCloseButton } from "./DialogCloseButton";
 import {
   DEFAULT_SETTINGS_SECTION_ID,
   SETTINGS_SECTION_DEFINITIONS,
@@ -144,16 +145,7 @@ export const SettingsOverlay = ({
           title="Settings"
           titleId={titleId}
           subtitle="Manage app behavior, indexing, flair, thumbnails, and cached previews."
-          actions={
-            <PressButton
-              ref={closeButtonRef}
-              type="button"
-              className="btn ghost settings-close"
-              onClick={onClose}
-            >
-              Close
-            </PressButton>
-          }
+          actions={<DialogCloseButton ref={closeButtonRef} onClose={onClose} />}
         />
         <div className="settings-body">
           <nav className="settings-sidebar" aria-label="Settings sections">

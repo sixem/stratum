@@ -70,6 +70,7 @@ export const buildEntryOpenWithItems = ({
       kind: "submenu",
       id: "entry-open-with",
       label: "Open with",
+      icon: "open-with",
       items: openWithMenuItems,
     },
   ];

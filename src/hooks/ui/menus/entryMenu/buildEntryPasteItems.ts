@@ -21,6 +21,7 @@ export const buildEntryPasteItems = ({
     {
       id: "entry-paste",
       label: target.isDir ? "Paste into folder" : "Paste",
+      icon: target.isDir ? "paste-into-folder" : "paste",
       onSelect: () => {
         if (pasteTarget) void onPasteEntries(pasteTarget);
       },

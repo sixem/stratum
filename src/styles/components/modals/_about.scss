@@ -1,5 +1,4 @@
 // About dialog with a centered brand mark and compact project details.
-@use "../control-recipes" as control;
 @use "./shared" as modal;
 
 .about-modal {
@@ -37,19 +36,8 @@
 
 :where(.about-panel) {
   .about-close {
-    @include control.icon-button-shell(28px);
     position: absolute;
     inset: 10px 10px auto auto;
-
-    &:hover {
-      background: var(--surface-control);
-      color: var(--text);
-    }
-
-    svg {
-      width: 12px;
-      height: 12px;
-    }
   }
 
   .about-header {
@@ -126,7 +114,6 @@
     }
   }
 
-  .about-close:focus-visible,
   .about-links a:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;

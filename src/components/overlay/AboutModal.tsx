@@ -5,7 +5,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { APP_ISSUES_URL, APP_REPO_URL } from "@/constants";
 import { isEditableElement } from "@/lib";
 import { useModalFocusTrap } from "@/hooks";
-import { OpenExternalIcon, StratumBrandIcon, WindowCloseIcon } from "@/components/icons";
+import { OpenExternalIcon, StratumBrandIcon } from "@/components/icons";
+import { DialogCloseButton } from "./DialogCloseButton";
 
 type AboutModalProps = {
   open: boolean;
@@ -100,15 +101,12 @@ export const AboutModal = ({
         ref={panelRef}
         tabIndex={-1}
       >
-        <button
+        <DialogCloseButton
           ref={closeButtonRef}
-          type="button"
           className="about-close"
-          aria-label="Close About"
-          onClick={onClose}
-        >
-          <WindowCloseIcon />
-        </button>
+          label="Close About"
+          onClose={onClose}
+        />
         <header className="about-header">
           <StratumBrandIcon className="about-logo" />
           <h2 className="about-title" id={titleId}>{appName}</h2>

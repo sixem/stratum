@@ -47,6 +47,7 @@ export const useLayoutMenuItems = ({
       shellItems.push({
         id: "layout-shell-pwsh",
         label: "Open in PowerShell",
+        icon: "terminal",
         onSelect: () => {
           if (!targetPath) return;
           onOpenShell("pwsh", targetPath);
@@ -58,6 +59,7 @@ export const useLayoutMenuItems = ({
       shellItems.push({
         id: "layout-shell-wsl",
         label: "Open in WSL",
+        icon: "terminal",
         onSelect: () => {
           if (!targetPath) return;
           onOpenShell("wsl", targetPath);
@@ -72,6 +74,7 @@ export const useLayoutMenuItems = ({
             {
               id: "layout-new-folder",
               label: "New folder",
+              icon: "new-folder",
               onSelect: () => {
                 if (!onCreateFolder || !targetPath) return;
                 openCreatePrompt({
@@ -86,6 +89,7 @@ export const useLayoutMenuItems = ({
             {
               id: "layout-new-file",
               label: "New file",
+              icon: "new-file",
               onSelect: () => {
                 if (!onCreateFile || !targetPath) return;
                 openCreatePrompt({
@@ -102,6 +106,7 @@ export const useLayoutMenuItems = ({
       {
         id: "layout-paste",
         label: "Paste",
+        icon: "paste",
         onSelect: () => {
           if (targetPath) onPaste(targetPath);
         },

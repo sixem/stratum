@@ -1,7 +1,7 @@
 // Conversion planning modal: thin container that wires feature-local model
 // state into smaller presentational sections.
 import { useEffect, useId, useRef } from "react";
-import { PressButton } from "@/components/primitives";
+import { DialogCloseButton } from "@/components/overlay/DialogCloseButton";
 import { useModalFocusTrap } from "@/hooks";
 import { useShellStore } from "@/modules";
 import { findRuleFormat } from "./conversionModalConfig";
@@ -41,7 +41,7 @@ export const ConversionModal = ({
   const panelRef = useRef<HTMLDivElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const shouldCloseRef = useRef(false);
-  const ffmpegMessage = useShellStore(state => state.availability?.ffmpegMessage);
+  const availability = useShellStore(state => state.availability);
   const model = useConversionModalModel({
     open,
     request,
@@ -72,6 +72,14 @@ export const ConversionModal = ({
   }, [onClose, open]);
 
   if (!open || !request || !draft) return null;
+
+  // An invalid configured path can still resolve to a working automatic installation.
+  const ffmpegStatus = model.hasVideoItems && availability && (!availability.ffmpeg || availability.ffmpegMessage)
+    ? {
+        available: availability.ffmpeg,
+        detail: availability.ffmpegMessage ?? "Choose ffmpeg.exe in Settings.",
+      }
+    : null;
 
   return (
     <div
@@ -107,9 +115,7 @@ export const ConversionModal = ({
               ].filter(Boolean).join(" · ")}
             </p>
           </div>
-          <PressButton type="button" className="btn ghost" onClick={onClose}>
-            Close
-          </PressButton>
+          <DialogCloseButton onClose={onClose} />
         </div>
         <div className="conversion-body">
           <section className="conversion-right" aria-label="Conversion options">
@@ -118,6 +124,7 @@ export const ConversionModal = ({
                 outputMode={draft.outputMode}
                 suffix={draft.suffix}
                 sampleItem={model.sampleItem}
+                ffmpegStatus={ffmpegStatus}
                 sampleFormat={model.sampleItem && (model.sampleItem.override?.targetFormat ?? findRuleFormat(draft, model.sampleItem.kind))}
                 runInProgress={model.runInProgress}
                 onOutputModeChange={model.setOutputMode}
@@ -130,9 +137,6 @@ export const ConversionModal = ({
                 runInProgress={model.runInProgress}
                 onRuleFormatChange={model.setRuleFormat}
               />
-              {model.hasVideoItems && ffmpegMessage && (
-                <div className="conversion-block" role="status">{ffmpegMessage}</div>
-              )}
               {model.hasImageItems ? (
                 <ConversionImageOptionsSection
                   imageQualityValue={model.imageQualityValue}

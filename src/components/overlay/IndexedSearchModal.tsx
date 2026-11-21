@@ -5,7 +5,7 @@
 // indexedSearchModal/.
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef } from "react";
 
-import { BinocularsIcon, TabCloseIcon } from "@/components/icons";
+import { LibraryIcon, TabCloseIcon } from "@/components/icons";
 import { ContextMenu } from "@/components/overlay/ContextMenu";
 import { buildIndexedSearchGallery } from "@/components/overlay/indexedSearchModal/buildIndexedSearchGallery";
 import { IndexedSearchDriveList } from "@/components/overlay/indexedSearchModal/IndexedSearchDriveList";
@@ -22,6 +22,7 @@ import { useModalFocusTrap } from "@/hooks";
 import type { PreviewGallerySource, PreviewSourceBindings } from "@/hooks/ui/view/useQuickPreview";
 import { formatCount, formatIndexedSearchServiceState, isIndexedDriveActiveState } from "@/lib";
 import { useIndexedSearchUiStore } from "@/modules";
+import { DialogCloseButton } from "./DialogCloseButton";
 
 export type IndexedSearchModalProps = {
   menuActions: IndexedSearchMenuActions;
@@ -204,20 +205,12 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
           className="indexed-search-header"
           title="Indexed Search"
           titleId={titleId}
-          actions={
-            <PressButton
-              type="button"
-              className="btn ghost"
-              onClick={closeModal}
-            >
-              Close
-            </PressButton>
-          }
+          actions={<DialogCloseButton onClose={closeModal} />}
         />
 
         <div className="indexed-search-field">
           <div className="indexed-search-searchbox">
-            <BinocularsIcon className="indexed-search-searchbox-icon" />
+            <LibraryIcon className="indexed-search-searchbox-icon" />
             <input
               ref={inputRef}
               type="search"

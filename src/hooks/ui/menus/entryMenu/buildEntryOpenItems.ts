@@ -26,7 +26,7 @@ export const buildEntryOpenItems = ({
     {
       id: "entry-open",
       label: "Open",
-      icon: "open",
+      icon: target.isDir ? "open-folder" : "open",
       onSelect: () => {
         if (!hasTargets) return;
         if (target.isDir) {
@@ -52,6 +52,7 @@ export const buildEntryOpenItems = ({
     items.push({
       id: "entry-open-new-tab",
       label: "Open in new tab",
+      icon: "open-new-tab",
       onSelect: () => {
         if (!hasTargets) return;
         onOpenDirNewTab(target.path);
@@ -63,6 +64,7 @@ export const buildEntryOpenItems = ({
     items.push({
       id: "entry-open-other-pane",
       label: otherPane.label,
+      icon: "open-folder",
       onSelect: () => otherPane.open(target.path),
     });
   }

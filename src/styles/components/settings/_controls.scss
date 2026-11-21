@@ -157,14 +157,7 @@
   }
 
   .settings-pills {
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    align-items: center;
-    padding: 3px;
-    border: 1px solid #1b2232;
-    border-radius: 999px;
-    background: #101521;
+    @include control.pill-group();
     justify-self: start;
   }
 
@@ -289,27 +282,7 @@
   }
 
   .settings-pill {
-    padding: 5px 12px;
-    border-radius: 999px;
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    color: var(--muted);
-    border: 1px solid transparent;
-    cursor: pointer;
-    background: transparent;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition:
-      color 0.14s ease,
-      background-color 0.14s ease,
-      border-color 0.14s ease;
-  }
-
-  .settings-pill:hover:not(:disabled):not(.is-active) {
-    color: var(--text);
-    background: #141a28;
-    border-color: rgba(255, 255, 255, 0.05);
+    @include control.pill-option();
   }
 
   .settings-pill-check {
@@ -325,20 +298,6 @@
 
   .settings-pill-check span {
     pointer-events: none;
-  }
-
-  .settings-pill.is-active {
-    @include control.active-surface(
-      #181f2e,
-      var(--text),
-      rgba(255, 255, 255, 0.08),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.03)
-    );
-  }
-
-  .settings-pill:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 
   .settings-swatch {

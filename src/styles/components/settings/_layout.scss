@@ -4,6 +4,7 @@
 :where(.settings-panel) {
   .settings-header {
     gap: 8px;
+    border-bottom-width: var(--surface-border-width);
   }
 
   .settings-title {
@@ -16,10 +17,6 @@
     color: var(--muted);
     max-width: 520px;
     line-height: 1.4;
-  }
-
-  .settings-close {
-    align-self: start;
   }
 
   .settings-body {
@@ -53,7 +50,7 @@
   }
 
   .settings-sidebar-actions {
-    border-top: 1px solid var(--stroke);
+    border-top: var(--surface-border-width) solid var(--stroke);
     padding-top: 12px;
     display: grid;
     gap: 8px;
@@ -114,7 +111,7 @@
   .settings-sidebar-footer {
     margin-top: auto;
     padding-top: 12px;
-    border-top: 1px solid var(--stroke);
+    border-top: var(--surface-border-width) solid var(--stroke);
     display: grid;
     gap: 8px;
   }

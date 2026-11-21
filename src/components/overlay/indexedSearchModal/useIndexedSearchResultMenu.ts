@@ -74,6 +74,7 @@ export const useIndexedSearchResultMenu = ({
       return [{
         id: "indexed-open-current-tab",
         label: "Open in current tab",
+        icon: "open-folder",
         onSelect: () => { closeSearch(); actions.onOpenFolder(result.path); },
       }];
     }
@@ -81,6 +82,7 @@ export const useIndexedSearchResultMenu = ({
     return parent ? [{
       id: "indexed-open-containing-folder",
       label: "Open containing folder",
+      icon: "open-folder",
       onSelect: () => { closeSearch(); actions.onOpenFolderNewTab(parent); },
     }] : [];
   }, [actions.onOpenFolder, actions.onOpenFolderNewTab, closeSearch, result]);

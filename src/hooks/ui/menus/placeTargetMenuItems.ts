@@ -69,7 +69,7 @@ export const buildPlaceTargetMenuItems = ({
     items.push({
       id: "place-target-open",
       label: "Open",
-      icon: "open",
+      icon: "open-folder",
       onSelect: () => onOpenPath(path),
     });
   }
@@ -78,6 +78,7 @@ export const buildPlaceTargetMenuItems = ({
     items.push({
       id: "place-target-open-new-tab",
       label: "Open in new tab",
+      icon: "open-new-tab",
       onSelect: () => onOpenPathNewTab(path),
     });
   }
@@ -90,6 +91,7 @@ export const buildPlaceTargetMenuItems = ({
     items.push({
       id: "place-target-pin-toggle",
       label: buildPinLabel(target.source, true, isPinned),
+      icon: isPinned ? "unpin" : "pin",
       onSelect: () => {
         if (isPinned) {
           onUnpinPlace(path);
@@ -101,17 +103,20 @@ export const buildPlaceTargetMenuItems = ({
     items.push({
       id: "place-target-remove",
       label: "Remove from places",
+      icon: "remove",
       onSelect: () => onRemovePlace(path),
     });
   } else {
     items.push({
       id: "place-target-add",
       label: buildAddLabel(target.source),
+      icon: "add",
       onSelect: () => addOrUpdate(),
     });
     items.push({
       id: "place-target-pin",
       label: buildPinLabel(target.source, false, false),
+      icon: "pin",
       onSelect: () => addOrUpdate({ pinned: true }),
     });
   }
@@ -121,6 +126,7 @@ export const buildPlaceTargetMenuItems = ({
     items.push({
       id: "place-target-remove-recent",
       label: "Remove from recent jumps",
+      icon: "remove",
       onSelect: () => onRemoveRecentJump(path),
     });
   }

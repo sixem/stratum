@@ -4,7 +4,7 @@
 // actions are passed in so opening files and rebuilding drives stay testable in
 // the modal hooks.
 import { OpenExternalIcon } from "@/components/icons";
-import { ContextOpenIcon } from "@/components/icons/contextMenuIcons";
+import { ContextOpenFolderIcon } from "@/components/icons/contextMenuIcons";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PressButton } from "@/components/primitives";
 import {
@@ -91,7 +91,7 @@ export const IndexedSearchSelectionDetail = ({
               className="btn indexed-search-selection-detail-action"
               onClick={() => onOpenResult(selectedResult)}
             >
-              {selectedResult.kind === "file" ? <OpenExternalIcon /> : <ContextOpenIcon />}
+              {selectedResult.kind === "file" ? <OpenExternalIcon /> : <ContextOpenFolderIcon />}
               Open
             </PressButton>
           </div>

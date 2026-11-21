@@ -114,6 +114,49 @@
   }
 }
 
+// Pill groups share the same shape and selection states across dialogs.
+@mixin pill-group($border-width: 1px) {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  padding: 3px;
+  @include control-surface(999px, #101521, #1b2232, $border-width);
+}
+
+@mixin pill-option() {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  @include control-surface(999px, transparent, transparent, 1px);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.14s ease, background-color 0.14s ease, border-color 0.14s ease;
+
+  &:hover:not(:disabled):not(.is-active) {
+    color: var(--text);
+    background: #141a28;
+    border-color: rgba(255, 255, 255, 0.05);
+  }
+
+  &.is-active {
+    @include active-surface(
+      #181f2e,
+      var(--text),
+      rgba(255, 255, 255, 0.08),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.03)
+    );
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
 @mixin eyebrow-label(
   $size: var(--font-size-2xs),
   $tracking: var(--eyebrow-tracking),
