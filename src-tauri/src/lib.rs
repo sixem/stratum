@@ -118,6 +118,7 @@ pub fn run() {
             app::commands::get_image_info,
             app::commands::convert_media_entries,
             app::commands::get_file_icons,
+            app::commands::get_executable_icons,
             app::commands::get_shell_availability,
             app::commands::open_shell,
             app::commands::is_windows_11,

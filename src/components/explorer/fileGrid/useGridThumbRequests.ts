@@ -17,6 +17,7 @@ import type { EntryMeta, ThumbnailRequest } from "@/types";
 import { useGridDisplayMeta } from "./useGridDisplayMeta";
 import type { GridDisplayMeta } from "./useGridDisplayMeta";
 import { useGridFolderSamples } from "./useGridFolderSamples";
+import { useExecutableIcons } from "./useExecutableIcons";
 
 type UseGridThumbRequestsOptions = {
   viewportRef: RefObject<HTMLDivElement | null>;
@@ -41,6 +42,7 @@ type GridThumbRequestsState = {
   thumbSource: Map<string, string>;
   folderThumbSource: Map<string, string>;
   fileIcons: Map<string, string>;
+  executableIcons: Map<string, string>;
   scrolling: boolean;
   interactionActive: boolean;
 };
@@ -96,14 +98,15 @@ export const useGridThumbRequests = ({
     lastSuppressedRef.current = thumbsSuppressed;
   }, [thumbsSuppressed, thumbnails]);
 
-  const { metaPaths, thumbRequests, folderPaths } = useMemo(() => {
+  const { metaPaths, thumbRequests, folderPaths, executableFiles } = useMemo(() => {
     // Build the meta + thumbnail request lists in one pass to keep allocations low.
     if (visibleItems.length === 0) {
-      return { metaPaths: [], thumbRequests: [], folderPaths: [] };
+      return { metaPaths: [], thumbRequests: [], folderPaths: [], executableFiles: [] };
     }
     const nextMeta: string[] = [];
     const nextThumbs: ThumbnailRequest[] = [];
     const nextFolders: string[] = [];
+    const nextExecutables: ThumbnailRequest[] = [];
     for (const item of visibleItems) {
       if (item.type !== "entry") continue;
       if (item.presence === "removed") continue;
@@ -122,9 +125,16 @@ export const useGridThumbRequests = ({
         size: resolvedSize,
         modified: resolvedModified,
       });
+      if (thumbnailAppIcons && getExtension(item.entry.name) === "exe") {
+        nextExecutables.push({
+          path,
+          size: item.entry.size ?? resolvedSize,
+          modified: item.entry.modified ?? resolvedModified,
+        });
+      }
     }
-    return { metaPaths: nextMeta, thumbRequests: nextThumbs, folderPaths: nextFolders };
-  }, [entryMeta, visibleItems]);
+    return { metaPaths: nextMeta, thumbRequests: nextThumbs, folderPaths: nextFolders, executableFiles: nextExecutables };
+  }, [entryMeta, thumbnailAppIcons, visibleItems]);
 
   const gridMetaByPath = useGridDisplayMeta({
     entryMeta,
@@ -138,6 +148,7 @@ export const useGridThumbRequests = ({
   const canRequestThumbs = thumbnailsEnabled && !loading && !interactionActive;
   const thumbSource = thumbsSuppressed ? thumbSnapshotRef.current : thumbnails;
   const { icons: fileIcons, requestIcons: requestFileIcons } = useFileIcons(thumbnailAppIcons);
+  const executableIcons = useExecutableIcons(executableFiles, thumbnailAppIcons && !loading && !interactionActive);
   useThumbnailRequest(
     loading || interactionActive,
     canRequestThumbs,
@@ -239,6 +250,7 @@ export const useGridThumbRequests = ({
     thumbSource,
     folderThumbSource,
     fileIcons,
+    executableIcons,
     scrolling,
     interactionActive,
   };

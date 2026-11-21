@@ -26,6 +26,7 @@ export const ThumbnailIcon = ({
   extension,
   thumbUrl,
   appIconUrl,
+  executableIconUrl,
   appIconsEnabled = false,
 }: ThumbnailIconProps) => {
   const [thumbReady, setThumbReady] = useState(
@@ -40,22 +41,15 @@ export const ThumbnailIcon = ({
     setThumbReady(isThumbPreviewReadyCached(thumbUrl));
   }, [thumbUrl]);
 
+  const [failedExecutableIcon, setFailedExecutableIcon] = useState<string>();
+  const [loadedAppIcon, setLoadedAppIcon] = useState<string>();
+  const specificIcon = executableIconUrl !== failedExecutableIcon ? executableIconUrl : undefined;
   // A refresh can replace a file with a folder at the same path, reusing this card.
-  const showAppIcon = !isDir && Boolean(appIconUrl) && appIconsEnabled && !thumbReady;
-  const [appIconReady, setAppIconReady] = useState(
-    () => Boolean(appIconUrl && readyAppIconUrls.has(appIconUrl)),
-  );
-
-  useEffect(() => {
-    if (!appIconUrl) {
-      setAppIconReady(false);
-      return;
-    }
-    setAppIconReady(readyAppIconUrls.has(appIconUrl));
-  }, [appIconUrl]);
+  const iconUrl = !isDir && appIconsEnabled && !thumbReady ? specificIcon ?? appIconUrl : undefined;
+  const appIconReady = Boolean(iconUrl && (loadedAppIcon === iconUrl || readyAppIconUrls.has(iconUrl)));
 
   // Keep fallback visible until either app icon or thumbnail has decoded for this card.
-  const showFallback = !thumbReady && (!showAppIcon || !appIconReady);
+  const showFallback = !thumbReady && !appIconReady;
 
   return (
     <>
@@ -67,25 +61,23 @@ export const ThumbnailIcon = ({
           extension={extension}
         />
       ) : null}
-      {showAppIcon ? (
+      {iconUrl ? (
         <img
+          key={iconUrl}
           className="thumb-app-icon"
-          src={appIconUrl}
+          src={iconUrl}
           alt=""
           aria-hidden="true"
           draggable={false}
           data-ready={appIconReady ? "true" : "false"}
-          onLoad={(event) => {
-            if (appIconUrl) {
-              markAppIconReady(appIconUrl);
-            }
-            setAppIconReady(true);
-            event.currentTarget.dataset.ready = "true";
+          onLoad={() => {
+            markAppIconReady(iconUrl);
+            setLoadedAppIcon(iconUrl);
           }}
-          onError={(event) => {
-            if (appIconUrl) readyAppIconUrls.delete(appIconUrl);
-            setAppIconReady(false);
-            event.currentTarget.dataset.ready = "false";
+          onError={() => {
+            readyAppIconUrls.delete(iconUrl);
+            setLoadedAppIcon(undefined);
+            if (specificIcon) setFailedExecutableIcon(iconUrl);
           }}
         />
       ) : null}

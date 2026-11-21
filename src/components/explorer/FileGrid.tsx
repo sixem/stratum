@@ -147,6 +147,7 @@ const FileGrid = ({
     thumbSource,
     folderThumbSource,
     fileIcons,
+    executableIcons,
     interactionActive,
   } = useGridThumbRequests({
     viewportRef,
@@ -261,6 +262,7 @@ const FileGrid = ({
                 sizeLabel={itemMeta ? itemMeta.sizeLabel : ""}
                 thumbUrl={thumbUrl}
                 appIconUrl={appIconUrl}
+                executableIconUrl={executableIcons.get(item.entry.path)}
                 appIconsEnabled={thumbs.thumbnailAppIcons}
                 disableTooltip={interactionActive}
                 showSize={grid.gridShowSize}

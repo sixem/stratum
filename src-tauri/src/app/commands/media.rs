@@ -94,6 +94,16 @@ pub async fn get_file_icons(
 }
 
 #[tauri::command]
+pub async fn get_executable_icons(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+) -> Result<Vec<file_icons::ExecutableIconHit>, String> {
+    tauri::async_runtime::spawn_blocking(move || file_icons::get_executable_icons(&app, paths))
+        .await
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
 pub async fn get_image_info(path: String) -> Result<images::ImageInfo, String> {
     tauri::async_runtime::spawn_blocking(move || images::get_image_info(path))
         .await

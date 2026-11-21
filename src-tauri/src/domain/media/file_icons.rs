@@ -1,4 +1,4 @@
-// Retrieves and caches default app icons for file extensions.
+// Retrieves and caches Windows file-type and executable icons.
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
@@ -7,6 +7,10 @@ use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Manager};
 
+#[cfg(target_os = "windows")]
+mod cache;
+#[cfg(target_os = "windows")]
+mod executable;
 #[cfg(target_os = "windows")]
 mod handler_cache;
 #[cfg(target_os = "windows")]
@@ -17,6 +21,23 @@ pub(crate) use handler_cache::HandlerIconCache;
 pub struct FileIconHit {
     pub extension: String,
     pub icon_path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutableIconHit {
+    pub path: String,
+    pub icon_path: String,
+}
+
+pub fn get_executable_icons(app_handle: &AppHandle, paths: Vec<String>) -> Vec<ExecutableIconHit> {
+    #[cfg(target_os = "windows")]
+    return executable::load_icons(&resolve_cache_dir(app_handle), paths);
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (app_handle, paths);
+        Vec::new()
+    }
 }
 
 pub fn get_file_icons(

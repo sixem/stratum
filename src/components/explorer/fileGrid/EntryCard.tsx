@@ -19,6 +19,7 @@ export const EntryCard = memo(({
   sizeLabel,
   thumbUrl,
   appIconUrl,
+  executableIconUrl,
   appIconsEnabled,
   disableTooltip = false,
   showSize,
@@ -166,6 +167,7 @@ export const EntryCard = memo(({
           extension={extension}
           thumbUrl={thumbUrl}
           appIconUrl={appIconUrl}
+          executableIconUrl={executableIconUrl}
           appIconsEnabled={appIconsEnabled}
         />
       </div>

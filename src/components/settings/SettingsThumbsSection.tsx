@@ -34,7 +34,7 @@ export const THUMBS_SETTINGS_ITEMS = {
   },
   appIcons: {
     label: "Default app icons",
-    description: "Show the system icon when no thumbnail is available.",
+    description: "Show Windows icons when no thumbnail is available, including icons embedded in executables.",
   },
   display: {
     label: "Thumbnail display",

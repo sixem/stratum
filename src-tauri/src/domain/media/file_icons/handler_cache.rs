@@ -3,14 +3,12 @@ use std::collections::hash_map::DefaultHasher;
 use std::ffi::OsString;
 use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
-use std::io::{self, BufReader, BufWriter, Write};
+use std::io::BufReader;
 use std::os::windows::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
-use image::{
-    imageops::FilterType, io::Limits, io::Reader, DynamicImage, ImageFormat, ImageOutputFormat,
-};
+use super::cache::{fresh_icon, publish_icon, trim_icon_cache};
+use image::{imageops::FilterType, io::Limits, io::Reader, DynamicImage, ImageFormat};
 use windows::core::HSTRING;
 use windows::Win32::UI::{
     Controls::{IImageList, ILD_TRANSPARENT},
@@ -19,7 +17,6 @@ use windows::Win32::UI::{
 
 const MAX_ICON_SIDE: u32 = 32;
 const MAX_ICONS: usize = 256;
-const MAX_AGE: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 pub(crate) struct HandlerIconCache {
     directory: PathBuf,
@@ -89,38 +86,8 @@ impl HandlerIconCache {
 
     pub(crate) fn trim(&self) {
         // Cache hits need only one stat. Scan the small directory once after a batch of writes.
-        if !self.added_icons {
-            return;
-        }
-        let Ok(entries) = fs::read_dir(&self.directory) else {
-            return;
-        };
-        let mut icons = Vec::new();
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Some(extension) = path.extension().and_then(|value| value.to_str()) else {
-                continue;
-            };
-            if !matches!(extension, "png" | "tmp")
-                || !entry.file_type().is_ok_and(|kind| kind.is_file())
-            {
-                continue;
-            }
-            let Ok(modified) = entry.metadata().and_then(|item| item.modified()) else {
-                continue;
-            };
-            if modified.elapsed().unwrap_or_default() >= MAX_AGE {
-                let _ = fs::remove_file(path);
-            } else if extension == "png" {
-                icons.push((modified, path));
-            }
-        }
-        let excess = icons.len().saturating_sub(MAX_ICONS);
-        if excess > 0 {
-            icons.sort_unstable_by_key(|(modified, _)| *modified);
-            for (_, path) in icons.into_iter().take(excess) {
-                let _ = fs::remove_file(path);
-            }
+        if self.added_icons {
+            trim_icon_cache(&self.directory, MAX_ICONS);
         }
     }
 }
@@ -142,39 +109,4 @@ fn packaged_app_icon(location: &str) -> Option<DynamicImage> {
     limits.max_alloc = Some(4 * 1024 * 1024);
     reader.limits(limits);
     reader.decode().ok()
-}
-
-fn fresh_icon(path: &Path) -> bool {
-    fs::symlink_metadata(path).is_ok_and(|info| {
-        info.is_file()
-            && info.len() > 0
-            && info
-                .modified()
-                .is_ok_and(|modified| modified.elapsed().unwrap_or_default() < MAX_AGE)
-    })
-}
-
-fn publish_icon(path: &Path, image: &DynamicImage) -> io::Result<()> {
-    // Use a private staging file so parallel menu requests never read a partial PNG.
-    let mut nonce = [0; 8];
-    getrandom::fill(&mut nonce).map_err(|error| io::Error::other(error.to_string()))?;
-    let stage = path.with_extension(format!("{:016x}.tmp", u64::from_le_bytes(nonce)));
-    let file = File::options().write(true).create_new(true).open(&stage)?;
-    let result = encode_icon(file, image).and_then(|()| fs::rename(&stage, path));
-    if result.is_err() {
-        let _ = fs::remove_file(stage);
-        // A concurrent render may have already published the same icon.
-        if fresh_icon(path) {
-            return Ok(());
-        }
-    }
-    result
-}
-
-fn encode_icon(file: File, image: &DynamicImage) -> io::Result<()> {
-    let mut writer = BufWriter::new(file);
-    image
-        .write_to(&mut writer, ImageOutputFormat::Png)
-        .map_err(io::Error::other)?;
-    writer.flush()
 }

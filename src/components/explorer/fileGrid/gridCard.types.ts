@@ -13,6 +13,7 @@ export type ThumbnailIconProps = {
   extension: string | null;
   thumbUrl?: string;
   appIconUrl?: string;
+  executableIconUrl?: string;
   appIconsEnabled?: boolean;
 };
 
@@ -41,6 +42,7 @@ export type EntryCardProps = {
   sizeLabel: string | null;
   thumbUrl?: string;
   appIconUrl?: string;
+  executableIconUrl?: string;
   appIconsEnabled: boolean;
   disableTooltip?: boolean;
   showSize: boolean;
