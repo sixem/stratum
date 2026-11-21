@@ -3,6 +3,8 @@
 // The store facade keeps shared SQLite connection details and catalog data
 // shapes in one place. Schema setup, writes, query planning, and ranking live
 // in focused modules under catalog/.
+#[path = "catalog/pagination.rs"]
+mod pagination;
 #[path = "catalog/query.rs"]
 mod query;
 #[path = "catalog/ranking.rs"]

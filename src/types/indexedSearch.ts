@@ -49,3 +49,10 @@ export type IndexedPathQuery = {
   query: string;
   limit?: number;
 };
+
+export type IndexedPathPageQuery = IndexedPathQuery & { cursor?: string | null };
+
+export type IndexedPathPage = {
+  matches: IndexedPathMatch[];
+  nextCursor: string | null;
+};

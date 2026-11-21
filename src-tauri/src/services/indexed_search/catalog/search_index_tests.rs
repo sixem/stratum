@@ -7,7 +7,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::domain::indexed_search::IndexedPathQuery;
+use crate::domain::indexed_search::{IndexedPathPageQuery, IndexedPathQuery};
 
 use super::*;
 
@@ -325,4 +325,88 @@ fn exact_and_prefix_hits_survive_a_full_substring_candidate_set() {
     assert_ranked();
     assert!(store.backfill_search_index(&|| false).unwrap());
     assert_ranked();
+}
+
+#[test]
+fn keyset_pages_cover_prefixes_substrings_and_equal_names() {
+    let directory = TestDirectory::new();
+    let path = directory.0.join("catalog.db");
+    let mut connection = Connection::open(&path).unwrap();
+    create_legacy_tables(&connection);
+
+    // Equal names resume by their index row IDs, even across page boundaries.
+    let prefixes = (0..77)
+        .rev()
+        .map(|number| (format!(r"C:\folder{number:03}\needle.txt"), "needle.txt"));
+    let substrings = (0..81).map(|number| {
+        (
+            format!(r"C:\folder{number:03}\a-needle.txt"),
+            "a-needle.txt",
+        )
+    });
+    let visible: Vec<_> = [(r"C:\needle".to_owned(), "needle")]
+        .into_iter()
+        .chain(prefixes)
+        .chain(substrings)
+        .collect();
+    let transaction = connection.transaction().unwrap();
+    transaction
+        .execute(
+            "INSERT INTO indexed_entries (path, normalized_name, kind) VALUES (?1, 'needle', 0)",
+            [r"Z:\needle"],
+        )
+        .unwrap();
+    for (path, name) in &visible {
+        transaction
+            .execute(
+                "INSERT INTO indexed_entries (path, normalized_name, kind) VALUES (?1, ?2, 0)",
+                params![path, name],
+            )
+            .unwrap();
+    }
+    transaction.commit().unwrap();
+    drop(connection);
+    let store = IndexedCatalogStore::open(path).unwrap();
+    verify_test_volume(&store);
+    assert!(store.search_index_needs_backfill().unwrap());
+
+    let volumes = [("C:\\".to_owned(), "test-volume".to_owned())];
+    let page = |query: &str, cursor: Option<String>| {
+        store.query_page(
+            IndexedPathPageQuery {
+                search: IndexedPathQuery {
+                    query: query.into(),
+                    limit: Some(25),
+                },
+                cursor,
+            },
+            &volumes,
+        )
+    };
+    let results = |query| {
+        let mut cursor = None;
+        let mut paths = Vec::new();
+        loop {
+            let response = page(query, cursor).unwrap();
+            paths.extend(response.matches.into_iter().map(|entry| entry.path));
+            assert!(paths.len() <= visible.len());
+            let Some(next) = response.next_cursor else {
+                return paths;
+            };
+            cursor = Some(next);
+        }
+    };
+    let expected: Vec<_> = visible.iter().map(|(path, _)| path.clone()).collect();
+    assert_eq!(results("needle"), expected);
+    let wildcard = results("*needle*");
+    assert_eq!(wildcard.len(), expected.len());
+    assert_eq!(wildcard[0], r"C:\folder000\a-needle.txt");
+
+    assert!(store.backfill_search_index(&|| false).unwrap());
+    assert_eq!(results("needle"), expected);
+    assert_eq!(results("*needle*"), wildcard);
+
+    let cursor = page("needle", None).unwrap().next_cursor;
+    assert!(page("other", cursor).is_err());
+    assert!(page("needle", Some("invalid".to_owned())).is_err());
 }

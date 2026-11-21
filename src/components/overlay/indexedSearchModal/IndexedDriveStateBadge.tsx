@@ -13,6 +13,7 @@ const statusDescriptions: Partial<Record<IndicatorState, string>> = {
   checking: "Verifying the saved index for this drive.",
   ready: "The index tracks NTFS changes across the drive.",
   saved: "Saved results are available. Drive-wide updates depend on the NTFS change journal.",
+  queued: "This drive will refresh when a scan slot is available.",
   scanning: "Stratum is scanning this drive in the background.",
   rescanrequired: "This drive needs a fresh index.",
   stale: "The saved index may be out of date.",
@@ -31,7 +32,7 @@ const renderIndexedDriveStateMarker = (state: IndicatorState) => {
       return <HourglassIcon className="indexed-search-drive-state-icon" />;
     case "scanning":
     case "checking":
-      return <RefreshIcon className="indexed-search-drive-state-icon" />;
+      return <RefreshIcon className="indexed-search-drive-state-icon indexed-search-refresh-spinner" />;
     case "stale":
     case "rescanrequired":
     case "unsupported":

@@ -9,6 +9,8 @@
   }
 
   .indexed-search-results .indexed-search-section-head {
+    min-height: 42px;
+    align-items: center;
     padding: 11px 12px 10px;
     border-bottom: 1px solid var(--stroke);
   }
@@ -19,19 +21,33 @@
   }
 
   .indexed-search-result-list {
-    display: grid;
-    align-content: start;
-    gap: 3px;
-    padding: 6px 12px 6px 6px;
+    position: relative;
+  }
+
+  .indexed-search-results-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .indexed-search-results-status img {
+    width: 14px;
+    height: 14px;
+  }
+
+  .indexed-search-results-status .btn {
+    padding: 1px 5px;
   }
 
   .indexed-search-result {
     @include control.control-surface(6px, transparent, transparent);
+    position: absolute;
+    inset-inline: 6px 12px;
     display: grid;
-    grid-template-columns: 32px minmax(0, 1fr) auto;
+    grid-template-columns: 32px minmax(0, 1fr) minmax(7ch, auto);
     align-items: center;
     gap: 10px;
-    width: 100%;
     min-width: 0;
     padding: 5px 9px 5px 6px;
     text-align: left;
@@ -91,11 +107,16 @@
   }
 
   .indexed-search-result-path,
-  .indexed-search-result-kind {
+  .indexed-search-result-detail {
     color: var(--muted);
     font-size: var(--font-size-sm);
     font-weight: 500;
     line-height: 1.3;
+  }
+
+  .indexed-search-result-detail {
+    text-align: right;
+    white-space: nowrap;
   }
 
   .indexed-search-empty {

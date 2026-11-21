@@ -110,6 +110,7 @@ pub fn run() {
             app::commands::set_indexed_search_enabled,
             app::commands::list_indexed_drive_statuses,
             app::commands::query_indexed_paths,
+            app::commands::query_indexed_path_page,
             app::commands::rebuild_indexed_drive,
             app::commands::get_thumb_cache_dir,
             app::commands::clear_thumb_cache,

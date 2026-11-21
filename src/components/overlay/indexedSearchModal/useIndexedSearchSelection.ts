@@ -3,8 +3,8 @@
 // This hook is deliberately UI-adjacent: it owns refs used for keyboard
 // scrolling, but keeps backend detail loading and open-path failures out of the
 // render-only components.
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 
 import { openPath, statEntries } from "@/api";
 import type {
@@ -17,11 +17,15 @@ import {
   normalizeIndexedPathKey,
   type IndexedSelection,
 } from "./indexedSearchModalTypes";
+import { useIndexedResultFocus } from "./useIndexedResultFocus";
 
 type UseIndexedSearchSelectionParams = {
   driveStatuses: IndexedDriveStatus[];
   open: boolean;
   results: IndexedPathMatch[];
+  hasMore: boolean;
+  loadMore: () => void;
+  resultsViewportRef: RefObject<HTMLDivElement | null>;
   onOpenFolder: (path: string) => void;
 };
 
@@ -29,24 +33,18 @@ export const useIndexedSearchSelection = ({
   driveStatuses,
   open,
   results,
+  hasMore,
+  loadMore,
+  resultsViewportRef,
   onOpenFolder,
 }: UseIndexedSearchSelectionParams) => {
-  const resultRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const { registerResultRow, revealResult } = useIndexedResultFocus(resultsViewportRef);
   const [selection, setSelection] = useState<IndexedSelection | null>(null);
   const [selectedResultMeta, setSelectedResultMeta] = useState<EntryMeta | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
-
-  const selectedResult =
-    selection?.kind === "result"
-      ? results.find(
-          (result) =>
-            normalizeIndexedPathKey(result.path) === normalizeIndexedPathKey(selection.path),
-        ) ?? null
-      : null;
-
-  useEffect(() => {
-    resultRefs.current.length = results.length;
-  }, [results.length]);
+  const resultIndexes = useMemo(() => new Map(results.map(({ path }, index) => [path, index])), [results]);
+  const selectedResultIndex = selection?.kind === "result" ? resultIndexes.get(selection.path) ?? -1 : -1;
+  const selectedResult = results[selectedResultIndex] ?? null;
 
   useEffect(() => {
     if (open) return;
@@ -61,15 +59,12 @@ export const useIndexedSearchSelection = ({
 
     setSelection((current) => {
       if (current?.kind === "result") {
+        if (resultIndexes.has(current.path)) return current;
+        const pathKey = normalizeIndexedPathKey(current.path);
         const matchingResult = results.find(
-          (result) =>
-            normalizeIndexedPathKey(result.path) === normalizeIndexedPathKey(current.path),
+          (result) => normalizeIndexedPathKey(result.path) === pathKey,
         );
-        if (matchingResult) {
-          return current.path === matchingResult.path
-            ? current
-            : { kind: "result", path: matchingResult.path };
-        }
+        if (matchingResult) return { kind: "result", path: matchingResult.path };
       }
 
       if (current?.kind === "drive") {
@@ -91,7 +86,7 @@ export const useIndexedSearchSelection = ({
 
       return null;
     });
-  }, [driveStatuses, open, results]);
+  }, [driveStatuses, open, resultIndexes, results]);
 
   const selectedResultPath = selectedResult?.path;
 
@@ -138,7 +133,8 @@ export const useIndexedSearchSelection = ({
 
   const selectResult = useCallback((result: IndexedPathMatch) => {
     setSelectionError(null);
-    setSelection({ kind: "result", path: result.path });
+    setSelection((current) => current?.kind === "result" && current.path === result.path
+      ? current : { kind: "result", path: result.path });
   }, []);
 
   const selectDrive = useCallback((drivePath: string) => {
@@ -149,30 +145,30 @@ export const useIndexedSearchSelection = ({
     (direction: 1 | -1, focusRow: boolean) => {
       if (results.length === 0) return;
 
-      const currentIndex =
-        selection?.kind === "result"
-          ? results.findIndex(
-              (result) =>
-                normalizeIndexedPathKey(result.path) ===
-                normalizeIndexedPathKey(selection.path),
-            )
-          : -1;
+      if (hasMore && direction > 0 && selectedResultIndex === results.length - 1) {
+        loadMore();
+        return;
+      }
+      if (hasMore && direction < 0 && selectedResultIndex === 0) return;
+
       const nextIndex =
-        currentIndex < 0
+        selectedResultIndex < 0
           ? direction > 0
             ? 0
             : results.length - 1
-          : (currentIndex + direction + results.length) % results.length;
+          : (selectedResultIndex + direction + results.length) % results.length;
       const nextResult = results[nextIndex];
       if (!nextResult) return;
 
       selectResult(nextResult);
-      const row = resultRefs.current[nextIndex];
-      if (focusRow) row?.focus({ preventScroll: true });
-      row?.scrollIntoView({ block: "nearest" });
+      revealResult(nextResult.path, nextIndex, focusRow);
     },
-    [results, selectResult, selection],
+    [hasMore, loadMore, results, revealResult, selectedResultIndex, selectResult],
   );
+
+  const focusSelectedResult = useCallback(() => {
+    if (selectedResult) revealResult(selectedResult.path, selectedResultIndex, true);
+  }, [revealResult, selectedResult, selectedResultIndex]);
 
   const handleSearchKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLInputElement | HTMLButtonElement>) => {
@@ -209,9 +205,11 @@ export const useIndexedSearchSelection = ({
   return {
     handleOpenSelectedResult,
     handleSearchKeyDown,
-    resultRefs,
+    registerResultRow,
+    focusSelectedResult,
     selectedDrive,
     selectedResult,
+    selectedResultIndex,
     selectedResultMeta: selectedResultMeta?.path === selectedResultPath ? selectedResultMeta : null,
     selectionError,
     selectDrive,

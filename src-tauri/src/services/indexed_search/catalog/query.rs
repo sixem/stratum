@@ -17,10 +17,16 @@ const MAX_FETCH_LIMIT: usize = 300;
 const MAX_FTS_TERMS: usize = 64;
 
 #[derive(Clone, Copy)]
-struct PrefixFilter<'a> {
-    start: &'a str,
-    end: Option<&'a str>,
-    include: bool,
+pub(super) struct PrefixFilter<'a> {
+    pub(super) start: &'a str,
+    pub(super) end: Option<&'a str>,
+    pub(super) include: bool,
+}
+
+pub(super) enum NameSeek<'a> {
+    EqualNameAfterId(&'a str, i64),
+    AfterName(&'a str),
+    AfterKey(&'a str, i64),
 }
 
 impl IndexedCatalogStore {
@@ -218,6 +224,32 @@ fn fetch_hits(
     prefix: Option<PrefixFilter<'_>>,
     limit: usize,
 ) -> Result<Vec<CatalogQueryHit>, String> {
+    let (mut sql, mut params) = build_hits_sql(plan, verified_volumes, prefix, None);
+    sql.push_str(" ORDER BY e.normalized_name ASC, e.path ASC LIMIT ?");
+    params.push(Value::from(limit as i64));
+
+    let mut statement = connection
+        .prepare(&sql)
+        .map_err(|error| format!("Failed to prepare indexed-search query: {error}"))?;
+    let rows = statement
+        .query_map(params_from_iter(params.iter()), |row| {
+            Ok(CatalogQueryHit {
+                path: row.get(0)?,
+                kind: int_to_kind(row.get(1)?),
+                normalized_name: row.get(2)?,
+            })
+        })
+        .map_err(|error| format!("Failed to run indexed-search query: {error}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to read indexed-search results: {error}"))
+}
+
+pub(super) fn build_hits_sql(
+    plan: &QueryPlan,
+    verified_volumes: &[(String, String)],
+    prefix: Option<PrefixFilter<'_>>,
+    seek: Option<NameSeek<'_>>,
+) -> (String, Vec<Value>) {
     // The prefix range can use the name index, including for one-character
     // searches and catalogs whose FTS backfill has not finished yet.
     let match_expression = plan
@@ -240,6 +272,23 @@ fn fetch_hits(
         params.push(Value::from(drive_path.clone()));
         params.push(Value::from(volume_id.clone()));
     }
+    // SQLite uses the first applicable lower name bound as its index start.
+    // Put the continuation bound ahead of the beginning of the prefix range.
+    match seek {
+        Some(NameSeek::EqualNameAfterId(name, id)) => {
+            sql.push_str(" AND e.normalized_name = ? AND e.entry_id > ?");
+            params.extend([Value::from(name.to_owned()), Value::from(id)]);
+        }
+        Some(NameSeek::AfterName(name)) => {
+            sql.push_str(" AND e.normalized_name > ?");
+            params.push(Value::from(name.to_owned()));
+        }
+        Some(NameSeek::AfterKey(name, id)) => {
+            sql.push_str(" AND (e.normalized_name, e.entry_id) > (?, ?)");
+            params.extend([Value::from(name.to_owned()), Value::from(id)]);
+        }
+        None => {}
+    }
     if let Some(filter) = prefix {
         sql.push_str(if filter.include {
             " AND ("
@@ -254,28 +303,12 @@ fn fetch_hits(
         }
         sql.push(')');
     }
-    sql.push_str(" ORDER BY e.normalized_name ASC, e.path ASC LIMIT ?");
-    params.push(Value::from(limit as i64));
-
-    let mut statement = connection
-        .prepare(&sql)
-        .map_err(|error| format!("Failed to prepare indexed-search query: {error}"))?;
-    let rows = statement
-        .query_map(params_from_iter(params.iter()), |row| {
-            Ok(CatalogQueryHit {
-                path: row.get(0)?,
-                kind: int_to_kind(row.get(1)?),
-                normalized_name: row.get(2)?,
-            })
-        })
-        .map_err(|error| format!("Failed to run indexed-search query: {error}"))?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("Failed to read indexed-search results: {error}"))
+    (sql, params)
 }
 
 // SQLite's binary UTF-8 ordering preserves Unicode scalar order. Increment
 // the last scalar that has a successor, dropping any maximum scalars after it.
-fn exclusive_prefix_end(prefix: &str) -> Option<String> {
+pub(super) fn exclusive_prefix_end(prefix: &str) -> Option<String> {
     let (offset, next) = prefix
         .char_indices()
         .rev()
@@ -290,7 +323,7 @@ fn exclusive_prefix_end(prefix: &str) -> Option<String> {
     Some(format!("{}{next}", &prefix[..offset]))
 }
 
-fn build_query_plan(query: IndexedPathQuery, fts_ready: bool) -> Option<QueryPlan> {
+pub(super) fn build_query_plan(query: IndexedPathQuery, fts_ready: bool) -> Option<QueryPlan> {
     let trimmed = query.query.trim();
     if trimmed.is_empty() {
         return None;
@@ -395,7 +428,7 @@ fn build_match_expression(tokens: BTreeSet<String>) -> Option<String> {
 }
 
 fn build_query_sql(use_fts: bool, like_pattern_count: usize, volume_count: usize) -> String {
-    let mut sql = String::from("SELECT e.path, e.kind, e.normalized_name ");
+    let mut sql = String::from("SELECT e.path, e.kind, e.normalized_name, e.entry_id ");
 
     if use_fts {
         // CROSS JOIN starts with the FTS row IDs before looking up the entries.

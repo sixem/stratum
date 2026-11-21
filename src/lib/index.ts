@@ -14,7 +14,6 @@ export {
   formatIndexedDriveState,
   formatIndexedSearchServiceState,
   isCheckingIndexedDrive,
-  isIndexedDriveAttentionState,
   isVisibleDriveInfo,
   isIndexedDriveActiveState,
   shouldPollIndexedSearch,

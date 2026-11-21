@@ -83,6 +83,21 @@ pub struct IndexedPathQuery {
     pub limit: Option<usize>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexedPathPageQuery {
+    #[serde(flatten)]
+    pub search: IndexedPathQuery,
+    pub cursor: Option<String>,
+}
+
+#[derive(Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexedPathPage {
+    pub matches: Vec<IndexedPathMatch>,
+    pub next_cursor: Option<String>,
+}
+
 impl IndexedPathQuery {
     // The search planner and cache must agree on which limits are equivalent.
     pub(crate) fn effective_limit(&self) -> usize {

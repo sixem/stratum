@@ -2,7 +2,8 @@
 use tauri::Manager;
 
 use crate::domain::indexed_search::{
-    IndexedDriveStatus, IndexedPathMatch, IndexedPathQuery, IndexedSearchServiceStatus,
+    IndexedDriveStatus, IndexedPathMatch, IndexedPathPage, IndexedPathPageQuery, IndexedPathQuery,
+    IndexedSearchServiceStatus,
 };
 use crate::services::indexed_search;
 
@@ -71,6 +72,20 @@ pub async fn query_indexed_paths(
         Ok(result) => result,
         Err(error) => Err(error.to_string()),
     }
+}
+
+#[tauri::command]
+pub async fn query_indexed_path_page(
+    app: tauri::AppHandle,
+    query: IndexedPathPageQuery,
+) -> Result<IndexedPathPage, String> {
+    let indexed_search = app
+        .state::<indexed_search::IndexedSearchHandle>()
+        .inner()
+        .clone();
+    tauri::async_runtime::spawn_blocking(move || indexed_search.query_path_page(query))
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]

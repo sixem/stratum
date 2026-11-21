@@ -4,6 +4,8 @@ export type {
   IndexedDriveStatus,
   IndexedEntryKind,
   IndexedPathMatch,
+  IndexedPathPage,
+  IndexedPathPageQuery,
   IndexedPathQuery,
   IndexedSearchServiceState,
   IndexedSearchServiceStatus,

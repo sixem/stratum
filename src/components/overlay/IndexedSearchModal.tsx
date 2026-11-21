@@ -70,6 +70,10 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
   const {
     results,
     resultsError,
+    pageError,
+    hasMore,
+    loadingMore,
+    loadMore,
     resultsViewportRef,
     searching,
     trimmedQuery,
@@ -82,9 +86,11 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
   const {
     handleOpenSelectedResult,
     handleSearchKeyDown,
-    resultRefs,
+    focusSelectedResult,
+    registerResultRow,
     selectedDrive,
     selectedResult,
+    selectedResultIndex,
     selectedResultMeta,
     selectionError,
     selectDrive,
@@ -93,6 +99,9 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
     driveStatuses,
     open,
     results,
+    hasMore,
+    loadMore,
+    resultsViewportRef,
     onOpenFolder: openFolderInNewTab,
   });
 
@@ -135,13 +144,11 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
   useLayoutEffect(() => {
     const shouldRestoreResult = visible && returningFromGalleryRef.current;
     returningFromGalleryRef.current = open && previewOpen;
-    if (!shouldRestoreResult || !selectedPath) return;
+    if (!shouldRestoreResult) return;
 
     // Gallery navigation updates the selection even while the result list is hidden.
-    const selectedRow = resultRefs.current.find((row) => row?.dataset.path === selectedPath);
-    selectedRow?.focus({ preventScroll: true });
-    selectedRow?.scrollIntoView({ block: "nearest" });
-  }, [open, previewOpen, resultRefs, selectedPath, visible]);
+    focusSelectedResult();
+  }, [focusSelectedResult, open, previewOpen, visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -245,18 +252,23 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
         <div className="indexed-search-body">
           <IndexedSearchResultsList
             catalogPending={catalogPending}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+            loadMore={loadMore}
             onResultKeyDown={handleSearchKeyDown}
             onOpenResult={handleOpenSelectedResult}
             onOpenContextMenu={resultMenu.openAt}
             onPreviewPress={preview.onPress}
             onSelectResult={selectResult}
-            resultRefs={resultRefs}
+            registerResultRow={registerResultRow}
             results={results}
             resultsError={resultsError}
+            pageError={pageError}
             resultsViewportRef={resultsViewportRef}
             searching={searching}
-            selectedPath={selectedPath}
+            selectedResultIndex={selectedResultIndex}
             trimmedQuery={trimmedQuery}
+            visible={visible}
           />
 
           <aside className="indexed-search-sidebar" aria-label="Details and drives">

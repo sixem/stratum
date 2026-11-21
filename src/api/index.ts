@@ -6,6 +6,7 @@ export {
   getIndexedSearchCatalogPath,
   getIndexedSearchSnapshot,
   setIndexedSearchEnabled,
+  queryIndexedPathPage,
   queryIndexedPaths,
   rebuildIndexedDrive,
 } from "./indexedSearch";

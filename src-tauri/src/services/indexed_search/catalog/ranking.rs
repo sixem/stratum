@@ -38,17 +38,21 @@ pub(super) fn rank_hits(hits: Vec<CatalogQueryHit>, plan: &QueryPlan) -> Vec<Ind
 
     ranked_hits
         .into_iter()
-        .map(|ranked_hit| {
-            let path = ranked_hit.hit.path;
-            IndexedPathMatch {
-                name: entry_name_from_catalog_path(&path),
-                parent_path: parent_path_from_catalog_path(&path),
-                drive_path: drive_root_from_catalog_path(&path),
-                path,
-                kind: ranked_hit.hit.kind,
-            }
-        })
+        .map(|ranked_hit| ranked_hit.hit.into())
         .collect()
+}
+
+impl From<CatalogQueryHit> for IndexedPathMatch {
+    fn from(hit: CatalogQueryHit) -> Self {
+        let path = hit.path;
+        Self {
+            name: entry_name_from_catalog_path(&path),
+            parent_path: parent_path_from_catalog_path(&path),
+            drive_path: drive_root_from_catalog_path(&path),
+            path,
+            kind: hit.kind,
+        }
+    }
 }
 
 fn build_hit_rank(hit: &CatalogQueryHit, plan: &QueryPlan) -> HitRank {

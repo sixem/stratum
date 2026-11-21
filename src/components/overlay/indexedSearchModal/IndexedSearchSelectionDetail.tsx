@@ -12,7 +12,6 @@ import {
   formatDate,
   formatIndexedDriveSummary,
   formatPercent,
-  isIndexedDriveAttentionState,
 } from "@/lib";
 import type {
   DriveInfo,
@@ -20,6 +19,7 @@ import type {
   IndexedDriveStatus,
   IndexedPathMatch,
 } from "@/types";
+import { IndexedSearchDriveRefresh } from "./IndexedSearchDriveRefresh";
 import { normalizeDrivePathKey } from "./indexedSearchModalTypes";
 
 type IndexedSearchSelectionDetailProps = {
@@ -65,13 +65,6 @@ export const IndexedSearchSelectionDetail = ({
       : null;
   const selectedDriveSummary = selectedDrive
     ? formatIndexedDriveSummary(selectedDrive)
-    : null;
-  const selectedDriveNote = selectedDrive && (
-    isIndexedDriveAttentionState(selectedDrive.state) ||
-    selectedDrive.state === "saved" ||
-    selectedDrive.state === "scanning"
-  )
-    ? selectedDrive.message?.trim()
     : null;
 
   return (
@@ -132,22 +125,11 @@ export const IndexedSearchSelectionDetail = ({
                 <div className="indexed-search-selection-detail-meta">{selectedDrive.drivePath}</div>
               ) : null}
             </div>
-            {selectedDrive.indexable ? (
-              <PressButton
-                type="button"
-                className="btn ghost indexed-search-selection-detail-action"
-                disabled={
-                  rebuildingDrivePath != null ||
-                  selectedDrive.state === "queued" ||
-                  selectedDrive.state === "scanning"
-                }
-                onClick={() => {
-                  onRebuildDrive(selectedDrive.drivePath);
-                }}
-              >
-                {rebuildingDrivePath === selectedDrive.drivePath ? "Queuing…" : "Refresh index"}
-              </PressButton>
-            ) : null}
+            <IndexedSearchDriveRefresh
+              drive={selectedDrive}
+              rebuildingDrivePath={rebuildingDrivePath}
+              onRebuildDrive={onRebuildDrive}
+            />
           </div>
 
           {selectedDriveSummary ? (
@@ -156,27 +138,20 @@ export const IndexedSearchSelectionDetail = ({
             </div>
           ) : null}
 
-          {selectedDriveNote ? (
-            <div className="indexed-search-section-note">
-              {selectedDriveNote}
-            </div>
-          ) : null}
-
           {selectedDriveUsageLabel ? (
-            <div className="indexed-search-selection-detail-meta tnum">
-              {selectedDriveUsageLabel}
-            </div>
-          ) : null}
-
-          {selectedDriveUsagePercentLabel ? (
-            <div
-              className="indexed-search-selection-progress"
-              aria-label={`${selectedDriveUsagePercentLabel} used`}
-            >
-              <span
-                className="indexed-search-selection-progress-fill"
-                style={{ width: selectedDriveUsagePercentLabel }}
-              />
+            <div className="indexed-search-selection-usage">
+              <div className="indexed-search-selection-detail-meta tnum">{selectedDriveUsageLabel}</div>
+              {selectedDriveUsagePercentLabel ? (
+                <div
+                  className="indexed-search-selection-progress"
+                  aria-label={`${selectedDriveUsagePercentLabel} used`}
+                >
+                  <span
+                    className="indexed-search-selection-progress-fill"
+                    style={{ width: selectedDriveUsagePercentLabel }}
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null}
         </>

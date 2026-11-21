@@ -4,6 +4,7 @@ import type {
   IndexedDriveStatus,
   IndexedSearchServiceStatus,
 } from "@/types";
+import { formatCount } from "./format";
 import { normalizePath } from "./paths";
 
 const ACTIVE_DRIVE_STATES = new Set<IndexedDriveState>(["queued", "scanning"]);
@@ -27,9 +28,6 @@ export const filterVisibleIndexedDriveStatuses = (
 export const isIndexedDriveActiveState = (
   state: IndexedDriveState | null | undefined,
 ) => state != null && ACTIVE_DRIVE_STATES.has(state);
-
-export const isIndexedDriveAttentionState = (state?: IndexedDriveState | null) =>
-  state === "stale" || state === "rescanrequired" || state === "error";
 
 // Startup can briefly report a saved snapshot as provisional while the volume is checked.
 export const isCheckingIndexedDrive = (state: IndexedDriveState | undefined, checkingIndex: boolean) =>
@@ -60,32 +58,10 @@ export const formatIndexedDriveState = (state: IndexedDriveState) => {
   }
 };
 
-export const formatIndexedDriveSourceLabel = (
-  sourceLabel: string | null | undefined,
-) => {
-  if (!sourceLabel) return null;
-
-  const normalized = sourceLabel.trim().toLowerCase();
-  if (normalized === "ntfs fast path") {
-    return "NTFS";
-  }
-  if (normalized === "recursive fallback") {
-    return "Filesystem";
-  }
-
-  return sourceLabel;
-};
-
 export const formatIndexedDriveSummary = (status: IndexedDriveStatus) => {
-  if (status.entryCount == null) {
-    return null;
-  }
-
-  const countLabel = `${new Intl.NumberFormat().format(status.entryCount)} entr${
-    status.entryCount === 1 ? "y" : "ies"
-  }`;
-  const sourceLabel = formatIndexedDriveSourceLabel(status.sourceLabel);
-  return sourceLabel ? `${sourceLabel}: ${countLabel}` : countLabel;
+  const { entryCount } = status;
+  if (entryCount == null) return null;
+  return `${formatCount(entryCount)} ${entryCount === 1 ? "entry" : "entries"}`;
 };
 
 export const formatIndexedSearchServiceState = (

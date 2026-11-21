@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   IndexedDriveStatus,
   IndexedPathMatch,
+  IndexedPathPage,
+  IndexedPathPageQuery,
   IndexedPathQuery,
   IndexedSearchServiceStatus,
 } from "@/types";
@@ -32,6 +34,9 @@ export const getIndexedSearchCatalogPath = () =>
 
 export const queryIndexedPaths = (query: IndexedPathQuery) =>
   invoke<IndexedPathMatch[]>("query_indexed_paths", { query });
+
+export const queryIndexedPathPage = (query: IndexedPathPageQuery) =>
+  invoke<IndexedPathPage>("query_indexed_path_page", { query });
 
 export const rebuildIndexedDrive = (drivePath: string) =>
   invoke<boolean>("rebuild_indexed_drive", { drivePath });
