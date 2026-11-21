@@ -31,7 +31,7 @@ type SessionStore = SessionRuntimeState & {
   setActiveTabId: (id: string | null) => void;
   setRecentJumps: (updater: string[] | ((prev: string[]) => string[])) => void;
   updateSession: (patch: Partial<SessionRuntimeState>) => void;
-  restoreTabs: (layout: TabLayout) => void;
+  restoreSession: (layout: SessionState) => void;
   resetSession: () => void;
 };
 
@@ -120,7 +120,7 @@ const coerceTabs = (value: unknown) => {
     .filter((item): item is Tab => Boolean(item));
 };
 
-export const coerceTabLayout = (value: Partial<TabLayout> | null | undefined): TabLayout => {
+const coerceTabLayout = (value: Partial<TabLayout> | null | undefined): TabLayout => {
   const tabs = coerceTabs(value?.tabs);
   const activeTabId =
     typeof value?.activeTabId === "string" && tabs.some((tab) => tab.id === value.activeTabId)
@@ -129,7 +129,7 @@ export const coerceTabLayout = (value: Partial<TabLayout> | null | undefined): T
   return { tabs, activeTabId };
 };
 
-const coerceSession = (value: Partial<SessionState> | null | undefined): SessionState => {
+export const coerceSession = (value: Partial<SessionState> | null | undefined): SessionState => {
   const recentJumps = Array.isArray(value?.recentJumps)
     ? value.recentJumps.filter((item) => typeof item === "string")
     : [];
@@ -200,13 +200,14 @@ const createSessionStore = (key: string) => {
         recentJumps: applyUpdater(state.recentJumps, updater),
       })),
     updateSession: (patch) => set((state) => ({ ...state, ...patch })),
-    restoreTabs: (layout) => {
+    restoreSession: (layout) => {
       const activeIndex = layout.tabs.findIndex((tab) => tab.id === layout.activeTabId);
       // Each restore is a new visit, even if it reopens the same saved tab.
       const tabs = layout.tabs.map((tab) => ({ ...tab, id: createTab(tab.path).id, sort: { ...tab.sort } }));
       set((state) => ({
         tabs,
         activeTabId: (tabs[activeIndex] ?? tabs[0])?.id ?? null,
+        recentJumps: [...layout.recentJumps],
         closedTabs: [],
         restoreRevision: state.restoreRevision + 1,
       }));

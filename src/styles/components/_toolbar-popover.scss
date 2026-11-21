@@ -1,0 +1,61 @@
+// Shared menu surfaces for the work log and workspace picker.
+@use "./control-recipes" as control;
+
+.toolbar-popover {
+  position: absolute;
+  inset-block-start: calc(100% + 8px);
+  min-height: 0;
+  @include control.floating-panel(
+    10px,
+    10px 12px 12px,
+    #0b1119,
+    #1a2433,
+    0 18px 34px rgba(0, 0, 0, 0.42),
+    hidden
+  );
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 4px;
+  z-index: 30;
+}
+
+.toolbar-popover-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+}
+
+.toolbar-popover-title {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  min-width: 0;
+}
+
+.toolbar-popover-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: var(--surface-border-width) solid var(--stroke);
+  padding: 0 4px 0 0;
+  scrollbar-gutter: stable;
+
+  > * + * {
+    border-top: 1px solid var(--stroke);
+  }
+
+  &::-webkit-scrollbar {
+    width: 7px;
+  }
+}
+
+.toolbar-popover-footer {
+  grid-row: 3;
+  border-top: 1px solid var(--stroke);
+  padding-top: 4px;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--muted);
+}

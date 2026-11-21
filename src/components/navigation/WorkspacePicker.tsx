@@ -3,21 +3,24 @@ import { useCallback, useId, useRef, useState } from "react";
 import { ChevronDownIcon, PlusIcon } from "@/components/icons";
 import { ContextMoreOptionsIcon } from "@/components/icons/contextMenuIcons";
 import { useOverlayDismiss } from "@/components/overlay/useOverlayDismiss";
+import { ToolbarPopover } from "@/components/primitives/ToolbarPopover";
 import { folderPathKey } from "@/lib";
 import { usePromptStore } from "@/modules";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
+import { usePlacesStore } from "@/modules/placesStore";
 import { useBottomSessionStore, useSessionStore } from "@/modules/sessionStore";
-import type { TabLayout } from "@/modules/sessionStore";
-import { removeWorkspace, saveWorkspace, switchWorkspace, useWorkspaceStore } from "@/modules/workspaceStore";
+import type { SessionState } from "@/modules/sessionStore";
+import { createFreshWorkspace, removeWorkspace, saveWorkspace, switchWorkspace, useWorkspaceStore } from "@/modules/workspaceStore";
 import type { Workspace, WorkspaceLayout } from "@/modules/workspaceStore";
 import { promptWorkspaceName, runWorkspaceAction } from "./workspaceDialogs";
 
-const captureTabs = ({ tabs, activeTabId }: TabLayout, pane: "main" | "bottom"): TabLayout => {
+const captureSession = ({ tabs, activeTabId, recentJumps }: SessionState, pane: "main" | "bottom"): SessionState => {
   const files = document.querySelector<HTMLElement>(`[data-file-pane="${pane}"]`);
   const viewport = files?.querySelector<HTMLElement>(".list-body, .thumb-viewport");
   const displayedPath = folderPathKey(files?.dataset.panePath ?? "");
   return {
     activeTabId,
+    recentJumps: [...recentJumps],
     tabs: tabs.map((tab) => ({
       ...tab,
       sort: { ...tab.sort },
@@ -29,11 +32,23 @@ const captureTabs = ({ tabs, activeTabId }: TabLayout, pane: "main" | "bottom"):
 
 const captureLayout = (): WorkspaceLayout => {
   const { open, height, defaultViewMode, active } = useBottomPaneStore.getState();
+  const { initialized, places } = usePlacesStore.getState();
   return {
-    main: captureTabs(useSessionStore.getState(), "main"),
-    bottom: captureTabs(useBottomSessionStore.getState(), "bottom"),
+    main: captureSession(useSessionStore.getState(), "main"),
+    bottom: captureSession(useBottomSessionStore.getState(), "bottom"),
     pane: { open, height, defaultViewMode, active: open && active },
+    places: { initialized, places: places.map((place) => ({ ...place })) },
   };
+};
+
+const focusRestoredPane = () => {
+  const revision = useSessionStore.getState().restoreRevision;
+  window.requestAnimationFrame(() => {
+    if (useSessionStore.getState().restoreRevision !== revision || usePromptStore.getState().prompt) return;
+    const layout = useBottomPaneStore.getState();
+    const pane = layout.open && layout.active ? "bottom" : "main";
+    document.querySelector<HTMLElement>(`[data-file-pane="${pane}"]`)?.focus({ preventScroll: true });
+  });
 };
 
 export const WorkspacePicker = () => {
@@ -71,14 +86,20 @@ export const WorkspacePicker = () => {
     closeAndFocus();
     runWorkspaceAction(() => {
       switchWorkspace(target, captureLayout());
-      const revision = useSessionStore.getState().restoreRevision;
-      window.requestAnimationFrame(() => {
-        if (useSessionStore.getState().restoreRevision !== revision || usePromptStore.getState().prompt) return;
-        const layout = useBottomPaneStore.getState();
-        const pane = layout.open && layout.active ? "bottom" : "main";
-        document.querySelector<HTMLElement>(`[data-file-pane="${pane}"]`)?.focus({ preventScroll: true });
-      });
+      focusRestoredPane();
     });
+  };
+
+  const create = () => {
+    closeAndFocus();
+    promptWorkspaceName("New workspace", "Create", "", (name) => {
+      createFreshWorkspace(name, captureLayout());
+      focusRestoredPane();
+    });
+  };
+  const save = () => {
+    closeAndFocus();
+    promptWorkspaceName("Save workspace", "Save", "", (name) => saveWorkspace(name, captureLayout()));
   };
 
   const rename = (workspace: Workspace) => {
@@ -97,7 +118,7 @@ export const WorkspacePicker = () => {
     closeAndFocus();
     usePromptStore.getState().showPrompt({
       title: "Replace workspace?",
-      content: `Replace the saved layout for “${workspace.name}” with the current tabs and panes?`,
+      content: `Replace the saved tabs, panes, and places for “${workspace.name}” with the current ones?`,
       confirmLabel: "Replace",
       cancelLabel: "Cancel",
       onConfirm: () => runWorkspaceAction(() => saveWorkspace(workspace.name, captureLayout(), workspace.id)),
@@ -139,12 +160,27 @@ export const WorkspacePicker = () => {
         <ChevronDownIcon />
       </button>
       {open ? (
-        <div className="workspace-popover" id={id} role="region" aria-label="Workspaces">
+        <ToolbarPopover
+          className="workspace-popover"
+          id={id}
+          role="region"
+          aria-label="Workspaces"
+          heading="Workspaces"
+          footer={(
+            <>
+              {previous ? <button type="button" onClick={() => load(previous)}>Previous session</button> : null}
+              <div className="workspace-save-actions">
+                <button type="button" onClick={create}><PlusIcon />New workspace…</button>
+                <button type="button" onClick={save}>Save current as…</button>
+              </div>
+            </>
+          )}
+        >
           {workspaces.length ? (
-            <ul className="workspace-list">
+            <ul className="toolbar-popover-list workspace-list">
               {workspaces.map((workspace) => (
                 <li key={workspace.id}>
-                  <div className="workspace-row" data-active={workspace.id === activeId}>
+                  <div className="workspace-row">
                     <button type="button" className="workspace-name" onClick={() => load(workspace)}
                       aria-current={workspace.id === activeId ? "true" : undefined}>
                       {workspace.name}
@@ -171,17 +207,7 @@ export const WorkspacePicker = () => {
               ))}
             </ul>
           ) : null}
-          <div className="workspace-footer">
-            {previous ? <button type="button" onClick={() => load(previous)}>Previous session</button> : null}
-            <button type="button" onClick={() => {
-              closeAndFocus();
-              promptWorkspaceName("Save workspace", "Save", "", (name) => saveWorkspace(name, captureLayout()));
-            }}>
-              <PlusIcon />
-              Save current as…
-            </button>
-          </div>
-        </div>
+        </ToolbarPopover>
       ) : null}
     </div>
   );

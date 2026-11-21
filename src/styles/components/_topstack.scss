@@ -10,6 +10,11 @@
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
 }
 
+// The popovers can overlap the sidebar resize handle and pane controls.
+.topstack:has(.toolbar-popover) {
+  z-index: 4;
+}
+
 .topstack::after {
   content: "";
   position: absolute;
@@ -97,37 +102,9 @@
   }
 
   .transfer-popover {
-    position: absolute;
-    top: calc(100% + 8px);
     right: 0;
     width: min(356px, calc(100vw - 16px));
     max-height: min(432px, calc(100vh - 84px));
-    min-height: 0;
-    @include control.floating-panel(
-      10px,
-      10px 12px 12px,
-      #0b1119,
-      #1a2433,
-      0 18px 34px rgba(0, 0, 0, 0.42),
-      hidden
-    );
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
-    gap: 4px;
-    z-index: 30;
-  }
-
-  .transfer-popover-title {
-    font-size: var(--font-size-md);
-    font-weight: 600;
-    min-width: 0;
-  }
-
-  .transfer-popover-header {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 10px;
   }
 
   .transfer-popover-clear-shell {
@@ -156,31 +133,11 @@
     cursor: not-allowed;
   }
 
-  .transfer-list {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    border-top: var(--surface-border-width) solid var(--stroke);
-    padding: 0;
-    padding-right: 4px;
-    scrollbar-gutter: stable;
-  }
-
-  .transfer-list::-webkit-scrollbar {
-    width: 7px;
-  }
-
   .transfer-item {
     display: flex;
     flex-direction: column;
     gap: 4px;
     padding: 7px 2px;
-  }
-
-  .transfer-item + .transfer-item {
-    border-top: 1px solid var(--stroke);
   }
 
   .transfer-item-header {
@@ -348,13 +305,9 @@
     background: #e14c4c;
   }
 
-  .transfer-popover-note {
+  .transfer-popover .toolbar-popover-footer {
     padding-top: 8px;
-    border-top: 1px solid var(--stroke);
-    font-size: var(--font-size-sm);
-    font-weight: 500;
     line-height: 1.35;
-    color: var(--muted);
   }
 }
 

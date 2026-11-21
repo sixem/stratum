@@ -19,7 +19,7 @@
     background: transparent;
   }
 
-  :is(.sidebar, .settings-pills, .conversion-mode-toggle, .transfer-popover,
+  :is(.sidebar, .settings-pills, .conversion-mode-toggle, .toolbar-popover,
       .drop-submenu, .conversion-override-select-menu) {
     background: var(--panel);
     border-color: var(--stroke);

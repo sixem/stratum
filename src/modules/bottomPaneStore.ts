@@ -15,8 +15,17 @@ type BottomPaneState = {
   navigation: { path: string; newTab: boolean } | null;
 };
 
+export type BottomPaneLayout = Omit<BottomPaneState, "navigation">;
+
+export const DEFAULT_BOTTOM_PANE_LAYOUT: BottomPaneLayout = {
+  open: false,
+  height: 35,
+  defaultViewMode: "list",
+  active: false,
+};
+
 export const useBottomPaneStore = create<BottomPaneState>()(persist(
-  (): BottomPaneState => ({ open: false, height: 35, defaultViewMode: "list", active: false, navigation: null }),
+  (): BottomPaneState => ({ ...DEFAULT_BOTTOM_PANE_LAYOUT, navigation: null }),
   { name: "stratum.bottom-pane", partialize: ({ open, height, defaultViewMode }) => ({ open, height, defaultViewMode }) },
 ));
 

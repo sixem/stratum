@@ -21,13 +21,12 @@ type PlacesStore = {
   removePlace: (path: string) => void;
 };
 
+export type PlacesState = Pick<PlacesStore, "initialized" | "places">;
+
 const STORAGE_KEY = PLACES_STORAGE_KEY;
 const STORAGE_VERSION = PLACES_STORAGE_VERSION;
 
-const DEFAULT_STATE: Omit<
-  PlacesStore,
-  "seedDefaults" | "addPlace" | "pinPlace" | "unpinPlace" | "reorderPinnedPlace" | "removePlace"
-> = {
+export const DEFAULT_PLACES_STATE: PlacesState = {
   initialized: false,
   places: [],
 };
@@ -148,38 +147,31 @@ const updatePlace = (
   return insertPlace(next, nextPlace);
 };
 
-const readStoredPlaces = (): StoredPlacesState => {
+export const coercePlacesState = (value: { initialized?: unknown; places?: unknown }): PlacesState => {
+  const list = Array.isArray(value.places)
+    ? value.places.map(coercePlaceEntry).filter((item): item is Place => Boolean(item))
+    : [];
+  return { initialized: value.initialized === true || list.length > 0, places: dedupePlaces(list) };
+};
+
+const readStoredPlaces = (): PlacesState => {
   try {
     if (!("localStorage" in globalThis)) {
-      return { version: STORAGE_VERSION, ...DEFAULT_STATE };
+      return DEFAULT_PLACES_STATE;
     }
     const raw = globalThis.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { version: STORAGE_VERSION, ...DEFAULT_STATE };
-    const parsed = JSON.parse(raw) as
-      | StoredPlacesState
-      | { initialized?: unknown; places?: unknown }
-      | unknown;
+    if (!raw) return DEFAULT_PLACES_STATE;
+    const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") {
-      return { version: STORAGE_VERSION, ...DEFAULT_STATE };
+      return DEFAULT_PLACES_STATE;
     }
-    const withState = parsed as { version?: unknown; initialized?: unknown; places?: unknown };
-    const list = Array.isArray(withState.places)
-      ? withState.places
-          .map((item) => coercePlaceEntry(item))
-          .filter((item): item is Place => Boolean(item))
-      : [];
-    return {
-      version:
-        typeof withState.version === "number" ? withState.version : STORAGE_VERSION,
-      initialized: withState.initialized === true || list.length > 0,
-      places: dedupePlaces(list),
-    };
+    return coercePlacesState(parsed as { initialized?: unknown; places?: unknown });
   } catch {
-    return { version: STORAGE_VERSION, ...DEFAULT_STATE };
+    return DEFAULT_PLACES_STATE;
   }
 };
 
-const writeStoredPlaces = (state: Pick<PlacesStore, "initialized" | "places">) => {
+const writeStoredPlaces = (state: PlacesState) => {
   try {
     if (!("localStorage" in globalThis)) return;
     const payload: StoredPlacesState = {

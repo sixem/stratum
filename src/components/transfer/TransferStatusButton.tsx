@@ -11,6 +11,7 @@ import {
   sortTransferJobsByRecent,
 } from "@/components/transfer/transferStatusView";
 import { PressButton } from "@/components/primitives/PressButton";
+import { ToolbarPopover } from "@/components/primitives/ToolbarPopover";
 
 export const TransferStatusButton = () => {
   const jobs = useTransferJobs();
@@ -85,18 +86,16 @@ export const TransferStatusButton = () => {
       {open ? (
         // The title bar passes pointer events through decorative elements.
         // Keep both the panel and its native scrollbar interactive.
-        <div
+        <ToolbarPopover
           className="transfer-popover"
-          data-window-drag-ignore="true"
           role="dialog"
           aria-label="Work log"
           aria-modal="false"
           id={popoverId}
           ref={popoverRef}
           tabIndex={-1}
-        >
-          <div className="transfer-popover-header">
-            <div className="transfer-popover-title">{summary.title}</div>
+          heading={summary.title}
+          headerAction={(
             <TooltipWrapper text={clearTooltipText}>
               <span className="transfer-popover-clear-shell">
                 <PressButton
@@ -112,19 +111,20 @@ export const TransferStatusButton = () => {
                 </PressButton>
               </span>
             </TooltipWrapper>
-          </div>
-          <div className="transfer-list" role="list" data-window-drag-ignore="true">
-            {recentJobs.map((job) => (
-              <TransferStatusItem key={job.id} job={job} now={now} />
-            ))}
-          </div>
-          {summary.latestJob?.failures ? (
+          )}
+          footer={summary.latestJob?.failures ? (
             <div className="transfer-popover-note tnum">
               {summary.latestJob.failures} failed item
               {summary.latestJob.failures === 1 ? "" : "s"}
             </div>
           ) : null}
-        </div>
+        >
+          <div className="toolbar-popover-list transfer-list" role="list" data-window-drag-ignore="true">
+            {recentJobs.map((job) => (
+              <TransferStatusItem key={job.id} job={job} now={now} />
+            ))}
+          </div>
+        </ToolbarPopover>
       ) : null}
     </div>
   );
