@@ -84,6 +84,88 @@ fn reruns_destination_check_and_leaves_a_late_file_intact() {
 }
 
 #[cfg(windows)]
+fn open_read_without_delete_share(path: &Path) -> fs::File {
+    use std::os::windows::fs::OpenOptionsExt;
+    use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
+
+    fs::File::options()
+        .read(true)
+        .share_mode(FILE_SHARE_READ)
+        .open(path)
+        .unwrap()
+}
+
+#[cfg(windows)]
+#[test]
+fn renames_three_files_when_a_read_handle_only_briefly_blocks_the_second() {
+    use std::time::Duration;
+    use windows_sys::Win32::Foundation::ERROR_SHARING_VIOLATION;
+
+    let fixture = Fixture::new();
+    let files = [
+        (
+            fixture.write("first.webp", b"first"),
+            "one.webp",
+            &b"first"[..],
+        ),
+        (
+            fixture.write("second.webp", b"second"),
+            "two.webp",
+            &b"second"[..],
+        ),
+        (
+            fixture.write("third.webp", b"third"),
+            "three.webp",
+            &b"third"[..],
+        ),
+    ];
+    let blocker = open_read_without_delete_share(&files[1].0);
+    let requests = files.iter().map(|(path, next_name, _)| BatchRenameRequest {
+        path: path.to_string_lossy().into_owned(),
+        next_name: (*next_name).into(),
+    });
+    assert_eq!(
+        validate_batch_rename(requests.collect()),
+        [None, None, None]
+    );
+    let error = staging::rename_new(&files[1].0, &fixture.0.join("two.webp")).unwrap_err();
+    assert_eq!(error.raw_os_error(), Some(ERROR_SHARING_VIOLATION as i32));
+
+    let (first, second, third) = (&files[0], &files[1], &files[2]);
+    rename_entry(first.0.to_string_lossy().into_owned(), first.1.into()).unwrap();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(120));
+        drop(blocker);
+    });
+    let renamed = rename_entry(second.0.to_string_lossy().into_owned(), second.1.into());
+    release.join().unwrap();
+    renamed.unwrap();
+    rename_entry(third.0.to_string_lossy().into_owned(), third.1.into()).unwrap();
+
+    for (source, destination, bytes) in files {
+        assert!(!source.exists());
+        assert_eq!(fs::read(fixture.0.join(destination)).unwrap(), bytes);
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn leaves_the_original_intact_when_the_file_stays_in_use() {
+    let fixture = Fixture::new();
+    let source = fixture.write("locked.webp", b"original");
+    let lock = open_read_without_delete_share(&source);
+
+    let error = rename_entry(source.to_string_lossy().into_owned(), "new.webp".into()).unwrap_err();
+    assert!(error.contains("the item is still in use"), "{error}");
+    assert_eq!(fs::read(&source).unwrap(), b"original");
+    assert!(!fixture.0.join("new.webp").exists());
+
+    drop(lock);
+    let renamed = rename_entry(source.to_string_lossy().into_owned(), "new.webp".into()).unwrap();
+    assert_eq!(fs::read(renamed).unwrap(), b"original");
+}
+
+#[cfg(windows)]
 #[test]
 fn checks_windows_names_and_distinguishes_case_only_changes() {
     let fixture = Fixture::new();

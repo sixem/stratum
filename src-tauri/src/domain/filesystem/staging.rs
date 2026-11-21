@@ -55,6 +55,42 @@ impl Drop for StageDirectory {
 }
 
 #[cfg(windows)]
+pub(super) fn is_sharing_violation(error: &io::Error) -> bool {
+    use windows_sys::Win32::Foundation::{ERROR_LOCK_VIOLATION, ERROR_SHARING_VIOLATION};
+
+    error.raw_os_error().is_some_and(|code| {
+        code == ERROR_SHARING_VIOLATION as i32 || code == ERROR_LOCK_VIOLATION as i32
+    })
+}
+
+#[cfg(windows)]
+pub(super) fn retry_after_sharing<T>(
+    mut result: io::Result<T>,
+    mut operation: impl FnMut() -> io::Result<T>,
+) -> io::Result<T> {
+    // Give short-lived handles time to close without waiting indefinitely.
+    for _ in 0..7 {
+        if !result
+            .as_ref()
+            .is_err_and(|error| is_sharing_violation(error))
+        {
+            return result;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        result = operation();
+    }
+    result
+}
+
+pub(crate) fn retry_sharing<T>(mut operation: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+    let result = operation();
+    #[cfg(windows)]
+    return retry_after_sharing(result, operation);
+    #[cfg(not(windows))]
+    result
+}
+
+#[cfg(windows)]
 fn pin_directory(path: &Path) -> io::Result<fs::File> {
     use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
     use windows_sys::Win32::Storage::FileSystem::{

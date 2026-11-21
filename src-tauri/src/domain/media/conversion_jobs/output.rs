@@ -2,12 +2,12 @@
 use super::ConversionJobItem;
 use crate::domain::filesystem::{
     file_identity::file_id,
-    staging::{rename_new, StageDirectory},
+    staging::{rename_new, retry_sharing, StageDirectory},
 };
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 // Keep the file object alive to prevent ID reuse while the encoder is running.
 // On Windows allow renames but exclude in-place writers. Verify the actual
@@ -167,16 +167,4 @@ pub(super) fn cleanup_backups(
         destination.display(),
         failures.join(", ")
     ))
-}
-
-fn retry_sharing<T>(mut operation: impl FnMut() -> io::Result<T>) -> io::Result<T> {
-    for _ in 0..7 {
-        match operation() {
-            Err(err) if matches!(err.raw_os_error(), Some(32 | 33)) => {
-                std::thread::sleep(Duration::from_millis(60));
-            }
-            result => return result,
-        }
-    }
-    operation()
 }

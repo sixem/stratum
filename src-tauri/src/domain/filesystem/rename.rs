@@ -153,14 +153,68 @@ pub fn rename_entry(path: String, new_name: String) -> Result<String, String> {
     // Recheck at apply time and rely on the native no-replace move if the
     // destination becomes occupied between this check and the operation.
     check_destination(&paths.destination)?;
-    staging::rename_new(&paths.source, &paths.destination).map_err(|error| {
-        if error.kind() == io::ErrorKind::AlreadyExists {
-            OCCUPIED_NAME.into()
-        } else {
-            error.to_string()
-        }
-    })?;
+    apply_rename(&paths.source, &paths.destination).map_err(rename_failure)?;
     Ok(destination.into_owned())
+}
+
+fn apply_rename(source: &Path, destination: &Path) -> io::Result<()> {
+    let result = staging::rename_new(source, destination);
+    #[cfg(windows)]
+    if result
+        .as_ref()
+        .is_err_and(|error| staging::is_sharing_violation(error))
+    {
+        return retry_rename(source, destination, result);
+    }
+    result
+}
+
+#[cfg(windows)]
+fn retry_rename(source: &Path, destination: &Path, result: io::Result<()>) -> io::Result<()> {
+    use super::file_identity::file_id;
+
+    // Keep the original object alive so a replacement at the same path
+    // cannot reuse its ID while we wait for the sharing conflict to clear.
+    let Ok(original) = open_rename_source(source) else {
+        return result;
+    };
+    let Ok(expected_id) = file_id(&original) else {
+        return result;
+    };
+    staging::retry_after_sharing(result, || {
+        let current = open_rename_source(source)?;
+        if file_id(&current)? != expected_id {
+            return Err(io::Error::other(
+                "The source changed while waiting to rename it.",
+            ));
+        }
+        staging::rename_new(source, destination)
+    })
+}
+
+#[cfg(windows)]
+fn open_rename_source(path: &Path) -> io::Result<fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+    };
+
+    // Query identity without reading file data or following a link.
+    fs::File::options()
+        .access_mode(0)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+}
+
+fn rename_failure(error: io::Error) -> String {
+    if error.kind() == io::ErrorKind::AlreadyExists {
+        return OCCUPIED_NAME.into();
+    }
+    #[cfg(windows)]
+    if staging::is_sharing_violation(&error) {
+        return "Windows is blocking the rename because the item is still in use. Try again once it is available.".into();
+    }
+    error.to_string()
 }
 
 #[cfg(test)]
