@@ -3,6 +3,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "re
 import { validateBatchRename } from "@/api";
 import { PressButton } from "@/components/primitives";
 import { useModalFocusTrap } from "@/hooks/ui/app/useModalFocusTrap";
+import { isPlainEscape, releaseInputFocusOnEscape } from "@/hooks/ui/inputs/inputFocus";
 import {
   buildBatchRenamePreview,
   DEFAULT_BATCH_RENAME_NUMBERING,
@@ -184,7 +185,7 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
           void apply();
         }}
         onKeyDown={(event) => {
-          if (event.defaultPrevented || event.key !== "Escape") return;
+          if (!isPlainEscape(event.nativeEvent) || releaseInputFocusOnEscape(event.nativeEvent)) return;
           event.preventDefault();
           event.stopPropagation();
           close();

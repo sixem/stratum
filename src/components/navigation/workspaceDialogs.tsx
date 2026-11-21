@@ -47,11 +47,10 @@ export const promptWorkspaceName = (
             aria-describedby={error ? `${id}-error` : undefined}
             onChange={(event) => { name = event.currentTarget.value; }}
             onKeyDown={(event) => {
-              if (event.nativeEvent.isComposing || (event.key !== "Enter" && event.key !== "Escape")) return;
+              if (event.nativeEvent.isComposing || event.key !== "Enter") return;
               event.preventDefault();
               event.stopPropagation();
-              const closed = usePromptStore.getState().hidePrompt(prompt);
-              if (closed && event.key === "Enter") onConfirm();
+              if (usePromptStore.getState().hidePrompt(prompt)) onConfirm();
             }}
           />
           {error ? <div className="workspace-name-error" id={`${id}-error`} role="alert">{error}</div> : null}

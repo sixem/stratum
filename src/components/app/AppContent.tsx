@@ -5,6 +5,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { FileView, PerfProfiler, Sidebar } from "@/components";
 import { SidebarDivider } from "@/components/navigation/SidebarDivider";
 import { useSettingsStore } from "@/modules";
+import { focusFilePaneBackground } from "@/hooks/ui/inputs/inputFocus";
 import type { PanePreviewBindings } from "@/hooks/ui/view/useQuickPreview";
 import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
 
@@ -93,7 +94,10 @@ export const AppContent = ({
           } as CSSProperties}>
         <main className="main upper-files" data-file-pane="main" data-pane-path={upperPath}
           data-drop-background={fileDrop.backgroundHovered && fileDrop.hoveredPane === "main" || undefined}
-          onPointerDownCapture={() => setBottomPaneActive(false)}
+          onPointerDownCapture={event => {
+            setBottomPaneActive(false);
+            focusFilePaneBackground(event);
+          }}
           onFocusCapture={() => setBottomPaneActive(false)} ref={mainRef} tabIndex={-1} aria-busy={folderBusy}>
           {folderBusy && (
             <div className="folder-load-progress" role="progressbar" aria-label="Loading folder" />

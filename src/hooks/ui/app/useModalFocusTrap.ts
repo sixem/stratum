@@ -201,7 +201,7 @@ export const useModalFocusTrap = ({
       }
       const active = document.activeElement as HTMLElement | null;
       if (event.shiftKey) {
-        if (!active || active === focusable[0]) {
+        if (!active || active === container || active === focusable[0]) {
           event.preventDefault();
           focusLast();
         }

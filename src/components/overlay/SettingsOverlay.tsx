@@ -15,6 +15,7 @@ import {
 import { PressButton } from "@/components/primitives/PressButton";
 import { useModalFocusTrap } from "@/hooks";
 import { handleSearchHotkey } from "@/hooks/ui/inputs/useSearchHotkey";
+import { isPlainEscape } from "@/hooks/ui/inputs/inputFocus";
 import { usePromptStore, useSettingsStore } from "@/modules";
 
 export type SettingsOverlayProps = {
@@ -69,7 +70,7 @@ export const SettingsOverlay = ({
   useEffect(() => {
     if (!open) return;
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (!isPlainEscape(event)) return;
       if (captureActive) return;
       onClose();
     };
@@ -227,12 +228,6 @@ export const SettingsOverlay = ({
                 autoComplete="off"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.currentTarget.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== "Escape" || !searchQuery) return;
-                  event.preventDefault();
-                  event.stopPropagation();
-                  clearSearch();
-                }}
               />
               {searchQuery ? (
                 <button

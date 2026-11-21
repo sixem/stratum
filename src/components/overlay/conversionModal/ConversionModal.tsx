@@ -1,8 +1,9 @@
 // Conversion planning modal: thin container that wires feature-local model
 // state into smaller presentational sections.
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 import { DialogCloseButton } from "@/components/overlay/DialogCloseButton";
 import { useModalFocusTrap } from "@/hooks";
+import { isPlainEscape, releaseInputFocusOnEscape } from "@/hooks/ui/inputs/inputFocus";
 import { useShellStore } from "@/modules";
 import { findRuleFormat } from "./conversionModalConfig";
 import type {
@@ -58,19 +59,6 @@ export const ConversionModal = ({
     initialFocusRef: cancelButtonRef,
   });
 
-  useEffect(() => {
-    if (!open) return;
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-    };
-    window.addEventListener("keydown", handleKey, { capture: true });
-    return () =>
-      window.removeEventListener("keydown", handleKey, { capture: true });
-  }, [onClose, open]);
-
   if (!open || !request || !draft) return null;
 
   // An invalid configured path can still resolve to a working automatic installation.
@@ -104,6 +92,12 @@ export const ConversionModal = ({
         ref={panelRef}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (!isPlainEscape(event.nativeEvent) || releaseInputFocusOnEscape(event.nativeEvent)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }}
       >
         <div className="conversion-header">
           <div className="conversion-heading">

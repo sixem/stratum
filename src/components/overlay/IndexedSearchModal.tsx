@@ -19,6 +19,7 @@ import { OverlayPanelHeader } from "@/components/overlay/OverlayPanelHeader";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PressButton } from "@/components/primitives";
 import { useModalFocusTrap } from "@/hooks";
+import { isPlainEscape, releaseInputFocusOnEscape } from "@/hooks/ui/inputs/inputFocus";
 import type { PreviewGallerySource, PreviewSourceBindings } from "@/hooks/ui/view/useQuickPreview";
 import { formatCount, formatIndexedSearchServiceState, isIndexedDriveActiveState } from "@/lib";
 import { useIndexedSearchUiStore } from "@/modules";
@@ -153,8 +154,9 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
   useEffect(() => {
     if (!visible) return;
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (!isPlainEscape(event)) return;
       if (resultMenuOpen || modalRef.current?.inert) return;
+      if (releaseInputFocusOnEscape(event)) return;
       event.preventDefault();
       event.stopPropagation();
       closeModal();

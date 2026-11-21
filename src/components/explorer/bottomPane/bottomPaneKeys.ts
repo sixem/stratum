@@ -2,6 +2,7 @@
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 import { REOPEN_CLOSED_TAB_KEYBIND } from "@/constants";
 import { formatDeleteLabel, isEditableElement } from "@/lib";
+import { releaseInputFocusOnEscape } from "@/hooks/ui/inputs/inputFocus";
 import { handleSearchHotkey } from "@/hooks/ui/inputs/useSearchHotkey";
 import { moveFileSelection } from "@/hooks/ui/selection/moveFileSelection";
 import { buildKeybindFromEvent, useIndexedSearchUiStore, useSettingsStore, usePromptStore, writeFileClipboard } from "@/modules";
@@ -13,6 +14,7 @@ type Options = {
   folder: ReturnType<typeof useBottomFolder>;
   actions: PaneActions;
   address: RefObject<HTMLInputElement | null>;
+  files: RefObject<HTMLDivElement | null>;
   searchInput: RefObject<HTMLInputElement | null>;
   clearSearchAndFocusFiles: () => void;
   browseFromView: (path: string) => void;
@@ -31,7 +33,7 @@ type Options = {
 };
 
 export function bottomPaneKeys({
-  folder, actions, address, searchInput, clearSearchAndFocusFiles, browseFromView,
+  folder, actions, address, files, searchInput, clearSearchAndFocusFiles, browseFromView,
   openContextMenu, paths, ready, commandsBlocked, gridColumns, closeTab,
   startRename, clearSelection, undo, scrollTo, handleTypeahead, handleTabJump,
 }: Options) {
@@ -48,6 +50,7 @@ export function bottomPaneKeys({
     event.stopPropagation();
     if (commandsBlocked || usePromptStore.getState().prompt || useIndexedSearchUiStore.getState().open) return;
     if (event.defaultPrevented || event.nativeEvent.isComposing) return;
+    if (releaseInputFocusOnEscape(event.nativeEvent, files.current)) return;
     if (handleSearchHotkey(event, searchInput.current, clearSearchAndFocusFiles)) return;
     if (event.repeat && !event.key.startsWith("Arrow")) return;
     const cmd = event.ctrlKey && !event.altKey && !event.metaKey;

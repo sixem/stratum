@@ -160,7 +160,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   });
   const handleTabJump = useSmartTabJump(files, active && ready ? `${viewKey}:${tabs.viewMode}` : null);
   const onKey = bottomPaneKeys({
-    folder, actions, address, paths, ready, closeTab, commandsBlocked, gridColumns,
+    folder, actions, address, files, paths, ready, closeTab, commandsBlocked, gridColumns,
     openContextMenu: paneActions.openKeyboardContextMenu,
     startRename: paneActions.handleRenameStart, clearSelection: paneActions.clearSelectionForVisit,
     undo: paneActions.undo,
