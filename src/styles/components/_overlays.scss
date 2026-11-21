@@ -38,10 +38,11 @@
 
 .context-menu,
 .context-submenu {
+  --context-corner-radius: 0px;
   position: fixed;
   min-width: 190px;
   max-width: min(340px, calc(100vw - 24px));
-  @include control.floating-panel(0, 6px);
+  @include control.floating-panel(var(--context-corner-radius), 6px);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s ease;
@@ -54,7 +55,7 @@
 }
 
 :root:not([data-grid-corners="straight"]) :where(.context-menu, .context-submenu) {
-  border-radius: 6px;
+  --context-corner-radius: 6px;
 }
 
 // In blurred-overlay mode, apply `backdrop-filter` on a pseudo-element surface.
@@ -121,7 +122,8 @@
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: inherit;
+  // The blur layer starts inside the border, so it follows the inner radius.
+  border-radius: max(0px, calc(var(--context-corner-radius) - var(--surface-border-width)));
   background: rgba(15, 18, 26, 0.9);
   @include shell.frosted-backdrop(
     var(--overlay-backdrop-blur-soft),

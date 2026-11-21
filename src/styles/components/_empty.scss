@@ -175,7 +175,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: var(--surface-border-width) solid var(--stroke);
     padding: 2px 2px 8px;
   }
 
@@ -187,7 +187,7 @@
     height: 18px;
     padding: 0 7px;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: var(--surface-border-width) solid var(--stroke);
     background: rgba(255, 255, 255, 0.02);
     color: var(--muted);
     font-size: var(--font-size-2xs);
@@ -224,10 +224,7 @@
   }
 
   .lander-drive {
-    border: 1px solid transparent;
-    border-bottom-color: var(--stroke);
-    border-radius: 6px;
-    background: transparent;
+    @include control.control-surface(6px, var(--surface-control-muted), var(--stroke), var(--file-view-grid-card-border));
     padding: 8px;
     display: grid;
     gap: 4px;
@@ -238,7 +235,6 @@
 
   .lander-drive:hover {
     border-color: rgba(var(--accent-rgb), 0.36);
-    background: rgba(var(--accent-rgb), 0.08);
   }
 
   .lander-storage-summary {
@@ -355,7 +351,7 @@
   }
 
   .lander-place {
-    border: 1px solid transparent;
+    border: var(--surface-border-width) solid transparent;
     border-bottom-color: var(--stroke);
     border-radius: 6px;
     padding: 8px;
@@ -368,6 +364,10 @@
   .lander-place:hover {
     border-color: rgba(var(--accent-rgb), 0.34);
     background: rgba(var(--accent-rgb), 0.08);
+  }
+
+  :is(.lander-drive, .lander-place):focus-visible {
+    border-color: var(--accent);
   }
 
   .lander-place-head {
@@ -401,4 +401,8 @@
     text-overflow: ellipsis;
   }
 
+}
+
+:root[data-ambient="true"] :where(.lander-panel) .lander-drive {
+  background-color: color-mix(in srgb, var(--surface-control-muted) 90%, transparent);
 }

@@ -35,18 +35,6 @@
   background: linear-gradient(to top, rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0));
 }
 
-.statusbar-shell.is-hidden {
-  height: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.statusbar-shell.is-hidden .statusbar {
-  border: 0;
-  padding: 0;
-  opacity: 0;
-}
-
 // Scope status bar content to the bar without increasing specificity.
 :where(.statusbar) {
   .status-left {

@@ -36,6 +36,7 @@
   inset-inline-start: 0;
   width: min(332px, calc(100vw - 26px));
   max-height: min(432px, max(80px, calc(100vh - 132px)));
+  padding-block-end: 8px;
 
   button {
     border: 0;
@@ -110,6 +111,11 @@
 }
 
 .workspace-popover .toolbar-popover-footer {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  padding-block-start: 8px;
+
   button {
     display: flex;
     align-items: center;

@@ -5,11 +5,14 @@ import { createTab } from "@/lib/tabs";
 import type { ViewMode } from "@/types";
 import { useBottomSessionStore, useSessionStore } from "./sessionStore";
 
-export const clampPaneHeight = (percent: number) => Math.min(70, Math.max(22, percent));
+export const PANE_DIVIDER_HEIGHT = 4;
+export const MIN_MAIN_PANE_HEIGHT = 120;
+export const MIN_BOTTOM_PANE_HEIGHT = 120;
 
-type BottomPaneState = {
+type PaneHeight = { height: number; heightUnit: "px" | "%" };
+
+type BottomPaneState = PaneHeight & {
   open: boolean;
-  height: number;
   defaultViewMode: ViewMode;
   active: boolean;
   navigation: { path: string; newTab: boolean } | null;
@@ -19,14 +22,34 @@ export type BottomPaneLayout = Omit<BottomPaneState, "navigation">;
 
 export const DEFAULT_BOTTOM_PANE_LAYOUT: BottomPaneLayout = {
   open: false,
-  height: 35,
+  height: 240,
+  heightUnit: "px",
   defaultViewMode: "list",
   active: false,
 };
 
+export const coerceBottomPaneHeight = (value?: Partial<PaneHeight>): PaneHeight => {
+  const height = value?.height;
+  if (typeof height !== "number" || !Number.isFinite(height)) {
+    return { height: DEFAULT_BOTTOM_PANE_LAYOUT.height, heightUnit: "px" };
+  }
+  if (value?.heightUnit === "px") {
+    return { height: Math.max(MIN_BOTTOM_PANE_HEIGHT, Math.round(height)), heightUnit: "px" };
+  }
+  // Older sessions and workspaces stored a percentage. Resolve it on first display.
+  return { height: Math.min(70, Math.max(22, height)), heightUnit: "%" };
+};
+
 export const useBottomPaneStore = create<BottomPaneState>()(persist(
   (): BottomPaneState => ({ ...DEFAULT_BOTTOM_PANE_LAYOUT, navigation: null }),
-  { name: "stratum.bottom-pane", partialize: ({ open, height, defaultViewMode }) => ({ open, height, defaultViewMode }) },
+  {
+    name: "stratum.bottom-pane",
+    partialize: ({ open, height, heightUnit, defaultViewMode }) => ({ open, height, heightUnit, defaultViewMode }),
+    merge: (stored, current) => {
+      const value = stored as Partial<BottomPaneLayout> | undefined;
+      return { ...current, ...value, ...coerceBottomPaneHeight(value) };
+    },
+  },
 ));
 
 export const setBottomPaneActive = (active: boolean) => {

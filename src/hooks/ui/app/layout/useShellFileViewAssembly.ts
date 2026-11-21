@@ -173,14 +173,9 @@ export const useShellFileViewAssembly = ({
       statusBar: {
         message: fileManager.status.message,
         level: fileManager.status.level,
-        countLabel,
-        selectionLabel,
+        countLabel: resolvedView.showLander ? "" : countLabel,
+        selectionLabel: resolvedView.showLander ? "" : selectionLabel,
       },
-      statusHidden: resolvedView.showLander
-        && fileManager.placesLoaded
-        && fileManager.status.level === "idle"
-        && fileManager.indexedSearchStatus?.state !== "starting"
-        && fileManager.indexedSearchStatus?.state !== "scanning",
     },
     preview: {
       open: interactionModel.previewOpen,

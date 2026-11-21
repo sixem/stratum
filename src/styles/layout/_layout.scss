@@ -144,7 +144,9 @@
 }
 
 .pane-stack[data-split="true"] {
-  grid-template-rows: minmax(0, 1fr) 4px minmax(0, var(--bottom-preview, var(--bottom-height)));
+  --bottom-height-limit: max(0px, calc(100% - var(--pane-divider-height) - min(50%, var(--main-pane-min-height))));
+  grid-template-rows: minmax(0, 1fr) var(--pane-divider-height)
+    min(var(--bottom-preview, var(--bottom-height)), var(--bottom-height-limit));
 
   // Overlay the indicator so opaque file views cannot cover it.
   &[data-active-pane="main"] .upper-files::after,

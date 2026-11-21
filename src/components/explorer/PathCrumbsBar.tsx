@@ -11,6 +11,7 @@ import type { PlaceContextTarget } from "@/types";
 
 type PathCrumbsBarProps = {
   path: string;
+  reserveSpace?: boolean;
   // The deepest path visited within the current branch, used to show future crumbs.
   trailPath?: string | null;
   dropTargetPath?: string | null;
@@ -22,6 +23,7 @@ type PathCrumbsBarProps = {
 
 export const PathCrumbsBar = ({
   path,
+  reserveSpace = false,
   trailPath,
   dropTargetPath,
   onNavigate,
@@ -37,7 +39,7 @@ export const PathCrumbsBar = ({
   const crumbsRef = useRef<HTMLDivElement>(null);
   useHorizontalWheelScroll(crumbsRef, Boolean(trimmedPath));
   if (!trimmedPath) {
-    return null;
+    return reserveSpace ? <div className="crumbbar" aria-hidden="true" /> : null;
   }
   const isBarDropTarget = Boolean(trimmedPath && dropTargetPath === trimmedPath);
 

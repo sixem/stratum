@@ -29,7 +29,6 @@ const App = () => {
         }}
         statusbar={{
           statusBar: selection.statusBar,
-          hidden: selection.statusHidden,
         }}
       />
       <AppOverlays {...overlays} />

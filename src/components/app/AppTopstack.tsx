@@ -1,6 +1,6 @@
 // Renders the app header stack (controls, inputs, tabs, crumbs).
 import type { ComponentProps } from "react";
-import { setBottomPaneActive } from "@/modules/bottomPaneStore";
+import { setBottomPaneActive, useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { PathBar } from "@/components/explorer/PathBar";
 import { PathInputsBar } from "@/components/explorer/PathInputsBar";
 import { PathCrumbsBar } from "@/components/explorer/PathCrumbsBar";
@@ -20,6 +20,7 @@ export const AppTopstack = ({
   tabsBar,
   crumbsBar,
 }: AppTopstackProps) => {
+  const split = useBottomPaneStore((state) => state.open);
   const focusMain = (event: { target: EventTarget }) => {
     if (event.target instanceof Element && event.target.closest("[data-workspace-picker]")) return;
     setBottomPaneActive(false);
@@ -33,7 +34,7 @@ export const AppTopstack = ({
           <TabsBar {...tabsBar} leading={<WorkspacePicker />} />
         </div>
       </div>
-      <PathCrumbsBar {...crumbsBar} />
+      <PathCrumbsBar {...crumbsBar} reserveSpace={split} />
     </div>
   );
 };

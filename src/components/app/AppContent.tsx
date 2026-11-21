@@ -8,7 +8,9 @@ import { useSettingsStore } from "@/modules";
 import type { PanePreviewBindings } from "@/hooks/ui/view/useQuickPreview";
 import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
 
-import { useBottomPaneStore, showBottomPane, setBottomPaneActive } from "@/modules/bottomPaneStore";
+import {
+  MIN_MAIN_PANE_HEIGHT, PANE_DIVIDER_HEIGHT, setBottomPaneActive, showBottomPane, useBottomPaneStore,
+} from "@/modules/bottomPaneStore";
 import { PaneDivider } from "../explorer/bottomPane/PaneDivider";
 import type { PaneActions, PaneDrop, PaneSummary } from "../explorer/bottomPane/BottomPane";
 
@@ -52,7 +54,7 @@ export const AppContent = ({
   onContextMenuDown,
 }: AppContentProps) => {
   const split = useBottomPaneStore(state => state.open);
-  const height = useBottomPaneStore(state => state.height);
+  const bottomHeight = useBottomPaneStore(state => `${state.height}${state.heightUnit}`);
   const bottomActive = useBottomPaneStore(state => state.open && state.active);
   const sidebarWidth = useSettingsStore(state => state.sidebarWidth);
   const [sidebarResizing, setSidebarResizing] = useState(false);
@@ -84,7 +86,11 @@ export const AppContent = ({
           </PerfProfiler>
         ) : null}
         <div className="pane-stack" data-split={split} data-active-pane={bottomActive ? "bottom" : "main"}
-          style={{ "--bottom-height": height + "%" } as CSSProperties}>
+          style={{
+            "--bottom-height": bottomHeight,
+            "--pane-divider-height": `${PANE_DIVIDER_HEIGHT}px`,
+            "--main-pane-min-height": `${MIN_MAIN_PANE_HEIGHT}px`,
+          } as CSSProperties}>
         <main className="main upper-files" data-file-pane="main" data-pane-path={upperPath}
           data-drop-background={fileDrop.backgroundHovered && fileDrop.hoveredPane === "main" || undefined}
           onPointerDownCapture={() => setBottomPaneActive(false)}

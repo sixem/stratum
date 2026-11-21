@@ -1,7 +1,7 @@
 // Named workspaces are explicit snapshots of both pane layouts.
 import { createWithEqualityFn } from "zustand/traditional";
 import { createTab } from "@/lib/tabs";
-import { clampPaneHeight, DEFAULT_BOTTOM_PANE_LAYOUT, useBottomPaneStore } from "./bottomPaneStore";
+import { coerceBottomPaneHeight, DEFAULT_BOTTOM_PANE_LAYOUT, useBottomPaneStore } from "./bottomPaneStore";
 import type { BottomPaneLayout } from "./bottomPaneStore";
 import { coercePlacesState, DEFAULT_PLACES_STATE, usePlacesStore } from "./placesStore";
 import type { PlacesState } from "./placesStore";
@@ -44,8 +44,7 @@ const readLayout = (value: Partial<WorkspaceLayout> | undefined): WorkspaceLayou
     places: coercePlacesState(value.places ?? usePlacesStore.getState()),
     pane: {
       open,
-      height: typeof pane?.height === "number" && Number.isFinite(pane.height)
-        ? clampPaneHeight(pane.height) : DEFAULT_BOTTOM_PANE_LAYOUT.height,
+      ...coerceBottomPaneHeight(pane),
       defaultViewMode: pane?.defaultViewMode === "thumbs" ? "thumbs" : "list",
       active: open && pane?.active === true,
     },

@@ -1,58 +1,107 @@
 // Preview a resize on the grid itself. Save only the final pointer position.
-import { useRef } from "react";
-import { clampPaneHeight, useBottomPaneStore } from "@/modules/bottomPaneStore";
+import { useLayoutEffect, useRef } from "react";
+import {
+  MIN_BOTTOM_PANE_HEIGHT, MIN_MAIN_PANE_HEIGHT, PANE_DIVIDER_HEIGHT, useBottomPaneStore,
+} from "@/modules/bottomPaneStore";
 
-type Resize = { id: number; startY: number; percent: number; stackHeight: number };
+type HeightBounds = { min: number; max: number };
+type Resize = HeightBounds & { id: number; startY: number; startHeight: number };
 
-function heightAt(drag: Resize, y: number) {
-  return clampPaneHeight(drag.percent + 100 * (drag.startY - y) / drag.stackHeight);
+const clampHeight = (height: number, { min, max }: HeightBounds) => Math.min(max, Math.max(min, Math.round(height)));
+
+function readSplit(divider: HTMLElement) {
+  const stack = divider.parentElement;
+  const upper = divider.previousElementSibling;
+  if (!stack || !upper) return null;
+  const stackHeight = stack.getBoundingClientRect().height;
+  const available = stackHeight - PANE_DIVIDER_HEIGHT;
+  const max = Math.max(0, Math.floor(available - Math.min(MIN_MAIN_PANE_HEIGHT, stackHeight / 2)));
+  const min = Math.min(MIN_BOTTOM_PANE_HEIGHT, max);
+  const height = clampHeight(available - upper.getBoundingClientRect().height, { min: 0, max });
+  return { stack, upper, height, min, max };
+}
+
+function setDividerValue(divider: HTMLElement, height: number) {
+  divider.setAttribute("aria-valuenow", String(height));
+  divider.setAttribute("aria-valuetext", `${height} pixels`);
 }
 
 export function PaneDivider() {
-  const saved = useBottomPaneStore(state => state.height);
+  const heightUnit = useBottomPaneStore(state => state.heightUnit);
+  const dividerRef = useRef<HTMLDivElement>(null);
   const drag = useRef<Resize | null>(null);
+
+  useLayoutEffect(() => {
+    const divider = dividerRef.current;
+    if (!divider) return;
+    const split = readSplit(divider);
+    if (!split) return;
+    const sync = () => {
+      if (drag.current) return;
+      const measured = readSplit(divider);
+      if (!measured) return;
+      const { height, min, max } = measured;
+      if (max > 0 && useBottomPaneStore.getState().heightUnit === "%") {
+        useBottomPaneStore.setState({ height: Math.max(MIN_BOTTOM_PANE_HEIGHT, height), heightUnit: "px" });
+      }
+      divider.setAttribute("aria-valuemin", String(min));
+      divider.setAttribute("aria-valuemax", String(max));
+      setDividerValue(divider, height);
+    };
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(split.stack);
+    observer.observe(split.upper);
+    return () => observer.disconnect();
+  }, [heightUnit]);
+
   return (
     <div
+      ref={dividerRef}
       className="pane-divider"
       role="separator"
       tabIndex={0}
       aria-label="Bottom pane height"
       aria-orientation="horizontal"
-      aria-valuemin={22}
-      aria-valuemax={70}
-      aria-valuenow={Math.round(saved)}
       onPointerDown={event => {
         if (event.button !== 0 || drag.current) return;
-        const stackHeight = event.currentTarget.parentElement?.clientHeight;
-        if (!stackHeight) return;
+        const split = readSplit(event.currentTarget);
+        if (!split) return;
         event.preventDefault();
-        drag.current = { id: event.pointerId, startY: event.clientY, percent: saved, stackHeight };
+        drag.current = { id: event.pointerId, startY: event.clientY, startHeight: split.height, min: split.min, max: split.max };
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
       onPointerMove={event => {
         const active = drag.current;
         if (!active || event.pointerId !== active.id) return;
-        const value = heightAt(active, event.clientY);
-        event.currentTarget.parentElement?.style.setProperty("--bottom-preview", value + "%");
-        event.currentTarget.setAttribute("aria-valuenow", String(Math.round(value)));
+        const height = clampHeight(active.startHeight + active.startY - event.clientY, active);
+        event.currentTarget.parentElement?.style.setProperty("--bottom-preview", `${height}px`);
+        setDividerValue(event.currentTarget, height);
       }}
       onPointerUp={event => {
         const active = drag.current;
-        if (active && event.pointerId === active.id) {
-          useBottomPaneStore.setState({ height: heightAt(active, event.clientY) });
+        if (!active || event.pointerId !== active.id) return;
+        const split = readSplit(event.currentTarget);
+        if (!split) return;
+        const height = clampHeight(active.startHeight + active.startY - event.clientY, split);
+        if (height !== active.startHeight) {
+          useBottomPaneStore.setState({ height, heightUnit: "px" });
         }
       }}
       onLostPointerCapture={event => {
         drag.current = null;
         event.currentTarget.parentElement?.style.removeProperty("--bottom-preview");
-        const height = useBottomPaneStore.getState().height;
-        event.currentTarget.setAttribute("aria-valuenow", String(Math.round(height)));
+        const split = readSplit(event.currentTarget);
+        if (split) setDividerValue(event.currentTarget, split.height);
       }}
       onKeyDown={event => {
         if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
         event.preventDefault();
         event.stopPropagation();
-        useBottomPaneStore.setState({ height: clampPaneHeight(saved + (event.key === "ArrowUp" ? 5 : -5)) });
+        const split = readSplit(event.currentTarget);
+        if (!split) return;
+        const height = clampHeight(split.height + (event.key === "ArrowUp" ? 16 : -16), split);
+        if (height !== split.height) useBottomPaneStore.setState({ height, heightUnit: "px" });
       }}
     />
   );

@@ -208,12 +208,20 @@
   // Borderless actions use an inset edge so hover cannot shift nearby content.
   :is(.quick-preview-topbar-nav > .btn,
       .drive-picker-scroll-button, .tab-scroll-button,
-      .quick-preview-strip-toggle, .indexed-search-clear, .pathbar-brand) {
+      .quick-preview-strip-toggle, .indexed-search-clear) {
     background: var(--surface-control);
     transition: none;
 
     &:hover:not(:disabled) {
       box-shadow: inset 0 0 0 1px var(--dark-hover-stroke);
+    }
+  }
+
+  .pathbar-brand:hover {
+    background: transparent;
+
+    .brand-mark-icon {
+      filter: brightness(1.15) drop-shadow(0 0 3px rgba(var(--accent-rgb), 0.25));
     }
   }
 
@@ -257,7 +265,11 @@
     box-shadow: inset 0 0 0 1px var(--dark-hover-stroke);
   }
 
-  :is(.lander-drive, .crumb:not([data-drop-target="true"])):hover {
+  .lander-drive:hover:not(:focus-visible) {
+    border-color: var(--dark-hover-stroke);
+  }
+
+  .crumb:not([data-drop-target="true"]):hover {
     background: transparent;
     border-color: var(--dark-hover-stroke);
   }

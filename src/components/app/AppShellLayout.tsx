@@ -25,11 +25,14 @@ export const AppShellLayout = ({
   const sidebarProps = focused
     ? { ...content.sidebarProps, activePath: focused.path, recentJumps: focused.recentJumps }
     : content.sidebarProps;
-  const labels = focused ? { countLabel: focused.countLabel, selectionLabel: focused.selectionLabel } : {};
+  const labels = focused ? {
+    countLabel: focused.path ? focused.countLabel : "",
+    selectionLabel: focused.path ? focused.selectionLabel : "",
+  } : {};
   return (
     <div className="app-shell-frame">
       <AppLayout topstack={topstack} content={{ ...content, sidebarProps, onBottomSummary: setBottom }} />
-      <AppStatusbar statusBar={{ ...statusbar.statusBar, ...labels }} hidden={focused ? !focused.path && statusbar.hidden : statusbar.hidden} />
+      <AppStatusbar statusBar={{ ...statusbar.statusBar, ...labels }} />
     </div>
   );
 };

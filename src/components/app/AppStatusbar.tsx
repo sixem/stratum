@@ -4,15 +4,11 @@ import { StatusBar } from "@/components/navigation/StatusBar";
 
 type AppStatusbarProps = {
   statusBar: ComponentProps<typeof StatusBar>;
-  hidden?: boolean;
 };
 
-export const AppStatusbar = ({
-  statusBar,
-  hidden = false,
-}: AppStatusbarProps) => {
+export const AppStatusbar = ({ statusBar }: AppStatusbarProps) => {
   return (
-    <div className={`statusbar-shell${hidden ? " is-hidden" : ""}`}>
+    <div className="statusbar-shell">
       <StatusBar {...statusBar} />
     </div>
   );

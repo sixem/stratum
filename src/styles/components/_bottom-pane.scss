@@ -95,8 +95,11 @@
 
   .tabsbar {
     flex: 0 0 auto;
+    position: relative;
+    z-index: 2;
     background: var(--panel);
     border-bottom: var(--surface-border-width) solid var(--stroke);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
   }
 
   .bottom-files {
