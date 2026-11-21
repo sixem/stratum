@@ -187,7 +187,6 @@
     @include control.panel-card(10px, var(--surface-nav));
     padding: 14px;
     display: grid;
-    gap: 12px;
     min-height: 0;
     scroll-margin-top: 1px;
   }
@@ -198,5 +197,9 @@
     letter-spacing: 0.02em;
     text-transform: none;
     color: var(--text);
+  }
+
+  .settings-item + .settings-section-title {
+    margin-top: 12px;
   }
 }

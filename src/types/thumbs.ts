@@ -15,6 +15,7 @@ export type ThumbnailRequestOptions = {
   format: ThumbnailFormat;
   allowVideos: boolean;
   allowSvgs: boolean;
+  darkSvgPreviews: boolean;
   cacheMb: number;
 };
 

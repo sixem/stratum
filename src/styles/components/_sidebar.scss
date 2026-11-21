@@ -70,7 +70,7 @@
     cursor: pointer;
     width: 100%;
     border: 0;
-    border-bottom: 1px solid #1c2537;
+    border-bottom: var(--surface-border-width) solid #1c2537;
     background: transparent;
     text-align: left;
     transition: none;
@@ -119,7 +119,7 @@
   .sidebar-tips {
     margin-top: 2px;
     padding-top: 10px;
-    border-top: 1px solid #1c2537;
+    border-top: var(--surface-border-width) solid #1c2537;
   }
 
   .tips {

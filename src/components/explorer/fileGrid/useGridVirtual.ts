@@ -151,7 +151,7 @@ export const useGridVirtual = ({
     rowHeight,
     overscan,
     VIEW_INSET,
-    VIEW_INSET,
+    0,
     {
       viewportHeight,
       observeContainerResize: false,

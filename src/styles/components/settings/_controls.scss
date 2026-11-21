@@ -4,13 +4,14 @@
 :where(.settings-panel) {
   .settings-item {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 12px;
     align-items: center;
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid #151b28;
-    background: #121826;
+    padding: 12px 0;
+  }
+
+  .settings-item + .settings-item {
+    border-top: var(--surface-border-width) solid var(--stroke);
   }
 
   .settings-item.is-stacked {
@@ -24,7 +25,7 @@
 
   .settings-label {
     font-weight: 600;
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-md);
   }
 
   .settings-label-row {
@@ -43,7 +44,8 @@
   }
 
   .settings-desc {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
     color: var(--muted);
     margin-top: 2px;
     line-height: 1.4;
@@ -64,11 +66,11 @@
 
   .settings-toggle {
     position: relative;
-    width: 42px;
-    height: 22px;
+    width: 44px;
+    height: 24px;
     border-radius: 999px;
     background: #0f1420;
-    border: 1px solid #1d2434;
+    border: var(--surface-border-width) solid #1d2434;
     cursor: pointer;
     display: inline-block;
     transition:

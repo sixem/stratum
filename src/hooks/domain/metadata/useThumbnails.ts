@@ -2,13 +2,13 @@
 import { listen } from "@tauri-apps/api/event";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { requestThumbnails, toThumbnailUrl } from "@/api";
-import { makeDebug } from "@/lib";
+import { getExtension, getPathName, isSvgLikeExtension, makeDebug } from "@/lib";
 import type { ThumbnailEvent, ThumbnailRequest, ThumbnailRequestOptions } from "@/types";
 
-const buildOptionsKey = (options: ThumbnailRequestOptions) => {
+const buildOptionsKey = (options: ThumbnailRequestOptions, dark = options.darkSvgPreviews) => {
   const quality = options.format === "jpeg" ? options.quality : "lossless";
   const videoFlag = options.allowVideos ? "video" : "no-video";
-  const svgFlag = options.allowSvgs ? "svg" : "no-svg";
+  const svgFlag = !options.allowSvgs ? "no-svg" : dark ? "svg-dark" : "svg";
   return [options.size, options.format, quality, videoFlag, svgFlag].join(":");
 };
 
@@ -73,7 +73,12 @@ export const useThumbnails = (
   const flushTimerRef = useRef<number | null>(null);
   const thumbnailsRef = useRef(thumbnails);
   const optionsKey = useMemo(() => buildOptionsKey(options), [options]);
+  const otherSvgThemeKey = useMemo(
+    () => options.allowSvgs ? buildOptionsKey(options, !options.darkSvgPreviews) : null,
+    [options],
+  );
   const optionsKeyRef = useRef(optionsKey);
+  const otherSvgThemeKeyRef = useRef(otherSvgThemeKey);
   const flushKeyRef = useRef(optionsKey);
   const resetKeyRef = useRef(resetKey);
 
@@ -113,12 +118,13 @@ export const useThumbnails = (
   useEffect(() => {
     if (optionsKeyRef.current === optionsKey) return;
     optionsKeyRef.current = optionsKey;
+    otherSvgThemeKeyRef.current = otherSvgThemeKey;
     pending.current = new Set();
     signatureByPathRef.current.clear();
     pendingUpdatesRef.current.clear();
     clearFlushTimer();
     setThumbnails(new Map());
-  }, [clearFlushTimer, optionsKey]);
+  }, [clearFlushTimer, optionsKey, otherSvgThemeKey]);
 
   useEffect(() => {
     if (resetKey === undefined) return;
@@ -146,7 +152,12 @@ export const useThumbnails = (
       const stop = await listen<ThumbnailEvent>("thumb_ready", (event) => {
         if (!active) return;
         const payload = event.payload;
-        if (!payload || payload.key !== optionsKeyRef.current) return;
+        if (!payload) return;
+        // A raster job in flight also serves the other SVG theme.
+        if (payload.key !== optionsKeyRef.current && (
+          payload.key !== otherSvgThemeKeyRef.current ||
+          isSvgLikeExtension(getExtension(getPathName(payload.path)))
+        )) return;
         const url = toThumbnailUrl(payload.thumbPath);
         // The worker echoes the signature on ready events. Files it cannot
         // render have no event, so they must not hold a signature in memory.

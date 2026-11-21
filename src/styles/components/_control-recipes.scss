@@ -115,21 +115,21 @@
 }
 
 // Pill groups share the same shape and selection states across dialogs.
-@mixin pill-group($border-width: 1px) {
+@mixin pill-group() {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 4px;
   align-items: center;
   padding: 3px;
-  @include control-surface(999px, #101521, #1b2232, $border-width);
+  @include control-surface(999px, #101521, #1b2232);
 }
 
 @mixin pill-option() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
-  @include control-surface(999px, transparent, transparent, 1px);
+  padding: 4px 11px;
+  @include control-surface(999px, transparent, transparent);
   font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--muted);

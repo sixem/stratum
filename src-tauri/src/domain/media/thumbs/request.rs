@@ -17,6 +17,7 @@ pub(super) fn request_thumbnails(
     key: String,
 ) -> Vec<ThumbHit> {
     let mut hits = Vec::with_capacity(requests.len());
+    let cache_key = build_render_cache_key(&options);
 
     for request in requests.into_iter().rev() {
         let trimmed = request.path.trim();
@@ -36,8 +37,8 @@ pub(super) fn request_thumbnails(
             &state.cache_dir,
             &input_path,
             &meta,
-            &key,
-            &options.format,
+            &cache_key,
+            &options,
             &kind,
         );
         if cache::has_cache_entry(state, &thumb_id) {
@@ -120,7 +121,7 @@ fn build_thumb_path(
     input_path: &Path,
     meta: &ThumbMeta,
     key: &str,
-    format: &ThumbFormat,
+    options: &ThumbOptions,
     kind: &ThumbKind,
 ) -> (PathBuf, String) {
     let mut hasher = DefaultHasher::new();
@@ -133,15 +134,33 @@ fn build_thumb_path(
     if matches!(kind, ThumbKind::Svg) {
         // Regenerate SVG thumbnails that used the old external resource resolver.
         "self-contained-svg".hash(&mut hasher);
+        if options.dark_svg_previews {
+            "dark-svg-adaptive-backdrop".hash(&mut hasher);
+        }
     }
     let hash = hasher.finish();
     let shard = format!("{:02x}", hash & 0xff);
-    let extension = match format {
+    let extension = match options.format_for(*kind) {
         ThumbFormat::Webp => "webp",
         ThumbFormat::Jpeg => "jpg",
     };
     let file_name = format!("{:x}.{}", hash, extension);
     (cache_dir.join(shard).join(&file_name), file_name)
+}
+
+fn build_render_cache_key(options: &ThumbOptions) -> String {
+    // Keep existing cache paths and append the theme only when hashing SVGs.
+    let encoding = match options.format {
+        ThumbFormat::Webp => "webp:lossless".to_owned(),
+        ThumbFormat::Jpeg => format!("jpeg:{}", options.quality),
+    };
+    let video = if options.allow_videos {
+        "video"
+    } else {
+        "no-video"
+    };
+    let svg = if options.allow_svgs { "svg" } else { "no-svg" };
+    format!("{}:{encoding}:{video}:{svg}", options.size)
 }
 
 fn to_epoch_ms(time: SystemTime) -> Option<u64> {

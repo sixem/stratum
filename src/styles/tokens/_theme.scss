@@ -118,12 +118,10 @@ $accent-themes: (
   --overlay-scrim: rgb(0 0 0 / 72%);
   --stroke: #1b1b1b;
   --window-frame-edge: var(--stroke);
-  --dark-hover-stroke: #36363a;
+  --dark-hover-stroke: #323236;
   --dark-selection: #111112;
-  --dark-selected-stroke: rgba(var(--accent-rgb), 0.62);
+  --dark-selected-stroke: rgba(var(--accent-rgb), 0.56);
+  --dark-selected-hover-stroke: rgba(var(--accent-rgb), 0.82);
   --text: #e5e5e9;
   --muted: #98989f;
-  --ambient-glow-strong: rgba(var(--accent-rgb), 0.12);
-  --ambient-glow-mid: rgba(var(--accent-rgb), 0.08);
-  --ambient-glow-soft: rgba(var(--accent-rgb), 0.04);
 }

@@ -11,6 +11,11 @@
     border-color: var(--stroke);
   }
 
+  // These two edges divide the title bar, tabs, and path breadcrumbs.
+  :is(.pathbar-shell, .path-tabs) {
+    border-bottom-width: 1px;
+  }
+
   :is(.pathbar-shell, .statusbar, .quick-preview-topbar-shell, .overlay-panel-header) {
     background: var(--panel-2);
   }
@@ -19,7 +24,7 @@
     background: transparent;
   }
 
-  :is(.sidebar, .settings-item, .settings-pills, .conversion-mode-toggle, .transfer-popover,
+  :is(.sidebar, .settings-pills, .conversion-mode-toggle, .transfer-popover,
       .drop-submenu, .conversion-override-select-menu) {
     background: var(--panel);
     border-color: var(--stroke);
@@ -57,15 +62,23 @@
     --conversion-field-surface-focus: var(--surface-control);
   }
 
-  :is(.path-input, .search-field, .search-input, .bottom-search, .bottom-search input,
+  :is(.path-input, .search-field, .bottom-search, .bottom-search input,
       .indexed-search-searchbox, .indexed-search-input, .prompt-input, .rename-input) {
     background: var(--surface-control);
     transition: none;
   }
 
+  .search-field:hover:not(:focus-within) {
+    border-color: var(--dark-hover-stroke);
+  }
+
+  .inputbar-indexed-search {
+    transition: none;
+  }
+
   // Bordered controls stay black when the pointer enters them. A brighter
   // edge gives immediate feedback without changing their size or fill.
-  :is(.btn, .view-btn, .inputbar-refresh, .inputbar-indexed-search, .tab-new,
+  :is(.btn, :where(.bottom-nav) .view-btn, .inputbar-refresh, .tab-new,
       .empty-action, .quick-preview-control-button, .transfer-popover-clear,
       .transfer-item-action, .settings-nav-item, .settings-pill, .settings-toggle,
       .conversion-mode-btn, .ui-select-trigger, .indexed-search-drive) {
@@ -78,19 +91,19 @@
     }
   }
 
-  :is(.inputbar-refresh, .inputbar-indexed-search, .view-btn:not(.is-active),
+  :is(:where(.bottom-nav) .view-btn:not(.is-active), .inputbar-refresh,
       .settings-nav-item:not(.is-active), .settings-pill:not(.is-active),
       .conversion-mode-btn:not(.is-active)) {
     color: var(--muted);
   }
 
-  :is(.view-btn.is-active, .settings-nav-item.is-active, .settings-pill.is-active,
+  :is(:where(.bottom-nav) .view-btn.is-active, .settings-nav-item.is-active, .settings-pill.is-active,
       .conversion-mode-btn.is-active, .conversion-primary-btn, .indexed-search-drive[aria-pressed="true"]) {
     color: var(--text);
     border-color: var(--dark-selected-stroke);
 
     &:hover:not(:disabled) {
-      border-color: var(--accent);
+      border-color: var(--dark-selected-hover-stroke);
     }
   }
 
@@ -98,7 +111,7 @@
     border-color: var(--dark-selected-stroke);
 
     &:hover {
-      border-color: var(--accent);
+      border-color: var(--dark-selected-hover-stroke);
     }
   }
 
@@ -127,12 +140,30 @@
     border-color: var(--dark-selected-stroke);
 
     &:hover {
-      border-color: var(--accent);
+      border-color: var(--dark-selected-hover-stroke);
     }
   }
 
   .pathbar .drive-picker-button {
     background: var(--surface-control);
+  }
+
+  .pathbar .view-btn {
+    background: transparent;
+    border-color: transparent;
+
+    &:not(.is-active):hover:not(:disabled) {
+      color: var(--text);
+    }
+
+    &.is-active {
+      color: var(--accent);
+    }
+  }
+
+  :is(.pathbar .view-btn, .inputbar-refresh):focus-visible {
+    outline: 2px solid var(--dark-selected-stroke);
+    outline-offset: -2px;
   }
 
   // Borderless actions use an inset edge so hover cannot shift nearby content.
@@ -151,19 +182,25 @@
     box-shadow: inset 0 0 0 1px var(--dark-selected-stroke);
   }
 
-  .tab:not(.is-active):hover {
-    background: transparent;
-    border-top-color: var(--dark-hover-stroke);
+  .tab:not([data-drop-target="true"]) {
+    &[data-tab-kind="untitled"]:not(.is-active) {
+      background: #101012;
+    }
+
+    &:not(.is-active):hover {
+      background: #161619;
+      border-top-color: var(--dark-hover-stroke);
+    }
+
+    &.is-active {
+      background: #1c1c1f;
+      border-top-color: rgba(var(--accent-rgb), 0.42);
+    }
   }
 
-  .tab.is-active,
   .sidebar .place.is-active,
   :is(.drop-submenu-item, .tab, .place)[data-drop-target="true"] {
     background: var(--dark-selection);
-  }
-
-  .tab[data-tab-kind="untitled"]:not(.is-active):not([data-drop-target="true"]) {
-    background: var(--panel-deep);
   }
 
   .sidebar .place:not(.is-active):not(.is-empty):not([data-drop-target="true"]):hover {
@@ -192,6 +229,14 @@
     border-color: var(--dark-hover-stroke);
   }
 
+  .thumb-card.is-selected:not([data-drop-target="true"]) {
+    border-color: var(--dark-selected-stroke);
+
+    &.is-dir {
+      border-color: rgba(var(--accent-rgb), 0.72);
+    }
+  }
+
   :is(.indexed-search-result:not([aria-pressed="true"]), .context-item,
       .context-item-group.is-open > .context-item, .ui-select-option:not(.is-selected)):is(:hover, :focus-visible) {
     background: transparent;
@@ -200,6 +245,27 @@
 
   .context-divider {
     background: var(--stroke);
+  }
+}
+
+:root[data-dark-mode="true"][data-ambient="true"] {
+  :is(.file-list, .view-lander) {
+    // Let the existing shell glow show through both panes and the new-tab view.
+    background: transparent;
+  }
+
+  .thumb-card:not(.is-selected):not([data-drop-target="true"]) {
+    background-color: color-mix(in srgb, var(--surface-card) 90%, transparent);
+  }
+
+  .thumb-shell[data-category-tint="true"] {
+    .thumb-card:is([data-kind="document"], [data-kind="image"], [data-kind="video"], [data-kind="executable"]):not(.is-selected):not([data-drop-target="true"]) {
+      background-color: color-mix(
+        in srgb,
+        color-mix(in srgb, var(--surface-card), var(--thumb-icon-color) 7%) 90%,
+        transparent
+      );
+    }
   }
 }
 

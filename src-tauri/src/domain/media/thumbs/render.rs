@@ -25,7 +25,7 @@ pub(super) fn render_thumbnail(job: &ThumbJob) -> Result<ThumbRenderOutput, Stri
     // Release the full decoded image before encoding the small thumbnail.
     let resized = load_source_image(job, target_size)?.thumbnail(target_size, target_size);
     let mut file = fs::File::create(&job.thumb_path).map_err(|err| err.to_string())?;
-    match job.options.format {
+    match job.options.format_for(job.kind) {
         ThumbFormat::Webp => resized
             .write_to(&mut file, image::ImageOutputFormat::WebP)
             .map_err(|err| err.to_string())?,
@@ -58,7 +58,9 @@ fn load_source_image(job: &ThumbJob, target_size: u32) -> Result<image::DynamicI
             .decode()
             .map_err(|err| err.to_string()),
         ThumbKind::Video => render_video_thumbnail(&job.path, target_size),
-        ThumbKind::Svg => svg::render_svg_thumbnail(&job.path, target_size),
+        ThumbKind::Svg => {
+            svg::render_svg_thumbnail(&job.path, target_size, job.options.dark_svg_previews)
+        }
     }
 }
 

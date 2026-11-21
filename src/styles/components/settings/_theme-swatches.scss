@@ -7,3 +7,16 @@
     --swatch-color: #{map.get($theme-values, color)};
   }
 }
+
+:where(.settings-panel) .settings-pill[data-accent] {
+  &[aria-pressed="true"] {
+    box-shadow:
+      0 0 8px color-mix(in srgb, var(--swatch-color) 34%, transparent),
+      inset 0 0 7px color-mix(in srgb, var(--swatch-color) 12%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--swatch-color);
+    outline-offset: 2px;
+  }
+}

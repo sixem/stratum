@@ -72,6 +72,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
               type="button"
               data-accent={theme.id}
               className={`settings-pill${accentTheme === theme.id ? " is-active" : ""}`}
+              aria-pressed={accentTheme === theme.id}
               onClick={() => updateSettings({ accentTheme: theme.id })}
             >
               <span className="settings-swatch" aria-hidden="true" />
@@ -101,7 +102,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
       <div className="settings-item">
         <div>
           <div className="settings-label">Ambient background</div>
-          <div className="settings-desc">Slow moving gradient glow behind the UI.</div>
+          <div className="settings-desc">A slow-moving backdrop behind the UI.</div>
         </div>
         <label className="settings-toggle">
           <input

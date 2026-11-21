@@ -1,4 +1,4 @@
-// Keep the same entry near the viewport center when the grid reflows.
+// Keep viewport edges pinned and center the same entry between them on reflow.
 import type { RefObject } from "react";
 import { useLayoutEffect, useRef } from "react";
 import type { EntryItem } from "@/lib";
@@ -11,19 +11,19 @@ type GridLayout = {
   columnCount: number;
   rowHeight: number;
   viewportHeight: number;
+  contentHeight: number;
   loading: boolean;
 };
 
 type UseGridScrollAnchorOptions = GridLayout & {
   viewportRef: RefObject<HTMLDivElement | null>;
-  contentHeight: number;
 };
 
-type ScrollAnchor = {
-  index: number;
-  rowFraction: number;
-  scrollTop: number;
-};
+type ScrollAnchor =
+  | { kind: "top" | "bottom"; scrollTop: number }
+  | { kind: "entry"; index: number; rowFraction: number; scrollTop: number };
+
+const EDGE_TOLERANCE = 1;
 
 export const useGridScrollAnchor = ({
   viewportRef,
@@ -42,7 +42,7 @@ export const useGridScrollAnchor = ({
   useLayoutEffect(() => {
     const previous = previousLayoutRef.current;
     previousLayoutRef.current = {
-      viewKey, scrollRestoreKey, items, columnCount, rowHeight, viewportHeight, loading,
+      viewKey, scrollRestoreKey, items, columnCount, rowHeight, viewportHeight, contentHeight, loading,
     };
 
     const element = viewportRef.current;
@@ -60,7 +60,9 @@ export const useGridScrollAnchor = ({
     if (previous.columnCount === columnCount && previous.rowHeight === rowHeight) {
       if (saved && (
         previous.viewportHeight !== viewportHeight ||
-        previous.items[saved.index]?.key !== items[saved.index]?.key
+        (saved.kind === "entry"
+          ? previous.items[saved.index]?.key !== items[saved.index]?.key
+          : previous.contentHeight !== contentHeight)
       )) {
         anchorRef.current = null;
       }
@@ -68,20 +70,30 @@ export const useGridScrollAnchor = ({
     }
 
     const scrollTop = element.scrollTop;
-    // Reuse the exact entry across consecutive reflows until the user scrolls.
+    // Reuse the original edge or entry across reflows until the user scrolls.
     const retained = saved?.scrollTop === scrollTop ? saved : null;
-    if (!retained && scrollTop === 0) {
-      anchorRef.current = null;
+    const clientHeight = element.clientHeight;
+    const maxScrollTop = Math.max(0, contentHeight - clientHeight);
+    const previousMaxScrollTop = Math.max(0, previous.contentHeight - previous.viewportHeight);
+    const edge = retained?.kind ?? (
+      scrollTop <= EDGE_TOLERANCE ? "top" :
+      scrollTop >= previousMaxScrollTop - EDGE_TOLERANCE ? "bottom" :
+      "entry"
+    );
+    if (edge !== "entry") {
+      element.scrollTop = edge === "top" ? 0 : maxScrollTop;
+      anchorRef.current = { kind: edge, scrollTop: element.scrollTop };
       return;
     }
 
     const previousRow = Math.max(0, scrollTop + previous.viewportHeight / 2 - VIEW_INSET) /
       previous.rowHeight;
-    const previousIndex = retained?.index ?? Math.min(
+    const entryAnchor = retained?.kind === "entry" ? retained : null;
+    const previousIndex = entryAnchor?.index ?? Math.min(
       previous.items.length - 1,
       Math.floor(previousRow) * previous.columnCount + Math.floor(previous.columnCount / 2),
     );
-    const rowFraction = retained?.rowFraction ?? previousRow % 1;
+    const rowFraction = entryAnchor?.rowFraction ?? previousRow % 1;
     const anchorKey = previous.items[previousIndex]?.key;
     const index = items[previousIndex]?.key === anchorKey
       ? previousIndex
@@ -91,12 +103,10 @@ export const useGridScrollAnchor = ({
       return;
     }
 
-    const clientHeight = element.clientHeight;
     const center = (Math.floor(index / columnCount) + rowFraction) * rowHeight + VIEW_INSET;
-    const maxScrollTop = Math.max(0, contentHeight - clientHeight);
     const target = Math.min(maxScrollTop, Math.max(0, center - clientHeight / 2));
     if (Math.abs(target - scrollTop) > 0.5) element.scrollTop = target;
-    anchorRef.current = { index, rowFraction, scrollTop: element.scrollTop };
+    anchorRef.current = { kind: "entry", index, rowFraction, scrollTop: element.scrollTop };
   }, [
     columnCount, contentHeight, items, loading, rowHeight, scrollRestoreKey,
     viewKey, viewportHeight, viewportRef,

@@ -231,7 +231,8 @@ export const useGridSizing = ({
         );
   const rowCount = Math.ceil(viewItemsLength / columnCount);
   const rowHeight = gridSizing.rowHeight + gridSizing.gap;
-  const contentHeight = rowCount * rowHeight + VIEW_INSET * 2;
+  // The last virtual row already includes the grid gap as its bottom padding.
+  const contentHeight = rowCount * rowHeight + VIEW_INSET;
   const layoutReady = viewportWidth > 0;
 
   useEffect(() => {

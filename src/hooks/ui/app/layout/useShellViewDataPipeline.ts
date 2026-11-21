@@ -55,6 +55,7 @@ export const useShellViewDataPipeline = ({
 }) => {
   const { contextMenuActive } = menuState;
   const blockReveal = resolvedView.viewLoading;
+  const darkSvgPreviews = settings.darkMode && settings.thumbnailSvgs;
 
   const thumbnailOptions = useMemo(
     () => ({
@@ -63,9 +64,11 @@ export const useShellViewDataPipeline = ({
       format: settings.thumbnailFormat,
       allowVideos: settings.thumbnailVideos,
       allowSvgs: settings.thumbnailSvgs,
+      darkSvgPreviews,
       cacheMb: settings.thumbnailCacheMb,
     }),
     [
+      darkSvgPreviews,
       settings.thumbnailCacheMb,
       settings.thumbnailFormat,
       settings.thumbnailQuality,
@@ -74,12 +77,13 @@ export const useShellViewDataPipeline = ({
       settings.thumbnailVideos,
     ],
   );
-  const thumbnailResetKey = `reset:${thumbResetNonce}`;
-  const { thumbnails, requestThumbnails } = useThumbnails(
+  const thumbnailCacheResetKey = `reset:${thumbResetNonce}`;
+  const { thumbnails, requestThumbnails, optionsKey } = useThumbnails(
     thumbnailOptions,
     settings.thumbnailsEnabled,
-    thumbnailResetKey,
+    thumbnailCacheResetKey,
   );
+  const thumbnailResetKey = `${thumbnailCacheResetKey}:${optionsKey}`;
 
   const { sortedEntries, visibleCount, isFiltered, totalCount: resolvedTotalCount } =
     useFilteredEntries({

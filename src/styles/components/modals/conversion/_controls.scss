@@ -11,7 +11,7 @@
   }
 
   .conversion-mode-toggle {
-    @include control.pill-group(var(--surface-border-width));
+    @include control.pill-group();
   }
 
   .conversion-mode-btn {

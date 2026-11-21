@@ -30,7 +30,7 @@
   transition: opacity 0.3s ease;
 }
 
-:root[data-ambient="true"] .app-shell::before {
+:root[data-ambient="true"]:not([data-dark-mode="true"]) .app-shell::before {
   // Keep ambient mode to a single animated glow layer so the effect reads
   // softly without stacking extra blend work behind the shell.
   inset: -28%;
@@ -46,10 +46,38 @@
   animation: ambient-drift 10s ease-in-out infinite alternate;
 }
 
-:root[data-ambient="true"] .app-shell::after {
+:root[data-ambient="true"]:not([data-dark-mode="true"]) .app-shell::after {
   inset: 0;
   background: linear-gradient(180deg, rgba(10, 11, 16, 0.16), rgba(10, 11, 16, 0.04));
   opacity: 1;
+}
+
+:root[data-dark-mode="true"][data-ambient="true"] .app-shell::before {
+  inset: auto -7% 0;
+  height: 67%;
+  background: var(--accent);
+  // Reuse Maelstrom's wave geometry. Its alpha carries the individual strokes
+  // and their fades so one layer can follow Stratum's selected accent.
+  mask: url("../../assets/ambient-wave.svg") center / 100% 100% no-repeat;
+  mask-mode: alpha;
+  opacity: 0.56;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-dark-mode="true"][data-ambient="true"] .app-shell::before {
+    animation: ambient-wave-drift 28s ease-in-out -7s infinite alternate;
+    will-change: transform;
+  }
+
+  :root[data-dark-mode="true"][data-ambient="true"][data-window-focus="false"] .app-shell::before,
+  :root[data-dark-mode="true"][data-ambient="true"] .app-shell[data-preview="true"]::before {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes ambient-wave-drift {
+  from { transform: translate3d(-4%, 2%, 0); }
+  to { transform: translate3d(4%, -2%, 0); }
 }
 
 @keyframes ambient-drift {
@@ -72,7 +100,7 @@
     transition: none;
   }
 
-  :root[data-ambient="true"] .app-shell::before {
+  :root[data-ambient="true"]:not([data-dark-mode="true"]) .app-shell::before {
     animation: none;
   }
 }
