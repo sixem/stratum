@@ -7,22 +7,34 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Local workspace files
+/.codex
+/.agents/
 /AGENTS.md
-/PLAN.MD
+/PLAN.[mM][dD]
 /TODO.md
 /references
-/references/**
 
+# Local environment variables
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.local
+
+# Dependencies and build output
 node_modules
 dist
 dist-ssr
-*.local
+*.tsbuildinfo
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
+Desktop.ini
 *.suo
 *.ntvs*
 *.njsproj
