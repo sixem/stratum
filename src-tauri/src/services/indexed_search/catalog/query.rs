@@ -15,6 +15,7 @@ use super::{
 
 const MAX_FETCH_LIMIT: usize = 300;
 const MAX_FTS_TERMS: usize = 64;
+const SELECT_HIT_COLUMNS: &str = "SELECT e.path, e.kind, e.normalized_name, e.entry_id";
 
 #[derive(Clone, Copy)]
 pub(super) struct PrefixFilter<'a> {
@@ -256,22 +257,28 @@ pub(super) fn build_hits_sql(
         .match_expression
         .as_ref()
         .filter(|_| !prefix.is_some_and(|filter| filter.include));
-    let mut sql = build_query_sql(
-        match_expression.is_some(),
-        plan.like_patterns.len(),
-        verified_volumes.len(),
-    );
+    let mut sql = String::from(SELECT_HIT_COLUMNS);
+    if match_expression.is_some() {
+        // Start with the FTS row IDs before looking up the entries.
+        sql.push_str(
+            " FROM indexed_entry_fts CROSS JOIN indexed_entries e ON e.entry_id = indexed_entry_fts.rowid
+              WHERE indexed_entry_fts MATCH ? AND ",
+        );
+    } else {
+        sql.push_str(" FROM indexed_entries e WHERE ");
+    }
     let mut params = match_expression
         .into_iter()
         .cloned()
         .map(Value::from)
         .collect::<Vec<_>>();
-    params.extend(plan.like_patterns.iter().cloned().map(Value::from));
-    params.push(Value::from(schema::DRIVE_CATALOG_STATE_READY.to_string()));
-    for (drive_path, volume_id) in verified_volumes {
-        params.push(Value::from(drive_path.clone()));
-        params.push(Value::from(volume_id.clone()));
-    }
+    append_match_filters(
+        &mut sql,
+        &mut params,
+        "e.normalized_name",
+        plan,
+        verified_volumes,
+    );
     // SQLite uses the first applicable lower name bound as its index start.
     // Put the continuation bound ahead of the beginning of the prefix range.
     match seek {
@@ -289,21 +296,83 @@ pub(super) fn build_hits_sql(
         }
         None => {}
     }
+    append_prefix_filter(&mut sql, &mut params, "e.normalized_name", prefix);
+    (sql, params)
+}
+
+pub(super) fn build_ordered_substring_probe_sql(
+    plan: &QueryPlan,
+    verified_volumes: &[(String, String)],
+    prefix: Option<PrefixFilter<'_>>,
+    after: Option<(&str, i64)>,
+    candidate_limit: usize,
+) -> (String, Vec<Value>) {
+    // Materialize the name window before applying LIKE. This bounds the
+    // probe even if none of the candidates match or belong to a ready drive.
+    // Name and row ID are covered by this index. Only matching names need a
+    // table lookup for the path, kind, and drive verification.
+    let source = "SELECT e.normalized_name, e.entry_id
+                  FROM indexed_entries e INDEXED BY indexed_entries_normalized_name_idx";
+    let order = "ORDER BY e.normalized_name, e.entry_id";
+    let cap = candidate_limit as i64;
+    let (mut sql, mut params) = if let Some((name, id)) = after {
+        // Seek past exact-name ties by row ID, then spend what remains of the
+        // same window on later names. A tuple seek can reread earlier ties.
+        (
+            format!(
+                "WITH tied AS MATERIALIZED (
+                   {source} WHERE e.normalized_name = ? AND e.entry_id > ? {order} LIMIT ?
+                 ), later AS MATERIALIZED (
+                   {source} WHERE e.normalized_name > ? {order} LIMIT ? - (SELECT count(*) FROM tied)
+                 ), ordered AS (SELECT * FROM tied UNION ALL SELECT * FROM later)"
+            ),
+            vec![name.to_owned().into(), id.into(), cap.into(), name.to_owned().into(), cap.into()],
+        )
+    } else {
+        (
+            format!("WITH ordered AS MATERIALIZED ({source} {order} LIMIT ?)"),
+            vec![cap.into()],
+        )
+    };
+    sql.push(' ');
+    sql.push_str(SELECT_HIT_COLUMNS);
+    sql.push_str(
+        " FROM ordered candidate CROSS JOIN indexed_entries e ON e.entry_id = candidate.entry_id WHERE ",
+    );
+    append_match_filters(
+        &mut sql,
+        &mut params,
+        "candidate.normalized_name",
+        plan,
+        verified_volumes,
+    );
+    append_prefix_filter(&mut sql, &mut params, "candidate.normalized_name", prefix);
+    (sql, params)
+}
+
+fn append_prefix_filter(
+    sql: &mut String,
+    params: &mut Vec<Value>,
+    name_column: &str,
+    prefix: Option<PrefixFilter<'_>>,
+) {
     if let Some(filter) = prefix {
         sql.push_str(if filter.include {
             " AND ("
         } else {
             " AND NOT ("
         });
-        sql.push_str("e.normalized_name >= ?");
+        sql.push_str(name_column);
+        sql.push_str(" >= ?");
         params.push(Value::from(filter.start.to_owned()));
         if let Some(end) = filter.end {
-            sql.push_str(" AND e.normalized_name < ?");
+            sql.push_str(" AND ");
+            sql.push_str(name_column);
+            sql.push_str(" < ?");
             params.push(Value::from(end.to_owned()));
         }
         sql.push(')');
     }
-    (sql, params)
 }
 
 // SQLite's binary UTF-8 ordering preserves Unicode scalar order. Increment
@@ -427,24 +496,20 @@ fn build_match_expression(tokens: BTreeSet<String>) -> Option<String> {
     Some(terms.join(" AND "))
 }
 
-fn build_query_sql(use_fts: bool, like_pattern_count: usize, volume_count: usize) -> String {
-    let mut sql = String::from("SELECT e.path, e.kind, e.normalized_name, e.entry_id ");
-
-    if use_fts {
-        // CROSS JOIN starts with the FTS row IDs before looking up the entries.
-        sql.push_str(
-            "FROM indexed_entry_fts CROSS JOIN indexed_entries e ON e.entry_id = indexed_entry_fts.rowid
-             WHERE indexed_entry_fts MATCH ? AND ",
-        );
-    } else {
-        sql.push_str("FROM indexed_entries e WHERE ");
-    }
-
-    for index in 0..like_pattern_count {
+fn append_match_filters(
+    sql: &mut String,
+    params: &mut Vec<Value>,
+    name_column: &str,
+    plan: &QueryPlan,
+    verified_volumes: &[(String, String)],
+) {
+    for (index, pattern) in plan.like_patterns.iter().enumerate() {
         if index > 0 {
             sql.push_str(" AND ");
         }
-        sql.push_str("e.normalized_name LIKE ? ESCAPE '\\'");
+        sql.push_str(name_column);
+        sql.push_str(" LIKE ? ESCAPE '\\'");
+        params.push(Value::from(pattern.clone()));
     }
     // Apply the mount and ready-snapshot checks before LIMIT so stale rows
     // cannot occupy result slots, and verify each identity in this SQL read.
@@ -453,12 +518,14 @@ fn build_query_sql(use_fts: bool, like_pattern_count: usize, volume_count: usize
             SELECT drive_path FROM indexed_drive_catalog_state
             WHERE lifecycle_state = ? AND (drive_path, volume_id) IN (VALUES ",
     );
-    for index in 0..volume_count {
+    params.push(Value::from(schema::DRIVE_CATALOG_STATE_READY.to_string()));
+    for (index, (drive_path, volume_id)) in verified_volumes.iter().enumerate() {
         if index > 0 {
             sql.push_str(", ");
         }
         sql.push_str("(?, ?)");
+        params.push(Value::from(drive_path.clone()));
+        params.push(Value::from(volume_id.clone()));
     }
     sql.push_str("))");
-    sql
 }

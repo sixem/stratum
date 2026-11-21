@@ -133,7 +133,9 @@ fn scan_directory(
         if excluded_path(&path, capture.excluded_directory) {
             continue;
         }
-        let Ok(metadata) = fs::symlink_metadata(entry.path()) else {
+        // On Windows the listing already carries the attributes used here.
+        // open_frontier still checks each directory before traversing it.
+        let Ok(metadata) = entry.metadata() else {
             continue;
         };
         let kind = if metadata.is_dir() {
@@ -292,6 +294,21 @@ mod tests {
         // ordinary directory is traversed in the second invocation.
         assert_eq!(search("durable-root").len(), 1);
         assert_eq!(search("ordinary-child").len(), 1);
+        assert!(search("outside").is_empty());
+
+        // Refreshes of a published index use the other baseline scanner.
+        // It should replace the saved rows and still skip the junction target.
+        fs::write(source.join("fresh-root.txt"), "").unwrap();
+        let refreshed = super::super::scan::scan_drive_into_catalog(
+            &store,
+            &capture,
+            &|| false,
+            &|| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(refreshed.entries_indexed, 4);
+        assert_eq!(search("fresh-root").len(), 1);
+        assert!(search("durable-root").is_empty());
         assert!(search("outside").is_empty());
     }
 }

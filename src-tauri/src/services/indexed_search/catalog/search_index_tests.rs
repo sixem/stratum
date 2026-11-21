@@ -4,11 +4,17 @@ use std::{
     collections::HashSet,
     fs,
     path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::mpsc,
+    thread,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-use crate::domain::indexed_search::{IndexedPathPageQuery, IndexedPathQuery};
+use crate::domain::indexed_search::{
+    IndexedEntryKind, IndexedPathPage, IndexedPathPageQuery, IndexedPathQuery,
+};
 
+use super::super::{pagination::read_page, recursive_build::RecursiveBuild, CatalogEntryRecord};
 use super::*;
 
 struct TestDirectory(PathBuf);
@@ -409,4 +415,270 @@ fn keyset_pages_cover_prefixes_substrings_and_equal_names() {
     let cursor = page("needle", None).unwrap().next_cursor;
     assert!(page("other", cursor).is_err());
     assert!(page("needle", Some("invalid".to_owned())).is_err());
+}
+
+fn indexed_file(folder: &str, name: &str) -> CatalogEntryRecord {
+    CatalogEntryRecord::new(
+        format!(r"{folder}\{name}"),
+        name.to_lowercase(),
+        IndexedEntryKind::File,
+    )
+}
+
+fn page_query(term: &str, cursor: Option<String>, limit: usize) -> IndexedPathPageQuery {
+    IndexedPathPageQuery {
+        search: IndexedPathQuery {
+            query: term.into(),
+            limit: Some(limit),
+        },
+        cursor,
+    }
+}
+
+fn assert_page_parity(term: &str, probe: &IndexedPathPage, fts: &IndexedPathPage) {
+    assert_eq!(
+        serde_json::to_value(probe).unwrap(),
+        serde_json::to_value(fts).unwrap(),
+        "different result or continuation for {term:?}",
+    );
+}
+
+#[test]
+fn substring_pages_match_fts_while_a_disk_catalog_refreshes() {
+    let directory = TestDirectory::new();
+    let store = IndexedCatalogStore::open(directory.0.join("catalog.db")).unwrap();
+    verify_test_volume(&store);
+    let mut baseline = store.begin_write().unwrap();
+    let mut entries = vec![
+        indexed_file("C:", "log"),
+        indexed_file("C:", "log-copy.txt"),
+    ];
+    // Reverse folder order so ties must resume by row ID instead of path.
+    for number in (0..700).rev() {
+        entries.push(indexed_file(&format!(r"C:\{number:03}"), "a-log.txt"));
+        if number < 30 {
+            for name in ["b%_log.txt", "Éあ🍺-log.txt", "e\u{301}あ🍺-log.txt"] {
+                entries.push(indexed_file(&format!(r"C:\{number:03}"), name));
+            }
+        }
+    }
+    entries.extend([
+        indexed_file("C:", "0-rare-entry.txt"),
+        indexed_file("C:", "z-rare-entry.txt"),
+        indexed_file("C:", "xy"),
+    ]);
+    baseline.insert_batch(&entries).unwrap();
+    baseline.finish().unwrap();
+
+    let mut original = store.begin_drive_refresh("D:\\").unwrap();
+    original
+        .insert_batch(&[indexed_file("D:", "log-original.txt")])
+        .unwrap();
+    original
+        .finish_drive_refresh("D:\\", "test", 0, "second-volume", None, || Ok(()))
+        .unwrap();
+    let mut replaced = store.begin_drive_refresh("Z:\\").unwrap();
+    replaced
+        .insert_batch(&[indexed_file("Z:", "0-log-replaced.txt")])
+        .unwrap();
+    replaced
+        .finish_drive_refresh("Z:\\", "test", 0, "previous-volume", None, || Ok(()))
+        .unwrap();
+    let mut building = RecursiveBuild::open(&store, "E:\\", "building-volume", 0, None)
+        .unwrap()
+        .unwrap();
+    building
+        .write_chunk(
+            "",
+            &[indexed_file("E:", "0-log-building.txt")],
+            &[],
+            0,
+            true,
+        )
+        .unwrap();
+
+    let mut refresh = store.begin_drive_refresh("D:\\").unwrap();
+    refresh
+        .insert_batch(&[indexed_file("D:", "log-pending.txt")])
+        .unwrap();
+    let verified = [
+        ("C:\\".into(), "test-volume".into()),
+        ("D:\\".into(), "second-volume".into()),
+        ("E:\\".into(), "building-volume".into()),
+        ("Z:\\".into(), "current-volume".into()),
+    ];
+    let mut reader = store.connect().unwrap();
+    let mode: String = reader
+        .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(mode, "wal");
+    let snapshot = reader.transaction().unwrap();
+    for term in [
+        "log",
+        "*LOG*",
+        "*%_log*",
+        "éあ🍺",
+        "e\u{301}あ🍺",
+        "rare-entry",
+        "log txt",
+        "xy",
+    ] {
+        let mut cursor = None;
+        let mut seen = HashSet::new();
+        loop {
+            let probe = read_page(
+                &snapshot,
+                page_query(term, cursor.clone(), 37),
+                &verified,
+                true,
+            )
+            .unwrap();
+            let fts = read_page(
+                &snapshot,
+                page_query(term, cursor.clone(), 37),
+                &verified,
+                false,
+            )
+            .unwrap();
+            assert_page_parity(term, &probe, &fts);
+            for entry in probe.matches {
+                assert!(seen.insert(entry.path));
+            }
+            let Some(next) = probe.next_cursor else { break };
+            assert_ne!(cursor.as_ref(), Some(&next));
+            cursor = Some(next);
+        }
+        assert!(!seen.contains(r"E:\0-log-building.txt"));
+        assert!(!seen.contains(r"Z:\0-log-replaced.txt"));
+        assert!(!seen.contains(r"D:\log-pending.txt"));
+        if term == "log" {
+            assert_eq!(seen.len(), entries.len() - 2);
+            assert!(seen.contains(r"D:\log-original.txt"));
+        }
+    }
+
+    // Readers retain the same published snapshot even when a write commits.
+    refresh
+        .finish_drive_refresh("D:\\", "test", 0, "second-volume", None, || Ok(()))
+        .unwrap();
+    let old = read_page(&snapshot, page_query("log", None, 37), &verified, true).unwrap();
+    let fts = read_page(&snapshot, page_query("log", None, 37), &verified, false).unwrap();
+    assert_page_parity("log", &old, &fts);
+    assert!(old
+        .matches
+        .iter()
+        .any(|entry| entry.path == r"D:\log-original.txt"));
+    let published = store
+        .query_page(page_query("log", None, 37), &verified)
+        .unwrap();
+    assert!(published
+        .matches
+        .iter()
+        .any(|entry| entry.path == r"D:\log-pending.txt"));
+    assert!(!published
+        .matches
+        .iter()
+        .any(|entry| entry.path == r"D:\log-original.txt"));
+}
+
+#[test]
+#[ignore = "writes a large disposable SQLite catalog for a concurrent indexing benchmark"]
+fn measure_substring_pages_during_disk_indexing() {
+    let directory = TestDirectory::new();
+    let store = IndexedCatalogStore::open(directory.0.join("catalog.db")).unwrap();
+    verify_test_volume(&store);
+    let mut baseline = store.begin_write().unwrap();
+    for start in (0..450_000).step_by(1024) {
+        let entries: Vec<_> = (start..(start + 1024).min(450_000))
+            .map(|index| {
+                let suffix = if index % 4 == 0 { "report" } else { "log" };
+                indexed_file(r"C:\archive", &format!("a{index:07}-{suffix}.txt"))
+            })
+            .collect();
+        baseline.insert_batch(&entries).unwrap();
+    }
+    baseline
+        .insert_batch(&[indexed_file("C:", "z-rare-entry.txt")])
+        .unwrap();
+    baseline.finish().unwrap();
+
+    let committed_batches = AtomicUsize::new(0);
+    let stop = AtomicBool::new(false);
+    let verified = [("C:\\".into(), "test-volume".into())];
+    let mut reader = store.connect().unwrap();
+    thread::scope(|threads| {
+        let (started, ready) = mpsc::sync_channel(1);
+        let store_for_writer = &store;
+        let stop_writer = &stop;
+        let batches_written = &committed_batches;
+        threads.spawn(move || {
+            let mut build =
+                RecursiveBuild::open(store_for_writer, "D:\\", "building-volume", 0, None)
+                    .unwrap()
+                    .unwrap();
+            for batch in 0..512 {
+                if stop_writer.load(Ordering::Relaxed) {
+                    break;
+                }
+                let entries: Vec<_> = (0..256)
+                    .map(|index| indexed_file("D:", &format!("b{batch:03}-{index:03}-log.txt")))
+                    .collect();
+                build.write_chunk("", &entries, &[], 0, false).unwrap();
+                batches_written.fetch_add(1, Ordering::Release);
+                if batch == 0 {
+                    started.send(()).unwrap();
+                }
+                thread::sleep(Duration::from_millis(2));
+            }
+        });
+        ready.recv_timeout(Duration::from_secs(30)).unwrap();
+        let before = committed_batches.load(Ordering::Acquire);
+        for (term, pages) in [("log", 3), ("rare-entry", 1)] {
+            let mut times = [Vec::new(), Vec::new()];
+            for run in 0..7 {
+                let snapshot = reader.transaction().unwrap();
+                let mut cursor = None;
+                for _ in 0..pages {
+                    let mut read = |probe: bool| {
+                        let start = Instant::now();
+                        let result = read_page(
+                            &snapshot,
+                            page_query(term, cursor.clone(), 64),
+                            &verified,
+                            probe,
+                        )
+                        .unwrap();
+                        if run > 0 {
+                            times[usize::from(probe)].push(start.elapsed());
+                        }
+                        result
+                    };
+                    let (fts, probe) = if run % 2 == 0 {
+                        (read(false), read(true))
+                    } else {
+                        let probe = read(true);
+                        (read(false), probe)
+                    };
+                    assert_page_parity(term, &probe, &fts);
+                    cursor = probe.next_cursor;
+                }
+            }
+            for samples in &mut times {
+                samples.sort_unstable();
+            }
+            let [fts, probe] = times;
+            println!(
+                "{term}: FTS {:?}, bounded probe {:?} median while indexing",
+                fts[fts.len() / 2],
+                probe[probe.len() / 2]
+            );
+        }
+        stop.store(true, Ordering::Relaxed);
+        let concurrent_batches = committed_batches.load(Ordering::Acquire) - before;
+        assert!(
+            concurrent_batches > 0,
+            "writer must commit while queries run"
+        );
+        println!("{concurrent_batches} baseline batches committed during comparisons");
+    });
 }

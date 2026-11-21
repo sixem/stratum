@@ -25,9 +25,9 @@ pub(super) fn indexed_children(
     parent: &str,
 ) -> Result<BTreeMap<String, Option<IndexedEntryKind>>, String> {
     let read = || -> rusqlite::Result<_> {
-        let mut seek = connection.prepare_cached(
+        let mut scan = connection.prepare_cached(
             "SELECT path, kind FROM indexed_entries
-             WHERE path >= ?1 AND path < ?2 ORDER BY path LIMIT 1",
+             WHERE path >= ?1 AND path < ?2 ORDER BY path",
         )?;
         let mut children = BTreeMap::new();
         let parent = trim_catalog_path(parent);
@@ -35,23 +35,20 @@ pub(super) fn indexed_children(
             let prefix = format!("{}\\", spelling.trim_end_matches('\\'));
             let end = format!("{}]", spelling.trim_end_matches('\\'));
             let mut start = prefix.clone();
-            while let Some((path, kind)) = seek
-                .query_row(params![start, end], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-                })
-                .optional()?
-            {
-                let relative = &path[prefix.len()..];
-                if let Some((name, _)) = relative.split_once('\\') {
-                    // Jump over this subtree without walking its descendants.
-                    children.entry(name.to_owned()).or_insert(None);
-                    start = format!("{prefix}{name}]");
-                } else {
-                    children.insert(relative.to_owned(), Some(int_to_kind(kind)));
-                    // A NUL follows the exact filename and precedes every
-                    // possible continuation of that name in the binary index.
-                    start = format!("{path}\0");
+            'seek: loop {
+                let mut rows = scan.query(params![start, end])?;
+                while let Some(row) = rows.next()? {
+                    let path: String = row.get(0)?;
+                    let relative = &path[prefix.len()..];
+                    if let Some((name, _)) = relative.split_once('\\') {
+                        // Stream direct children and seek again only to skip a subtree.
+                        children.entry(name.to_owned()).or_insert(None);
+                        start = format!("{prefix}{name}]");
+                        continue 'seek;
+                    }
+                    children.insert(relative.to_owned(), Some(int_to_kind(row.get(1)?)));
                 }
+                break;
             }
         }
         Ok(children)

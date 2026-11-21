@@ -5,11 +5,16 @@ use serde::{Deserialize, Serialize};
 use crate::domain::indexed_search::{IndexedPathPage, IndexedPathPageQuery};
 
 use super::{
-    query::{build_hits_sql, build_query_plan, exclusive_prefix_end, NameSeek, PrefixFilter},
+    query::{
+        build_hits_sql, build_ordered_substring_probe_sql, build_query_plan, exclusive_prefix_end,
+        NameSeek, PrefixFilter,
+    },
     search_index,
     writer::int_to_kind,
     CatalogQueryHit, IndexedCatalogStore, QueryPlan,
 };
+
+const ORDERED_PROBE_CANDIDATES: usize = 256;
 
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 enum PageTier {
@@ -46,83 +51,115 @@ impl IndexedCatalogStore {
         let transaction = connection
             .transaction()
             .map_err(|error| format!("Failed to start indexed-search page: {error}"))?;
-        let fts_ready = !search_index::needs_backfill(&transaction)?;
-        let Some(plan) = build_query_plan(query.search, fts_ready) else {
-            return Ok(IndexedPathPage::default());
-        };
-        let cursor = query
-            .cursor
-            .as_deref()
-            .map(serde_json::from_str::<PageCursor>)
-            .transpose()
-            .map_err(|_| "Invalid indexed-search cursor.".to_owned())?;
-        if cursor.as_ref().is_some_and(|cursor| {
-            cursor.query != plan.normalized_query
-                || (cursor.tier == PageTier::Prefix && plan.has_wildcards)
-        }) {
-            return Err("This indexed-search cursor belongs to another query.".to_owned());
-        }
+        read_page(&transaction, query, verified_volumes, true)
+    }
+}
 
-        let end = exclusive_prefix_end(&plan.normalized_query);
-        let prefix = (!plan.has_wildcards).then_some(PrefixFilter {
-            start: &plan.normalized_query,
-            end: end.as_deref(),
-            include: true,
+// Keep the probe and FTS fallback in the caller's read snapshot. Tests can
+// compare them there while the catalog writer continues to publish changes.
+pub(super) fn read_page(
+    connection: &Connection,
+    query: IndexedPathPageQuery,
+    verified_volumes: &[(String, String)],
+    allow_ordered_probe: bool,
+) -> Result<IndexedPathPage, String> {
+    if verified_volumes.is_empty() {
+        return Ok(IndexedPathPage::default());
+    }
+    let fts_ready = !search_index::needs_backfill(connection)?;
+    let Some(plan) = build_query_plan(query.search, fts_ready) else {
+        return Ok(IndexedPathPage::default());
+    };
+    let cursor = query
+        .cursor
+        .as_deref()
+        .map(serde_json::from_str::<PageCursor>)
+        .transpose()
+        .map_err(|_| "Invalid indexed-search cursor.".to_owned())?;
+    if cursor.as_ref().is_some_and(|cursor| {
+        cursor.query != plan.normalized_query
+            || (cursor.tier == PageTier::Prefix && plan.has_wildcards)
+    }) {
+        return Err("This indexed-search cursor belongs to another query.".to_owned());
+    }
+
+    let end = exclusive_prefix_end(&plan.normalized_query);
+    let prefix = (!plan.has_wildcards).then_some(PrefixFilter {
+        start: &plan.normalized_query,
+        end: end.as_deref(),
+        include: true,
+    });
+    let cursor = cursor.as_ref();
+    // One lookahead row is enough to know whether continuation exists.
+    let fetch_limit = plan.limit + 1;
+    let mut hits = Vec::new();
+    if let Some(prefix) = prefix.filter(|_| cursor.is_none_or(|key| key.tier == PageTier::Prefix)) {
+        hits = fetch_page_tier(
+            connection,
+            &plan,
+            verified_volumes,
+            Some(prefix),
+            PageTier::Prefix,
+            cursor,
+            fetch_limit,
+        )?;
+    }
+    let remaining = fetch_limit - hits.len();
+    if remaining > 0 {
+        let outside_prefix = prefix.map(|prefix| PrefixFilter {
+            include: false,
+            ..prefix
         });
-        let cursor = cursor.as_ref();
-        // One lookahead row is enough to know whether continuation exists.
-        let fetch_limit = plan.limit + 1;
-        let mut hits = Vec::new();
-        if let Some(prefix) =
-            prefix.filter(|_| cursor.is_none_or(|key| key.tier == PageTier::Prefix))
-        {
-            hits = fetch_page_tier(
-                &transaction,
+        let after = cursor.filter(|key| key.tier == PageTier::Substring);
+        let mut substring_hits = if allow_ordered_probe && plan.match_expression.is_some() {
+            let (sql, params) = build_ordered_substring_probe_sql(
                 &plan,
                 verified_volumes,
-                Some(prefix),
-                PageTier::Prefix,
-                cursor,
-                fetch_limit,
-            )?;
-        }
-        if hits.len() < fetch_limit {
-            let outside_prefix = prefix.map(|prefix| PrefixFilter {
-                include: false,
-                ..prefix
-            });
-            hits.extend(fetch_page_tier(
-                &transaction,
+                outside_prefix,
+                after.map(|key| (key.name.as_str(), key.id)),
+                ORDERED_PROBE_CANDIDATES,
+            );
+            read_hits(connection, sql, params, PageTier::Substring, remaining)?
+        } else {
+            Vec::new()
+        };
+
+        // Accept only a complete page including lookahead. A partial window
+        // leaves the rest of the search to the normal substring query.
+        if substring_hits.len() < remaining {
+            substring_hits = fetch_page_tier(
+                connection,
                 &plan,
                 verified_volumes,
                 outside_prefix,
                 PageTier::Substring,
-                cursor.filter(|key| key.tier == PageTier::Substring),
-                fetch_limit - hits.len(),
-            )?);
+                after,
+                remaining,
+            )?;
         }
-
-        let has_more = hits.len() > plan.limit;
-        hits.truncate(plan.limit);
-        let next_cursor = hits
-            .last()
-            .filter(|_| has_more)
-            .map(|last| {
-                serde_json::to_string(&PageCursor {
-                    query: plan.normalized_query,
-                    tier: last.tier,
-                    name: last.hit.normalized_name.clone(),
-                    id: last.id,
-                })
-            })
-            .transpose()
-            .map_err(|error| format!("Failed to encode indexed-search cursor: {error}"))?;
-
-        Ok(IndexedPathPage {
-            matches: hits.into_iter().map(|result| result.hit.into()).collect(),
-            next_cursor,
-        })
+        hits.extend(substring_hits);
     }
+
+    let has_more = hits.len() > plan.limit;
+    hits.truncate(plan.limit);
+    let next_cursor = hits
+        .last()
+        .filter(|_| has_more)
+        .map(|last| {
+            serde_json::to_string(&PageCursor {
+                query: plan.normalized_query,
+                tier: last.tier,
+                name: last.hit.normalized_name.clone(),
+                id: last.id,
+            })
+        })
+        .transpose()
+        .map_err(|error| format!("Failed to encode indexed-search cursor: {error}"))?;
+
+    Ok(IndexedPathPage {
+        matches: hits.into_iter().map(|result| result.hit.into()).collect(),
+        next_cursor,
+    })
 }
 
 fn fetch_page_tier(
@@ -135,28 +172,8 @@ fn fetch_page_tier(
     limit: usize,
 ) -> Result<Vec<PageHit>, String> {
     let fetch = |seek, limit: usize| {
-        let (mut sql, mut params) = build_hits_sql(plan, verified_volumes, prefix, seek);
-        sql.push_str(" ORDER BY e.normalized_name, e.entry_id LIMIT ?");
-        params.push(Value::from(limit as i64));
-
-        let mut statement = connection
-            .prepare(&sql)
-            .map_err(|error| format!("Failed to prepare indexed-search page: {error}"))?;
-        let rows = statement
-            .query_map(params_from_iter(params.iter()), |row| {
-                Ok(PageHit {
-                    hit: CatalogQueryHit {
-                        path: row.get(0)?,
-                        kind: int_to_kind(row.get(1)?),
-                        normalized_name: row.get(2)?,
-                    },
-                    tier,
-                    id: row.get(3)?,
-                })
-            })
-            .map_err(|error| format!("Failed to run indexed-search page: {error}"))?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|error| format!("Failed to read indexed-search page: {error}"))
+        let (sql, params) = build_hits_sql(plan, verified_volumes, prefix, seek);
+        read_hits(connection, sql, params, tier, limit)
     };
     let Some(after) = after else {
         return fetch(None, limit);
@@ -180,4 +197,33 @@ fn fetch_page_tier(
         )?);
     }
     Ok(hits)
+}
+
+fn read_hits(
+    connection: &Connection,
+    mut sql: String,
+    mut params: Vec<Value>,
+    tier: PageTier,
+    limit: usize,
+) -> Result<Vec<PageHit>, String> {
+    sql.push_str(" ORDER BY e.normalized_name, e.entry_id LIMIT ?");
+    params.push(Value::from(limit as i64));
+    let mut statement = connection
+        .prepare(&sql)
+        .map_err(|error| format!("Failed to prepare indexed-search page: {error}"))?;
+    let rows = statement
+        .query_map(params_from_iter(params.iter()), |row| {
+            Ok(PageHit {
+                hit: CatalogQueryHit {
+                    path: row.get(0)?,
+                    kind: int_to_kind(row.get(1)?),
+                    normalized_name: row.get(2)?,
+                },
+                tier,
+                id: row.get(3)?,
+            })
+        })
+        .map_err(|error| format!("Failed to run indexed-search page: {error}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to read indexed-search page: {error}"))
 }

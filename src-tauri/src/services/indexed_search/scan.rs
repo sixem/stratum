@@ -113,7 +113,9 @@ pub(super) fn scan_drive_into_catalog(
             if excluded_path(&logical_path, capture.excluded_directory) {
                 continue;
             }
-            let metadata = match fs::symlink_metadata(&path) {
+            // Reuse the listing's Windows attributes. Traversal is verified
+            // separately when the directory is taken from the stack.
+            let metadata = match entry.metadata() {
                 Ok(value) => value,
                 Err(_) => continue,
             };
