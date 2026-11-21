@@ -65,7 +65,14 @@ export const AppContent = ({
     <PerfProfiler id="app-content">
       <div
         className={layoutClass}
-        style={{ "--sidebar-width": sidebarWidth + "px" } as CSSProperties}
+        data-split={split}
+        data-active-pane={bottomActive ? "bottom" : "main"}
+        style={{
+          "--sidebar-width": `${sidebarWidth}px`,
+          "--bottom-height": bottomHeight,
+          "--pane-divider-height": `${PANE_DIVIDER_HEIGHT}px`,
+          "--main-pane-min-height": `${MIN_MAIN_PANE_HEIGHT}px`,
+        } as CSSProperties}
         onPointerDown={(event) => {
           if (event.button !== 2) return;
           onContextMenuDown?.(event);
@@ -86,12 +93,7 @@ export const AppContent = ({
             <SidebarDivider width={sidebarWidth} onResizeChange={setSidebarResizing} />
           </PerfProfiler>
         ) : null}
-        <div className="pane-stack" data-split={split} data-active-pane={bottomActive ? "bottom" : "main"}
-          style={{
-            "--bottom-height": bottomHeight,
-            "--pane-divider-height": `${PANE_DIVIDER_HEIGHT}px`,
-            "--main-pane-min-height": `${MIN_MAIN_PANE_HEIGHT}px`,
-          } as CSSProperties}>
+        <div className="pane-stack" data-split={split}>
         <main className="main upper-files" data-file-pane="main" data-pane-path={upperPath}
           data-drop-background={fileDrop.backgroundHovered && fileDrop.hoveredPane === "main" || undefined}
           onPointerDownCapture={event => {

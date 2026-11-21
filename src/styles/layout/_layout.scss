@@ -1,5 +1,6 @@
 // Overall layout grid and main panel.
 .layout {
+  --pane-active-edge: #28364b;
   display: grid;
   grid-template-columns: var(--sidebar-width-preview, var(--sidebar-width, 250px)) minmax(0, 1fr);
   gap: var(--layout-gap);
@@ -7,6 +8,29 @@
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+}
+
+.layout[data-split="true"] {
+  --bottom-height-limit: max(0px, calc(100% - var(--pane-divider-height) - min(50%, var(--main-pane-min-height))));
+  --pane-bottom-size: min(var(--bottom-preview, var(--bottom-height)), var(--bottom-height-limit));
+
+  // Paint directly over the sidebar border using the same split height as the panes.
+  > .sidebar-divider::after {
+    content: "";
+    position: absolute;
+    inset-inline-end: 50%;
+    width: var(--surface-border-width);
+    background: var(--pane-active-edge);
+    pointer-events: none;
+  }
+
+  &[data-active-pane="main"] > .sidebar-divider::after {
+    inset-block: 0 calc(var(--pane-bottom-size) + var(--pane-divider-height));
+  }
+
+  &[data-active-pane="bottom"] > .sidebar-divider::after {
+    inset-block: calc(100% - var(--pane-bottom-size)) 0;
+  }
 }
 
 .layout > :is(.sidebar, .sidebar-divider) {
@@ -136,7 +160,6 @@
 }
 
 .pane-stack {
-  --pane-active-edge: #28364b;
   display: grid;
   grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   min-height: 0;
@@ -144,22 +167,7 @@
 }
 
 .pane-stack[data-split="true"] {
-  --bottom-height-limit: max(0px, calc(100% - var(--pane-divider-height) - min(50%, var(--main-pane-min-height))));
-  grid-template-rows: minmax(0, 1fr) var(--pane-divider-height)
-    min(var(--bottom-preview, var(--bottom-height)), var(--bottom-height-limit));
-
-  // Overlay the indicator so opaque file views cannot cover it.
-  &[data-active-pane="main"] .upper-files::after,
-  &[data-active-pane="bottom"] .bottom-pane::after {
-    content: "";
-    position: absolute;
-    inset-block: 0;
-    inset-inline-start: 0;
-    width: var(--surface-border-width);
-    background: var(--pane-active-edge);
-    pointer-events: none;
-    z-index: 2;
-  }
+  grid-template-rows: minmax(0, 1fr) var(--pane-divider-height) var(--pane-bottom-size);
 }
 
 .main[data-drop-background="true"] {
