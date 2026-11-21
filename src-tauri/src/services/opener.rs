@@ -131,12 +131,38 @@ pub fn open_path_with_dialog(path: String) -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
+fn executable_working_directory(path: &Path) -> Option<&Path> {
+    // Only direct file launches have an executable directory to supply.
+    // Shell URLs, shortcuts, and associated documents keep Windows' defaults.
+    if path.is_absolute()
+        && path
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+        && path.is_file()
+    {
+        return path.parent();
+    }
+    None
+}
+
+#[cfg(target_os = "windows")]
 fn open_path_windows(path: &str) -> Result<(), String> {
     let wide: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
+    let working_directory = executable_working_directory(Path::new(path)).map(|directory| {
+        directory
+            .as_os_str()
+            .encode_wide()
+            .chain(once(0))
+            .collect::<Vec<_>>()
+    });
     let mut info = SHELLEXECUTEINFOW::default();
     info.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
     info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_DDEWAIT | SEE_MASK_FLAG_NO_UI;
     info.lpFile = PCWSTR(wide.as_ptr());
+    if let Some(directory) = &working_directory {
+        // Programs can resolve sibling assets without inheriting Stratum's cwd.
+        info.lpDirectory = PCWSTR(directory.as_ptr());
+    }
     info.nShow = SW_SHOWNORMAL.0;
 
     unsafe { ShellExecuteExW(&mut info).map_err(|err| err.to_string())? };
@@ -429,4 +455,45 @@ fn focus_process_window(process_id: u32) -> bool {
         let _ = SetForegroundWindow(state.hwnd);
     }
     true
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::*;
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    #[test]
+    fn only_absolute_executable_files_use_their_parent_as_working_directory() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let folder =
+            std::env::temp_dir().join(format!("stratum exe launch {}-{nonce}", std::process::id()));
+        fs::create_dir(&folder).unwrap();
+        let executable = folder.join("Relative Asset Probe.EXE");
+        let executable_directory = folder.join("Directory.exe");
+        let shortcut = folder.join("Program.lnk");
+        fs::write(&executable, []).unwrap();
+        fs::create_dir(&executable_directory).unwrap();
+        fs::write(&shortcut, []).unwrap();
+
+        let actual = [
+            executable_working_directory(&executable),
+            executable_working_directory(&executable_directory),
+            executable_working_directory(&shortcut),
+            executable_working_directory(Path::new(r"relative\Program.exe")),
+            executable_working_directory(Path::new("shell:RecycleBinFolder")),
+            executable_working_directory(Path::new("https://example.com/Program.exe")),
+        ];
+        fs::remove_dir_all(&folder).unwrap();
+
+        assert_eq!(
+            actual,
+            [Some(folder.as_path()), None, None, None, None, None]
+        );
+    }
 }
