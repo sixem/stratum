@@ -42,6 +42,7 @@ type UseAppKeybindsOptions = {
   hasTransientUi?: boolean;
   onCancelTransientUi?: () => void;
   onSelectAll: () => void;
+  onRenameSelection: (paths: string[]) => boolean;
 };
 
 export const useAppKeybinds = ({
@@ -76,6 +77,7 @@ export const useAppKeybinds = ({
   hasTransientUi = false,
   onCancelTransientUi,
   onSelectAll,
+  onRenameSelection,
 }: UseAppKeybindsOptions) => {
   const indexedSearchOpen = useIndexedSearchUiStore((state) => state.open);
   const selectionTargets = useMemo(
@@ -203,6 +205,12 @@ export const useAppKeybinds = ({
     return true;
   }, [canHandleViewKeybind, onSelectAll]);
 
+  const handleRenameSelectionKeybind = useCallback((event: KeyboardEvent) => {
+    if (event.isComposing || !canHandleViewKeybind() || !selectionTargets.length) return false;
+    if (getFileCommandFocus(mainRef.current) !== "view") return false;
+    return onRenameSelection(selectionTargets);
+  }, [canHandleViewKeybind, mainRef, onRenameSelection, selectionTargets]);
+
   const handleDuplicateSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
     if (selectionTargets.length === 0) return false;
@@ -297,6 +305,7 @@ export const useAppKeybinds = ({
     () => {
       const map: Record<string, (event: KeyboardEvent) => boolean> = {
         Escape: handleClearSelectionKeybind,
+        F2: handleRenameSelectionKeybind,
         F5: handleRefreshKeybind,
         "Control+a": handleSelectAllKeybind,
         "Control+c": () => handleClipboardSelection("copy"),
@@ -319,6 +328,7 @@ export const useAppKeybinds = ({
       handlePasteSelectionKeybind,
       handleReopenClosedTabKeybind,
       handleRefreshKeybind,
+      handleRenameSelectionKeybind,
       handleSelectAllKeybind,
       handleSelectTabIndex,
     ],

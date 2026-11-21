@@ -13,6 +13,7 @@ type UseAppSelectionHandlersOptions = {
   onAfterClearSelection?: () => void;
   handleSelectItem: (path: string, index: number, event: ReactMouseEvent) => void;
   handleRenameCommit: (reason?: RenameCommitReason) => void;
+  tryStartBatchRename: (target: EntryContextTarget) => boolean;
   setRenameTarget: (target: EntryContextTarget | null) => void;
   setRenameValue: (value: string) => void;
 };
@@ -26,6 +27,7 @@ export const useAppSelectionHandlers = ({
   onAfterClearSelection,
   handleSelectItem,
   handleRenameCommit,
+  tryStartBatchRename,
   setRenameTarget,
   setRenameValue,
 }: UseAppSelectionHandlersOptions) => {
@@ -61,13 +63,14 @@ export const useAppSelectionHandlers = ({
   const handleRenameStart = useCallback(
     (target: EntryContextTarget) => {
       if (!target?.path) return;
+      if (tryStartBatchRename(target)) return;
       if (!selected.has(target.path)) {
         handleSelectionChange([target.path], target.path);
       }
       setRenameTarget(target);
       setRenameValue(getRenameInputValue(target, gridNameHideExtension));
     },
-    [gridNameHideExtension, handleSelectionChange, selected, setRenameTarget, setRenameValue],
+    [gridNameHideExtension, handleSelectionChange, selected, setRenameTarget, setRenameValue, tryStartBatchRename],
   );
 
   return {

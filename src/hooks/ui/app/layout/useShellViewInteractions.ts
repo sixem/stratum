@@ -186,9 +186,9 @@ export const useShellViewInteractions = ({
     setRenameValue,
     handleRenameCommit,
     handleRenameCancel,
+    tryStartBatchRename,
   } = useAppRenameFlow({
     viewVisit,
-    entries: fileManager.entries,
     entryByPath: viewModel.entryByPath,
     indexMap: viewModel.indexMap,
     selected,
@@ -213,9 +213,19 @@ export const useShellViewInteractions = ({
     onAfterClearSelection: fileDrop.clearDragState,
     handleSelectItem,
     handleRenameCommit,
+    tryStartBatchRename,
     setRenameTarget,
     setRenameValue,
   });
+
+  const handleRenameSelection = useCallback((paths: string[]) => {
+    const anchor = getSelectionTarget();
+    const path = anchor && paths.includes(anchor.path) ? anchor.path : paths[0];
+    const entry = viewModel.entryByPath.get(path);
+    if (!entry) return false;
+    handleRenameStart(entry);
+    return true;
+  }, [getSelectionTarget, handleRenameStart, viewModel.entryByPath]);
 
   const hasTransientDragUi = Boolean(
     fileDrop.dropTargetPath ||
@@ -390,6 +400,7 @@ export const useShellViewInteractions = ({
     handleSelectItemWithRename,
     handleManualRefresh,
     handleSelectAll,
+    handleRenameSelection,
     handleCreateFile,
     handleCreateFolder,
     handleCreateFolderAndGo,

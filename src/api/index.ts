@@ -37,6 +37,7 @@ export {
   resumeTransferJob,
   transferEntries,
   renameEntry,
+  validateBatchRename,
   startDirWatch,
   statEntries,
   stopDirWatch,

@@ -164,6 +164,7 @@ export const useEntryMenuItems = ({
       ...(onRenameEntry ? buildEntryRenameItems({
         target,
         hasTargets,
+        multiple: actionTargets.length > 1,
         onRenameEntry,
       }) : []),
       ...(onPasteEntries ? buildEntryPasteItems({

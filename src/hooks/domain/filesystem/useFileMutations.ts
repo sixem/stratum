@@ -142,9 +142,9 @@ export const useFileMutations = ({
       const nextRenames: RenameRequest[] = [];
       const seen = new Set<string>();
       renames.forEach((item) => {
-        const path = item.path.trim();
-        const nextName = item.nextName.trim();
-        if (!path || !nextName) return;
+        const path = item.path;
+        const nextName = item.nextName;
+        if (!path.trim() || !nextName.trim()) return;
         if (seen.has(path)) return;
         seen.add(path);
         nextRenames.push({ path, nextName });

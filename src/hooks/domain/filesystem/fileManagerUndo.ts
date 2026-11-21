@@ -2,7 +2,7 @@
 import { useCallback } from "react";
 import type { RefObject } from "react";
 import { restoreRecycleItems, statEntries, transferEntries } from "@/api";
-import { entryExists, formatFailures, getParentPath, getPathName, toMessage } from "@/lib";
+import { entryExists, formatFailures, getParentPath, toMessage } from "@/lib";
 import { usePromptStore } from "@/modules";
 import { isTransferCancelledError } from "./transferJobErrors";
 
@@ -256,7 +256,8 @@ export const useFileManagerUndo = ({
       const requests: RenameRequest[] = action.entries
         .map((entry) => ({
           path: entry.to,
-          nextName: getPathName(entry.from),
+          // Keep the original basename exactly, including legal Unicode whitespace.
+          nextName: entry.from.split(/[\\/]/).pop() ?? "",
         }))
         .filter((item) => item.path && item.nextName);
       // Keep rename undo visually in-place by temporarily disabling

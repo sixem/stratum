@@ -1,6 +1,7 @@
 // Groups overlay layers to keep App render structure small and explicit.
 import { Suspense, lazy, useEffect, useState } from "react";
 import { AboutModal } from "@/components/overlay/AboutModal";
+import { BatchRenameDialog } from "@/components/overlay/BatchRenameDialog";
 import { ContextMenu } from "@/components/overlay/ContextMenu";
 import { IndexedSearchModal } from "@/components/overlay/IndexedSearchModal";
 import { PromptModal } from "@/components/overlay/PromptModal";
@@ -8,6 +9,7 @@ import { TooltipDisplay } from "@/components/overlay/Tooltip";
 import type { ConversionModalProps } from "@/components/overlay/conversionModal";
 import type { SettingsOverlayProps } from "@/components/overlay/SettingsOverlay";
 import type { QuickPreviewOverlayProps } from "@/components/preview/QuickPreviewOverlay";
+import { useBatchRenameStore } from "@/modules/batchRenameStore";
 import type { ComponentProps } from "react";
 
 const LazyConversionModal = lazy(async () => {
@@ -98,6 +100,7 @@ export const AppOverlays = ({
   const conversionMounted = useDeferredMount(conversion.open, true);
   const settingsMounted = useDeferredMount(settings.open, true);
   const quickPreviewMounted = useDeferredMount(quickPreview.open, true);
+  const batchRename = useBatchRenameStore((state) => state.session);
 
   return (
     <>
@@ -107,6 +110,13 @@ export const AppOverlays = ({
         <Suspense fallback={null}>
           <LazyConversionModal {...conversion} />
         </Suspense>
+      ) : null}
+      {batchRename ? (
+        <BatchRenameDialog
+          items={batchRename.items}
+          onApply={batchRename.onApply}
+          onClose={() => useBatchRenameStore.getState().close(batchRename)}
+        />
       ) : null}
       <PromptModal />
       {settingsMounted ? (

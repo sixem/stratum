@@ -24,6 +24,7 @@ type Options = {
   closeTab: (id: string) => void;
   startRename: (item: EntryContextTarget) => void;
   clearSelection: () => void;
+  undo: () => Promise<void>;
   scrollTo: (index: number) => void;
   handleTypeahead: (event: KeyboardEvent) => boolean;
   handleTabJump: (event: KeyboardEvent) => boolean;
@@ -32,7 +33,7 @@ type Options = {
 export function bottomPaneKeys({
   folder, actions, address, searchInput, clearSearchAndFocusFiles, browseFromView,
   openContextMenu, paths, ready, commandsBlocked, gridColumns, closeTab,
-  startRename, clearSelection, scrollTo, handleTypeahead, handleTabJump,
+  startRename, clearSelection, undo, scrollTo, handleTypeahead, handleTabJump,
 }: Options) {
   const { dir, tabs, model, selection } = folder;
   const navigate = tabs.browseTo;
@@ -83,7 +84,7 @@ export function bottomPaneKeys({
     else if (cmd && key === "a") selection.setSelection(model.itemPaths, model.itemPaths[0]);
     else if (paths.length && cmd && (key === "c" || key === "x")) void writeFileClipboard(paths, key === "x" ? "move" : "copy");
     else if (cmd && key === "v") void actions.pasteEntries(path);
-    else if (binding === keybinds.undo) void actions.undo();
+    else if (binding === keybinds.undo) void undo();
     else if (key === "escape") clearSelection();
     else if (key === "backspace" && dir.parentPath) navigate(dir.parentPath);
     else if (binding === keybinds.duplicateSelection && paths.length) void actions.duplicateEntries(paths, path);

@@ -9,6 +9,7 @@ import { useWindowSize } from "@/hooks/perf/resize";
 import { useScrollRequest } from "@/hooks/perf/scroll";
 import { makeDebug } from "@/lib";
 import { useIndexedSearchUiStore, usePlacesStore, usePromptStore } from "@/modules";
+import { useBatchRenameStore } from "@/modules/batchRenameStore";
 import { useAppMenuState } from "./useAppMenuState";
 import { useAppNavigationController } from "./useAppNavigationController";
 import { useAppViewState } from "./useAppViewState";
@@ -55,6 +56,7 @@ export const useAppShellModel = () => {
   // Menu and overlay state stays local to the shell model so App only renders slices.
   const menuState = useAppMenuState();
   const promptOpen = usePromptStore((state) => Boolean(state.prompt));
+  const batchRenameOpen = useBatchRenameStore((state) => state.session !== null);
   const [, setSuppressExternalPresence] = useState(false);
   const [thumbResetNonce, setThumbResetNonce] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -173,7 +175,7 @@ export const useAppShellModel = () => {
 
   const shellView = useShellViewModel({
     tauriEnv,
-    promptOpen,
+    promptOpen: promptOpen || batchRenameOpen,
     aboutOpen,
     menuState,
     fileManager,

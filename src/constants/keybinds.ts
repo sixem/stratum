@@ -99,6 +99,7 @@ export const RESERVED_KEYBIND_DEFINITIONS = [
   { combo: REOPEN_CLOSED_TAB_KEYBIND, label: "Reopen closed tab" },
   { combo: "ContextMenu", label: "Context menu" },
   { combo: "Shift+F10", label: "Windows context menu" },
+  { combo: "F2", label: "Rename" },
   { combo: "Control+r", label: "Refresh" },
   { combo: "F5", label: "Refresh" },
   { combo: "Control+1", label: "Tab 1" },

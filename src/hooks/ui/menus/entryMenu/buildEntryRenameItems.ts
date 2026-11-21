@@ -5,17 +5,19 @@ import type { ContextMenuItem, EntryContextTarget } from "@/types";
 type BuildEntryRenameItemsOptions = {
   target: EntryContextTarget;
   hasTargets: boolean;
+  multiple: boolean;
   onRenameEntry: (target: EntryContextTarget) => void;
 };
 
 export const buildEntryRenameItems = ({
   target,
   hasTargets,
+  multiple,
   onRenameEntry,
 }: BuildEntryRenameItemsOptions): ContextMenuItem[] => [
   {
     id: "entry-rename",
-    label: "Rename",
+    label: multiple ? "Batch rename…" : "Rename",
     icon: "rename",
     onSelect: () => {
       if (!hasTargets) return;

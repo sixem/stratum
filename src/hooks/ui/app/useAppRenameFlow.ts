@@ -1,18 +1,13 @@
 // Manages rename state and commit logic for single + bulk renames.
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
-import type { FileEntry, RenameCommitReason } from "@/types";
-import {
-  applyHiddenExtension,
-  buildBulkRenamePlan,
-  getSelectionTargets,
-  splitNameExtension,
-} from "@/lib";
-import type { EntryContextTarget } from "@/types";
+import type { EntryContextTarget, FileEntry, RenameCommitReason } from "@/types";
+import { applyHiddenExtension, getSelectionTargets } from "@/lib";
+import type { BatchRenameRequest } from "@/lib/batchRename";
+import { useBatchRenameStore } from "@/modules/batchRenameStore";
 
 type UseAppRenameFlowOptions = {
   viewVisit: RefObject<boolean>;
-  entries: FileEntry[];
   entryByPath: Map<string, FileEntry>;
   indexMap: Map<string, number>;
   selected: Set<string>;
@@ -20,14 +15,19 @@ type UseAppRenameFlowOptions = {
   gridNameHideExtension: boolean;
   renameEntry: (path: string, nextName: string) => Promise<string | null | undefined>;
   renameEntries: (
-    renames: Array<{ path: string; nextName: string }>,
+    renames: BatchRenameRequest[],
   ) => Promise<{ renamed: Map<string, string> } | null | undefined>;
   setSelection: (paths: string[], anchor?: string) => void;
 };
 
+type RenameSelection = {
+  paths: string[];
+  anchor: string;
+  visit: RefObject<boolean>;
+};
+
 export const useAppRenameFlow = ({
   viewVisit,
-  entries,
   entryByPath,
   indexMap,
   selected,
@@ -39,13 +39,58 @@ export const useAppRenameFlow = ({
 }: UseAppRenameFlowOptions) => {
   const [renameTarget, setRenameTarget] = useState<EntryContextTarget | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [suppressInternalPresence, setSuppressInternalPresence] = useState(false);
+  const [renameSelection, setRenameSelection] = useState<RenameSelection | null>(null);
   const renameCommitRef = useRef(false);
+
+  // Restore selection against the refreshed listing, including any active filter.
+  useEffect(() => {
+    if (!renameSelection) return;
+    if (renameSelection.visit === viewVisit && viewVisit.current) {
+      setSelection(renameSelection.paths, renameSelection.anchor);
+    }
+    setRenameSelection(null);
+  }, [renameSelection, setSelection, viewVisit]);
 
   const handleRenameCancel = useCallback(() => {
     setRenameTarget(null);
     setRenameValue("");
   }, []);
+
+  const tryStartBatchRename = useCallback((target: EntryContextTarget) => {
+    if (!selected.has(target.path) || selected.size < 2) return false;
+    // Use the visible sort order and hold a snapshot while the dialog is open.
+    const ordered = getSelectionTargets(selected, viewParentPath)
+      .sort((left, right) => (
+        (indexMap.get(left) ?? indexMap.size) - (indexMap.get(right) ?? indexMap.size)
+      ));
+    const items = ordered.flatMap((path) => {
+      const entry = entryByPath.get(path);
+      return entry ? [{ path, name: entry.name, isDir: entry.isDir }] : [];
+    });
+    if (items.length < 2) return false;
+    useBatchRenameStore.getState().open({
+      items,
+      onApply: async (requests) => {
+        if (!viewVisit.current) throw new Error("The original folder is no longer open in this pane.");
+        if (renameCommitRef.current) throw new Error("Another rename is already in progress.");
+        renameCommitRef.current = true;
+        try {
+          const result = await renameEntries(requests);
+          if (!result) throw new Error("Another rename is already in progress.");
+          if (result.renamed.size && viewVisit.current) {
+            setRenameSelection({
+              paths: items.map(({ path }) => result.renamed.get(path) ?? path),
+              anchor: result.renamed.get(target.path) ?? target.path,
+              visit: viewVisit,
+            });
+          }
+        } finally {
+          renameCommitRef.current = false;
+        }
+      },
+    });
+    return true;
+  }, [entryByPath, indexMap, renameEntries, selected, viewParentPath, viewVisit]);
 
   const handleRenameCommit = useCallback(
     (reason: RenameCommitReason = "enter") => {
@@ -53,9 +98,6 @@ export const useAppRenameFlow = ({
       if (renameCommitRef.current) return;
       const nextName = renameValue.trim();
       const originalName = renameTarget.name.trim();
-      const selectionTargets = getSelectionTargets(selected, viewParentPath);
-      const isMultiRename =
-        selectionTargets.length > 1 && selectionTargets.includes(renameTarget.path);
       setRenameTarget(null);
       setRenameValue("");
       const hideExtension = gridNameHideExtension && !renameTarget.isDir;
@@ -65,73 +107,23 @@ export const useAppRenameFlow = ({
         hideExtension,
         renameTarget.isDir,
       );
-      if (!resolvedNextName || (!isMultiRename && resolvedNextName === originalName)) {
-        renameCommitRef.current = false;
-        return;
-      }
+      if (!resolvedNextName || resolvedNextName === originalName) return;
       const shouldSelect = reason === "enter";
-      if (!isMultiRename) {
-        renameCommitRef.current = true;
-        setSuppressInternalPresence(true);
-        void renameEntry(renameTarget.path, resolvedNextName)
-          .then((nextPath) => {
-            if (!nextPath || !shouldSelect || !viewVisit.current) return;
-            setSelection([nextPath], nextPath);
-          })
-          .finally(() => {
-            renameCommitRef.current = false;
-            setSuppressInternalPresence(false);
-          });
-        return;
-      }
-
-      // Explorer-style bulk rename uses the typed base name and preserves extensions.
-      const baseName = renameTarget.isDir
-        ? nextName
-        : splitNameExtension(nextName).base.trim();
-      if (!baseName) {
-        renameCommitRef.current = false;
-        return;
-      }
-
-      const { ordered, plan } = buildBulkRenamePlan(
-        baseName,
-        selectionTargets,
-        entryByPath,
-        entries,
-        indexMap,
-      );
-      if (plan.length === 0) {
-        renameCommitRef.current = false;
-        return;
-      }
       renameCommitRef.current = true;
-      setSuppressInternalPresence(true);
-      void renameEntries(plan)
-        .then((result) => {
-          if (!result || !shouldSelect || !viewVisit.current) return;
-          const renamed = result.renamed;
-          const nextSelection = ordered.map((path) => renamed.get(path) ?? path);
-          const nextAnchor = renamed.get(renameTarget.path) ?? renameTarget.path;
-          setSelection(nextSelection, nextAnchor);
+      void renameEntry(renameTarget.path, resolvedNextName)
+        .then((nextPath) => {
+          if (!nextPath || !shouldSelect || !viewVisit.current) return;
+          setRenameSelection({ paths: [nextPath], anchor: nextPath, visit: viewVisit });
         })
         .finally(() => {
           renameCommitRef.current = false;
-          setSuppressInternalPresence(false);
         });
     },
     [
-      entries,
-      entryByPath,
       gridNameHideExtension,
-      indexMap,
-      renameEntries,
       renameEntry,
       renameTarget,
       renameValue,
-      selected,
-      setSelection,
-      viewParentPath,
       viewVisit,
     ],
   );
@@ -143,6 +135,6 @@ export const useAppRenameFlow = ({
     setRenameValue,
     handleRenameCommit,
     handleRenameCancel,
-    suppressInternalPresence,
+    tryStartBatchRename,
   };
 };

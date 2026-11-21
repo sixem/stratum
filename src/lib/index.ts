@@ -39,7 +39,7 @@ export {
 export type { PathCrumb, PathCrumbsState } from "./pathCrumbs";
 export { activeDrive, folderPathKey, getParentPath, getPathName, normalizePath, tabLabel } from "./paths";
 export { entryExists, getDriveKey, toMessage } from "./fsUtils";
-export { applyHiddenExtension, buildBulkRenamePlan, getRenameInputValue } from "./renamePlan";
+export { applyHiddenExtension, getRenameInputValue } from "./renamePlan";
 export { formatDeleteLabel, getSelectionTargets } from "./selection";
 export { DEFAULT_SORT, getDefaultSortDir, nextSortState } from "./sort";
 export { createTab, DEFAULT_TAB_STATE } from "./tabs";

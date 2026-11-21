@@ -31,14 +31,22 @@ export function useBottomPaneActions({
   const { closeContextMenu } = menu;
   const rename = useAppRenameFlow({
     viewVisit,
-    entries: dir.entries,
     entryByPath: model.entryByPath,
     indexMap: model.indexMap,
     selected: selection.selected,
     viewParentPath: dir.parentPath,
     gridNameHideExtension: hideExtension,
-    renameEntry: actions.renameEntry,
-    renameEntries: actions.renameEntries,
+    renameEntry: async (path, nextName) => {
+      const result = await actions.renameEntry(path, nextName);
+      if (result && viewVisit.current) await dir.refreshAfterChange();
+      return result;
+    },
+    renameEntries: async (requests) => {
+      const result = await actions.renameEntries(requests);
+      // Mutations share the main pane's Undo stack. Refresh this listing too.
+      if (result?.renamed.size && viewVisit.current) await dir.refreshAfterChange();
+      return result;
+    },
     setSelection: selection.setSelection,
   });
   const { handleRenameCancel } = rename;
@@ -58,6 +66,9 @@ export function useBottomPaneActions({
   });
   const clearSelectionForVisit = () => {
     if (viewVisit.current) selectionHandlers.handleClearSelection();
+  };
+  const undo = async () => {
+    if (await actions.undo() && viewVisit.current) await dir.refreshAfterChange();
   };
   const { queueCreateSelection } = usePendingCreateSelection({
     viewKey,
@@ -113,5 +124,5 @@ export function useBottomPaneActions({
     onRemoveRecentJump: tabs.removeRecentJump,
   });
 
-  return { ...rename, ...selectionHandlers, ...context, createFile, createFolder, createFolderAndGo, changeSort, clearSelectionForVisit };
+  return { ...rename, ...selectionHandlers, ...context, createFile, createFolder, createFolderAndGo, changeSort, clearSelectionForVisit, undo };
 }

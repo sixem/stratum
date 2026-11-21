@@ -161,6 +161,7 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery, bot
     folder, actions, address, paths, ready, closeTab, commandsBlocked, gridColumns,
     openContextMenu: paneActions.openKeyboardContextMenu,
     startRename: paneActions.handleRenameStart, clearSelection: paneActions.clearSelectionForVisit,
+    undo: paneActions.undo,
     scrollTo: (index) => { focusFiles(); scrollTo(index); },
     handleTypeahead, handleTabJump, searchInput, clearSearchAndFocusFiles, browseFromView,
   });

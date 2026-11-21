@@ -8,12 +8,13 @@ mod fs_list;
 #[cfg(target_os = "windows")]
 mod fs_recycle_windows;
 mod fs_trash;
+mod rename;
 mod reports;
 mod time;
 pub(crate) mod transfer;
 mod types;
 
-pub use entry_mutations::{create_file, create_folder, ensure_dir, rename_entry};
+pub use entry_mutations::{create_file, create_folder, ensure_dir};
 pub(crate) use fs_delete::delete_entries;
 pub use fs_list::{
     get_home, get_places, list_dir, list_dir_with_parent, list_drive_info, list_drives,
@@ -21,6 +22,7 @@ pub use fs_list::{
 };
 pub(crate) use fs_trash::trash_entries;
 pub use fs_trash::restore_recycle_items;
+pub use rename::{rename_entry, validate_batch_rename, BatchRenameRequest};
 pub use reports::{
     CopyConflict, CopyConflictKind, CopyPlan, CopyReport, DeleteReport, MovedTransferEntry,
     RestoreRecycleReport, TransferProgress, TransferReport, TrashReport,

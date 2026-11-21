@@ -1,0 +1,223 @@
+// Shared modal chrome with a fixed header and independently scrolling preview.
+@use "../control-recipes" as control;
+@use "./shared" as modal;
+
+.batch-rename-modal {
+  @include modal.overlay-shell(2375, 16px);
+  @include modal.overlay-open();
+}
+
+.batch-rename-panel {
+  @include modal.panel-shell(min(100%, 660px), calc(100dvh - 32px), 0, 0, 12px, $overflow: auto);
+  @include modal.panel-open();
+}
+
+.batch-rename-header.overlay-panel-header {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+  border-bottom: var(--surface-border-width) solid var(--stroke);
+  background: transparent;
+
+  .overlay-panel-header-top {
+    align-items: center;
+  }
+
+  .overlay-panel-header-drag {
+    align-content: center;
+    min-height: 32px;
+  }
+
+  .overlay-panel-header-title {
+    font-size: var(--font-size-xl);
+  }
+}
+
+.batch-rename-options {
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: start;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px 16px;
+  border: 0;
+}
+
+.batch-rename-modes {
+  @include control.pill-group();
+  background: var(--surface-card);
+  border-color: var(--stroke);
+}
+
+.batch-rename-mode {
+  @include control.pill-option();
+  white-space: nowrap;
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+  }
+}
+
+:root[data-dark-mode="true"] .batch-rename-mode {
+  transition: none;
+
+  &:hover:not(:disabled):not(.is-active) {
+    background: transparent;
+    border-color: var(--dark-hover-stroke);
+  }
+
+  &.is-active {
+    background: var(--dark-selection);
+    border-color: var(--dark-selected-stroke);
+    box-shadow: none;
+  }
+}
+
+.batch-rename-fields {
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
+  gap: 10px;
+}
+
+.batch-rename-field {
+  flex: 1 1 180px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text);
+
+  input {
+    @include control.control-surface(6px, var(--surface-control));
+    width: 100%;
+    min-width: 0;
+    padding: 6px 8px;
+    color: var(--text);
+    font-size: var(--font-size-md);
+    font-weight: 400;
+    user-select: text;
+  }
+
+  input:focus {
+    @include control.focus-ring(rgba(var(--accent-rgb), 0.6), rgba(var(--accent-rgb), 0.2));
+  }
+}
+
+.batch-rename-checks {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  input {
+    appearance: auto;
+    accent-color: var(--accent);
+    color-scheme: dark;
+  }
+}
+
+.batch-rename-preview {
+  @include control.control-surface(8px, var(--panel-deep));
+  display: flex;
+  flex-direction: column;
+  min-height: 78px;
+  margin: 0 16px;
+  overflow: hidden;
+}
+
+.batch-rename-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: 16px;
+  padding: 0 12px;
+}
+
+.batch-rename-preview-head {
+  flex: 0 0 auto;
+  min-height: 30px;
+  border-bottom: var(--surface-border-width) solid var(--stroke);
+  background: var(--surface-card);
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.batch-rename-scroll-slot {
+  min-height: 44px;
+  max-height: min(264px, 34dvh);
+}
+
+.batch-rename-scroll {
+  height: 100%;
+}
+
+.batch-rename-preview-row {
+  border-bottom: 1px solid var(--stroke);
+  color: var(--text);
+  font-size: var(--font-size-sm);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  > :first-child,
+  &[data-changed="false"] {
+    color: var(--muted);
+  }
+}
+
+.batch-rename-filename,
+.batch-rename-preview-row .batch-rename-error {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-rename-filename {
+  user-select: text;
+}
+
+.batch-rename-error {
+  color: #f29898;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+}
+
+.batch-rename-footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 14px 16px;
+}
+
+.batch-rename-status {
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.batch-rename-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+:is(.batch-rename-checks input, .batch-rename-actions .btn):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

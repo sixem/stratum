@@ -459,6 +459,15 @@ pub async fn restore_recycle_items(
 }
 
 #[tauri::command]
+pub async fn validate_batch_rename(
+    requests: Vec<fs::BatchRenameRequest>,
+) -> Result<Vec<Option<String>>, String> {
+    tauri::async_runtime::spawn_blocking(move || fs::validate_batch_rename(requests))
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn rename_entry(
     indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
     path: String,

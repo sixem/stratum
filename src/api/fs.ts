@@ -103,6 +103,9 @@ export const restoreRecycleItems = (receiptId: string) =>
 export const renameEntry = (path: string, newName: string) =>
   invoke<string>("rename_entry", { path, newName });
 
+export const validateBatchRename = (requests: { path: string; nextName: string }[]) =>
+  invoke<(string | null)[]>("validate_batch_rename", { requests });
+
 // Blocking workers may finish out of order as navigation crosses slow drives.
 let watchGeneration = 0;
 const nextWatchGeneration = () => {
