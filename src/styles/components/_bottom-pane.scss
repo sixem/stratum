@@ -128,12 +128,10 @@
     overflow: visible;
   }
 
-  // The divider and toolbar already define the pane, so the list needs no outer card.
+  // The divider and toolbar already frame the list.
   .bottom-files .file-list {
-    --list-inset-start: 0px;
     --list-inset-end: 0px;
     --list-scrollbar-gap: 0px;
-    border: 0;
-    border-radius: 0;
+    border-block: 0;
   }
 }

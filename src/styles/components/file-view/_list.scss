@@ -6,16 +6,15 @@
   flex-direction: column;
   gap: 0;
   background: var(--panel-deep);
-  border: 1px solid var(--stroke);
-  border-radius: 5px;
+  border-block: 1px solid var(--stroke);
   overflow: hidden;
   min-height: 0;
   flex: 1;
   padding: 0;
   --list-columns: 1fr 90px 150px;
-  --list-inset-start: 10px;
   --list-inset-end: 4px;
   --list-scrollbar-gap: 8px;
+  --list-row-inline-padding: 10px;
 }
 
 // Scope list internals to the list container.
@@ -27,7 +26,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding-inline: var(--list-inset-start) var(--list-inset-end);
+    padding-inline-end: var(--list-inset-end);
   }
 
   .list-content {
@@ -56,8 +55,8 @@
     gap: 8px;
     // Match the row inset and reserve the same space as the scroll gutter.
     padding-block: 4px;
-    padding-inline: calc(11px + var(--list-inset-start))
-      calc(11px + var(--list-inset-end) + var(--list-scrollbar-gap) + 7px);
+    padding-inline: var(--list-row-inline-padding)
+      calc(var(--list-row-inline-padding) + var(--list-inset-end) + var(--list-scrollbar-gap) + 7px);
     border-bottom: var(--surface-border-width) solid var(--stroke);
     background: var(--panel-2);
   }
@@ -199,12 +198,11 @@
     grid-template-columns: var(--list-columns);
     align-items: center;
     gap: 8px;
-    padding: 6px 10px;
+    padding: 5px var(--list-row-inline-padding);
     height: var(--list-row-height, var(--file-view-list-row-height));
-    border-radius: 2px;
     background: transparent;
     --list-dot-color: var(--accent);
-    border: 1px solid transparent;
+    border-block: var(--surface-border-width) solid transparent;
     text-align: left;
     cursor: pointer;
     transition: none;
