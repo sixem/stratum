@@ -2,9 +2,11 @@
 // the shell view. This hook intentionally works from the already-filtered data
 // pipeline so interaction code can focus on user intent instead of source
 // derivation.
-import { useCallback, useLayoutEffect, useMemo } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { useDragOutHandler } from "@/hooks/ui/inputs";
 import { useFileViewInteractions, useFileViewModel } from "@/hooks/ui/view";
+import type { PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
+import { isPreviewableEntry } from "@/lib";
 import { useAppCommands } from "../useAppCommands";
 import { useAppContextMenuSection } from "../useAppContextMenuSection";
 import type { ContextMenuServices } from "../useAppContextMenus";
@@ -82,19 +84,17 @@ export const useShellViewInteractions = ({
     previewPath,
     previewMeta,
     previewGallery,
+    mainPreview,
     bottomPreview,
+    indexedPreview,
     openPreview,
     closePreview,
-    handlePreviewPress,
     handlePreviewRelease,
   } = useAppPreviewSection({
-    entryByPath: viewModel.entryByPath,
-    mainRef: viewState.mainRef,
     previewKeybind: settings.keybinds.previewItem,
     settingsOpen: menuState.settingsOpen,
     contextMenuOpen: dataPipeline.contextMenuActive,
     promptOpen,
-    loading: resolvedView.viewLoading,
     entryMeta: fileManager.entryMeta,
   });
 
@@ -125,17 +125,49 @@ export const useShellViewInteractions = ({
     requestScrollToIndex: requestScrollToIndexForView,
   });
 
-  const handlePreviewSelect = useCallback(
-    (path: string) => {
-      if (!path) return;
-      if (previewGallery) previewGallery.onSelectPath(path);
-      else setSelection([path], path);
-      openPreview(path, previewGallery);
+  // The gallery keeps the displayed listing from the moment it opens, even
+  // when a background reload replaces the files shown in the pane.
+  const currentMainGallery = useRef<PreviewGallerySource | null>(null);
+  const mainGallery = useMemo<PreviewGallerySource>(() => ({
+    items: dataPipeline.sortedEntries,
+    entryByPath: viewModel.entryByPath,
+    onSelectPath: (path) => {
+      if (viewVisit.current && currentMainGallery.current?.entryByPath.has(path)) {
+        setSelection([path], path);
+      }
     },
-    [openPreview, previewGallery, setSelection],
-  );
+  }), [dataPipeline.sortedEntries, setSelection, viewModel.entryByPath, viewVisit]);
+  const registerMainPreview = mainPreview.registerSource;
+  const mainRef = viewState.mainRef;
+  const mainLoading = resolvedView.viewLoading;
+  useLayoutEffect(() => {
+    const root = mainRef.current;
+    if (!root || mainLoading) return;
+    currentMainGallery.current = mainGallery;
+    const unregister = registerMainPreview({
+      gallery: mainGallery,
+      paneRoot: root,
+      filesRoot: root,
+      isCurrent: () => viewVisit.current,
+    });
+    return () => {
+      unregister();
+      currentMainGallery.current = null;
+    };
+  }, [mainGallery, mainLoading, mainRef, registerMainPreview, viewVisit]);
+
+  const handlePreviewSelect = useCallback((path: string) => {
+    if (!previewGallery?.entryByPath.has(path)) return;
+    previewGallery.onSelectPath(path);
+    openPreview(path, previewGallery);
+  }, [openPreview, previewGallery]);
   const handleOpenGallery = useCallback((path: string) => {
-    if (viewVisit.current) openPreview(path);
+    const gallery = currentMainGallery.current;
+    if (!viewVisit.current || !gallery) return;
+    const entry = gallery.entryByPath.get(path);
+    if (entry && isPreviewableEntry(entry)) {
+      openPreview(entry.path, gallery);
+    }
   }, [openPreview, viewVisit]);
   const closePreviewIfOpen = useCallback(() => {
     if (!previewOpen) return false;
@@ -315,8 +347,26 @@ export const useShellViewInteractions = ({
     previewMeta,
     previewGallery,
     bottomPreview,
+    indexedSearch: {
+      preview: indexedPreview,
+      onOpenGallery: openPreview,
+      menuActions: {
+        windowsMenuEnabled: tauriEnv,
+        beginFileActivity: fileManager.beginFileActivity,
+        confirmDelete: settings.confirmDelete,
+        menuShowConvert: settings.menuShowConvert,
+        onShellCommand,
+        onOpenFolder: tabSession.jumpTo,
+        onOpenFolderNewTab: navigationController.handleOpenInNewTab,
+        onRename: fileManager.renameEntry,
+        onDeleteEntries: fileManager.deleteEntries,
+        onPasteEntries: fileManager.pasteEntries,
+        onOpenConvertModal: dataPipeline.openConversionModal,
+        onQuickConvertImages: dataPipeline.handleQuickConvertImages,
+      },
+    },
     openPreview,
-    handlePreviewPress,
+    handlePreviewPress: mainPreview.onPress,
     handlePreviewRelease,
     handlePreviewSelect,
     closePreviewIfOpen,

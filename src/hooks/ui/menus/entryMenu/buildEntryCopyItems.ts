@@ -6,17 +6,19 @@ import { writeFileClipboard } from "@/modules";
 type BuildEntryCopyItemsOptions = {
   actionTargets: string[];
   hasTargets: boolean;
+  showShortcuts: boolean;
 };
 
 export const buildEntryCopyItems = ({
   actionTargets,
   hasTargets,
+  showShortcuts,
 }: BuildEntryCopyItemsOptions): ContextMenuItem[] => [
   {
     id: "entry-cut",
     label: "Cut",
     icon: "cut",
-    hint: "Ctrl+X",
+    hint: showShortcuts ? "Ctrl+X" : undefined,
     onSelect: () => { void writeFileClipboard(actionTargets, "move"); },
     disabled: !hasTargets,
   },
@@ -24,7 +26,7 @@ export const buildEntryCopyItems = ({
     id: "entry-copy",
     label: "Copy",
     icon: "copy",
-    hint: "Ctrl+C",
+    hint: showShortcuts ? "Ctrl+C" : undefined,
     onSelect: () => { void writeFileClipboard(actionTargets, "copy"); },
     disabled: !hasTargets,
   },

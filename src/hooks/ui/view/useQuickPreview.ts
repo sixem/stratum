@@ -1,9 +1,8 @@
 // Manages quick preview mode for single-media selections.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { RefObject } from "react";
 import type { FileEntry } from "@/types";
 import { isEditableElement, isPreviewableEntry } from "@/lib";
-import { buildKeybindFromEvent, normalizeKeybind } from "@/modules";
+import { buildKeybindFromEvent, normalizeKeybind, useIndexedSearchUiStore } from "@/modules";
 
 export type PreviewGallerySource = {
   items: FileEntry[];
@@ -11,50 +10,49 @@ export type PreviewGallerySource = {
   onSelectPath: (path: string) => void;
 };
 
-export type BottomPreviewSource = {
+export type PreviewSource = {
   gallery: PreviewGallerySource;
   paneRoot: HTMLElement;
   filesRoot: HTMLElement;
   isCurrent: () => boolean;
+  getSelectedPath?: () => string | undefined;
+  shortcutInput?: HTMLInputElement;
 };
 
-export type BottomPreviewBindings = {
-  registerSource: (source: BottomPreviewSource) => () => void;
+export type PreviewSourceBindings = {
+  registerSource: (source: PreviewSource) => () => void;
   onPress: (path: string) => boolean;
 };
 
-type PreviewSession = { path: string; gallery?: PreviewGallerySource };
-type PreviewTarget = { path: string; pane: BottomPreviewSource | null };
+export type BottomPreviewBindings = PreviewSourceBindings;
+type PreviewSourceKind = "main" | "bottom" | "indexed";
+
+type PreviewSession = { path: string; gallery: PreviewGallerySource };
+type PreviewTarget = PreviewSession & { source: PreviewSourceKind };
 
 const matchesTarget = (preview: PreviewSession | null, target: PreviewTarget) =>
-  preview?.path === target.path && preview.gallery === target.pane?.gallery;
+  preview?.path === target.path && preview.gallery === target.gallery;
 
 type UseQuickPreviewOptions = {
-  entryByPath: Map<string, FileEntry>;
-  mainRef: RefObject<HTMLElement | null>;
   previewKeybind: string;
   settingsOpen: boolean;
   contextMenuOpen: boolean;
   promptOpen: boolean;
-  loading: boolean;
 };
 
 const PREVIEW_HOLD_DELAY_MS = 220;
 const PREVIEW_HOLD_THRESHOLD_MS = 220;
 
 export const useQuickPreview = ({
-  entryByPath,
-  mainRef,
   previewKeybind,
   settingsOpen,
   contextMenuOpen,
   promptOpen,
-  loading,
 }: UseQuickPreviewOptions) => {
   const [preview, setPreview] = useState<PreviewSession | null>(null);
   const previewPath = preview?.path ?? null;
   const previewRef = useRef<PreviewSession | null>(null);
-  const bottomSourceRef = useRef<BottomPreviewSource | null>(null);
+  const sourcesRef = useRef<Partial<Record<PreviewSourceKind, PreviewSource>>>({});
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const holdStateRef = useRef<{
     timer: number | null;
@@ -86,27 +84,28 @@ export const useQuickPreview = ({
   );
   const previewUsesMouse = previewBinding === "MouseMiddle";
 
-  const canTriggerPreview = useCallback((target: PreviewTarget | null) => {
+  const canTriggerPreview = useCallback((target: PreviewTarget, mouse: boolean, modified: boolean) => {
     if (settingsOpen || contextMenuOpen || promptOpen) return false;
-    if (target?.pane ? !target.pane.isCurrent() : loading) return false;
+    const source = sourcesRef.current[target.source];
+    if (!source?.isCurrent()) return false;
     const active = document.activeElement;
-    if (isEditableElement(active)) return false;
-    const main = target?.pane?.filesRoot ?? mainRef.current;
-    if (!main) return false;
+    // An explicit mouse click may leave a filter field, while typing stays in it.
+    const fromShortcutInput = modified && active === source.shortcutInput;
+    if (!mouse && !fromShortcutInput && isEditableElement(active)) return false;
 
-    const hasMainFocus = Boolean(active && main.contains(active));
+    const hasSourceFocus = Boolean(active && source.filesRoot.contains(active));
     const isRootFocus =
       !active || active === document.body || active === document.documentElement;
 
     // Bring focus back to the source file view when a toolbar or tab has it.
-    if (!hasMainFocus && !isRootFocus) {
-      main.focus({ preventScroll: true });
+    if (!hasSourceFocus && !isRootFocus && !fromShortcutInput) {
+      source.filesRoot.focus({ preventScroll: true });
     }
 
     return true;
-  }, [contextMenuOpen, loading, mainRef, promptOpen, settingsOpen]);
+  }, [contextMenuOpen, promptOpen, settingsOpen]);
 
-  const openPreview = useCallback((path: string, gallery?: PreviewGallerySource) => {
+  const openPreview = useCallback((path: string, gallery: PreviewGallerySource) => {
     setPreview({ path, gallery });
   }, []);
 
@@ -118,16 +117,18 @@ export const useQuickPreview = ({
     previewRef.current = preview;
   }, [preview]);
 
-  const registerBottomSource = useCallback((source: BottomPreviewSource) => {
-    bottomSourceRef.current = source;
+  const registerSource = useCallback((kind: PreviewSourceKind, source: PreviewSource) => {
+    sourcesRef.current[kind] = source;
     return () => {
-      if (bottomSourceRef.current === source) bottomSourceRef.current = null;
+      if (sourcesRef.current[kind] === source) delete sourcesRef.current[kind];
     };
   }, []);
 
   const openTarget = useCallback((target: PreviewTarget) => {
-    if (target.pane && (bottomSourceRef.current !== target.pane || !target.pane.isCurrent())) return false;
-    openPreview(target.path, target.pane?.gallery);
+    const source = sourcesRef.current[target.source];
+    if (source?.gallery !== target.gallery || !source.isCurrent()) return false;
+    if (target.source === "indexed") target.gallery.onSelectPath(target.path);
+    openPreview(target.path, target.gallery);
     return true;
   }, [openPreview]);
 
@@ -147,24 +148,36 @@ export const useQuickPreview = ({
   }, [previewUsesMouse]);
 
   const resolvePreviewTarget = useCallback(
-    (path: string | undefined, fromBottom = false): PreviewTarget | null => {
+    (path: string | undefined, kind: PreviewSourceKind): PreviewTarget | null => {
       if (!path) return null;
-      const pane = fromBottom ? bottomSourceRef.current : null;
-      if (fromBottom && !pane?.isCurrent()) return null;
-      const entry = (pane?.gallery.entryByPath ?? entryByPath).get(path);
-      return entry && isPreviewableEntry(entry) ? { path: entry.path, pane } : null;
+      const source = sourcesRef.current[kind];
+      if (!source?.isCurrent()) return null;
+      const entry = source.gallery.entryByPath.get(path);
+      return entry && isPreviewableEntry(entry)
+        ? { path: entry.path, source: kind, gallery: source.gallery }
+        : null;
     },
-    [entryByPath],
+    [],
   );
 
   const getHoveredPreviewTarget = useCallback(() => {
     const pointer = pointerRef.current;
-    if (!pointer) return null;
-    const element = document.elementFromPoint(pointer.x, pointer.y) as HTMLElement | null;
+    const element = pointer ? document.elementFromPoint(pointer.x, pointer.y) : null;
     const entry = element?.closest<HTMLElement>("[data-path]");
+    if (useIndexedSearchUiStore.getState().open) {
+      const source = sourcesRef.current.indexed;
+      if (!source?.isCurrent()) return null;
+      const active = document.activeElement;
+      const focused = active?.closest<HTMLElement>("[data-path]");
+      const path = active === source.shortcutInput ? source.getSelectedPath?.()
+        : focused && source.filesRoot.contains(focused) ? focused.dataset.path
+        : entry && source.filesRoot.contains(entry) ? entry.dataset.path
+        : source.getSelectedPath?.();
+      return resolvePreviewTarget(path, "indexed");
+    }
     if (!entry) return null;
     if (entry.dataset.selectable === "false") return null;
-    return resolvePreviewTarget(entry.dataset.path, Boolean(entry.closest('[data-file-pane="bottom"]')));
+    return resolvePreviewTarget(entry.dataset.path, entry.closest('[data-file-pane="bottom"]') ? "bottom" : "main");
   }, [resolvePreviewTarget]);
 
   const clearHoldTimer = useCallback(() => {
@@ -200,9 +213,9 @@ export const useQuickPreview = ({
       source: "mouse" | "key",
       keyCode: string | null,
       immediateOpen: boolean,
+      modified = false,
     ) => {
-      if (!target && !previewRef.current) return false;
-      if (!previewRef.current && !canTriggerPreview(target)) return false;
+      if (!previewRef.current && (!target || !canTriggerPreview(target, source === "mouse", modified))) return false;
       const state = holdStateRef.current;
       if (state.active) return false;
       state.active = true;
@@ -282,18 +295,26 @@ export const useQuickPreview = ({
   );
 
   const handlePreviewPress = useCallback(
-    (path: string, fromBottom = false) => {
+    (path: string, kind: PreviewSourceKind) => {
       if (!previewUsesMouse) return false;
-      const resolved = resolvePreviewTarget(path, fromBottom);
+      const resolved = resolvePreviewTarget(path, kind);
       if (!resolved) return false;
       return startHold(resolved, "mouse", null, true);
     },
     [previewUsesMouse, resolvePreviewTarget, startHold],
   );
+  const mainPreview = useMemo<PreviewSourceBindings>(() => ({
+    registerSource: (source) => registerSource("main", source),
+    onPress: (path) => handlePreviewPress(path, "main"),
+  }), [handlePreviewPress, registerSource]);
   const bottomPreview = useMemo<BottomPreviewBindings>(() => ({
-    registerSource: registerBottomSource,
-    onPress: (path) => handlePreviewPress(path, true),
-  }), [handlePreviewPress, registerBottomSource]);
+    registerSource: (source) => registerSource("bottom", source),
+    onPress: (path) => handlePreviewPress(path, "bottom"),
+  }), [handlePreviewPress, registerSource]);
+  const indexedPreview = useMemo<PreviewSourceBindings>(() => ({
+    registerSource: (source) => registerSource("indexed", source),
+    onPress: (path) => handlePreviewPress(path, "indexed"),
+  }), [handlePreviewPress, registerSource]);
 
   const handlePreviewRelease = useCallback((_path: string) => {
     if (!previewUsesMouse) return false;
@@ -308,15 +329,20 @@ export const useQuickPreview = ({
       if (event.repeat) return;
       const next = buildKeybindFromEvent(event);
       if (!next || next !== previewBinding) return;
-      const handled = startHold(getHoveredPreviewTarget(), "key", event.code, false);
+      const modified = (event.ctrlKey || event.altKey || event.metaKey) && !event.getModifierState("AltGraph");
+      const handled = startHold(getHoveredPreviewTarget(), "key", event.code, false, modified);
       if (!handled) return;
       event.preventDefault();
       event.stopPropagation();
     };
     // The lower pane normally contains its own shortcuts. Give just preview
     // first refusal there so the existing window-level hold can own keyup.
-    const handleBottomKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof Node && bottomSourceRef.current?.paneRoot.contains(event.target)) {
+    const handlePaneKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof Node && (
+        sourcesRef.current.bottom?.paneRoot.contains(target) ||
+        sourcesRef.current.indexed?.paneRoot.contains(target)
+      )) {
         handleKeyDown(event);
       }
     };
@@ -330,11 +356,11 @@ export const useQuickPreview = ({
       event.stopPropagation();
     };
     window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keydown", handleBottomKeyDown, true);
+    window.addEventListener("keydown", handlePaneKeyDown, true);
     window.addEventListener("keyup", handleKeyUp);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keydown", handleBottomKeyDown, true);
+      window.removeEventListener("keydown", handlePaneKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp);
     };
   }, [getHoveredPreviewTarget, previewBinding, previewUsesMouse, releaseHold, startHold]);
@@ -393,11 +419,12 @@ export const useQuickPreview = ({
   return {
     previewPath,
     previewGallery: preview?.gallery,
+    mainPreview,
     bottomPreview,
+    indexedPreview,
     previewOpen: Boolean(previewPath),
     openPreview,
     closePreview,
-    handlePreviewPress,
     handlePreviewRelease,
   };
 };

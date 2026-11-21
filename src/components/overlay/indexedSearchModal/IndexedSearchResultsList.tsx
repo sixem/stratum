@@ -13,7 +13,9 @@ import { INDEXED_SEARCH_RESULT_LIMIT } from "./indexedSearchModalConfig";
 
 type IndexedSearchResultsListProps = {
   catalogPending: boolean;
-  onOpenResult: (path: string) => void;
+  onOpenResult: (result: IndexedPathMatch) => void;
+  onOpenContextMenu: (result: IndexedPathMatch, point: { x: number; y: number }, native: boolean) => void;
+  onPreviewPress: (path: string) => boolean;
   onResultKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
   onSelectResult: (result: IndexedPathMatch) => void;
   resultRefs: RefObject<Array<HTMLButtonElement | null>>;
@@ -28,6 +30,8 @@ type IndexedSearchResultsListProps = {
 export const IndexedSearchResultsList = ({
   catalogPending,
   onOpenResult,
+  onOpenContextMenu,
+  onPreviewPress,
   onResultKeyDown,
   onSelectResult,
   resultRefs,
@@ -93,13 +97,39 @@ export const IndexedSearchResultsList = ({
                   resultRefs.current[index] = element;
                 }}
                 className="indexed-search-result"
+                data-path={result.path}
                 aria-pressed={isSelected}
+                aria-haspopup="menu"
                 tabIndex={isSelected || (selectedPath == null && index === 0) ? 0 : -1}
                 pressOnPointerDown={false}
                 onClick={() => onSelectResult(result)}
                 onFocus={() => onSelectResult(result)}
-                onKeyDown={onResultKeyDown}
-                onDoubleClick={() => onOpenResult(result.path)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  event.currentTarget.focus({ preventScroll: true });
+                  onOpenContextMenu(result, { x: event.clientX, y: event.clientY }, event.shiftKey);
+                }}
+                onKeyDown={(event) => {
+                  const native = event.shiftKey && event.key === "F10";
+                  if (event.key !== "ContextMenu" && !native) {
+                    onResultKeyDown(event);
+                    return;
+                  }
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (event.repeat) return;
+                  const bounds = event.currentTarget.getBoundingClientRect();
+                  onOpenContextMenu(result, { x: bounds.left, y: bounds.bottom }, native);
+                }}
+                onMouseDown={(event) => {
+                  if (event.button !== 1 || isDirectory) return;
+                  event.currentTarget.focus({ preventScroll: true });
+                  if (!onPreviewPress(result.path)) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onDoubleClick={() => onOpenResult(result)}
               >
                 <span className="indexed-search-result-icon" data-kind={result.kind}>
                   <FileTypeIcon

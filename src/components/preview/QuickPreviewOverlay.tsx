@@ -23,7 +23,6 @@ export type QuickPreviewOverlayProps = {
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   onRequestThumbs: (requests: ThumbnailRequest[]) => void;
   thumbResetKey?: string;
-  loading: boolean;
   onSelectPreview: (path: string) => void;
   smartTabJump: boolean;
   smartTabBlocked: boolean;
@@ -44,7 +43,6 @@ const QuickPreviewOverlayContent = ({
   onRequestMeta,
   onRequestThumbs,
   thumbResetKey,
-  loading,
   onSelectPreview,
   smartTabJump,
   smartTabBlocked,
@@ -199,7 +197,6 @@ const QuickPreviewOverlayContent = ({
             onRequestMeta={onRequestMeta}
             onRequestThumbs={onRequestThumbs}
             thumbResetKey={thumbResetKey}
-            loading={loading}
             onSelect={onSelectPreview}
             stripRef={stripRef}
           />

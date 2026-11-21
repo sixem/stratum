@@ -6,6 +6,7 @@ import { openPathProperties, type ShellMenuTarget } from "@/api";
 import type { BeginFileActivity } from "@/hooks/domain/filesystem/useFileActivity";
 import { getSelectionTargets, isEditableElement, isPreviewableEntry, toMessage } from "@/lib";
 import { usePromptStore } from "@/modules";
+import { showBottomPane } from "@/modules/bottomPaneStore";
 import type {
   ConversionModalRequest,
   ContextMenuItem,
@@ -18,6 +19,7 @@ import type {
   SortState,
 } from "@/types";
 import { useEntryMenuItems } from "../menus/useEntryMenuItems";
+import { appendWindowsMenuItem } from "../menus/appendWindowsMenuItem";
 import { useLayoutMenuItems } from "../menus/useLayoutMenuItems";
 import { resolveContextTargets } from "../menus/entryMenu/shared";
 import { getKeyboardMenuRequest } from "../menus/keyboardContextMenu";
@@ -267,6 +269,9 @@ export const useAppContextMenus = ({
     menuOpenWsl,
     onOpenShell,
   });
+  const otherPane = useMemo(() => onOpenDirInMainPane
+    ? { label: "Open in main pane", open: onOpenDirInMainPane }
+    : { label: "Open in bottom pane", open: showBottomPane }, [onOpenDirInMainPane]);
   const entryMenuItems = useEntryMenuItems({
     target: contextMenu?.kind === "entry" ? contextMenu.entry : null,
     selected,
@@ -277,7 +282,7 @@ export const useAppContextMenus = ({
     onOpenGallery,
     onOpenDir,
     onOpenDirNewTab,
-    onOpenDirInMainPane,
+    otherPane,
     onDeleteEntries,
     confirmDelete,
     onClearSelection,
@@ -317,15 +322,9 @@ export const useAppContextMenus = ({
   const contextMenuItems = useMemo<ContextMenuItem[]>(() => {
     if (!contextMenu || !menuTarget) return baseItems;
     const entry = contextMenu.kind === "entry" ? contextMenu.entry : undefined;
-    return [
-      ...baseItems,
-      { kind: "divider", id: "windows-menu-divider" },
-      {
-        id: "windows-menu", label: "Show more options", hint: "Shift+F10",
-        icon: "more-options",
-        onSelect: () => { openWindowsMenu(menuTarget, contextMenu, false, galleryAction(entry)); },
-      },
-    ];
+    return appendWindowsMenuItem(baseItems, () => {
+      openWindowsMenu(menuTarget, contextMenu, false, galleryAction(entry));
+    });
   }, [baseItems, contextMenu, galleryAction, menuTarget, openWindowsMenu]);
   const contextMenuOpen = Boolean(contextMenu && contextMenuItems.length > 0);
 

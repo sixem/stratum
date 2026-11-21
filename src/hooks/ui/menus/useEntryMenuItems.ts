@@ -27,36 +27,43 @@ import { useOpenWithMenuState } from "./useOpenWithMenuState";
 
 type UseEntryMenuItemsOptions = {
   target: EntryContextTarget | null;
-  selected: Set<string>;
-  entryByPath: Map<string, FileEntry>;
-  parentPath: string | null;
-  currentPath: string;
+  selected?: Set<string>;
+  entryByPath?: Map<string, FileEntry>;
+  parentPath?: string | null;
+  currentPath?: string;
   onOpenEntry: (path: string) => void;
-  onOpenGallery: (path: string) => void;
+  onOpenGallery?: (path: string) => void;
   onOpenDir: (path: string) => void;
-  onOpenDirNewTab: (path: string) => void;
-  onOpenDirInMainPane?: (path: string) => void;
+  onOpenDirNewTab?: (path: string) => void;
+  otherPane?: Parameters<typeof buildEntryOpenItems>[0]["otherPane"];
+  extraOpenItems?: ContextMenuItem[];
+  showClipboardShortcuts?: boolean;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   confirmDelete: boolean;
-  onClearSelection: () => void;
-  onRenameEntry: (target: EntryContextTarget) => void;
-  onPasteEntries: (destination: string) => Promise<unknown> | void;
+  onClearSelection?: () => void;
+  onRenameEntry?: (target: EntryContextTarget) => void;
+  onPasteEntries?: (destination: string) => Promise<unknown> | void;
   onOpenConvertModal: (request: ConversionModalRequest) => void;
   onQuickConvertImages: (request: ConversionModalRequest, targetFormat: string) => void;
   menuShowConvert: boolean;
 };
 
+const EMPTY_SELECTION = new Set<string>();
+const EMPTY_ENTRIES = new Map<string, FileEntry>();
+
 export const useEntryMenuItems = ({
   target,
-  selected,
-  entryByPath,
-  parentPath,
-  currentPath,
+  selected = EMPTY_SELECTION,
+  entryByPath = EMPTY_ENTRIES,
+  parentPath = null,
+  currentPath = "",
   onOpenEntry,
   onOpenGallery,
   onOpenDir,
   onOpenDirNewTab,
-  onOpenDirInMainPane,
+  otherPane,
+  extraOpenItems,
+  showClipboardShortcuts = true,
   onDeleteEntries,
   confirmDelete,
   onClearSelection,
@@ -82,7 +89,7 @@ export const useEntryMenuItems = ({
     const handleDeleteEntries = async (paths: string[]) => {
       const report = await onDeleteEntries(paths);
       if (report?.deleted) {
-        onClearSelection();
+        onClearSelection?.();
       }
       return report;
     };
@@ -134,8 +141,9 @@ export const useEntryMenuItems = ({
         onOpenGallery,
         onOpenDir,
         onOpenDirNewTab,
-        onOpenDirInMainPane,
+        otherPane,
       }),
+      ...(extraOpenItems ?? []),
       ...buildEntryOpenWithItems({
         isDir: target.isDir,
         openWithMenuState,
@@ -151,18 +159,19 @@ export const useEntryMenuItems = ({
       ...buildEntryCopyItems({
         actionTargets,
         hasTargets,
+        showShortcuts: showClipboardShortcuts,
       }),
-      ...buildEntryRenameItems({
+      ...(onRenameEntry ? buildEntryRenameItems({
         target,
         hasTargets,
         onRenameEntry,
-      }),
-      ...buildEntryPasteItems({
+      }) : []),
+      ...(onPasteEntries ? buildEntryPasteItems({
         target,
         canPaste,
         pasteTarget,
         onPasteEntries,
-      }),
+      }) : []),
       ...buildEntryDeleteItems({
         actionTargets,
         hasTargets,
@@ -181,13 +190,14 @@ export const useEntryMenuItems = ({
     clipboard,
     currentPath,
     entryByPath,
+    extraOpenItems,
     menuShowConvert,
     onClearSelection,
     onDeleteEntries,
     confirmDelete,
     onOpenConvertModal,
     onOpenDir,
-    onOpenDirInMainPane,
+    otherPane,
     onOpenDirNewTab,
     onOpenEntry,
     onOpenGallery,
@@ -197,6 +207,7 @@ export const useEntryMenuItems = ({
     openWithMenuState,
     parentPath,
     selected,
+    showClipboardShortcuts,
     target,
   ]);
 };

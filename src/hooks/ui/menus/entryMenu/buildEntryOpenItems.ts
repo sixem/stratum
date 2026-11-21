@@ -1,17 +1,16 @@
-import { showBottomPane } from "@/modules/bottomPaneStore";
-import { isPreviewableEntry } from "@/lib";
 // Builds the basic open actions for an entry menu.
 
+import { isPreviewableEntry } from "@/lib";
 import type { ContextMenuItem, EntryContextTarget } from "@/types";
 
 type BuildEntryOpenItemsOptions = {
   target: EntryContextTarget;
   hasTargets: boolean;
   onOpenEntry: (path: string) => void;
-  onOpenGallery: (path: string) => void;
+  onOpenGallery?: (path: string) => void;
   onOpenDir: (path: string) => void;
-  onOpenDirNewTab: (path: string) => void;
-  onOpenDirInMainPane?: (path: string) => void;
+  onOpenDirNewTab?: (path: string) => void;
+  otherPane?: { label: string; open: (path: string) => void };
 };
 
 export const buildEntryOpenItems = ({
@@ -21,7 +20,7 @@ export const buildEntryOpenItems = ({
   onOpenGallery,
   onOpenDir,
   onOpenDirNewTab,
-  onOpenDirInMainPane,
+  otherPane,
 }: BuildEntryOpenItemsOptions): ContextMenuItem[] => {
   const items: ContextMenuItem[] = [
     {
@@ -40,7 +39,7 @@ export const buildEntryOpenItems = ({
     },
   ];
 
-  if (hasTargets && isPreviewableEntry(target)) {
+  if (hasTargets && onOpenGallery && isPreviewableEntry(target)) {
     items.push({
       id: "entry-open-gallery",
       label: "Open in gallery",
@@ -49,7 +48,7 @@ export const buildEntryOpenItems = ({
     });
   }
 
-  if (target.isDir) {
+  if (target.isDir && onOpenDirNewTab) {
     items.push({
       id: "entry-open-new-tab",
       label: "Open in new tab",
@@ -59,13 +58,12 @@ export const buildEntryOpenItems = ({
       },
       disabled: !hasTargets,
     });
+  }
+  if (target.isDir && otherPane) {
     items.push({
       id: "entry-open-other-pane",
-      label: onOpenDirInMainPane ? "Open in main pane" : "Open in bottom pane",
-      onSelect: () => {
-        if (onOpenDirInMainPane) onOpenDirInMainPane(target.path);
-        else showBottomPane(target.path);
-      },
+      label: otherPane.label,
+      onSelect: () => otherPane.open(target.path),
     });
   }
   return items;

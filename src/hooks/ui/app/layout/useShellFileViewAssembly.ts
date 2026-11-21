@@ -1,10 +1,13 @@
 // Translates the shell data + interaction models into the render-facing slices
 // consumed by AppContent, status UI, and overlay builders.
 import { useStatusLabels } from "@/hooks/domain/metadata";
+import type { FileEntry } from "@/types";
 import { useAppFileViewController } from "../useAppFileViewController";
 import type { UseShellViewModelOptions } from "./shellViewModel.types";
 import type { ShellViewDataPipeline } from "./useShellViewDataPipeline";
 import type { ShellViewInteractionModel } from "./useShellViewInteractions";
+
+const EMPTY_GALLERY: FileEntry[] = [];
 
 type UseShellFileViewAssemblyOptions = Pick<
   UseShellViewModelOptions,
@@ -188,19 +191,19 @@ export const useShellFileViewAssembly = ({
       handlePlaceTargetContextMenuDown: interactionModel.handlePlaceTargetContextMenuDown,
     },
     overlayContext: {
+      indexedSearch: interactionModel.indexedSearch,
       contextMenuItems: interactionModel.contextMenuItems,
       contextMenuOpen: interactionModel.contextMenuOpen,
       previewOpen: interactionModel.previewOpen,
       previewPath: interactionModel.previewPath,
       previewMeta: interactionModel.previewMeta,
-      sortedEntries: interactionModel.previewGallery?.items ?? dataPipeline.sortedEntries,
+      galleryItems: interactionModel.previewGallery?.items ?? EMPTY_GALLERY,
       entryMeta: fileManager.entryMeta,
       thumbnailsEnabled: settings.thumbnailsEnabled,
       requestMeta: fileManager.requestEntryMeta,
       thumbnails: dataPipeline.thumbnails,
       requestThumbnails: dataPipeline.requestThumbnails,
       thumbnailResetKey: dataPipeline.thumbnailResetKey,
-      viewLoading: !interactionModel.previewGallery && resolvedView.viewLoading,
       handlePreviewSelect: interactionModel.handlePreviewSelect,
       smartTabJump: settings.smartTabJump,
       smartTabBlocked: dataPipeline.smartTabBlocked,

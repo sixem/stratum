@@ -51,6 +51,7 @@ export const useAppTopstackProps = ({
         className="pathbar-brand about-trigger"
         aria-label={`About ${appName}`}
         aria-haspopup="dialog"
+        pressOnPointerDown={false}
         onClick={onOpenAbout}
       >
         <div className="brand-mark">

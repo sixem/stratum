@@ -15,6 +15,7 @@ type UseAppOverlayControllerOptions = {
   onCloseAbout: () => void;
   contextMenu: AppOverlaysProps["contextMenu"];
   conversion: AppOverlaysProps["conversion"];
+  indexedSearch: AppOverlaysProps["indexedSearch"];
   quickPreview: AppOverlaysProps["quickPreview"];
   settings: AppOverlaysProps["settings"];
 };
@@ -28,6 +29,7 @@ export const useAppOverlayController = ({
   onCloseAbout,
   contextMenu,
   conversion,
+  indexedSearch,
   quickPreview,
   settings,
 }: UseAppOverlayControllerOptions): AppOverlaysProps => {
@@ -54,6 +56,7 @@ export const useAppOverlayController = ({
       },
       contextMenu,
       conversion,
+      indexedSearch,
       quickPreview,
       settings,
     }),
@@ -65,6 +68,7 @@ export const useAppOverlayController = ({
       appName,
       contextMenu,
       conversion,
+      indexedSearch,
       description,
       onCloseAbout,
       quickPreview,

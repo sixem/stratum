@@ -26,6 +26,7 @@ type UseAppOverlaySectionOptions = {
   quickPreview: AppOverlaysProps["quickPreview"];
   settings: AppOverlaysProps["settings"];
   conversion: AppOverlaysProps["conversion"];
+  indexedSearch: AppOverlaysProps["indexedSearch"];
 };
 
 export const useAppOverlaySection = ({
@@ -35,6 +36,7 @@ export const useAppOverlaySection = ({
   quickPreview,
   settings,
   conversion,
+  indexedSearch,
 }: UseAppOverlaySectionOptions): AppOverlaysProps => {
   return useAppOverlayController({
     isTauriEnv: appMeta.isTauriEnv,
@@ -51,6 +53,7 @@ export const useAppOverlaySection = ({
       onClose: contextMenu.onClose,
     },
     conversion,
+    indexedSearch,
     quickPreview,
     settings,
   });

@@ -22,12 +22,14 @@ type UseIndexedSearchSelectionParams = {
   driveStatuses: IndexedDriveStatus[];
   open: boolean;
   results: IndexedPathMatch[];
+  onOpenFolder: (path: string) => void;
 };
 
 export const useIndexedSearchSelection = ({
   driveStatuses,
   open,
   results,
+  onOpenFolder,
 }: UseIndexedSearchSelectionParams) => {
   const resultRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [selection, setSelection] = useState<IndexedSelection | null>(null);
@@ -119,16 +121,20 @@ export const useIndexedSearchSelection = ({
     };
   }, [open, selectedResultPath]);
 
-  const handleOpenSelectedResult = useCallback(async (path: string) => {
+  const handleOpenSelectedResult = useCallback(async (result: IndexedPathMatch) => {
     setSelectionError(null);
+    if (result.kind === "directory") {
+      onOpenFolder(result.path);
+      return;
+    }
     try {
-      await openPath(path);
+      await openPath(result.path);
     } catch (error) {
       setSelectionError(
         error instanceof Error ? error.message : "Unable to open the selected path.",
       );
     }
-  }, []);
+  }, [onOpenFolder]);
 
   const selectResult = useCallback((result: IndexedPathMatch) => {
     setSelectionError(null);
@@ -186,7 +192,7 @@ export const useIndexedSearchSelection = ({
         event.preventDefault();
         if (event.repeat) return;
         selectResult(resultToOpen);
-        void handleOpenSelectedResult(resultToOpen.path);
+        void handleOpenSelectedResult(resultToOpen);
       }
     },
     [handleOpenSelectedResult, moveSelection, results, selectedResult, selectResult],

@@ -21,7 +21,6 @@ type QuickPreviewStripProps = {
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   onRequestThumbs: (requests: ThumbnailRequest[]) => void;
   thumbResetKey?: string;
-  loading: boolean;
   onSelect: (path: string) => void;
   stripRef?: MutableRefObject<HTMLDivElement | null>;
 };
@@ -61,7 +60,6 @@ export const QuickPreviewStrip = ({
   onRequestMeta,
   onRequestThumbs,
   thumbResetKey,
-  loading,
   onSelect,
   stripRef: externalStripRef,
 }: QuickPreviewStripProps) => {
@@ -207,9 +205,9 @@ export const QuickPreviewStrip = ({
     return { metaPaths: nextMeta, thumbRequests: nextThumbs };
   }, [entryMeta, visibleItems]);
 
-  const requestLoading = loading || !open;
+  const requestLoading = !open;
   useEntryMetaRequest(requestLoading, metaPaths, onRequestMeta);
-  const canRequestThumbs = thumbnailsEnabled && !loading && open;
+  const canRequestThumbs = thumbnailsEnabled && open;
   useThumbnailRequest(requestLoading, canRequestThumbs, thumbRequests, onRequestThumbs, thumbResetKey);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {

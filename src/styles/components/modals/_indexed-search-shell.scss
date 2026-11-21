@@ -23,6 +23,10 @@
   @include modal.overlay-open();
 }
 
+.indexed-search-modal[hidden] {
+  display: none;
+}
+
 .indexed-search-modal[data-open="true"] .indexed-search-panel {
   @include modal.panel-open();
 }
@@ -73,7 +77,7 @@
     min-width: 0;
     padding: 8px 0;
     color: var(--text);
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-md);
     user-select: text;
     -webkit-user-select: text;
   }

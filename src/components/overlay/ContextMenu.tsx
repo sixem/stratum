@@ -1,5 +1,5 @@
 // Context menu overlay with viewport-aware positioning.
-import type { CSSProperties } from "react";
+import type { CSSProperties, RefObject } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   CopyActionIcon,
@@ -31,6 +31,7 @@ type ContextMenuProps = {
   items: ContextMenuItem[];
   onClose: () => void;
   onOpenNative?: () => boolean;
+  scrollContainer?: RefObject<HTMLElement | null>;
 };
 
 const MENU_EDGE = CONTEXT_MENU_EDGE;
@@ -56,7 +57,7 @@ const renderContextIcon = (icon: ContextMenuIcon) => {
   return <Icon className="context-check-icon" />;
 };
 
-export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative }: ContextMenuProps) => {
+export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollContainer }: ContextMenuProps) => {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const submenuRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState({ x, y });
@@ -64,10 +65,13 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative }: Contex
   const [submenuSide, setSubmenuSide] = useState<"left" | "right">("right");
   const [submenuOffset, setSubmenuOffset] = useState(0);
   const lastOpenItemsRef = useRef<ContextMenuItem[]>(items);
+  const scrollPositionRef = useRef<{ element: HTMLElement; top: number; left: number } | null>(null);
 
   useLayoutEffect(() => {
     const menu = menuRef.current;
     if (!open || !menu) return;
+    const element = scrollContainer?.current;
+    scrollPositionRef.current = element ? { element, top: element.scrollTop, left: element.scrollLeft } : null;
     const previous = document.activeElement;
     focusFirstMenuItem(menu);
     return () => {
@@ -77,7 +81,14 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative }: Contex
         previous.focus({ preventScroll: true });
       }
     };
-  }, [open]);
+  }, [open, scrollContainer]);
+
+  const handleScroll = useCallback(() => {
+    const position = scrollPositionRef.current;
+    // A scroll event can arrive after opening even if the anchor has already settled.
+    if (position && position.element.scrollTop === position.top && position.element.scrollLeft === position.left) return;
+    onClose();
+  }, [onClose]);
 
   useOverlayDismiss({
     enabled: open,
@@ -85,7 +96,7 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative }: Contex
     onEscape: onClose,
     onPointerDownOutside: onClose,
     pointerDownCapture: true,
-    onScroll: onClose,
+    onScroll: handleScroll,
     onResize: onClose,
   });
 

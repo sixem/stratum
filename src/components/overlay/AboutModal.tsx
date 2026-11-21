@@ -1,11 +1,11 @@
-// Simple about dialog showing app and build metadata.
+// Presents the app identity, project links, and build details.
 import type { MouseEvent } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { APP_ISSUES_URL, APP_REPO_URL } from "@/constants";
 import { isEditableElement } from "@/lib";
 import { useModalFocusTrap } from "@/hooks";
-import { PressButton } from "@/components/primitives/PressButton";
+import { OpenExternalIcon, StratumBrandIcon, WindowCloseIcon } from "@/components/icons";
 
 type AboutModalProps = {
   open: boolean;
@@ -39,6 +39,8 @@ export const AboutModal = ({
   platform,
   onClose,
 }: AboutModalProps) => {
+  const titleId = useId();
+  const descriptionId = useId();
   const shouldCloseRef = useRef(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -63,10 +65,9 @@ export const AboutModal = ({
     return () => window.removeEventListener("keydown", handleKey, { capture: true });
   }, [onClose, open]);
 
-  const handleLinkClick = (url: string) => async (
-    event: MouseEvent<HTMLAnchorElement>,
-  ) => {
+  const handleLinkClick = async (event: MouseEvent<HTMLAnchorElement>) => {
     if (!isTauriEnv()) return;
+    const url = event.currentTarget.href;
     event.preventDefault();
     try {
       await openUrl(url);
@@ -80,94 +81,54 @@ export const AboutModal = ({
   return (
     <div
       className="about-modal"
-      data-open={open ? "true" : "false"}
-      aria-hidden={open ? "false" : "true"}
+      data-open="true"
       onMouseDown={(event) => {
-        shouldCloseRef.current = event.target === event.currentTarget;
+        shouldCloseRef.current = event.button === 0 && event.target === event.currentTarget;
       }}
-      onClick={() => {
-        if (shouldCloseRef.current) {
-          onClose();
-        }
+      onClick={(event) => {
+        const close = shouldCloseRef.current && event.target === event.currentTarget;
         shouldCloseRef.current = false;
+        if (close) onClose();
       }}
     >
       <div
         className="about-panel"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="about-title"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
         ref={panelRef}
         tabIndex={-1}
-        onClick={(event) => event.stopPropagation()}
       >
+        <button
+          ref={closeButtonRef}
+          type="button"
+          className="about-close"
+          aria-label="Close About"
+          onClick={onClose}
+        >
+          <WindowCloseIcon />
+        </button>
         <header className="about-header">
-          <div className="about-header-top">
-            <div className="about-title" id="about-title">
-              {appName}
-            </div>
-            <PressButton
-              ref={closeButtonRef}
-              type="button"
-              className="btn"
-              onClick={onClose}
-            >
-              Close
-            </PressButton>
-          </div>
-          <div className="about-subtitle">{description}</div>
+          <StratumBrandIcon className="about-logo" />
+          <h2 className="about-title" id={titleId}>{appName}</h2>
+          <p className="about-version">Version <span className="tnum">{version}</span></p>
         </header>
+        <p className="about-description" id={descriptionId}>{description}</p>
 
-        <div className="about-meta">
-          <div className="about-row">
-            <span className="about-label">Version</span>
-            <span className="about-value tnum">{version}</span>
-          </div>
-          <div className="about-row">
-            <span className="about-label">Build</span>
-            <span className="about-value">{buildModeLabel(buildMode)}</span>
-          </div>
-          <div className="about-row">
-            <span className="about-label">Runtime</span>
-            <span className="about-value">{runtime}</span>
-          </div>
-          <div className="about-row">
-            <span className="about-label">Platform</span>
-            <span className="about-value">{platform}</span>
-          </div>
-        </div>
+        <nav className="about-links" aria-label="Project links">
+          <a href={APP_REPO_URL} target="_blank" rel="noreferrer" onClick={handleLinkClick}>
+            Source code <OpenExternalIcon />
+          </a>
+          <a href={APP_ISSUES_URL} target="_blank" rel="noreferrer" onClick={handleLinkClick}>
+            Report an issue <OpenExternalIcon />
+          </a>
+        </nav>
 
-        <div className="about-links">
-          <div className="about-row">
-            <span className="about-label">Repo</span>
-            <a
-              href={APP_REPO_URL}
-              target="_blank"
-              rel="noreferrer"
-              onClick={handleLinkClick(APP_REPO_URL)}
-            >
-              sixem/stratum
-            </a>
-          </div>
-          <div className="about-row">
-            <span className="about-label">Issues</span>
-            <a
-              href={APP_ISSUES_URL}
-              target="_blank"
-              rel="noreferrer"
-              onClick={handleLinkClick(APP_ISSUES_URL)}
-            >
-              github.com/sixem/stratum/issues
-            </a>
-          </div>
-          <div className="about-row">
-            <span className="about-label">Author</span>
-            <span>
-              emy@five.sh
-            </span>
-          </div>
-        </div>
-
+        <footer className="about-footer">
+          <p>{platform} · {runtime} · {buildModeLabel(buildMode)}</p>
+          <p>By emy@five.sh</p>
+        </footer>
       </div>
     </div>
   );

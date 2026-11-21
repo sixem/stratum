@@ -37,6 +37,7 @@ export const useShellOverlayModel = ({
       open: aboutOpen,
       onClose: navigationController.handleCloseAbout,
     },
+    indexedSearch: shellView.overlayContext.indexedSearch,
     contextMenu: {
       state: menuState.contextMenu
         ? { x: menuState.contextMenu.x, y: menuState.contextMenu.y }
@@ -49,14 +50,13 @@ export const useShellOverlayModel = ({
       open: shellView.overlayContext.previewOpen,
       path: shellView.overlayContext.previewPath,
       meta: shellView.overlayContext.previewMeta,
-      items: shellView.overlayContext.sortedEntries,
+      items: shellView.overlayContext.galleryItems,
       entryMeta: shellView.overlayContext.entryMeta,
       thumbnails: shellView.overlayContext.thumbnails,
       thumbnailsEnabled: shellView.overlayContext.thumbnailsEnabled,
       onRequestMeta: shellView.overlayContext.requestMeta,
       onRequestThumbs: shellView.overlayContext.requestThumbnails,
       thumbResetKey: shellView.overlayContext.thumbnailResetKey,
-      loading: shellView.overlayContext.viewLoading,
       onSelectPreview: shellView.overlayContext.handlePreviewSelect,
       smartTabJump: shellView.overlayContext.smartTabJump,
       smartTabBlocked: shellView.overlayContext.smartTabBlocked,

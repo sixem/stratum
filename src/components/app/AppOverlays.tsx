@@ -81,6 +81,7 @@ type AppOverlaysProps = {
   about: ComponentProps<typeof AboutModal>;
   contextMenu: ComponentProps<typeof ContextMenu>;
   conversion: ConversionModalProps;
+  indexedSearch: Omit<ComponentProps<typeof IndexedSearchModal>, "previewOpen">;
   quickPreview: QuickPreviewOverlayProps;
   settings: SettingsOverlayProps;
 };
@@ -89,6 +90,7 @@ export const AppOverlays = ({
   about,
   contextMenu,
   conversion,
+  indexedSearch,
   quickPreview,
   settings,
 }: AppOverlaysProps) => {
@@ -112,7 +114,7 @@ export const AppOverlays = ({
           <LazySettingsOverlay {...settings} />
         </Suspense>
       ) : null}
-      <IndexedSearchModal />
+      <IndexedSearchModal {...indexedSearch} previewOpen={quickPreview.open} />
       <TooltipDisplay />
       {quickPreviewMounted ? (
         <Suspense fallback={null}>

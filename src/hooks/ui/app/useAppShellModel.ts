@@ -137,13 +137,6 @@ export const useAppShellModel = () => {
     };
   }, [settings.updateSettings, tauriEnv]);
 
-  useEffect(() => {
-    useIndexedSearchUiStore.getState().setOpenFolderInApp(tabSession.jumpTo);
-    return () => {
-      useIndexedSearchUiStore.getState().setOpenFolderInApp(null);
-    };
-  }, [tabSession.jumpTo]);
-
   // View inputs stay grouped so the render tree only consumes already-derived data.
   const viewState = useAppViewState({
     displayPath: resolvedView.viewPath,

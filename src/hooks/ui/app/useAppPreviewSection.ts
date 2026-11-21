@@ -19,10 +19,11 @@ export const useAppPreviewSection = ({
     previewOpen,
     previewPath,
     previewGallery,
+    mainPreview,
     bottomPreview,
+    indexedPreview,
     openPreview,
     closePreview,
-    handlePreviewPress,
     handlePreviewRelease,
   } = useQuickPreview(quickPreviewOptions);
 
@@ -37,11 +38,12 @@ export const useAppPreviewSection = ({
     previewOpen,
     previewPath,
     previewGallery,
+    mainPreview,
     bottomPreview,
+    indexedPreview,
     previewMeta,
     openPreview,
     closePreview,
-    handlePreviewPress,
     handlePreviewRelease,
   };
 };
