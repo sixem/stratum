@@ -60,7 +60,9 @@ export const getDropTargetHit = (x: number, y: number): DropTargetHit => {
     if (pane?.dataset.panePath) return { target: { kind: "pane", pane: paneId, path: pane.dataset.panePath }, element: pane };
     return { target: null, element: null };
   }
-  return { target: { kind: "entry", pane: pane ? paneId : undefined, path }, element: entryTarget ?? null };
+  const dropPane = element?.closest<HTMLElement>("[data-drop-pane]")?.dataset.dropPane;
+  const entryPane = dropPane === "bottom" || dropPane === "main" ? dropPane : undefined;
+  return { target: { kind: "entry", pane: pane ? paneId : entryPane, path }, element: entryTarget ?? null };
 };
 
 export const getDropTargetFromPoint = (x: number, y: number): DropTarget | null =>

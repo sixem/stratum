@@ -1,7 +1,7 @@
 // Central registry for settings sections so navigation and content stay in sync.
 import type { ReactNode } from "react";
 import { KEYBIND_DEFINITIONS } from "@/modules";
-import { BARS_SETTINGS_ITEMS, SettingsBarsSection, TOPBAR_VISIBILITY_OPTIONS } from "./SettingsBarsSection";
+import { BARS_SETTINGS_ITEMS, SettingsBarsSection, TOPBAR_SETTINGS_OPTIONS } from "./SettingsBarsSection";
 import { CACHE_SETTINGS_ITEMS, SettingsCacheSection } from "./SettingsCacheSection";
 import { FLAIR_SETTINGS_ITEMS, SettingsFlairSection } from "./SettingsFlairSection";
 import { GENERAL_SETTINGS_ITEMS, SettingsGeneralSection } from "./SettingsGeneralSection";
@@ -55,7 +55,7 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
   {
     id: "settings-bars",
     label: "Bars",
-    items: [...Object.values(BARS_SETTINGS_ITEMS), ...TOPBAR_VISIBILITY_OPTIONS],
+    items: [...Object.values(BARS_SETTINGS_ITEMS), ...TOPBAR_SETTINGS_OPTIONS],
     render: () => <SettingsBarsSection sectionId="settings-bars" />,
   },
   {

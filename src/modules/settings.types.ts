@@ -28,6 +28,7 @@ export type Settings = {
   tabDropSubfolders: boolean;
   showRecycleBinButton: boolean;
   showDriveToggle: boolean;
+  collapseDrivePickerOnBlur: boolean;
   showTopbarFolderChevrons: boolean;
   smoothScroll: boolean;
   smartTabJump: boolean;

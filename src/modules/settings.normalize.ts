@@ -157,6 +157,10 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.showDriveToggle === "boolean"
         ? value.showDriveToggle
         : DEFAULT_SETTINGS.showDriveToggle,
+    collapseDrivePickerOnBlur:
+      typeof value?.collapseDrivePickerOnBlur === "boolean"
+        ? value.collapseDrivePickerOnBlur
+        : DEFAULT_SETTINGS.collapseDrivePickerOnBlur,
     showTopbarFolderChevrons:
       typeof value?.showTopbarFolderChevrons === "boolean"
         ? value.showTopbarFolderChevrons

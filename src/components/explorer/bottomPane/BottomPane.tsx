@@ -7,6 +7,7 @@ import { useStatusLabels } from "@/hooks/domain/metadata/useStatusLabels";
 import { useScrollRequest } from "@/hooks/perf/scroll";
 import type { ScrollAlignment } from "@/hooks/perf/scroll";
 import { FileView } from "../FileView";
+import { PathCrumbsBar } from "../PathCrumbsBar";
 import { TabsBar } from "@/components/navigation/TabsBar";
 import { ChevronDownIcon, ChevronUpIcon, FilterIcon, GridIcon, ListIcon, NavArrowIcon, TabCloseIcon } from "@/components/icons";
 import { ContextMenu } from "@/components/overlay/ContextMenu";
@@ -57,6 +58,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   const tabNumbers = useSettingsStore(state => state.showTabNumbers);
   const fixedWidth = useSettingsStore(state => state.fixedWidthTabs);
   const active = useBottomPaneStore(state => state.active);
+  const showBreadcrumbs = useBottomPaneStore(state => state.showBreadcrumbs);
   const path = dir.currentPath;
   const { currentDriveInfo } = useDriveInfo({
     currentPath: path, drives: upper.drives, driveInfo: upper.driveInfo,
@@ -131,7 +133,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     tabs.browseTo(next);
   };
   const openNew = tabs.openInNewTab;
-  const openDroppedTab = useCallback((location: string) => {
+  const openLocationTab = useCallback((location: string) => {
     focusFiles();
     openNew(location);
   }, [focusFiles, openNew]);
@@ -244,17 +246,34 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       >
         {nextView === "thumbs" ? <GridIcon /> : <ListIcon />}
       </ToolbarIconButton>
+      <ToolbarIconButton
+        label={showBreadcrumbs ? "Hide path bar" : "Show path bar"}
+        ariaLabel="Bottom pane path bar"
+        active={showBreadcrumbs}
+        pressed={showBreadcrumbs}
+        onClick={() => useBottomPaneStore.setState({ showBreadcrumbs: !showBreadcrumbs })}
+        pressOnPointerDown={false}
+      >
+        <ChevronDownIcon className="bottom-path-chevron" />
+      </ToolbarIconButton>
       <ToolbarIconButton label="Hide bottom pane" onClick={hideBottomPane} pressOnPointerDown={false}>
         <TabCloseIcon />
       </ToolbarIconButton>
     </nav>
     <TabsBar tabs={tabs.tabs} activeId={tabs.activeTabId} showTabNumbers={tabNumbers} fixedWidthTabs={fixedWidth}
       onSelect={tabs.selectTab} onClose={closeTab} onNew={tabs.newTab} onReorder={tabs.reorderTabs}
-      onOpenLocation={openDroppedTab}
+      onOpenLocation={openLocationTab}
       onTabContextMenu={paneActions.handlePlaceTargetContextMenu}
       onTabContextMenuDown={paneActions.handlePlaceTargetContextMenuDown}
       dropTargetId={drop.dropTargetTabId} dropTargetPath={drop.dropTargetPath} tabDropSubmenu={drop.tabDropSubmenu}
       dragPoint={drop.dragPoint} onSubmenuHoverTargetChange={drop.setDropTarget} onSubmenuCloseRequest={drop.clearDragState} />
+    {showBreadcrumbs ? (
+      <PathCrumbsBar pane="bottom" path={tabs.displayPath} trailPath={tabs.activeTab?.crumbTrailPath} reserveSpace
+        dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null}
+        onNavigate={browseFromView} onNavigateNewTab={openLocationTab}
+        onCrumbContextMenu={paneActions.handlePlaceTargetContextMenu}
+        onCrumbContextMenuDown={paneActions.handlePlaceTargetContextMenuDown} />
+    ) : null}
     <div ref={files} className="main bottom-files" tabIndex={-1} aria-busy={busy} data-file-pane="bottom" data-pane-path={ready ? path : ""}
       data-drop-background={drop.backgroundHovered && drop.hoveredPane === "bottom" || undefined}
       onScrollCapture={event => {

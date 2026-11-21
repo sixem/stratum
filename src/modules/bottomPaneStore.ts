@@ -14,11 +14,12 @@ type PaneHeight = { height: number; heightUnit: "px" | "%" };
 type BottomPaneState = PaneHeight & {
   open: boolean;
   defaultViewMode: ViewMode;
+  showBreadcrumbs: boolean;
   active: boolean;
   navigation: { path: string; newTab: boolean } | null;
 };
 
-export type BottomPaneLayout = Omit<BottomPaneState, "navigation" | "defaultViewMode">;
+export type BottomPaneLayout = Omit<BottomPaneState, "navigation" | "defaultViewMode" | "showBreadcrumbs">;
 
 export const DEFAULT_BOTTOM_PANE_LAYOUT: BottomPaneLayout = {
   open: false,
@@ -40,13 +41,17 @@ export const coerceBottomPaneHeight = (value?: Partial<PaneHeight>): PaneHeight 
 };
 
 export const useBottomPaneStore = create<BottomPaneState>()(persist(
-  (): BottomPaneState => ({ ...DEFAULT_BOTTOM_PANE_LAYOUT, defaultViewMode: "list", navigation: null }),
+  (): BottomPaneState => ({
+    ...DEFAULT_BOTTOM_PANE_LAYOUT, defaultViewMode: "list", showBreadcrumbs: false, navigation: null,
+  }),
   {
     name: "stratum.bottom-pane",
-    partialize: ({ open, height, heightUnit, defaultViewMode }) => ({ open, height, heightUnit, defaultViewMode }),
+    partialize: ({ open, height, heightUnit, defaultViewMode, showBreadcrumbs }) => ({
+      open, height, heightUnit, defaultViewMode, showBreadcrumbs,
+    }),
     merge: (stored, current) => {
-      const value = stored as Partial<BottomPaneLayout> | undefined;
-      return { ...current, ...value, ...coerceBottomPaneHeight(value) };
+      const value = stored as Partial<Omit<BottomPaneState, "active" | "navigation">> | undefined;
+      return { ...current, ...value, ...coerceBottomPaneHeight(value), showBreadcrumbs: value?.showBreadcrumbs === true };
     },
   },
 ));

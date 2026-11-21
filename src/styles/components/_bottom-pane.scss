@@ -93,6 +93,18 @@
     transform: rotate(180deg);
   }
 
+  .bottom-nav .bottom-path-chevron polyline {
+    stroke-width: 3;
+  }
+
+  .bottom-nav [aria-pressed="true"] .bottom-path-chevron {
+    transform: rotate(180deg);
+  }
+
+  .crumbbar {
+    flex: 0 0 auto;
+  }
+
   .tabsbar {
     flex: 0 0 auto;
     position: relative;

@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tabDropSubfolders: false,
   showRecycleBinButton: false,
   showDriveToggle: true,
+  collapseDrivePickerOnBlur: false,
   showTopbarFolderChevrons: true,
   smoothScroll: false,
   smartTabJump: true,

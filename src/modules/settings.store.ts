@@ -78,6 +78,7 @@ useSettingsStore.subscribe((state) => {
     tabDropSubfolders: state.tabDropSubfolders,
     showRecycleBinButton: state.showRecycleBinButton,
     showDriveToggle: state.showDriveToggle,
+    collapseDrivePickerOnBlur: state.collapseDrivePickerOnBlur,
     showTopbarFolderChevrons: state.showTopbarFolderChevrons,
     smoothScroll: state.smoothScroll,
     smartTabJump: state.smartTabJump,

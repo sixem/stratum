@@ -12,6 +12,7 @@ import type { PlaceContextTarget } from "@/types";
 
 type PathCrumbsBarProps = {
   path: string;
+  pane?: "main" | "bottom";
   reserveSpace?: boolean;
   // The deepest path visited within the current branch, used to show future crumbs.
   trailPath?: string | null;
@@ -24,6 +25,7 @@ type PathCrumbsBarProps = {
 
 export const PathCrumbsBar = ({
   path,
+  pane = "main",
   reserveSpace = false,
   trailPath,
   dropTargetPath,
@@ -56,7 +58,8 @@ export const PathCrumbsBar = ({
     <div
       className="crumbbar"
       role="navigation"
-      aria-label="Current path"
+      aria-label={pane === "bottom" ? "Bottom pane path" : "Current path"}
+      data-drop-pane={pane}
       data-is-dir="true"
       data-path={path}
       data-drop-target={isBarDropTarget ? "true" : "false"}

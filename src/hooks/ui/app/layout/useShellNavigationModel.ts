@@ -106,7 +106,7 @@ export const useShellNavigationModel = ({
     crumbsBar: {
       path: resolvedView.viewPath,
       trailPath: resolvedView.crumbTrailPath,
-      dropTargetPath: fileDrop.dropTargetPath,
+      dropTargetPath: fileDrop.hoveredPane === "bottom" ? null : fileDrop.dropTargetPath,
       onNavigate: viewState.browseFromView,
       onNavigateNewTab: navigationController.handleOpenInNewTab,
       onCrumbContextMenu: shellView.navigationContext.handlePlaceTargetContextMenu,
@@ -121,6 +121,7 @@ export const useShellNavigationModel = ({
       drivesLoading: !fileManager.drivesLoaded,
       driveInfo: fileManager.driveInfo,
       indexedSearchState: fileManager.indexedSearchStatus?.state,
+      collapseOnBlur: settings.collapseDrivePickerOnBlur,
       onSelect: navigationController.handleSelectDrive,
       onSelectNewTab: navigationController.handleOpenInNewTab,
     } : undefined,

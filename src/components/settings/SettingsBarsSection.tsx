@@ -46,7 +46,7 @@ type SettingsBarsSectionProps = {
 };
 
 const RECENT_STEP = 1;
-export const TOPBAR_VISIBILITY_OPTIONS = [
+export const TOPBAR_SETTINGS_OPTIONS = [
   {
     key: "showRecycleBinButton",
     label: "Topbar Recycle Bin button",
@@ -56,6 +56,12 @@ export const TOPBAR_VISIBILITY_OPTIONS = [
     key: "showDriveToggle",
     label: "Topbar drive toggle",
     description: "Show the drive picker in the topbar.",
+  },
+  {
+    key: "collapseDrivePickerOnBlur",
+    label: "Collapse drive picker on focus loss",
+    description: "Close the expanded drive list when you click or move focus outside it.",
+    keywords: "drives topbar unfocus",
   },
   {
     key: "showTopbarFolderChevrons",
@@ -74,6 +80,7 @@ export const SettingsBarsSection = ({
       tabDropSubfolders: state.tabDropSubfolders,
       showRecycleBinButton: state.showRecycleBinButton,
       showDriveToggle: state.showDriveToggle,
+      collapseDrivePickerOnBlur: state.collapseDrivePickerOnBlur,
       showTopbarFolderChevrons: state.showTopbarFolderChevrons,
       sidebarRecentLimit: state.sidebarRecentLimit,
       sidebarSectionOrder: state.sidebarSectionOrder,
@@ -157,7 +164,7 @@ export const SettingsBarsSection = ({
           <span />
         </label>
       </SettingsItem>
-      {TOPBAR_VISIBILITY_OPTIONS.map((option) => {
+      {TOPBAR_SETTINGS_OPTIONS.map((option) => {
         const { key } = option;
         return (
           <SettingsItem item={option} key={key}>

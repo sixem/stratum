@@ -1,5 +1,5 @@
 // Compact drive selector used in the path bar.
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   activeDrive,
   buildDriveTooltip,
@@ -13,6 +13,7 @@ import { useLocationDrag } from "@/hooks/ui/inputs/useLocationDrag";
 import type { DriveInfo, IndexedDriveState, IndexedSearchServiceState } from "@/types";
 import { HorizontalChevronButton, PressButton } from "@/components/primitives";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
+import { useOverlayDismiss } from "@/components/overlay/useOverlayDismiss";
 import { useDrivePickerDragScroll } from "./useDrivePickerDragScroll";
 
 type DrivePickerProps = {
@@ -21,6 +22,7 @@ type DrivePickerProps = {
   drivesLoading: boolean;
   driveInfo: DriveInfo[];
   indexedSearchState?: IndexedSearchServiceState;
+  collapseOnBlur?: boolean;
   onSelect: (path: string) => void;
   onSelectNewTab?: (path: string) => void;
 };
@@ -67,9 +69,11 @@ export const DrivePicker = ({
   drivesLoading,
   driveInfo,
   indexedSearchState,
+  collapseOnBlur = false,
   onSelect,
   onSelectNewTab,
 }: DrivePickerProps) => {
+  const pickerRef = useRef<HTMLDivElement | null>(null);
   const toggleRef = useRef<HTMLButtonElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const [driveListOpen, setDriveListOpen] = useState(false);
@@ -108,6 +112,22 @@ export const DrivePicker = ({
   const canDrag = expanded && overflowed;
   const { dragging, dragHandlers } = useDrivePickerDragScroll(canDrag);
   const locationDrag = useLocationDrag(canDrag);
+  const dismissRefs = useMemo(() => [pickerRef], []);
+  const collapse = useCallback(() => setDriveListOpen(false), []);
+  const dismissOnBlur = expanded && collapseOnBlur;
+
+  useOverlayDismiss({
+    enabled: dismissOnBlur,
+    refs: dismissRefs,
+    pointerDownCapture: true,
+    onPointerDownOutside: collapse,
+  });
+
+  useEffect(() => {
+    if (!dismissOnBlur) return;
+    window.addEventListener("blur", collapse);
+    return () => window.removeEventListener("blur", collapse);
+  }, [dismissOnBlur, collapse]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -127,7 +147,7 @@ export const DrivePicker = ({
     if (!expanded || event.key !== "Escape") return;
     event.preventDefault();
     event.stopPropagation();
-    setDriveListOpen(false);
+    collapse();
     toggleRef.current?.focus();
   };
 
@@ -135,6 +155,11 @@ export const DrivePicker = ({
     <div
       className="drive-picker"
       data-expanded={expanded ? "true" : "false"}
+      ref={pickerRef}
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (dismissOnBlur && next instanceof Node && !event.currentTarget.contains(next)) collapse();
+      }}
       onKeyDown={handleKeyDown}
     >
       <div className="drive-toggle">
