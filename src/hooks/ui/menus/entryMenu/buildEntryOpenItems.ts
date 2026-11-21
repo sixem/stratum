@@ -1,13 +1,13 @@
 // Builds the basic open actions for an entry menu.
 
-import { isPreviewableEntry } from "@/lib";
 import type { ContextMenuItem, EntryContextTarget } from "@/types";
 
 type BuildEntryOpenItemsOptions = {
   target: EntryContextTarget;
-  hasTargets: boolean;
+  targetCount: number;
   onOpenEntry: (path: string) => void;
   onOpenGallery?: (path: string) => void;
+  galleryPath?: string;
   onOpenDir: (path: string) => void;
   onOpenDirNewTab?: (path: string) => void;
   otherPane?: { label: string; open: (path: string) => void };
@@ -15,13 +15,15 @@ type BuildEntryOpenItemsOptions = {
 
 export const buildEntryOpenItems = ({
   target,
-  hasTargets,
+  targetCount,
   onOpenEntry,
   onOpenGallery,
+  galleryPath,
   onOpenDir,
   onOpenDirNewTab,
   otherPane,
 }: BuildEntryOpenItemsOptions): ContextMenuItem[] => {
+  const hasTargets = targetCount > 0;
   const items: ContextMenuItem[] = [
     {
       id: "entry-open",
@@ -39,12 +41,12 @@ export const buildEntryOpenItems = ({
     },
   ];
 
-  if (hasTargets && onOpenGallery && isPreviewableEntry(target)) {
+  if (hasTargets && onOpenGallery && galleryPath) {
     items.push({
       id: "entry-open-gallery",
-      label: "Open in gallery",
+      label: targetCount > 1 ? "Open selected in gallery" : "Open in gallery",
       icon: "open-gallery",
-      onSelect: () => onOpenGallery(target.path),
+      onSelect: () => onOpenGallery(galleryPath),
     });
   }
 

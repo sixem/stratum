@@ -2,11 +2,11 @@
 // Each focused effect composer owns one concern so App.tsx and shell wiring stay reusable.
 import {
   useAppScrollEffects,
-  useAppSearchEffects,
   useAppViewCleanupEffects,
   useAppWindowFocusEffects,
   useAppWindowTitleEffects,
 } from "@/hooks/ui/app/effects";
+import { useDirectoryFilter } from "@/hooks/domain/filesystem/useDirectoryFilter";
 import {
   useAppAppearance,
   useCloseConfirm,
@@ -41,7 +41,6 @@ export const useAppEffects = ({
     activeTabId,
     activeTabPath,
     activeSearch,
-    searchValue,
     currentPath,
     viewPath,
     viewPathKey,
@@ -56,8 +55,6 @@ export const useAppEffects = ({
   const {
     clearSearchAndFocusView,
     closePreviewIfOpen,
-    setSearchValue,
-    setTabSearch,
     flushWindowSize,
     loadDir,
     requestEntryMeta,
@@ -99,17 +96,13 @@ export const useAppEffects = ({
     gridCentered,
   });
 
-  useAppSearchEffects({
-    activeTabId,
+  useDirectoryFilter({
     activeTabPath,
     activeSearch,
-    searchValue,
     currentPath,
     deferredSearchValue,
     sortState,
     loading,
-    setSearchValue,
-    setTabSearch,
     loadDir,
   });
 

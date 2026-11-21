@@ -133,10 +133,18 @@ export const DropdownSelect = ({
     setActiveIndex(-1);
   }, []);
 
+  const dismissOnEscape = useCallback((event: KeyboardEvent) => {
+    const { target } = event;
+    if (target instanceof Node && (rootRef.current?.contains(target) || menuRef.current?.contains(target))) {
+      event.preventDefault();
+    }
+    closeMenu();
+  }, [closeMenu]);
+
   useOverlayDismiss({
     enabled: open,
     refs: [rootRef, menuRef],
-    onEscape: closeMenu,
+    onEscape: dismissOnEscape,
     onPointerDownOutside: closeMenu,
     keydownCapture: true,
     pointerDownCapture: true,

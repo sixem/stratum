@@ -43,6 +43,7 @@ export const usePinnedPlaceDragDrop = ({
     path: null,
   });
   const onReorderRef = useRef(onReorder);
+  const windowTrackingRef = useRef<AbortController | null>(null);
   const suppressClickRef = useRef(false);
   const suppressTimerRef = useRef<number | null>(null);
 
@@ -51,6 +52,8 @@ export const usePinnedPlaceDragDrop = ({
   }, [onReorder]);
 
   const setDropTargetValue = (nextTarget: DropTarget) => {
+    const current = dropTargetRef.current;
+    if (current?.path === nextTarget?.path && current?.position === nextTarget?.position) return;
     dropTargetRef.current = nextTarget;
     setDropTarget(nextTarget);
   };
@@ -86,9 +89,8 @@ export const usePinnedPlaceDragDrop = ({
   };
 
   const stopWindowTracking = () => {
-    window.removeEventListener("pointermove", handlePointerMove);
-    window.removeEventListener("pointerup", handlePointerUp);
-    window.removeEventListener("pointercancel", handlePointerCancel);
+    windowTrackingRef.current?.abort();
+    windowTrackingRef.current = null;
   };
 
   const computeDropTarget = (clientY: number): DropTarget => {
@@ -161,6 +163,7 @@ export const usePinnedPlaceDragDrop = ({
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>, path: string) => {
     if (event.button !== 0) return;
+    stopWindowTracking();
     dragRef.current = {
       active: true,
       dragging: false,
@@ -169,9 +172,12 @@ export const usePinnedPlaceDragDrop = ({
       startY: event.clientY,
       path,
     };
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerCancel);
+    const tracking = new AbortController();
+    windowTrackingRef.current = tracking;
+    const { signal } = tracking;
+    window.addEventListener("pointermove", handlePointerMove, { signal });
+    window.addEventListener("pointerup", handlePointerUp, { signal });
+    window.addEventListener("pointercancel", handlePointerCancel, { signal });
   };
 
   const handleSuppressClick = (event: ReactMouseEvent) => {

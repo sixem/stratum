@@ -10,7 +10,9 @@ import {
   type BatchRenameRule,
 } from "@/lib/batchRename";
 import { splitNameExtension } from "@/lib/fileName";
+import type { BatchRenamePreset } from "@/modules/batchRenamePresetStore";
 import type { EntryContextTarget } from "@/types";
+import { BatchRenamePresets } from "./BatchRenamePresets";
 import { BatchRenamePreview } from "./BatchRenamePreview";
 import { DialogCloseButton } from "./DialogCloseButton";
 import { OverlayPanelHeader } from "./OverlayPanelHeader";
@@ -74,14 +76,14 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
   useModalFocusTrap({ open: true, containerRef: panelRef, initialFocusRef: inputRef });
   useLayoutEffect(() => inputRef.current?.select(), []);
 
-  const rows = useMemo(() => {
-    const rule: BatchRenameRule = mode === "number"
-      ? { mode, baseName }
-      : mode === "replace"
-        ? { mode, find, replacement, matchCase }
-        : { mode, prefix, suffix };
-    return buildBatchRenamePreview(items, rule, preserveExtensions);
-  }, [baseName, find, items, matchCase, mode, prefix, preserveExtensions, replacement, suffix]);
+  const rule = useMemo<BatchRenameRule>(() => {
+    switch (mode) {
+      case "number": return { mode, baseName };
+      case "replace": return { mode, find, replacement, matchCase };
+      case "affix": return { mode, prefix, suffix };
+    }
+  }, [baseName, find, matchCase, mode, prefix, replacement, suffix]);
+  const rows = useMemo(() => buildBatchRenamePreview(items, rule, preserveExtensions), [items, rule, preserveExtensions]);
   const requests = useMemo(() => rows.flatMap(({ item, nextName }) =>
     nextName !== item.name ? [{ path: item.path, nextName }] : [],
   ), [rows]);
@@ -113,6 +115,25 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
 
   const close = () => {
     if (!applyingRef.current) onClose();
+  };
+
+  const loadPreset = ({ rule: savedRule, preserveExtensions }: BatchRenamePreset) => {
+    setMode(savedRule.mode);
+    setPreserveExtensions(preserveExtensions);
+    switch (savedRule.mode) {
+      case "number":
+        setBaseName(savedRule.baseName);
+        break;
+      case "replace":
+        setFind(savedRule.find);
+        setReplacement(savedRule.replacement);
+        setMatchCase(savedRule.matchCase);
+        break;
+      case "affix":
+        setPrefix(savedRule.prefix);
+        setSuffix(savedRule.suffix);
+        break;
+    }
   };
 
   const apply = async () => {
@@ -175,7 +196,7 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
           void apply();
         }}
         onKeyDown={(event) => {
-          if (event.key !== "Escape") return;
+          if (event.defaultPrevented || event.key !== "Escape") return;
           event.preventDefault();
           event.stopPropagation();
           close();
@@ -243,6 +264,12 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
               </label>
             ) : null}
           </div>
+          <BatchRenamePresets
+            rule={rule}
+            preserveExtensions={preserveExtensions}
+            disabled={applying}
+            onLoad={loadPreset}
+          />
         </fieldset>
         <BatchRenamePreview rows={rows} diskErrors={current?.errors} />
         <div className="batch-rename-footer">

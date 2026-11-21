@@ -7,6 +7,11 @@ type SetTabs = (next: Tab[] | ((prev: Tab[]) => Tab[])) => void;
 
 type SetRecentJumps = (next: string[] | ((prev: string[]) => string[])) => void;
 
+type PendingNavigation = {
+  path: string;
+  resetFilter?: { tabId: string; previousSearch: string };
+};
+
 type UseTabPersistenceOptions = {
   tabs: Tab[];
   activeTabId: string | null;
@@ -71,8 +76,8 @@ export const useTabPersistence = ({
     tabs.find((tab) => tab.id === activeTabId)?.path ?? null,
   );
   const restoreRequestedRef = useRef(false);
-  // Hold target path after tab switches to avoid transient path flicker.
-  const pendingTabPathRef = useRef<string | null>(null);
+  // Hold the target until its listing commits, including any pending filter reset.
+  const pendingNavigationRef = useRef<PendingNavigation | null>(null);
 
   useLayoutEffect(() => {
     // Keep the active tab path synced with the current directory.
@@ -86,30 +91,34 @@ export const useTabPersistence = ({
     if (isExplicitEmptyTab && currentPath.trim() && !allowEmptyTabSync) {
       return;
     }
-    const pendingPath = pendingTabPathRef.current;
-    if (pendingPath) {
-      const pendingKey = folderPathKey(pendingPath) ?? pendingPath;
-      const currentKey = folderPathKey(currentPath) ?? currentPath;
+    const pending = pendingNavigationRef.current;
+    if (pending) {
+      const pendingKey = folderPathKey(pending.path);
+      const currentKey = folderPathKey(currentPath);
       if (pendingKey && currentKey && pendingKey !== currentKey) {
         return;
       }
-      pendingTabPathRef.current = null;
+      pendingNavigationRef.current = null;
     }
     setTabs((prev) => {
       const index = prev.findIndex((tab) => tab.id === activeTabId);
       if (index === -1) return prev;
       const tab = prev[index];
+      // A search entered during the load belongs to the newly opened folder.
+      const reset = pending?.resetFilter;
+      const nextSearch =
+        reset?.tabId === tab.id && tab.search === reset.previousSearch ? "" : tab.search;
       // Update the crumb trail so breadcrumb "future" crumbs stay visible.
       const nextTrailPath = resolveCrumbTrailPath(
         currentPath,
         tab.crumbTrailPath ?? tab.path,
       );
-      if (tab.path === currentPath && tab.crumbTrailPath === nextTrailPath) {
+      if (tab.path === currentPath && tab.crumbTrailPath === nextTrailPath && tab.search === nextSearch) {
         // Avoid re-setting identical paths to prevent update loops.
         return prev;
       }
       const next = [...prev];
-      next[index] = { ...tab, path: currentPath, crumbTrailPath: nextTrailPath };
+      next[index] = { ...tab, path: currentPath, crumbTrailPath: nextTrailPath, search: nextSearch };
       return next;
     });
   }, [activeTab, activeTabId, currentPath, setTabs, shouldSyncEmptyTab]);
@@ -125,7 +134,7 @@ export const useTabPersistence = ({
       return;
     }
     restoreRequestedRef.current = true;
-    pendingTabPathRef.current = target;
+    pendingNavigationRef.current = { path: target };
     void loadDir(target, { sort: sortState, search: searchValue });
   }, [currentPath, loadDir, searchValue, sortState]);
 
@@ -136,5 +145,5 @@ export const useTabPersistence = ({
     });
   }, [recentLimit, setRecentJumps]);
 
-  return { emptyTabIdsRef, pendingTabPathRef };
+  return { emptyTabIdsRef, pendingNavigationRef };
 };

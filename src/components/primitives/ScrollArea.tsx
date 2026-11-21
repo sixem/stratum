@@ -53,12 +53,18 @@ export const ScrollArea = forwardRef<HTMLDivElement, ScrollAreaProps>(
     const rafRef = useRef<number | null>(null);
     const thumbSizeRef = useRef(thumbMinSize);
     const dragRef = useRef<{
+      listeners: AbortController;
       pointerId: number;
       startClientY: number;
       startScrollTop: number;
     } | null>(null);
     const [thumb, setThumb] = useState<ThumbState>(DEFAULT_THUMB_STATE);
     const [dragging, setDragging] = useState(false);
+
+    useEffect(() => () => {
+      dragRef.current?.listeners.abort();
+      dragRef.current = null;
+    }, []);
 
     const setViewportRef = useCallback(
       (node: HTMLDivElement | null) => {
@@ -157,7 +163,10 @@ export const ScrollArea = forwardRef<HTMLDivElement, ScrollAreaProps>(
         event.preventDefault();
         event.stopPropagation();
 
+        dragRef.current?.listeners.abort();
+        const listeners = new AbortController();
         dragRef.current = {
+          listeners,
           pointerId: event.pointerId,
           startClientY: event.clientY,
           startScrollTop: viewport.scrollTop,
@@ -195,16 +204,16 @@ export const ScrollArea = forwardRef<HTMLDivElement, ScrollAreaProps>(
           ) {
             return;
           }
+          listeners.abort();
           dragRef.current = null;
           setDragging(false);
-          window.removeEventListener("pointermove", handlePointerMove);
-          window.removeEventListener("pointerup", clearDrag);
-          window.removeEventListener("pointercancel", clearDrag);
         };
 
-        window.addEventListener("pointermove", handlePointerMove);
-        window.addEventListener("pointerup", clearDrag);
-        window.addEventListener("pointercancel", clearDrag);
+        const { signal } = listeners;
+        window.addEventListener("pointermove", handlePointerMove, { signal });
+        // The scroll area may be inside a pane that stops pointer-up bubbling.
+        window.addEventListener("pointerup", clearDrag, { signal, capture: true });
+        window.addEventListener("pointercancel", clearDrag, { signal, capture: true });
       },
       [thumb.visible],
     );

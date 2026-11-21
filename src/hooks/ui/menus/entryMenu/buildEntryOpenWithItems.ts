@@ -1,5 +1,6 @@
 // Builds the "Open with" submenu from the resolved handler state.
 
+import { toFileIconUrl } from "@/api/fileIcons";
 import type { ContextMenuItem } from "@/types";
 import type { EntryMenuOpenWithState } from "./types";
 
@@ -46,6 +47,7 @@ export const buildEntryOpenWithItems = ({
       ...openWithMenuState.handlers.map((handler) => ({
         id: `entry-open-with-${handler.id}`,
         label: handler.label,
+        iconUrl: handler.iconPath ? toFileIconUrl(handler.iconPath) : undefined,
         onSelect: () => {
           if (!openWithMenuState.targetPath) return;
           onOpenWithHandler(openWithMenuState.targetPath, handler.id);

@@ -82,3 +82,12 @@ pub struct IndexedPathQuery {
     pub query: String,
     pub limit: Option<usize>,
 }
+
+impl IndexedPathQuery {
+    // The search planner and cache must agree on which limits are equivalent.
+    pub(crate) fn effective_limit(&self) -> usize {
+        const DEFAULT_LIMIT: usize = 50;
+        const MAX_LIMIT: usize = 100;
+        self.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT)
+    }
+}

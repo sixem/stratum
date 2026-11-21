@@ -48,8 +48,15 @@ const buildDriveAriaLabel = (driveLabel: string, state?: DriveMarkerState) => {
   return state ? `${driveLabel}. Indexed search ${formatIndexedDriveState(state).toLowerCase()}.` : driveLabel;
 };
 
-const DriveStatusMarker = ({ state }: { state?: DriveMarkerState }) => {
-  return state ? <span className="drive-picker-status" data-state={state} aria-hidden="true" /> : null;
+const DriveStatusMarker = ({
+  state,
+  reserveSpace = false,
+}: {
+  state?: DriveMarkerState;
+  reserveSpace?: boolean;
+}) => {
+  if (!state && !reserveSpace) return null;
+  return <span className="drive-picker-status" data-state={state} aria-hidden="true" />;
 };
 
 export const DrivePicker = ({
@@ -139,8 +146,13 @@ export const DrivePicker = ({
               aria-label={buildDriveAriaLabel(displayLabel, activeIndexedState)}
             >
               <span className="drive-picker-button-content">
-                <DriveStatusMarker state={activeIndexedState} />
-                <span className="tnum">{displayLabel}</span>
+                <DriveStatusMarker state={activeIndexedState} reserveSpace={expanded} />
+                <span className="drive-picker-button-label tnum">
+                  <span>{displayLabel}</span>
+                  {expanded ? (
+                    <span className="drive-picker-label-spacer" aria-hidden="true">Drives +{drives.length}</span>
+                  ) : null}
+                </span>
               </span>
             </PressButton>
           </TooltipWrapper>

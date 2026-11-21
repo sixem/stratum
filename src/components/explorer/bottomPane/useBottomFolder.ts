@@ -21,9 +21,11 @@ export function useBottomFolder(upperPath: string) {
   const meta = useEntryMetaCache({ loadIdRef, perf: log });
   const dir = useDirectoryLoader({ pane: "bottom", loadIdRef, primeEntryMeta: meta.primeEntryMeta, reportError, perf: log, log });
   const defaultViewMode = useBottomPaneStore(state => state.defaultViewMode);
+  const keepFilterOnNavigation = useSettingsStore(state => state.keepFilterOnNavigation);
   const tabs = useTabSession({
     useStore: useBottomSessionStore, currentPath: dir.currentPath, loadingPath: dir.loadingPath,
     loadDir: dir.loadDir, clearDir: dir.clearDir, defaultViewMode, newTabViewMode: defaultViewMode, recentJumpsLimit: 12,
+    keepFilterOnNavigation,
   });
   const navigation = useBottomPaneStore(state => state.navigation);
   useEffect(() => {

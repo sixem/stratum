@@ -2,4 +2,5 @@
 export type OpenWithHandler = {
   id: string;
   label: string;
+  iconPath?: string;
 };

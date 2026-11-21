@@ -72,7 +72,6 @@ export const useShellViewBindings = ({
       activeTabId: resolvedView.activeTabId,
       activeTabPath: resolvedView.activeTabPath,
       activeSearch: resolvedView.activeSearch,
-      searchValue: viewState.searchValue,
       currentPath: fileManager.currentPath,
       viewPath: resolvedView.viewPath,
       viewPathKey: resolvedView.viewPathKey,
@@ -87,8 +86,6 @@ export const useShellViewBindings = ({
     actions: {
       clearSearchAndFocusView: viewState.clearSearchAndFocusView,
       closePreviewIfOpen: interactionModel.closePreviewIfOpen,
-      setSearchValue: viewState.setSearchValue,
-      setTabSearch: tabSession.setSearch,
       flushWindowSize,
       loadDir: fileManager.loadDir,
       requestEntryMeta: fileManager.requestEntryMeta,

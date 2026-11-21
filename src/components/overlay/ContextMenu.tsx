@@ -283,7 +283,17 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
           disabled={item.disabled}
         >
           <span className="context-check">
-            {item.icon ? renderContextIcon(item.icon) : item.active ? "x" : ""}
+            {item.iconUrl ? (
+              <img
+                key={item.iconUrl}
+                className="context-check-icon"
+                src={item.iconUrl}
+                alt=""
+                draggable={false}
+                decoding="async"
+                onError={(event) => { event.currentTarget.style.visibility = "hidden"; }}
+              />
+            ) : item.icon ? renderContextIcon(item.icon) : item.active ? "x" : ""}
           </span>
           <span className="context-label">{item.label}</span>
           {item.hint ? <span className="context-hint">{item.hint}</span> : null}

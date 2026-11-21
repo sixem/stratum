@@ -69,10 +69,10 @@ export const useShellNavigationModel = ({
     },
     pathInputsBar: {
       path: viewState.pathValue,
-      search: viewState.searchValue,
+      search: tabSession.searchValue,
       indexedSearchEnabled: settings.indexedSearchEnabled,
       onPathChange: viewState.setPathValue,
-      onSearchChange: viewState.setSearchValue,
+      onSearchChange: tabSession.setSearch,
       onSubmit: viewState.handleGo,
       onRefresh: shellView.navigationContext.handleManualRefresh,
       loading: fileManager.loading,

@@ -5,7 +5,7 @@
   // Tighten the sidebar density without affecting global layout tokens.
   --sidebar-padding: 12px;
   background: #0d0f14;
-  border: 1px solid #1a2233;
+  border: var(--surface-border-width) solid #1a2233;
   border-left: none;
   border-radius: var(--panel-radius);
   padding-inline: var(--sidebar-padding);

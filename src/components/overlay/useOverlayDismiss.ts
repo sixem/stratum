@@ -8,7 +8,7 @@ type DismissRef = RefObject<Element | null>;
 type UseOverlayDismissOptions = {
   enabled: boolean;
   refs?: DismissRef[];
-  onEscape?: () => void;
+  onEscape?: (event: KeyboardEvent) => void;
   onPointerDown?: () => void;
   onPointerDownOutside?: () => void;
   onScroll?: () => void;
@@ -40,7 +40,7 @@ export const useOverlayDismiss = ({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      onEscape?.();
+      onEscape?.(event);
     };
 
     const handlePointerDown = (event: PointerEvent) => {

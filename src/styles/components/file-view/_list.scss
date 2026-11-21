@@ -58,7 +58,7 @@
     padding-block: 4px;
     padding-inline: calc(11px + var(--list-inset-start))
       calc(11px + var(--list-inset-end) + var(--list-scrollbar-gap) + 7px);
-    border-bottom: 1px solid var(--stroke);
+    border-bottom: var(--surface-border-width) solid var(--stroke);
     background: var(--panel-2);
   }
 

@@ -35,9 +35,10 @@
     user-select: text;
   }
 
+  // Dark Mode shares the topbar's background and icon treatment for button focus.
   .bottom-nav form input:focus,
   .bottom-search:focus-within,
-  .bottom-nav button:focus-visible {
+  :root:not([data-dark-mode="true"]) & .bottom-nav button:focus-visible {
     @include control.focus-ring(rgba(var(--accent-rgb), 0.55), rgba(var(--accent-rgb), 0.16));
   }
 
@@ -95,7 +96,7 @@
   .tabsbar {
     flex: 0 0 auto;
     background: var(--panel);
-    border-bottom: 1px solid var(--stroke);
+    border-bottom: var(--surface-border-width) solid var(--stroke);
   }
 
   .bottom-files {

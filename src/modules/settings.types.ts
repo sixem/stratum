@@ -33,6 +33,7 @@ export type Settings = {
   darkMode: boolean;
   categoryTinting: boolean;
   showParentEntry: boolean;
+  keepFilterOnNavigation: boolean;
   confirmDelete: boolean;
   confirmClose: boolean;
   ambientBackground: boolean;

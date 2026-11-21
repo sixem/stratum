@@ -165,10 +165,16 @@ pub async fn open_path_properties(paths: Vec<String>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn list_open_with_handlers(path: String) -> Result<Vec<opener::OpenWithHandler>, String> {
-    tauri::async_runtime::spawn_blocking(move || opener::list_open_with_handlers(path))
-        .await
-        .map_err(|err| err.to_string())?
+pub async fn list_open_with_handlers(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<Vec<opener::OpenWithHandler>, String> {
+    let app_local_data = app.path().app_local_data_dir().ok();
+    tauri::async_runtime::spawn_blocking(move || {
+        opener::list_open_with_handlers(path, app_local_data.as_deref())
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]

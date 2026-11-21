@@ -26,7 +26,8 @@ export const ThumbnailPreview = ({ src, onReadyChange }: ThumbnailPreviewProps) 
 
   useEffect(() => {
     if (!src) return;
-    onReadyChange?.(isKnownReady);
+    // An image can finish loading after render and before this effect runs.
+    onReadyChange?.(isThumbPreviewReadyCached(src));
   }, [isKnownReady, onReadyChange, src]);
 
   if (!src) return null;
@@ -47,6 +48,7 @@ export const ThumbnailPreview = ({ src, onReadyChange }: ThumbnailPreviewProps) 
         event.currentTarget.dataset.ready = "true";
       }}
       onError={(event) => {
+        readyThumbSrcCache.delete(src);
         onReadyChange?.(false);
         event.currentTarget.dataset.ready = "false";
       }}

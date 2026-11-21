@@ -34,6 +34,7 @@ export const useTabDragDrop = ({ onReorder, containerRef }: UseTabDragDropOption
     tabId: null,
   });
   const onReorderRef = useRef(onReorder);
+  const windowTrackingRef = useRef<AbortController | null>(null);
   const suppressClickRef = useRef(false);
   const suppressTimerRef = useRef<number | null>(null);
 
@@ -100,9 +101,8 @@ export const useTabDragDrop = ({ onReorder, containerRef }: UseTabDragDropOption
   };
 
   const stopWindowTracking = () => {
-    window.removeEventListener("pointermove", handlePointerMove);
-    window.removeEventListener("pointerup", handlePointerUp);
-    window.removeEventListener("pointercancel", handlePointerCancel);
+    windowTrackingRef.current?.abort();
+    windowTrackingRef.current = null;
   };
 
   const computeDropIndex = (clientX: number) => {
@@ -167,6 +167,7 @@ export const useTabDragDrop = ({ onReorder, containerRef }: UseTabDragDropOption
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>, id: string) => {
     if (event.button !== 0) return;
+    stopWindowTracking();
     dragRef.current = {
       active: true,
       dragging: false,
@@ -175,9 +176,13 @@ export const useTabDragDrop = ({ onReorder, containerRef }: UseTabDragDropOption
       startY: event.clientY,
       tabId: id,
     };
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerCancel);
+    const tracking = new AbortController();
+    windowTrackingRef.current = tracking;
+    const { signal } = tracking;
+    window.addEventListener("pointermove", handlePointerMove, { signal });
+    // The bottom pane stops pointer-up bubbling to keep its own commands isolated.
+    window.addEventListener("pointerup", handlePointerUp, { signal, capture: true });
+    window.addEventListener("pointercancel", handlePointerCancel, { signal, capture: true });
   };
 
   const handleSuppressClick = (event: ReactMouseEvent) => {

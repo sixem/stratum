@@ -11,6 +11,14 @@ export type BatchRenameRule =
   | { mode: "replace"; find: string; replacement: string; matchCase: boolean }
   | { mode: "affix"; prefix: string; suffix: string };
 
+export const isBatchRenameRuleConfigured = (rule: BatchRenameRule) => {
+  switch (rule.mode) {
+    case "number": return Boolean(rule.baseName.trim());
+    case "replace": return Boolean(rule.find);
+    case "affix": return Boolean(rule.prefix || rule.suffix);
+  }
+};
+
 export type BatchRenamePreviewRow = {
   item: EntryContextTarget;
   nextName: string;

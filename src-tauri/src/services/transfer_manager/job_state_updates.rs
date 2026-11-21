@@ -38,7 +38,7 @@ pub(super) fn mark_job_planning(
 pub(super) fn mark_job_ready(
     inner: &Arc<TransferManagerInner>,
     job_id: &str,
-    plan: &PlannedTransferJob,
+    plan: PlannedTransferJob,
     event_emitter: &TransferEventEmitter,
 ) {
     let snapshot = {
@@ -54,7 +54,7 @@ pub(super) fn mark_job_ready(
         queued.request.snapshot.phase = TransferJobPhase::Ready;
         queued.request.snapshot.current_path = None;
         queued.request.snapshot.work = plan.work.clone();
-        queued.planning_state = QueuedTransferPlanningState::Ready(plan.clone());
+        queued.planning_state = QueuedTransferPlanningState::Ready(plan);
         snapshot_from_state(&guard)
     };
     event_emitter.emit_snapshot(&snapshot);
@@ -91,6 +91,7 @@ pub(super) fn apply_running_progress(
     job_id: &str,
     progress_kind: TransferProgressKind,
     update: &fs::TransferProgressUpdate,
+    include_snapshot: bool,
 ) -> Option<TransferQueueSnapshot> {
     let mut guard = inner.state.lock().ok()?;
     let active = guard.active_job.as_mut()?;
@@ -115,10 +116,9 @@ pub(super) fn apply_running_progress(
         }
     }
 
-    active.snapshot.current_path = match update.current_path.clone() {
-        Some(path) => Some(path),
-        None => active.snapshot.current_path.clone(),
-    };
+    if let Some(path) = &update.current_path {
+        active.snapshot.current_path = Some(path.clone());
+    }
 
     if let Some(runtime) = active.runtime.as_mut() {
         if runtime.progress_kind != Some(progress_kind) {
@@ -127,39 +127,37 @@ pub(super) fn apply_running_progress(
         runtime.update_snapshot(&mut active.snapshot, update);
     }
 
-    Some(snapshot_from_state(&guard))
+    include_snapshot.then(|| snapshot_from_state(&guard))
 }
 
 pub(super) fn apply_planning_progress(
     inner: &Arc<TransferManagerInner>,
     job_id: &str,
     update: &DeleteDiscoveryProgress,
+    include_snapshot: bool,
 ) -> Option<TransferQueueSnapshot> {
     let mut guard = inner.state.lock().ok()?;
 
-    if let Some(queued) = guard.queued_job_mut(job_id) {
-        queued.request.snapshot.status = TransferJobStatus::Running;
-        queued.request.snapshot.phase = TransferJobPhase::Planning;
-        queued.request.snapshot.current_path = update.current_path.clone();
-        queued.request.snapshot.work.files_total = Some(update.discovered_items);
-        queued.request.snapshot.work.files_completed = 0;
-        queued.request.snapshot.work.bytes_total = Some(update.discovered_bytes);
-        queued.request.snapshot.work.bytes_completed = 0;
-        return Some(snapshot_from_state(&guard));
-    }
+    let snapshot = if let Some(queued) = guard.queued_job_mut(job_id) {
+        let snapshot = &mut queued.request.snapshot;
+        snapshot.status = TransferJobStatus::Running;
+        snapshot.phase = TransferJobPhase::Planning;
+        snapshot
+    } else {
+        let active = guard.active_job.as_mut()?;
+        if active.snapshot.id != job_id {
+            return None;
+        }
+        &mut active.snapshot
+    };
 
-    let active = guard.active_job.as_mut()?;
-    if active.snapshot.id != job_id {
-        return None;
-    }
+    snapshot.current_path = update.current_path.clone();
+    snapshot.work.files_total = Some(update.discovered_items);
+    snapshot.work.files_completed = 0;
+    snapshot.work.bytes_total = Some(update.discovered_bytes);
+    snapshot.work.bytes_completed = 0;
 
-    active.snapshot.current_path = update.current_path.clone();
-    active.snapshot.work.files_total = Some(update.discovered_items);
-    active.snapshot.work.files_completed = 0;
-    active.snapshot.work.bytes_total = Some(update.discovered_bytes);
-    active.snapshot.work.bytes_completed = 0;
-
-    Some(snapshot_from_state(&guard))
+    include_snapshot.then(|| snapshot_from_state(&guard))
 }
 
 pub(super) fn mark_queued_job_finished(

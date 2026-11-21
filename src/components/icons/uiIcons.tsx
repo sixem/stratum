@@ -388,15 +388,29 @@ export const DeleteActionIcon = ({ className }: IconProps) => {
   );
 };
 
-// Compact clear-log glyph adapted for destructive work-log cleanup.
+// Lucide broom-sparkles glyph for clearing finished jobs.
 export const WorkLogClearIcon = ({ className }: IconProps) => {
   return (
-    <svg viewBox="0 0 122.88 120.01" aria-hidden="true" className={className} fill="currentColor">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M110.97 2.7 70.02 44.16l10.67 10.36 41.25-41.56c3.64-7.83-4.02-14.38-10.97-10.26ZM54.04 48.24c.4-.31.81-.58 1.22-.81l.15-.08c2.35-1.28 4.81-1.24 7.39.53l7.17 6.98.11.11 6.6 6.42c2.73 2.78 3.34 5.88 1.83 9.31l-19.35 50.75C24.02 114.42-.34 89.37 0 51.16c19.23 5.62 37.75 7.46 54.04-2.92Z"
-      />
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M11 2v2" />
+      <path d="M12 3h-2" />
+      <path d="M13.5 10.5 22 2" />
+      <path d="M14.734 13.841a2 2 0 00-.314-2.42L12.58 9.58a2 2 0 00-2.421-.314l-7.657 4.461A1 1 0 002.3 15.3l6.403 6.403a1 1 0 001.571-.204z" />
+      <path d="M20 15v4" />
+      <path d="M22 17h-4" />
+      <path d="M4 4v4" />
+      <path d="m5 18 2-2" />
+      <path d="M6 6H2" />
+      <path d="m7.699 10.7 5.602 5.601" />
     </svg>
   );
 };

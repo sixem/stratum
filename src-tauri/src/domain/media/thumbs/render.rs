@@ -1,5 +1,6 @@
 // Rendering helpers for each thumbnail source kind.
 use std::fs;
+use std::io::{self, BufWriter, Write};
 use std::path::Path;
 
 use image::io::Reader as ImageReader;
@@ -9,7 +10,11 @@ use super::{ThumbFormat, ThumbJob, ThumbKind, ThumbRenderOutput, MAX_THUMB_SIZE}
 mod svg;
 
 pub(super) fn render_thumbnail(job: &ThumbJob) -> Result<ThumbRenderOutput, String> {
-    if job.thumb_path.exists() {
+    if job
+        .thumb_path
+        .metadata()
+        .is_ok_and(|metadata| metadata.is_file() && metadata.len() > 0)
+    {
         return Ok(ThumbRenderOutput {
             path: job.thumb_path.clone(),
             added_bytes: 0,
@@ -24,23 +29,43 @@ pub(super) fn render_thumbnail(job: &ThumbJob) -> Result<ThumbRenderOutput, Stri
     let target_size = clamp_thumb_size(job.options.size);
     // Release the full decoded image before encoding the small thumbnail.
     let resized = load_source_image(job, target_size)?.thumbnail(target_size, target_size);
-    let mut file = fs::File::create(&job.thumb_path).map_err(|err| err.to_string())?;
-    match job.options.format_for(job.kind) {
-        ThumbFormat::Webp => resized
-            .write_to(&mut file, image::ImageOutputFormat::WebP)
-            .map_err(|err| err.to_string())?,
-        ThumbFormat::Jpeg => resized
-            .write_to(
-                &mut file,
-                image::ImageOutputFormat::Jpeg(job.options.quality),
-            )
-            .map_err(|err| err.to_string())?,
-    }
-    let added_bytes = file.metadata().map(|metadata| metadata.len()).unwrap_or(0);
+    let format = match job.options.format_for(job.kind) {
+        ThumbFormat::Webp => image::ImageOutputFormat::WebP,
+        ThumbFormat::Jpeg => image::ImageOutputFormat::Jpeg(job.options.quality),
+    };
+    let added_bytes = publish_thumbnail(&job.thumb_path, |file| {
+        resized.write_to(file, format).map_err(io::Error::other)
+    })
+    .map_err(|err| err.to_string())?;
     Ok(ThumbRenderOutput {
         path: job.thumb_path.clone(),
         added_bytes,
     })
+}
+
+fn publish_thumbnail(
+    path: &Path,
+    encode: impl FnOnce(&mut BufWriter<fs::File>) -> io::Result<()>,
+) -> io::Result<u64> {
+    // Publish only a completed image, so a partial write cannot become a cache hit.
+    let mut nonce = [0; 8];
+    getrandom::fill(&mut nonce).map_err(|error| io::Error::other(error.to_string()))?;
+    let stage = path.with_extension(format!("{:016x}.tmp", u64::from_le_bytes(nonce)));
+    let file = fs::File::options()
+        .write(true)
+        .create_new(true)
+        .open(&stage)?;
+    let mut writer = BufWriter::new(file);
+    let result = encode(&mut writer)
+        .and_then(|()| writer.flush())
+        .and_then(|()| writer.get_ref().metadata())
+        .map(|metadata| metadata.len());
+    drop(writer);
+    let result = result.and_then(|size| fs::rename(&stage, path).map(|()| size));
+    if result.is_err() {
+        let _ = fs::remove_file(stage);
+    }
+    result
 }
 
 fn clamp_thumb_size(size: u32) -> u32 {
@@ -72,4 +97,35 @@ fn render_video_thumbnail(path: &Path, size: u32) -> Result<image::DynamicImage,
 #[cfg(not(target_os = "windows"))]
 fn render_video_thumbnail(_path: &Path, _size: u32) -> Result<image::DynamicImage, String> {
     Err("Video thumbnails are not supported on this platform".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_thumbnail_encoding_leaves_no_cache_file() {
+        let mut nonce = [0; 8];
+        getrandom::fill(&mut nonce).unwrap();
+        let dir = std::env::temp_dir().join(format!(
+            "stratum-thumbnail-write-{:016x}",
+            u64::from_le_bytes(nonce)
+        ));
+        fs::create_dir(&dir).unwrap();
+        let target = dir.join("test.webp");
+
+        let failed = publish_thumbnail(&target, |file| {
+            file.write_all(b"partial")?;
+            Err(io::Error::other("encoding failed"))
+        });
+        let count_after_failure = fs::read_dir(&dir).unwrap().count();
+        let succeeded = publish_thumbnail(&target, |file| file.write_all(b"complete"));
+        let contents = fs::read(&target);
+        fs::remove_dir_all(dir).unwrap();
+
+        assert_eq!(failed.unwrap_err().to_string(), "encoding failed");
+        assert_eq!(count_after_failure, 0);
+        assert_eq!(succeeded.unwrap(), 8);
+        assert_eq!(contents.unwrap(), b"complete");
+    }
 }

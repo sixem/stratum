@@ -17,6 +17,7 @@ type TabSessionOptions = {
   clearDir: (options?: { silent?: boolean }) => void;
   defaultViewMode: ViewMode;
   newTabViewMode?: ViewMode;
+  keepFilterOnNavigation: boolean;
   recentJumpsLimit: number;
 };
 
@@ -31,6 +32,7 @@ export const useTabSession = ({
   clearDir,
   defaultViewMode,
   newTabViewMode,
+  keepFilterOnNavigation,
   recentJumpsLimit,
 }: TabSessionOptions) => {
   const { tabs, activeTabId, recentJumps, setTabs, setActiveTabId, setRecentJumps } =
@@ -82,7 +84,7 @@ export const useTabSession = ({
     recentLimit: safeRecentLimit,
     setRecentJumps,
   });
-  const { emptyTabIdsRef, pendingTabPathRef } = useTabPersistence({
+  const { emptyTabIdsRef, pendingNavigationRef } = useTabPersistence({
     tabs,
     activeTabId,
     activeTab,
@@ -98,12 +100,17 @@ export const useTabSession = ({
   const { setTabScrollTop } = useTabScroll({ setTabs });
   // The folder snapshot can commit one render before its tab is persisted.
   // Keep the submitted target in the address bar across both renders.
-  const requestedPath = pendingTabPathRef.current;
+  const pendingNavigation = pendingNavigationRef.current;
+  const requestedPath = pendingNavigation?.path;
   const requestedPathIsDisplayed = requestedPath &&
     folderPathKey(requestedPath) === folderPathKey(currentPath);
   const displayPath = loadingPath ?? (
     requestedPathIsDisplayed ? currentPath : activeTab?.path || currentPath
   );
+  // Look up cached results with the destination filter while the tab still shows its old search.
+  const displaySearch = requestedPath === displayPath && pendingNavigation?.resetFilter
+    ? ""
+    : searchValue;
 
   const ensureActiveTab = useCallback(
     (path: string) => {
@@ -135,19 +142,29 @@ export const useTabSession = ({
     ) => {
       const target = path.trim();
       if (!target) {
+        pendingNavigationRef.current = null;
         clearDir();
         return;
       }
       if (source === "navigate" && tabId) {
         emptyTabIdsRef.current.delete(tabId);
       }
-      pendingTabPathRef.current = target;
+      const tab = useStore.getState().tabs.find(({ id }) => id === tabId);
+      const resetFilter = source === "navigate" && !keepFilterOnNavigation
+        && tab?.search && options?.search === undefined
+        && folderPathKey(tab.path) !== folderPathKey(target)
+        ? { tabId: tab.id, previousSearch: tab.search }
+        : undefined;
+      pendingNavigationRef.current = { path: target, resetFilter };
       queuePendingJump(target, source, tabId);
-      const nextSort = options?.sort ?? sortState;
-      const nextSearch = options?.search ?? searchValue;
+      const nextSort = options?.sort ?? tab?.sort ?? sortState;
+      const nextSearch = resetFilter ? "" : options?.search ?? tab?.search ?? searchValue;
       void loadDir(target, { ...options, sort: nextSort, search: nextSearch });
     },
-    [clearDir, emptyTabIdsRef, loadDir, pendingTabPathRef, queuePendingJump, searchValue, sortState],
+    [
+      clearDir, emptyTabIdsRef, keepFilterOnNavigation, loadDir, pendingNavigationRef,
+      queuePendingJump, searchValue, sortState, useStore,
+    ],
   );
 
   const jumpTo = useCallback(
@@ -200,7 +217,7 @@ export const useTabSession = ({
     log("new tab -> empty");
     const nextTab = createTab("", { viewMode: nextViewMode, sort: sortState }, defaultTabState);
     emptyTabIdsRef.current.add(nextTab.id);
-    pendingTabPathRef.current = null;
+    pendingNavigationRef.current = null;
     setTabs((prev) => [...prev, nextTab]);
     setActiveTabId(nextTab.id);
     clearDir({ silent: true });
@@ -231,28 +248,24 @@ export const useTabSession = ({
     if (!activeTabId) return;
     const next = popBack(activeTabId, pathForHistory);
     if (!next) return;
-    performNavigation(next, { sort: sortState, search: searchValue }, "navigate", activeTabId);
+    performNavigation(next, undefined, "navigate", activeTabId);
   }, [
     activeTabId,
     pathForHistory,
     popBack,
     performNavigation,
-    searchValue,
-    sortState,
   ]);
 
   const goForward = useCallback(() => {
     if (!activeTabId) return;
     const next = popForward(activeTabId, pathForHistory);
     if (!next) return;
-    performNavigation(next, { sort: sortState, search: searchValue }, "navigate", activeTabId);
+    performNavigation(next, undefined, "navigate", activeTabId);
   }, [
     activeTabId,
     pathForHistory,
     popForward,
     performNavigation,
-    searchValue,
-    sortState,
   ]);
 
   const selectTab = useCallback(
@@ -266,7 +279,7 @@ export const useTabSession = ({
         if (!emptyTabIdsRef.current.has(selected.id)) {
           emptyTabIdsRef.current.add(selected.id);
         }
-        pendingTabPathRef.current = null;
+        pendingNavigationRef.current = null;
         if (selected.path.trim()) {
           setTabs((prev) => {
             const index = prev.findIndex((tab) => tab.id === selected.id);
@@ -314,7 +327,7 @@ export const useTabSession = ({
       });
 
       if (!fallback || (wasActive && !fallback.path.trim())) {
-        pendingTabPathRef.current = null;
+        pendingNavigationRef.current = null;
         clearDir({ silent: true });
         return;
       }
@@ -323,7 +336,7 @@ export const useTabSession = ({
         performNavigation(fallback.path, { sort: fallback.sort, search: fallback.search }, "switch", fallback.id);
       }
     },
-    [clearDir, emptyTabIdsRef, pendingTabPathRef, performNavigation, takeHistory, useStore],
+    [clearDir, emptyTabIdsRef, pendingNavigationRef, performNavigation, takeHistory, useStore],
   );
 
   const reopenClosedTab = useCallback(() => {
@@ -337,7 +350,7 @@ export const useTabSession = ({
     const isEmpty = !tab.path.trim();
     if (isEmpty) {
       emptyTabIdsRef.current.add(tab.id);
-      pendingTabPathRef.current = null;
+      pendingNavigationRef.current = null;
     }
     session.updateSession({ tabs: nextTabs, activeTabId: tab.id, closedTabs: remainingClosedTabs });
     if (history) restoreHistory(tab.id, history);
@@ -345,20 +358,19 @@ export const useTabSession = ({
     if (isEmpty) clearDir({ silent: true });
     else performNavigation(tab.path, { sort: tab.sort, search: tab.search }, "switch", tab.id);
     return true;
-  }, [clearDir, emptyTabIdsRef, pendingTabPathRef, performNavigation, restoreHistory, useStore]);
+  }, [clearDir, emptyTabIdsRef, pendingNavigationRef, performNavigation, restoreHistory, useStore]);
 
   const reorderTabs = useCallback(
     (fromId: string, toIndex: number) => {
       setTabs((prev) => {
         const fromIndex = prev.findIndex((tab) => tab.id === fromId);
         if (fromIndex === -1) return prev;
+        // The drop slot was measured with the dragged tab still in the strip.
+        const adjustedIndex = toIndex > fromIndex ? toIndex - 1 : toIndex;
+        const insertIndex = Math.min(Math.max(adjustedIndex, 0), prev.length - 1);
+        if (insertIndex === fromIndex) return prev;
         const next = [...prev];
         const [moved] = next.splice(fromIndex, 1);
-        let insertIndex = Math.min(Math.max(toIndex, 0), next.length);
-        if (fromIndex < insertIndex) {
-          insertIndex -= 1;
-        }
-        if (insertIndex === fromIndex) return prev;
         next.splice(insertIndex, 0, moved);
         return next;
       });
@@ -382,6 +394,7 @@ export const useTabSession = ({
     recentJumps: visibleRecentJumps,
     activeTab,
     displayPath,
+    displaySearch,
     viewMode,
     sortState,
     searchValue,

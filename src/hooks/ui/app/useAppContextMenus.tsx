@@ -4,7 +4,7 @@ import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 import { flushSync } from "react-dom";
 import { openPathProperties, type ShellMenuTarget } from "@/api";
 import type { BeginFileActivity } from "@/hooks/domain/filesystem/useFileActivity";
-import { getSelectionTargets, isEditableElement, isPreviewableEntry, toMessage } from "@/lib";
+import { getSelectionTargets, isEditableElement, toMessage } from "@/lib";
 import { usePromptStore } from "@/modules";
 import { showBottomPane } from "@/modules/bottomPaneStore";
 import type {
@@ -25,6 +25,7 @@ import { resolveContextTargets } from "../menus/entryMenu/shared";
 import { getKeyboardMenuRequest } from "../menus/keyboardContextMenu";
 import { useWindowsContextMenu } from "../menus/useWindowsContextMenu";
 import { buildPlaceTargetMenuItems } from "../menus/placeTargetMenuItems";
+import { resolveGalleryStartPath } from "../view/previewGallerySource";
 import type { useAppMenuState } from "./useAppMenuState";
 
 type ContextMenuState = ReturnType<typeof useAppMenuState>["contextMenu"];
@@ -134,9 +135,11 @@ export const useAppContextMenus = ({
   const openWindowsMenu = useWindowsContextMenu({
     enabled: windowsMenuEnabled, beginFileActivity, closeContextMenu, onCommand: onShellCommand,
   });
-  const galleryAction = useCallback((entry: EntryContextTarget | undefined) => {
-    if (entry && isPreviewableEntry(entry)) return () => onOpenGallery(entry.path);
-  }, [onOpenGallery]);
+  const galleryAction = useCallback((entry: EntryContextTarget | undefined, target: ShellMenuTarget) => {
+    if (!entry || !("paths" in target)) return;
+    const path = resolveGalleryStartPath(entry, target.paths, entryByPath);
+    if (path) return () => onOpenGallery(path);
+  }, [entryByPath, onOpenGallery]);
   const menuTarget = useMemo<ShellMenuTarget | null>(() => {
     if (!contextMenu || !windowsMenuEnabled) return null;
     switch (contextMenu.kind) {
@@ -153,7 +156,7 @@ export const useAppContextMenus = ({
     if (contextMenu) {
       if (!native) return true;
       const entry = contextMenu.kind === "entry" ? contextMenu.entry : undefined;
-      return menuTarget ? openWindowsMenu(menuTarget, contextMenu, false, galleryAction(entry)) : false;
+      return menuTarget ? openWindowsMenu(menuTarget, contextMenu, false, galleryAction(entry, menuTarget)) : false;
     }
     const main = mainRef.current;
     if (!main) return false;
@@ -163,7 +166,7 @@ export const useAppContextMenus = ({
     const { target, point, place } = request;
     if (native) {
       const entry = !place && "paths" in target ? entryByPath.get(target.paths[0]) : undefined;
-      return openWindowsMenu(target, point, false, galleryAction(entry));
+      return openWindowsMenu(target, point, false, galleryAction(entry, target));
     }
     if (place) {
       openContextMenuAt({ kind: "place-target", target: place, ...point });
@@ -246,10 +249,10 @@ export const useAppContextMenus = ({
       if (!selected.has(target.path)) {
         onSelectionChange([target.path], target.path);
       }
-      if (event.shiftKey && openWindowsMenu(
-        { paths: resolveContextTargets(target, selected, viewParentPath) },
-        eventPoint(event), true, galleryAction(target),
-      )) return;
+      if (event.shiftKey) {
+        const shellTarget = { paths: resolveContextTargets(target, selected, viewParentPath) };
+        if (openWindowsMenu(shellTarget, eventPoint(event), true, galleryAction(target, shellTarget))) return;
+      }
       openEntryMenu(event, target);
     },
     [galleryAction, onSelectionChange, openEntryMenu, openWindowsMenu, selected, viewParentPath],
@@ -323,7 +326,7 @@ export const useAppContextMenus = ({
     if (!contextMenu || !menuTarget) return baseItems;
     const entry = contextMenu.kind === "entry" ? contextMenu.entry : undefined;
     return appendWindowsMenuItem(baseItems, () => {
-      openWindowsMenu(menuTarget, contextMenu, false, galleryAction(entry));
+      openWindowsMenu(menuTarget, contextMenu, false, galleryAction(entry, menuTarget));
     });
   }, [baseItems, contextMenu, galleryAction, menuTarget, openWindowsMenu]);
   const contextMenuOpen = Boolean(contextMenu && contextMenuItems.length > 0);

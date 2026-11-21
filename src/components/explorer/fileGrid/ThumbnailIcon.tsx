@@ -40,19 +40,8 @@ export const ThumbnailIcon = ({
     setThumbReady(isThumbPreviewReadyCached(thumbUrl));
   }, [thumbUrl]);
 
-  if (isDir) {
-    // Keep the folder glyph visible until the folder preview is confirmed ready.
-    return (
-      <>
-        {!thumbReady ? <FileTypeIcon className="thumb-svg is-dir" isDir fileKind={fileKind} extension={extension} /> : null}
-        {thumbUrl ? (
-          <ThumbnailPreview src={thumbUrl} onReadyChange={setThumbReady} />
-        ) : null}
-      </>
-    );
-  }
-
-  const showAppIcon = Boolean(appIconUrl) && appIconsEnabled && !thumbReady;
+  // A refresh can replace a file with a folder at the same path, reusing this card.
+  const showAppIcon = !isDir && Boolean(appIconUrl) && appIconsEnabled && !thumbReady;
   const [appIconReady, setAppIconReady] = useState(
     () => Boolean(appIconUrl && readyAppIconUrls.has(appIconUrl)),
   );
@@ -70,7 +59,14 @@ export const ThumbnailIcon = ({
 
   return (
     <>
-      {showFallback ? <FileTypeIcon className="thumb-svg" isDir={false} fileKind={fileKind} extension={extension} /> : null}
+      {showFallback ? (
+        <FileTypeIcon
+          className={isDir ? "thumb-svg is-dir" : "thumb-svg"}
+          isDir={isDir}
+          fileKind={fileKind}
+          extension={extension}
+        />
+      ) : null}
       {showAppIcon ? (
         <img
           className="thumb-app-icon"
@@ -87,6 +83,7 @@ export const ThumbnailIcon = ({
             event.currentTarget.dataset.ready = "true";
           }}
           onError={(event) => {
+            if (appIconUrl) readyAppIconUrls.delete(appIconUrl);
             setAppIconReady(false);
             event.currentTarget.dataset.ready = "false";
           }}

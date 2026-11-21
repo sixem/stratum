@@ -20,7 +20,6 @@ pub(crate) enum TransferProgressKind {
     Items,
 }
 
-#[derive(Clone)]
 pub(crate) struct PlannedTransferJob {
     pub work: TransferWorkEstimate,
     pub progress_kind: TransferProgressKind,

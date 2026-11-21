@@ -75,21 +75,26 @@ impl TransferProgressDispatcher {
         if !progress_due {
             return;
         }
-
-        let update = self
-            .pending_update
-            .take()
-            .expect("pending update should exist");
-        let snapshot =
-            apply_running_progress(&self.inner, &self.job_id, self.progress_kind, &update);
-        self.event_emitter.emit(&update);
-        self.last_progress_emit = Some(now);
-
         let snapshot_due = force_snapshot
             || self
                 .last_snapshot_emit
                 .map(|last| now.duration_since(last) >= SNAPSHOT_EMIT_INTERVAL)
                 .unwrap_or(true);
+
+        let update = self
+            .pending_update
+            .take()
+            .expect("pending update should exist");
+        let snapshot = apply_running_progress(
+            &self.inner,
+            &self.job_id,
+            self.progress_kind,
+            &update,
+            snapshot_due,
+        );
+        self.event_emitter.emit(&update);
+        self.last_progress_emit = Some(now);
+
         if snapshot_due {
             if let Some(snapshot) = snapshot {
                 self.event_emitter.emit_snapshot(&snapshot);
@@ -145,12 +150,17 @@ impl PlanningProgressDispatcher {
         if !progress_due {
             return;
         }
+        let snapshot_due = force_snapshot
+            || self
+                .last_snapshot_emit
+                .map(|last| now.duration_since(last) >= SNAPSHOT_EMIT_INTERVAL)
+                .unwrap_or(true);
 
         let update = self
             .pending_update
             .take()
             .expect("pending planning update should exist");
-        let snapshot = apply_planning_progress(&self.inner, &self.job_id, &update);
+        let snapshot = apply_planning_progress(&self.inner, &self.job_id, &update, snapshot_due);
         self.event_emitter.emit(&fs::TransferProgressUpdate {
             processed: 0,
             total: update.discovered_items,
@@ -170,11 +180,6 @@ impl PlanningProgressDispatcher {
         });
         self.last_progress_emit = Some(now);
 
-        let snapshot_due = force_snapshot
-            || self
-                .last_snapshot_emit
-                .map(|last| now.duration_since(last) >= SNAPSHOT_EMIT_INTERVAL)
-                .unwrap_or(true);
         if snapshot_due {
             if let Some(snapshot) = snapshot {
                 self.event_emitter.emit_snapshot(&snapshot);

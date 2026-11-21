@@ -83,6 +83,7 @@ useSettingsStore.subscribe((state) => {
     darkMode: state.darkMode,
     categoryTinting: state.categoryTinting,
     showParentEntry: state.showParentEntry,
+    keepFilterOnNavigation: state.keepFilterOnNavigation,
     confirmDelete: state.confirmDelete,
     confirmClose: state.confirmClose,
     ambientBackground: state.ambientBackground,

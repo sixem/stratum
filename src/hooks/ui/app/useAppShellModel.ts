@@ -34,6 +34,7 @@ export const useAppShellModel = () => {
     loadDir: fileManager.loadDir,
     clearDir: fileManager.clearDir,
     defaultViewMode: settings.defaultViewMode,
+    keepFilterOnNavigation: settings.keepFilterOnNavigation,
     recentJumpsLimit: settings.sidebarRecentLimit,
   });
   const lastViewRef = useRef<{ tabId: string | null; pathKey: string } | null>(null);
@@ -143,6 +144,8 @@ export const useAppShellModel = () => {
   const viewState = useAppViewState({
     displayPath: resolvedView.viewPath,
     parentPath: resolvedView.viewParentPathBase,
+    searchValue: tabSession.searchValue,
+    setSearchValue: tabSession.setSearch,
     jumpTo: tabSession.jumpTo,
     browseTo: tabSession.browseTo,
   });

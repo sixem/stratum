@@ -1,14 +1,10 @@
-// Manages quick preview mode for single-media selections.
+// Manages quick preview sessions and activation across panes and search results.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FileEntry } from "@/types";
 import { isEditableElement, isPreviewableEntry } from "@/lib";
 import { buildKeybindFromEvent, normalizeKeybind, useIndexedSearchUiStore } from "@/modules";
+import { scopeGalleryToSelection, type PreviewGallerySource } from "./previewGallerySource";
 
-export type PreviewGallerySource = {
-  items: FileEntry[];
-  entryByPath: Map<string, FileEntry>;
-  onSelectPath: (path: string) => void;
-};
+export type { PreviewGallerySource } from "./previewGallerySource";
 
 export type PreviewSource = {
   gallery: PreviewGallerySource;
@@ -16,6 +12,7 @@ export type PreviewSource = {
   filesRoot: HTMLElement;
   isCurrent: () => boolean;
   getSelectedPath?: () => string | undefined;
+  getSelectionSnapshot?: () => ReadonlySet<string>;
   shortcutInput?: HTMLInputElement;
 };
 
@@ -24,14 +21,18 @@ export type PreviewSourceBindings = {
   onPress: (path: string) => boolean;
 };
 
-export type BottomPreviewBindings = PreviewSourceBindings;
+export type PanePreviewBindings = PreviewSourceBindings & { open: (path: string) => void };
 type PreviewSourceKind = "main" | "bottom" | "indexed";
 
-type PreviewSession = { path: string; gallery: PreviewGallerySource };
-type PreviewTarget = PreviewSession & { source: PreviewSourceKind };
+type PreviewTarget = { path: string; gallery: PreviewGallerySource; source: PreviewSourceKind };
+type PreviewSession = {
+  path: string;
+  gallery: PreviewGallerySource;
+  sourceGallery: PreviewGallerySource;
+};
 
 const matchesTarget = (preview: PreviewSession | null, target: PreviewTarget) =>
-  preview?.path === target.path && preview.gallery === target.gallery;
+  preview?.path === target.path && preview.sourceGallery === target.gallery;
 
 type UseQuickPreviewOptions = {
   previewKeybind: string;
@@ -105,8 +106,15 @@ export const useQuickPreview = ({
     return true;
   }, [contextMenuOpen, promptOpen, settingsOpen]);
 
-  const openPreview = useCallback((path: string, gallery: PreviewGallerySource) => {
-    setPreview({ path, gallery });
+  const openPreview = useCallback((path: string, gallery: PreviewGallerySource, sourceGallery = gallery) => {
+    setPreview({ path, gallery, sourceGallery });
+  }, []);
+
+  const selectPreview = useCallback((path: string) => {
+    const current = previewRef.current;
+    if (!current?.gallery.entryByPath.has(path)) return;
+    current.gallery.onSelectPath?.(path);
+    setPreview({ ...current, path });
   }, []);
 
   const closePreview = useCallback(() => {
@@ -127,8 +135,9 @@ export const useQuickPreview = ({
   const openTarget = useCallback((target: PreviewTarget) => {
     const source = sourcesRef.current[target.source];
     if (source?.gallery !== target.gallery || !source.isCurrent()) return false;
-    if (target.source === "indexed") target.gallery.onSelectPath(target.path);
-    openPreview(target.path, target.gallery);
+    if (target.source === "indexed") target.gallery.onSelectPath?.(target.path);
+    const gallery = scopeGalleryToSelection(target.gallery, target.path, source.getSelectionSnapshot?.());
+    openPreview(target.path, gallery, target.gallery);
     return true;
   }, [openPreview]);
 
@@ -159,6 +168,11 @@ export const useQuickPreview = ({
     },
     [],
   );
+
+  const openFromSource = useCallback((path: string, kind: PreviewSourceKind) => {
+    const target = resolvePreviewTarget(path, kind);
+    if (target) openTarget(target);
+  }, [openTarget, resolvePreviewTarget]);
 
   const getHoveredPreviewTarget = useCallback(() => {
     const pointer = pointerRef.current;
@@ -303,14 +317,16 @@ export const useQuickPreview = ({
     },
     [previewUsesMouse, resolvePreviewTarget, startHold],
   );
-  const mainPreview = useMemo<PreviewSourceBindings>(() => ({
+  const mainPreview = useMemo<PanePreviewBindings>(() => ({
     registerSource: (source) => registerSource("main", source),
     onPress: (path) => handlePreviewPress(path, "main"),
-  }), [handlePreviewPress, registerSource]);
-  const bottomPreview = useMemo<BottomPreviewBindings>(() => ({
+    open: (path) => openFromSource(path, "main"),
+  }), [handlePreviewPress, openFromSource, registerSource]);
+  const bottomPreview = useMemo<PanePreviewBindings>(() => ({
     registerSource: (source) => registerSource("bottom", source),
     onPress: (path) => handlePreviewPress(path, "bottom"),
-  }), [handlePreviewPress, registerSource]);
+    open: (path) => openFromSource(path, "bottom"),
+  }), [handlePreviewPress, openFromSource, registerSource]);
   const indexedPreview = useMemo<PreviewSourceBindings>(() => ({
     registerSource: (source) => registerSource("indexed", source),
     onPress: (path) => handlePreviewPress(path, "indexed"),
@@ -424,6 +440,7 @@ export const useQuickPreview = ({
     indexedPreview,
     previewOpen: Boolean(previewPath),
     openPreview,
+    selectPreview,
     closePreview,
     handlePreviewRelease,
   };

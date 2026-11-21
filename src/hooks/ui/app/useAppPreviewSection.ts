@@ -23,6 +23,7 @@ export const useAppPreviewSection = ({
     bottomPreview,
     indexedPreview,
     openPreview,
+    selectPreview,
     closePreview,
     handlePreviewRelease,
   } = useQuickPreview(quickPreviewOptions);
@@ -43,6 +44,7 @@ export const useAppPreviewSection = ({
     indexedPreview,
     previewMeta,
     openPreview,
+    selectPreview,
     closePreview,
     handlePreviewRelease,
   };

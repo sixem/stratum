@@ -6,7 +6,6 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { useDragOutHandler } from "@/hooks/ui/inputs";
 import { useFileViewInteractions, useFileViewModel } from "@/hooks/ui/view";
 import type { PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
-import { isPreviewableEntry } from "@/lib";
 import { useAppCommands } from "../useAppCommands";
 import { useAppContextMenuSection } from "../useAppContextMenuSection";
 import type { ContextMenuServices } from "../useAppContextMenus";
@@ -88,6 +87,7 @@ export const useShellViewInteractions = ({
     bottomPreview,
     indexedPreview,
     openPreview,
+    selectPreview: handlePreviewSelect,
     closePreview,
     handlePreviewRelease,
   } = useAppPreviewSection({
@@ -108,6 +108,7 @@ export const useShellViewInteractions = ({
     selectionItems,
     getSelectionIndex,
     getSelectionTarget,
+    getSelectionSnapshot,
     handleSelectItem,
   } = useFileViewInteractions({
     viewModel,
@@ -149,26 +150,13 @@ export const useShellViewInteractions = ({
       paneRoot: root,
       filesRoot: root,
       isCurrent: () => viewVisit.current,
+      getSelectionSnapshot,
     });
     return () => {
       unregister();
       currentMainGallery.current = null;
     };
-  }, [mainGallery, mainLoading, mainRef, registerMainPreview, viewVisit]);
-
-  const handlePreviewSelect = useCallback((path: string) => {
-    if (!previewGallery?.entryByPath.has(path)) return;
-    previewGallery.onSelectPath(path);
-    openPreview(path, previewGallery);
-  }, [openPreview, previewGallery]);
-  const handleOpenGallery = useCallback((path: string) => {
-    const gallery = currentMainGallery.current;
-    if (!viewVisit.current || !gallery) return;
-    const entry = gallery.entryByPath.get(path);
-    if (entry && isPreviewableEntry(entry)) {
-      openPreview(entry.path, gallery);
-    }
-  }, [openPreview, viewVisit]);
+  }, [getSelectionSnapshot, mainGallery, mainLoading, mainRef, registerMainPreview, viewVisit]);
   const closePreviewIfOpen = useCallback(() => {
     if (!previewOpen) return false;
     closePreview();
@@ -338,7 +326,7 @@ export const useShellViewInteractions = ({
     onCreateFolderAndGo: handleCreateFolderAndGo,
     onCreateFile: handleCreateFile,
     onOpenEntry: fileManager.openEntry,
-    onOpenGallery: handleOpenGallery,
+    onOpenGallery: mainPreview.open,
     onOpenDir: viewState.browseFromView,
     onOpenDirNewTab: navigationController.handleOpenInNewTab,
     onDeleteEntries: fileManager.deleteEntries,
@@ -375,7 +363,6 @@ export const useShellViewInteractions = ({
         onQuickConvertImages: dataPipeline.handleQuickConvertImages,
       },
     },
-    openPreview,
     handlePreviewPress: mainPreview.onPress,
     handlePreviewRelease,
     handlePreviewSelect,

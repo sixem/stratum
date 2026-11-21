@@ -17,25 +17,26 @@ type OpenWithCacheEntry = {
   handlers: OpenWithHandler[];
 };
 
+type OpenWithLookup = {
+  extension: string;
+  status: "ready" | "error";
+  handlers: OpenWithHandler[];
+};
+
 const OPEN_WITH_CACHE_TTL_MS = 5 * 60 * 1000;
-const OPEN_WITH_NO_EXTENSION_KEY = "<none>";
+const OPEN_WITH_CACHE_LIMIT = 128;
+const EMPTY_HANDLERS: OpenWithHandler[] = [];
 
 // Keep a session-local cache so repeated right-clicks stay instant.
 const openWithCacheByExtension = new Map<string, OpenWithCacheEntry>();
 const openWithPendingByExtension = new Map<string, Promise<OpenWithHandler[]>>();
 
-const toCacheKey = (target: EntryContextTarget): string => {
-  const extension = getExtension(target.name);
-  return extension ?? OPEN_WITH_NO_EXTENSION_KEY;
-};
-
 const readCachedHandlers = (cacheKey: string): OpenWithHandler[] | null => {
   const cached = openWithCacheByExtension.get(cacheKey);
   if (!cached) return null;
-  if (cached.expiresAt <= Date.now()) {
-    openWithCacheByExtension.delete(cacheKey);
-    return null;
-  }
+  openWithCacheByExtension.delete(cacheKey);
+  if (cached.expiresAt <= Date.now()) return null;
+  openWithCacheByExtension.set(cacheKey, cached);
   return cached.handlers;
 };
 
@@ -49,6 +50,10 @@ const requestHandlers = (cacheKey: string, path: string): Promise<OpenWithHandle
         expiresAt: Date.now() + OPEN_WITH_CACHE_TTL_MS,
         handlers,
       });
+      if (openWithCacheByExtension.size > OPEN_WITH_CACHE_LIMIT) {
+        const oldest = openWithCacheByExtension.keys().next().value;
+        if (oldest !== undefined) openWithCacheByExtension.delete(oldest);
+      }
       return handlers;
     })
     .finally(() => {
@@ -62,61 +67,41 @@ const requestHandlers = (cacheKey: string, path: string): Promise<OpenWithHandle
 export const useOpenWithMenuState = (
   target: EntryContextTarget | null,
 ): OpenWithMenuState => {
-  const [status, setStatus] = useState<OpenWithMenuStatus>("idle");
-  const [handlers, setHandlers] = useState<OpenWithHandler[]>([]);
-
-  const fileTarget = useMemo(() => {
-    if (!target || target.isDir) return null;
-    return target;
-  }, [target]);
-  const cacheKey = useMemo(
-    () => (fileTarget ? toCacheKey(fileTarget) : null),
-    [fileTarget],
-  );
+  const [lookup, setLookup] = useState<OpenWithLookup | null>(null);
+  const fileTarget = target && !target.isDir ? target : null;
+  const extension = fileTarget ? getExtension(fileTarget.name) : null;
   const targetPath = fileTarget?.path ?? null;
 
   useEffect(() => {
-    if (!fileTarget || !cacheKey) {
-      setStatus("idle");
-      setHandlers([]);
-      return;
-    }
-    if (cacheKey === OPEN_WITH_NO_EXTENSION_KEY) {
-      setStatus("ready");
-      setHandlers([]);
+    if (!targetPath || !extension) {
+      setLookup(null);
       return;
     }
 
-    const cached = readCachedHandlers(cacheKey);
+    const cached = readCachedHandlers(extension);
     if (cached) {
-      setStatus("ready");
-      setHandlers(cached);
+      setLookup({ extension, status: "ready", handlers: cached });
       return;
     }
 
     let active = true;
-    setStatus("loading");
-    setHandlers([]);
-    void requestHandlers(cacheKey, fileTarget.path)
-      .then((nextHandlers) => {
-        if (!active) return;
-        setStatus("ready");
-        setHandlers(nextHandlers);
+    setLookup(null);
+    void requestHandlers(extension, targetPath)
+      .then((handlers) => {
+        if (active) setLookup({ extension, status: "ready", handlers });
       })
       .catch(() => {
-        if (!active) return;
-        setStatus("error");
-        setHandlers([]);
+        if (active) setLookup({ extension, status: "error", handlers: EMPTY_HANDLERS });
       });
 
     return () => {
       active = false;
     };
-  }, [cacheKey, fileTarget]);
+  }, [extension, targetPath]);
 
-  return {
-    status,
-    handlers,
-    targetPath,
-  };
+  // A new menu can render before the previous lookup's effect is cleaned up.
+  const current = lookup?.extension === extension ? lookup : null;
+  const status = !targetPath ? "idle" : !extension ? "ready" : current?.status ?? "loading";
+  const handlers = current?.handlers ?? EMPTY_HANDLERS;
+  return useMemo(() => ({ status, handlers, targetPath }), [status, handlers, targetPath]);
 };

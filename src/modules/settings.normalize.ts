@@ -172,6 +172,10 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.showParentEntry === "boolean"
         ? value.showParentEntry
         : DEFAULT_SETTINGS.showParentEntry,
+    keepFilterOnNavigation:
+      typeof value?.keepFilterOnNavigation === "boolean"
+        ? value.keepFilterOnNavigation
+        : DEFAULT_SETTINGS.keepFilterOnNavigation,
     confirmDelete:
       typeof value?.confirmDelete === "boolean"
         ? value.confirmDelete

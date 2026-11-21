@@ -35,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   darkMode: false,
   categoryTinting: false,
   showParentEntry: true,
+  keepFilterOnNavigation: false,
   confirmDelete: true,
   confirmClose: true,
   ambientBackground: true,

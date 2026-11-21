@@ -1,6 +1,7 @@
 // Shared file glyphs for the thumbnail grid and indexed search.
-// Outlines from Tabler Icons v3.34.1 (MIT).
+// Tabler Icons v3.34.1 outlines and the supplied Lucide file glyphs.
 // https://github.com/tabler/tabler-icons/tree/v3.34.1/icons/outline
+import { CODE_EXTENSIONS, CONFIG_EXTENSIONS, SCRIPT_EXTENSIONS } from "@/constants/fileKinds";
 import { isPdfLikeExtension, isSvgLikeExtension } from "@/lib/fileKind";
 import type { FileKind } from "@/lib/fileKind";
 import type { IconProps } from "./types";
@@ -10,14 +11,28 @@ const fileGlyphs = {
     "M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2",
   ],
   generic: [
-    "M14 3v4a1 1 0 0 0 1 1h4",
-    "M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z",
+    "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z",
+    "M9 9.5a3 2.5 0 0 1 6 0c0 2-2 2-3 3.5",
+    "M12 17h.01",
   ],
   document: [
-    "M14 3v4a1 1 0 0 0 1 1h4",
-    "M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z",
-    "M9 17h6",
-    "M9 13h6",
+    "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z",
+    "M14 2v5a1 1 0 0 0 1 1h5",
+    "M10 9H8",
+    "M16 13H8",
+    "M16 17H8",
+  ],
+  code: [
+    "M4 12.15V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-3.35",
+    "M14 2v5a1 1 0 0 0 1 1h5",
+    "m5 16-3 3 3 3",
+    "m9 22 3-3-3-3",
+  ],
+  config: [
+    "M14 22h4a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v6",
+    "M14 2v5a1 1 0 0 0 1 1h5",
+    "M5 14a1 1 0 0 0-1 1v2a1 1 0 0 1-1 1 1 1 0 0 1 1 1v2a1 1 0 0 0 1 1",
+    "M9 22a1 1 0 0 0 1-1v-2a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-2a1 1 0 0 0-1-1",
   ],
   image: [
     "M15 8h.01",
@@ -36,10 +51,16 @@ const fileGlyphs = {
     "M16 16l4 0",
   ],
   audio: [
-    "M14 3v4a1 1 0 0 0 1 1h4",
-    "M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z",
-    "M11 16m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
-    "M12 16l0 -5l2 1",
+    "M11.65 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v10.35",
+    "M14 2v5a1 1 0 0 0 1 1h5",
+    "M8 20v-7l3 1.474",
+    "M4 20a2 2 0 1 0 4 0a2 2 0 1 0-4 0",
+  ],
+  waveform: [
+    "M4 11.55V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-1.95",
+    "M14 2v5a1 1 0 0 0 1 1h5",
+    "M12 15a5 5 0 0 1 0 6",
+    "M8 14.502a.5.5 0 0 0-.826-.381l-1.893 1.631a1 1 0 0 1-.651.243H3.5a.5.5 0 0 0-.5.501v3.006a.5.5 0 0 0 .5.501h1.129a1 1 0 0 1 .652.243l1.893 1.633a.5.5 0 0 0 .826-.38z",
   ],
   archive: [
     "M6 20.735a2 2 0 0 1 -1 -1.735v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2h-1",
@@ -89,9 +110,10 @@ const fileGlyphs = {
     "M10 15l2 6l2 -6",
     "M20 15h-1a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h1v-3",
   ],
-} satisfies Record<FileKind | "directory" | "pdf" | "spreadsheet" | "svg", string[]>;
+} satisfies Record<FileKind | "directory" | "pdf" | "spreadsheet" | "svg" | "code" | "config" | "waveform", string[]>;
 
 const spreadsheetExtensions = new Set(["csv", "numbers", "ods", "tsv", "xls", "xlsb", "xlsm", "xlsx"]);
+const waveformExtensions = new Set(["aif", "aiff", "wav"]);
 
 type FileTypeIconProps = IconProps & {
   isDir: boolean;
@@ -99,17 +121,25 @@ type FileTypeIconProps = IconProps & {
   extension: string | null;
 };
 
-export const FileTypeIcon = ({ className, isDir, fileKind, extension }: FileTypeIconProps) => {
-  const kind = isDir ? "directory"
-    : isPdfLikeExtension(extension) ? "pdf"
-    : isSvgLikeExtension(extension) ? "svg"
-    : extension && spreadsheetExtensions.has(extension) ? "spreadsheet"
-    : fileKind;
+const getFileGlyph = ({ isDir, fileKind, extension }: FileTypeIconProps): keyof typeof fileGlyphs => {
+  if (isDir) return "directory";
+  if (!extension) return fileKind;
+  if (isPdfLikeExtension(extension)) return "pdf";
+  if (isSvgLikeExtension(extension)) return "svg";
+  if (spreadsheetExtensions.has(extension)) return "spreadsheet";
+  if (CONFIG_EXTENSIONS.has(extension)) return "config";
+  if (CODE_EXTENSIONS.has(extension) || SCRIPT_EXTENSIONS.has(extension)) return "code";
+  if (waveformExtensions.has(extension)) return "waveform";
+  return fileKind;
+};
+
+export const FileTypeIcon = (props: FileTypeIconProps) => {
+  const kind = getFileGlyph(props);
 
   return (
     <svg
       viewBox="0 0 24 24"
-      className={className}
+      className={props.className}
       aria-hidden="true"
       fill="none"
       stroke="currentColor"

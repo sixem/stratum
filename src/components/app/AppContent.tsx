@@ -5,7 +5,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { FileView, PerfProfiler, Sidebar } from "@/components";
 import { SidebarDivider } from "@/components/navigation/SidebarDivider";
 import { useSettingsStore } from "@/modules";
-import type { BottomPreviewBindings, PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
+import type { PanePreviewBindings } from "@/hooks/ui/view/useQuickPreview";
 import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
 
 import { useBottomPaneStore, showBottomPane, setBottomPaneActive } from "@/modules/bottomPaneStore";
@@ -26,8 +26,7 @@ type AppContentProps = {
   fileViewProps: ComponentProps<typeof FileView>;
   bottomMenu: BottomMenuBindings;
   bottomCommandsBlocked: boolean;
-  onOpenGallery: (path: string, source: PreviewGallerySource) => void;
-  bottomPreview: BottomPreviewBindings;
+  bottomPreview: PanePreviewBindings;
   onContextMenu?: (event: ReactPointerEvent) => void;
   onContextMenuDown?: (event: ReactPointerEvent) => void;
 };
@@ -44,7 +43,6 @@ export const AppContent = ({
   fileViewProps,
   bottomMenu,
   bottomCommandsBlocked,
-  onOpenGallery,
   bottomPreview,
   onContextMenu,
   onContextMenuDown,
@@ -98,7 +96,7 @@ export const AppContent = ({
           <PaneDivider />
           <Suspense fallback={<div className="pane-loading">Opening bottom pane…</div>}>
             <BottomPane upper={paneViewProps} actions={paneActions} drop={fileDrop} menu={bottomMenu} commandsBlocked={bottomCommandsBlocked}
-              onSummary={onBottomSummary} onOpenGallery={onOpenGallery} bottomPreview={bottomPreview} />
+              onSummary={onBottomSummary} bottomPreview={bottomPreview} />
           </Suspense>
         </>}
         </div>

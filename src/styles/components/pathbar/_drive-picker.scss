@@ -73,6 +73,21 @@
     min-width: 0;
   }
 
+  // Keep the open list anchored when the trigger's drive letter or status changes.
+  .drive-picker-button-label {
+    display: inline-grid;
+    text-align: start;
+
+    > span {
+      grid-area: 1 / 1;
+    }
+  }
+
+  .drive-picker-label-spacer,
+  .drive-picker-status:not([data-state]) {
+    visibility: hidden;
+  }
+
   .drive-picker-button:disabled {
     cursor: default;
     opacity: 0.8;
@@ -154,7 +169,8 @@
   }
 
   .drive-picker-item {
-    padding: 2px 12px;
+    padding: 0 10px;
+    border: var(--surface-border-width) solid transparent;
     border-radius: 2px;
     @include control.eyebrow-label(var(--font-size-xs), 0.08em, 600, var(--text));
     white-space: nowrap;

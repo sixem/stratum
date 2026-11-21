@@ -13,10 +13,10 @@ import { useDragOutHandler } from "@/hooks/ui/inputs/useDragOutHandler";
 import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
 import { useSmartTabJump } from "@/hooks/ui/selection/useSmartTabJump";
 import { useTypeaheadSelection } from "@/hooks/ui/selection/useTypeaheadSelection";
-import type { BottomPreviewBindings, PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
+import type { PanePreviewBindings, PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
 import { useSettingsStore } from "@/modules";
 import { hideBottomPane, setBottomPaneActive, useBottomPaneStore } from "@/modules/bottomPaneStore";
-import { folderPathKey, getNextTrailPath, isPreviewableEntry } from "@/lib";
+import { folderPathKey, getNextTrailPath } from "@/lib";
 import type { useFileManager } from "@/hooks/domain/filesystem/useFileManager";
 import type { useFileDrop } from "@/hooks/domain/filesystem/useFileDrop";
 import { bottomPaneKeys } from "./bottomPaneKeys";
@@ -36,13 +36,12 @@ type Props = {
   actions: PaneActions;
   drop: PaneDrop;
   onSummary: (summary: PaneSummary) => void;
-  onOpenGallery: (path: string, source: PreviewGallerySource) => void;
-  bottomPreview: BottomPreviewBindings;
+  bottomPreview: PanePreviewBindings;
   menu: BottomMenuBindings;
   commandsBlocked: boolean;
 };
 
-export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery, bottomPreview, menu, commandsBlocked }: Props) {
+export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, menu, commandsBlocked }: Props) {
   const folder = useBottomFolder(upper.currentPath);
   const { dir, meta, tabs, model, selection, viewKey, busy } = folder;
   const root = useRef<HTMLElement>(null);
@@ -81,13 +80,8 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery, bot
       if (viewVisit.current) selectEntry([selectedPath], selectedPath);
     },
   }), [dir.entries, model.entryByPath, selectEntry, viewVisit]);
-  const openGallery = useCallback((targetPath: string) => {
-    const entry = bottomGallery.entryByPath.get(targetPath);
-    if (viewVisit.current && entry && isPreviewableEntry(entry)) {
-      onOpenGallery(entry.path, bottomGallery);
-    }
-  }, [bottomGallery, onOpenGallery, viewVisit]);
   const registerPreviewSource = bottomPreview.registerSource;
+  const { getSelectionSnapshot } = selection;
   useLayoutEffect(() => {
     if (!ready || !root.current || !files.current) return;
     return registerPreviewSource({
@@ -95,8 +89,9 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery, bot
       paneRoot: root.current,
       filesRoot: files.current,
       isCurrent: () => viewVisit.current,
+      getSelectionSnapshot,
     });
-  }, [bottomGallery, ready, registerPreviewSource, viewVisit]);
+  }, [bottomGallery, getSelectionSnapshot, ready, registerPreviewSource, viewVisit]);
   const nextTrailPath = ready ? getNextTrailPath(path, tabs.activeTab?.crumbTrailPath) : null;
   const paths = useMemo(() => Array.from(selection.selected).filter(item => model.entryByPath.has(item)),
     [selection.selected, model.entryByPath]);
@@ -129,10 +124,8 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery, bot
   };
   const browseFromView = (next: string) => {
     if (!next.trim()) return;
-    const hadSearch = tabs.searchValue.trim().length > 0;
-    if (hadSearch) tabs.setSearch("");
     focusFiles();
-    tabs.browseTo(next, hadSearch ? { search: "" } : undefined);
+    tabs.browseTo(next);
   };
   const openNew = tabs.openInNewTab;
   const dragOut = useDragOutHandler({
@@ -142,7 +135,7 @@ export function BottomPane({ upper, actions, drop, onSummary, onOpenGallery, bot
     setScrollRequest(prev => ({ index, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
   const paneActions = useBottomPaneActions({
-    folder, actions, menu, files, ready, viewVisit, browseFromView, openGallery, scrollTo,
+    folder, actions, menu, files, ready, viewVisit, browseFromView, openGallery: bottomPreview.open, scrollTo,
     hideExtension: upper.gridNameHideExtension,
     clearDragState: drop.clearDragState,
   });

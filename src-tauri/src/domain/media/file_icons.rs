@@ -7,6 +7,11 @@ use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Manager};
 
+#[cfg(target_os = "windows")]
+mod handler_cache;
+#[cfg(target_os = "windows")]
+pub(crate) use handler_cache::HandlerIconCache;
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileIconHit {
@@ -117,8 +122,6 @@ fn render_extension_icon(extension: &str) -> Result<image::DynamicImage, String>
     use windows::Win32::UI::Shell::{
         SHGetFileInfoW, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON, SHGFI_USEFILEATTRIBUTES,
     };
-    use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, HICON};
-
     let name = format!("placeholder.{}", extension);
     let wide: Vec<u16> = OsStr::new(&name).encode_wide().chain(once(0)).collect();
     let mut info = SHFILEINFOW::default();
@@ -135,7 +138,15 @@ fn render_extension_icon(extension: &str) -> Result<image::DynamicImage, String>
     if result == 0 || info.hIcon.0.is_null() {
         return Err("Unable to resolve icon for extension".to_string());
     }
-    let icon: HICON = info.hIcon;
+    owned_hicon_to_image(info.hIcon)
+}
+
+#[cfg(target_os = "windows")]
+fn owned_hicon_to_image(
+    icon: windows::Win32::UI::WindowsAndMessaging::HICON,
+) -> Result<image::DynamicImage, String> {
+    use windows::Win32::UI::WindowsAndMessaging::DestroyIcon;
+
     let image = hicon_to_image(icon);
     unsafe {
         let _ = DestroyIcon(icon);

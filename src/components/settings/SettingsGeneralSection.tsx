@@ -1,4 +1,5 @@
 // General settings and view defaults that shape navigation and layout.
+import { useId } from "react";
 import { shallow } from "zustand/shallow";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useSettingsStore } from "@/modules";
@@ -8,11 +9,14 @@ type SettingsGeneralSectionProps = {
 };
 
 export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProps) => {
+  const keepFilterId = useId();
+  const keepFilterDescriptionId = useId();
   const {
     defaultViewMode,
     smoothScroll,
     gridCentered,
     showParentEntry,
+    keepFilterOnNavigation,
     confirmDelete,
     confirmClose,
     updateSettings,
@@ -22,6 +26,7 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
       smoothScroll: state.smoothScroll,
       gridCentered: state.gridCentered,
       showParentEntry: state.showParentEntry,
+      keepFilterOnNavigation: state.keepFilterOnNavigation,
       confirmDelete: state.confirmDelete,
       confirmClose: state.confirmClose,
       updateSettings: state.updateSettings,
@@ -97,6 +102,24 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
           />
           <span />
         </label>
+      </div>
+      <div className="settings-item">
+        <div>
+          <label className="settings-label" htmlFor={keepFilterId}>Keep filter when changing folders</label>
+          <div className="settings-desc" id={keepFilterDescriptionId}>
+            Carry the current filter into the next folder in the same tab, in either pane.
+          </div>
+        </div>
+        <div className="settings-toggle">
+          <input
+            type="checkbox"
+            id={keepFilterId}
+            aria-describedby={keepFilterDescriptionId}
+            checked={keepFilterOnNavigation}
+            onChange={(event) => updateSettings({ keepFilterOnNavigation: event.currentTarget.checked })}
+          />
+          <span aria-hidden="true" />
+        </div>
       </div>
       <div className="settings-item">
         <div>

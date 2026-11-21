@@ -127,6 +127,30 @@
   }
 }
 
+.batch-rename-presets {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding-top: 10px;
+  border-top: var(--surface-border-width) solid var(--stroke);
+}
+
+.batch-rename-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.batch-rename-preset-picker {
+  flex: 1 1 145px;
+  min-width: 0;
+}
+
+.batch-rename-preset-editor {
+  align-items: end;
+}
+
 .batch-rename-preview {
   @include control.control-surface(8px, var(--panel-deep));
   display: flex;
@@ -217,7 +241,7 @@
   margin-left: auto;
 }
 
-:is(.batch-rename-checks input, .batch-rename-actions .btn):focus-visible {
+:is(.batch-rename-checks input, .batch-rename-presets .btn, .batch-rename-actions .btn):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

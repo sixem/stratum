@@ -30,6 +30,8 @@
   &::before {
     content: "";
     width: var(--surface-border-width);
+    position: relative;
+    inset-inline-end: calc(var(--surface-border-width) / 2);
   }
 
   &:is(:hover, :focus-visible, [data-resizing])::before {
@@ -52,6 +54,49 @@
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+}
+
+:root[data-dark-mode="true"][data-ambient="true"] .upper-files {
+  isolation: isolate;
+  background:
+    radial-gradient(58% 46% at 58% 72%, rgba(var(--accent-rgb), 0.055), transparent),
+    radial-gradient(36% 40% at 75% 52%, rgba(121, 119, 211, 0.035), transparent);
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 4% -5% -6%;
+    pointer-events: none;
+    contain: paint;
+    z-index: -1;
+    background: linear-gradient(
+      106deg,
+      rgba(var(--accent-rgb), 0.09),
+      rgba(var(--accent-rgb), 0.26) 54%,
+      rgba(131, 134, 221, 0.16)
+    );
+    // The SVG feathers the wave. Keep the animation on the transform layer.
+    mask: url("../../assets/ambient-wave.svg") center / 100% 100% no-repeat;
+    mask-mode: alpha;
+    transform-origin: 55% 72%;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-dark-mode="true"][data-ambient="true"] .upper-files::before {
+    animation: ambient-wave-expand 44s ease-in-out -10s infinite alternate;
+    will-change: transform;
+  }
+
+  :root[data-dark-mode="true"][data-ambient="true"][data-window-focus="false"] .upper-files::before,
+  :root[data-dark-mode="true"][data-ambient="true"] .app-shell[data-preview="true"] .upper-files::before {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes ambient-wave-expand {
+  from { transform: translate3d(-1%, 1%, 0) scale(0.97); }
+  to { transform: translate3d(2%, -2%, 0) scale(1.16); }
 }
 
 // Position progress above the file pane so it never shifts rows or captures clicks.

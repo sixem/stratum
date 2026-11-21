@@ -21,6 +21,7 @@ import { buildEntryOpenWithItems } from "./entryMenu/buildEntryOpenWithItems";
 import { buildEntryPasteItems } from "./entryMenu/buildEntryPasteItems";
 import { buildEntryPropertiesItems } from "./entryMenu/buildEntryPropertiesItems";
 import { buildEntryRenameItems } from "./entryMenu/buildEntryRenameItems";
+import { resolveGalleryStartPath } from "../view/previewGallerySource";
 import { resolveActionError, resolveContextTargets } from "./entryMenu/shared";
 import { summarizeEntrySelection } from "./entryMenu/summarizeEntrySelection";
 import { useOpenWithMenuState } from "./useOpenWithMenuState";
@@ -136,9 +137,10 @@ export const useEntryMenuItems = ({
     return [
       ...buildEntryOpenItems({
         target,
-        hasTargets,
+        targetCount: actionTargets.length,
         onOpenEntry,
         onOpenGallery,
+        galleryPath: onOpenGallery && resolveGalleryStartPath(target, actionTargets, entryByPath),
         onOpenDir,
         onOpenDirNewTab,
         otherPane,

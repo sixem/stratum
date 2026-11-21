@@ -31,9 +31,7 @@ impl TransferEventEmitter {
     }
 
     pub(super) fn emit_snapshot(&self, snapshot: &TransferQueueSnapshot) {
-        let _ = self
-            .app_handle
-            .emit("transfer_jobs_snapshot", snapshot.clone());
+        let _ = self.app_handle.emit("transfer_jobs_snapshot", snapshot);
     }
 }
 

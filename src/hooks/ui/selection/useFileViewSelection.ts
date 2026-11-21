@@ -101,6 +101,7 @@ export const useFileViewSelection = ({
     entryByPath,
     getSelectionIndex,
     getSelectionTarget,
+    getSelectionSnapshot,
     handleSelectItem,
   };
 };

@@ -51,6 +51,7 @@ export type ContextMenuItem =
       hint?: string;
       disabled?: boolean;
       icon?: ContextMenuIcon;
+      iconUrl?: string;
     }
   | {
       kind: "submenu";

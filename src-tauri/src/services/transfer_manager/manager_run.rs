@@ -66,7 +66,7 @@ fn run_planning_job(inner: &Arc<TransferManagerInner>, job: TransferJobRequest) 
 
     match plan_result {
         Ok(plan) => {
-            mark_job_ready(inner, &job.snapshot.id, &plan, &job.event_emitter);
+            mark_job_ready(inner, &job.snapshot.id, plan, &job.event_emitter);
             inner.queue_signal.notify_all();
         }
         Err(error) => {

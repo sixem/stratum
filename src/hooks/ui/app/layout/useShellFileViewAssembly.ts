@@ -166,7 +166,6 @@ export const useShellFileViewAssembly = ({
       fileViewProps,
       bottomMenu: interactionModel.bottomMenu,
       bottomCommandsBlocked: dataPipeline.smartTabBlocked || interactionModel.previewOpen,
-      onOpenGallery: interactionModel.openPreview,
       bottomPreview: interactionModel.bottomPreview,
     },
     selection: {

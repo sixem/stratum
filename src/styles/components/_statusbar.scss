@@ -6,7 +6,7 @@
   align-items: center;
   padding: 0.42rem 0.75rem;
   background: linear-gradient(180deg, rgba(8, 10, 16, 0.82), rgba(8, 10, 16, 0.66));
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: var(--surface-border-width) solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(2px) saturate(1.05);
   -webkit-backdrop-filter: blur(2px) saturate(1.05);
   font-size: 0.6875rem;

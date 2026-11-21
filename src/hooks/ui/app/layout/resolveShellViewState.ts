@@ -28,6 +28,7 @@ export const resolveShellViewState = ({
     activeTabId,
     activeTab,
     displayPath: viewPath,
+    displaySearch,
     viewMode,
     sortState,
     tabs,
@@ -47,7 +48,7 @@ export const resolveShellViewState = ({
   const viewLoading = Boolean(viewPathKey) && viewPathKey !== currentPathKey;
   const cachedView =
     viewLoading
-      ? fileManager.peekDirCache(viewPath, { sort: sortState, search: activeSearch })
+      ? fileManager.peekDirCache(viewPath, { sort: sortState, search: displaySearch })
       : null;
   const viewEntries = viewLoading ? cachedView?.entries ?? [] : entries;
   const viewTotalCount = viewLoading ? cachedView?.totalCount ?? 0 : totalCount;

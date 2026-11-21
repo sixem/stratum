@@ -28,9 +28,15 @@ pub(super) fn resolve_cache_dir(app_handle: &AppHandle) -> PathBuf {
 
 pub(super) fn load_cache_index(cache_dir: &Path) -> HashSet<String> {
     let mut index = HashSet::new();
-    visit_cache_files(cache_dir, |entry, _| {
+    visit_cache_files(cache_dir, |entry, metadata| {
+        if !metadata.is_file() || metadata.len() == 0 {
+            return;
+        }
         if let Ok(file_name) = entry.file_name().into_string() {
-            index.insert(file_name);
+            // A write interrupted by app exit can leave an unpublished staging file.
+            if file_name.ends_with(".jpg") || file_name.ends_with(".webp") {
+                index.insert(file_name);
+            }
         }
     });
     index

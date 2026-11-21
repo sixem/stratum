@@ -24,7 +24,6 @@ export type AppEffectView = {
   activeTabId: string | null;
   activeTabPath: string;
   activeSearch: string;
-  searchValue: string;
   currentPath: string;
   viewPath: string;
   viewPathKey: string;
@@ -40,8 +39,6 @@ export type AppEffectView = {
 export type AppEffectActions = {
   clearSearchAndFocusView: () => void;
   closePreviewIfOpen: () => boolean;
-  setSearchValue: (value: string) => void;
-  setTabSearch: (value: string) => void;
   flushWindowSize: () => void;
   loadDir: (
     path: string,

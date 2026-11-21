@@ -1,5 +1,7 @@
 // OS-level helpers for opening paths and properties.
 #[cfg(target_os = "windows")]
+use crate::domain::media::file_icons::HandlerIconCache;
+#[cfg(target_os = "windows")]
 use crate::platform::windows::com::StaComGuard;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -9,7 +11,6 @@ use std::ffi::OsStr;
 use std::iter::once;
 #[cfg(target_os = "windows")]
 use std::os::windows::ffi::OsStrExt;
-#[cfg(target_os = "windows")]
 use std::path::Path;
 #[cfg(target_os = "windows")]
 use std::time::Duration;
@@ -36,9 +37,12 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OpenWithHandler {
     pub id: String,
     pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_path: Option<String>,
 }
 
 pub fn open_path(path: String) -> Result<(), String> {
@@ -75,7 +79,10 @@ pub fn open_path_properties(paths: Vec<String>) -> Result<(), String> {
     }
 }
 
-pub fn list_open_with_handlers(path: String) -> Result<Vec<OpenWithHandler>, String> {
+pub fn list_open_with_handlers(
+    path: String,
+    app_local_data: Option<&Path>,
+) -> Result<Vec<OpenWithHandler>, String> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
         return Err("Empty path".to_string());
@@ -83,11 +90,12 @@ pub fn list_open_with_handlers(path: String) -> Result<Vec<OpenWithHandler>, Str
 
     #[cfg(target_os = "windows")]
     {
-        return list_open_with_handlers_windows(trimmed);
+        return list_open_with_handlers_windows(trimmed, app_local_data);
     }
 
     #[cfg(not(target_os = "windows"))]
     {
+        let _ = app_local_data;
         Ok(Vec::new())
     }
 }
@@ -206,13 +214,15 @@ fn normalize_property_paths(paths: Vec<String>) -> Vec<String> {
 }
 
 #[cfg(target_os = "windows")]
-fn list_open_with_handlers_windows(path: &str) -> Result<Vec<OpenWithHandler>, String> {
+fn list_open_with_handlers_windows(
+    path: &str,
+    app_local_data: Option<&Path>,
+) -> Result<Vec<OpenWithHandler>, String> {
     let _com = StaComGuard::new()?;
-    let extension = path_to_extension(path);
-    if extension.is_none() {
+    let Some(extension) = path_to_extension(path) else {
         return Ok(Vec::new());
-    }
-    enumerate_open_with_handlers(extension.as_deref().unwrap_or_default())
+    };
+    enumerate_open_with_handlers(&extension, app_local_data)
 }
 
 #[cfg(target_os = "windows")]
@@ -246,7 +256,10 @@ fn open_with_dialog_windows(path: &str) -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
-fn enumerate_open_with_handlers(extension: &str) -> Result<Vec<OpenWithHandler>, String> {
+fn enumerate_open_with_handlers(
+    extension: &str,
+    app_local_data: Option<&Path>,
+) -> Result<Vec<OpenWithHandler>, String> {
     let wide_extension: Vec<u16> = OsStr::new(extension).encode_wide().chain(once(0)).collect();
     let assoc_handlers = unsafe {
         SHAssocEnumHandlers(PCWSTR(wide_extension.as_ptr()), ASSOC_FILTER_RECOMMENDED)
@@ -254,6 +267,7 @@ fn enumerate_open_with_handlers(extension: &str) -> Result<Vec<OpenWithHandler>,
     };
     let mut handlers = Vec::new();
     let mut seen_ids = HashSet::new();
+    let mut icons = app_local_data.map(HandlerIconCache::new);
 
     loop {
         let mut slot: [Option<IAssocHandler>; 1] = [None];
@@ -280,10 +294,33 @@ fn enumerate_open_with_handlers(extension: &str) -> Result<Vec<OpenWithHandler>,
             }
             Err(_) => id.clone(),
         };
-        handlers.push(OpenWithHandler { id, label });
+        let icon_path = icons
+            .as_mut()
+            .and_then(|cache| open_with_handler_icon(&assoc_handler, cache));
+        handlers.push(OpenWithHandler {
+            id,
+            label,
+            icon_path,
+        });
     }
 
+    if let Some(cache) = icons {
+        cache.trim();
+    }
     Ok(handlers)
+}
+
+#[cfg(target_os = "windows")]
+fn open_with_handler_icon(
+    assoc_handler: &IAssocHandler,
+    cache: &mut HandlerIconCache,
+) -> Option<String> {
+    let mut path = PWSTR::null();
+    let mut index = 0;
+    let result = unsafe { assoc_handler.GetIconLocation(&mut path, &mut index) };
+    let location = read_pwstr_with_free(path);
+    result.ok()?;
+    cache.get(&location, index)
 }
 
 #[cfg(target_os = "windows")]

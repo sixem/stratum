@@ -133,33 +133,22 @@
   .transfer-popover-clear-shell {
     display: inline-flex;
     align-items: center;
-    flex: 0 0 auto;
+    margin-block: -4px;
+    margin-inline-end: -5px;
   }
 
   .transfer-popover-clear {
-    @include control.icon-button-shell(
-      28px,
-      6px,
-      #111926,
-      #202c3d,
-      rgba(234, 239, 248, 0.74)
-    );
-    transition:
-      border-color 120ms ease,
-      background-color 120ms ease,
-      color 120ms ease;
+    @include control.icon-button-shell(24px);
+    border: 0;
   }
 
   .transfer-popover-clear svg {
-    width: 13px;
-    height: 13px;
-    fill: currentColor;
+    width: 16px;
+    height: 16px;
   }
 
-  .transfer-popover-clear:hover:not(:disabled) {
-    border-color: rgba(225, 76, 76, 0.42);
-    background: rgba(225, 76, 76, 0.08);
-    color: #ffd7d7;
+  .transfer-popover-clear:is(:hover, :focus-visible):not(:disabled) {
+    color: var(--text);
   }
 
   .transfer-popover-clear:disabled {

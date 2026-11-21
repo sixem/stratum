@@ -110,7 +110,7 @@ impl IndexedSearchHandle {
 
 fn build_query_cache_key(query: &IndexedPathQuery) -> String {
     let normalized_query = query.query.trim().to_lowercase();
-    let normalized_limit = query.limit.unwrap_or(0);
+    let normalized_limit = query.effective_limit();
     format!("{normalized_query}\n{normalized_limit}")
 }
 
@@ -162,5 +162,24 @@ impl QueryCache {
 
     fn clear(&mut self) {
         self.entries.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn query_cache_keys_use_the_effective_result_limit() {
+        let key = |limit| {
+            build_query_cache_key(&IndexedPathQuery {
+                query: "example".into(),
+                limit,
+            })
+        };
+        assert_ne!(key(None), key(Some(0)));
+        assert_eq!(key(None), key(Some(50)));
+        assert_eq!(key(Some(0)), key(Some(1)));
+        assert_eq!(key(Some(100)), key(Some(usize::MAX)));
     }
 }

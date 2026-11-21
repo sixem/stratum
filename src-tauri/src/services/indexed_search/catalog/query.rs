@@ -13,8 +13,6 @@ use super::{
     DriveCatalogSnapshot, IndexedCatalogStore, JournalCheckpoint, QueryPlan,
 };
 
-const DEFAULT_QUERY_LIMIT: usize = 50;
-const MAX_QUERY_LIMIT: usize = 100;
 const MAX_FETCH_LIMIT: usize = 300;
 const MAX_FTS_TERMS: usize = 64;
 
@@ -324,10 +322,7 @@ fn build_query_plan(query: IndexedPathQuery, fts_ready: bool) -> Option<QueryPla
         }
     }
 
-    let limit = query
-        .limit
-        .unwrap_or(DEFAULT_QUERY_LIMIT)
-        .clamp(1, MAX_QUERY_LIMIT);
+    let limit = query.effective_limit();
     let fetch_limit = limit.saturating_mul(5).clamp(limit, MAX_FETCH_LIMIT);
 
     Some(QueryPlan {

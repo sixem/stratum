@@ -11,6 +11,8 @@ import type { ListDirOptions } from "@/types";
 type UseAppViewStateOptions = {
   displayPath: string;
   parentPath: string | null;
+  searchValue: string;
+  setSearchValue: (value: string) => void;
   jumpTo: (path: string, options?: ListDirOptions) => void;
   browseTo: (path: string, options?: ListDirOptions) => void;
 };
@@ -18,11 +20,12 @@ type UseAppViewStateOptions = {
 export const useAppViewState = ({
   displayPath,
   parentPath,
+  searchValue,
+  setSearchValue,
   jumpTo,
   browseTo,
 }: UseAppViewStateOptions) => {
   const [pathValue, setPathValue] = useState("");
-  const [searchValue, setSearchValue] = useState("");
   const deferredSearchValue = useDeferredValue(searchValue);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
@@ -34,13 +37,10 @@ export const useAppViewState = ({
 
   const browseFromView = useCallback(
     (path: string) => {
-      // Clear search before navigation so the next folder is unfiltered.
-      const hadSearch = searchValue.trim().length > 0;
-      if (hadSearch) {
-        setSearchValue("");
+      if (searchValue.trim()) {
         mainRef.current?.focus({ preventScroll: true });
       }
-      browseTo(path, hadSearch ? { search: "" } : undefined);
+      browseTo(path);
     },
     [browseTo, searchValue],
   );
@@ -60,13 +60,11 @@ export const useAppViewState = ({
   const clearSearchAndFocusView = useCallback(() => {
     setSearchValue("");
     mainRef.current?.focus({ preventScroll: true });
-  }, []);
+  }, [setSearchValue]);
 
   return {
     pathValue,
     setPathValue,
-    searchValue,
-    setSearchValue,
     deferredSearchValue,
     searchInputRef,
     mainRef,

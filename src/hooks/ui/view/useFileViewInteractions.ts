@@ -56,6 +56,7 @@ export const useFileViewInteractions = ({
     selectionItems,
     getSelectionIndex,
     getSelectionTarget,
+    getSelectionSnapshot,
     handleSelectItem,
   } = useFileViewSelection({
     viewModel,
@@ -165,6 +166,7 @@ export const useFileViewInteractions = ({
     selectionItems,
     getSelectionIndex,
     getSelectionTarget,
+    getSelectionSnapshot,
     handleSelectItem,
   };
 };
