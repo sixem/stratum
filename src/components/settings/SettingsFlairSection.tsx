@@ -5,6 +5,34 @@ import type { AccentTheme } from "@/modules";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useSettingsStore } from "@/modules";
 
+import { SettingsItem } from "./SettingsItem";
+import type { SettingsItemText } from "./SettingsItem";
+
+export const FLAIR_SETTINGS_ITEMS = {
+  darkMode: {
+    label: "Dark Mode",
+    description: "Use a darker, neutral palette.",
+    keywords: "theme appearance",
+  },
+  accentColor: {
+    label: "Accent color",
+    description: "Tint highlights and accents.",
+    keywords: "theme appearance",
+  },
+  categoryTints: {
+    label: "Category tints",
+    description: "Subtle color cues for file types in grid and list views.",
+  },
+  ambientBackground: {
+    label: "Ambient background",
+    description: "A slow-moving backdrop in the main file pane.",
+  },
+  blurOverlays: {
+    label: "Blur overlays",
+    description: "Backdrop blur for dialogs, menus, and tooltips.",
+  },
+} satisfies Record<string, SettingsItemText>;
+
 type SettingsFlairSectionProps = {
   sectionId: string;
 };
@@ -44,12 +72,12 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Flair</div>
-      <div className="settings-item">
-        <div>
-          <label className="settings-label" htmlFor={darkModeId}>Dark Mode</label>
-          <div className="settings-desc" id={darkModeDescriptionId}>Use a darker, neutral palette.</div>
-        </div>
-        <div className="settings-toggle">
+      <SettingsItem
+        item={FLAIR_SETTINGS_ITEMS.darkMode}
+        labelFor={darkModeId}
+        descriptionId={darkModeDescriptionId}
+      >
+        <label className="settings-toggle">
           <input
             type="checkbox"
             id={darkModeId}
@@ -58,13 +86,9 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
             onChange={(event) => updateSettings({ darkMode: event.currentTarget.checked })}
           />
           <span aria-hidden="true" />
-        </div>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Accent color</div>
-          <div className="settings-desc">Tint highlights and accents.</div>
-        </div>
+        </label>
+      </SettingsItem>
+      <SettingsItem item={FLAIR_SETTINGS_ITEMS.accentColor}>
         <div className="settings-pills" role="group" aria-label="Accent color">
           {ACCENT_THEMES.map((theme) => (
             <PressButton
@@ -80,14 +104,8 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
             </PressButton>
           ))}
         </div>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Category tints</div>
-          <div className="settings-desc">
-            Subtle color cues for file types in grid and list views.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={FLAIR_SETTINGS_ITEMS.categoryTints}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -98,12 +116,8 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
           />
           <span />
         </label>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Ambient background</div>
-          <div className="settings-desc">A slow-moving backdrop in the main file pane.</div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={FLAIR_SETTINGS_ITEMS.ambientBackground}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -114,12 +128,8 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
           />
           <span />
         </label>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Blur overlays</div>
-          <div className="settings-desc">Backdrop blur for dialogs, menus, and tooltips.</div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={FLAIR_SETTINGS_ITEMS.blurOverlays}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -128,7 +138,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
           />
           <span />
         </label>
-      </div>
+      </SettingsItem>
     </section>
   );
 };

@@ -108,6 +108,11 @@
     );
   }
 
+  .settings-nav[data-searching="true"] .settings-nav-item.is-search-match {
+    background: color-mix(in srgb, var(--surface-nav), var(--accent) 6%);
+    border-color: color-mix(in srgb, var(--stroke), var(--accent) 18%);
+  }
+
   .settings-sidebar-footer {
     margin-top: auto;
     padding-top: 12px;
@@ -162,25 +167,101 @@
     max-width: 120px;
   }
 
+  .settings-main {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px;
+    min-width: 0;
+    min-height: 0;
+    --settings-content-inset: 6px;
+    --settings-scrollbar-width: 7px;
+  }
+
+  .settings-search-field {
+    @include control.control-surface(8px, var(--surface-control));
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    margin-inline-end: calc(var(--settings-content-inset) + var(--settings-scrollbar-width));
+  }
+
+  .settings-search-field:focus-within {
+    @include control.focus-ring(rgba(var(--accent-rgb), 0.5), rgba(var(--accent-rgb), 0.16));
+  }
+
+  .settings-search-field input {
+    flex: 1;
+    min-width: 0;
+    min-height: 32px;
+    padding: 5px 10px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: var(--font-size-sm);
+    user-select: text;
+  }
+
+  .settings-search-field input::placeholder {
+    color: var(--muted);
+  }
+
+  .settings-search-field input::-webkit-search-cancel-button {
+    appearance: none;
+  }
+
+  .settings-search-clear {
+    @include control.icon-button-shell(26px);
+    flex-shrink: 0;
+    margin-inline-end: 3px;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--text);
+    }
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
   .settings-content {
     min-width: 0;
     min-height: 0;
     overflow: auto;
-    padding-right: 6px;
+    padding-inline-end: var(--settings-content-inset);
     scrollbar-gutter: stable;
+  }
 
-    > .settings-section:not(:first-child) {
-      margin-top: 14px;
-    }
+  .settings-search-results {
+    display: grid;
+    gap: 12px;
+  }
+
+  // Subheadings without any matching items can be left at the end of a card.
+  .settings-search-results .settings-section-title:last-child {
+    display: none;
+  }
+
+  .settings-search-empty {
+    margin: 0;
+    padding: 18px 0;
+    text-align: center;
+    color: var(--muted);
+    font-size: var(--font-size-sm);
   }
 
   .settings-tab-panel {
     min-height: 0;
   }
 
-  .settings-nav::-webkit-scrollbar,
-  .settings-content::-webkit-scrollbar {
+  .settings-nav::-webkit-scrollbar {
     width: 7px;
+  }
+
+  .settings-content::-webkit-scrollbar {
+    width: var(--settings-scrollbar-width);
   }
 
   .settings-section {

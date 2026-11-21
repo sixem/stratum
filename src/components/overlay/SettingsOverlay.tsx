@@ -1,16 +1,20 @@
 // Settings panel for view, flair, and thumbnail options.
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { TabCloseIcon } from "@/components/icons";
+import { SettingsSearchMatches } from "@/components/settings/SettingsItem";
 import { SettingsVitals } from "@/components/settings/SettingsVitals";
 import { OverlayPanelHeader } from "@/components/overlay/OverlayPanelHeader";
 import { DialogCloseButton } from "./DialogCloseButton";
 import {
   DEFAULT_SETTINGS_SECTION_ID,
   SETTINGS_SECTION_DEFINITIONS,
+  searchSettingsSections,
   type SettingsSectionId,
 } from "@/components/settings/settingsSectionRegistry";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useModalFocusTrap } from "@/hooks";
+import { handleSearchHotkey } from "@/hooks/ui/inputs/useSearchHotkey";
 import { usePromptStore, useSettingsStore } from "@/modules";
 
 export type SettingsOverlayProps = {
@@ -27,14 +31,18 @@ export const SettingsOverlay = ({
   onClearCache,
 }: SettingsOverlayProps) => {
   const resetSettings = useSettingsStore((state) => state.resetSettings);
+  const autoGrid = useSettingsStore((state) => state.gridSize === "auto");
   const titleId = useId();
   const [activeSectionId, setActiveSectionId] = useState<SettingsSectionId>(
     DEFAULT_SETTINGS_SECTION_ID,
   );
+  const [searchQuery, setSearchQuery] = useState("");
   const [captureActive, setCaptureActive] = useState(false);
   const shouldCloseRef = useRef(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const activeSection =
     useMemo(
@@ -43,6 +51,14 @@ export const SettingsOverlay = ({
         SETTINGS_SECTION_DEFINITIONS[0],
       [activeSectionId],
     );
+  const searchResults = useMemo(() => searchSettingsSections(searchQuery, autoGrid), [searchQuery, autoGrid]);
+  const searching = searchResults !== null;
+  const matchingSections = new Set(searchResults?.map(({ section }) => section.id));
+  const renderContext = { open, onCaptureChange: setCaptureActive, onOpenCacheLocation, onClearCache };
+
+  useLayoutEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [activeSectionId, searchQuery]);
 
   useModalFocusTrap({
     open,
@@ -53,7 +69,7 @@ export const SettingsOverlay = ({
   useEffect(() => {
     if (!open) return;
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || event.defaultPrevented) return;
       if (captureActive) return;
       onClose();
     };
@@ -64,11 +80,18 @@ export const SettingsOverlay = ({
   useEffect(() => {
     if (open) return;
     setCaptureActive(false);
+    setSearchQuery("");
   }, [open]);
 
   const handleSelectSection = useCallback((id: SettingsSectionId) => {
     setActiveSectionId(id);
     setCaptureActive(false);
+    setSearchQuery("");
+  }, []);
+
+  const clearSearch = useCallback(() => {
+    setSearchQuery("");
+    searchInputRef.current?.focus({ preventScroll: true });
   }, []);
 
   const handleSectionKeyDown = useCallback(
@@ -95,10 +118,10 @@ export const SettingsOverlay = ({
       }
       event.preventDefault();
       const nextSection = SETTINGS_SECTION_DEFINITIONS[nextIndex];
-      handleSelectSection(nextSection.id);
+      if (!searching) handleSelectSection(nextSection.id);
       tabRefs.current[nextIndex]?.focus();
     },
-    [handleSelectSection],
+    [handleSelectSection, searching],
   );
 
   const handleResetSettings = useCallback(() => {
@@ -135,8 +158,12 @@ export const SettingsOverlay = ({
         aria-modal="true"
         aria-labelledby={titleId}
         ref={panelRef}
+        inert={!open}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          handleSearchHotkey(event, searchInputRef.current, clearSearch);
+        }}
       >
         <OverlayPanelHeader
           className="settings-header"
@@ -149,28 +176,30 @@ export const SettingsOverlay = ({
         />
         <div className="settings-body">
           <nav className="settings-sidebar" aria-label="Settings sections">
-            <div className="settings-nav" role="tablist">
-              {SETTINGS_SECTION_DEFINITIONS.map((section, index) => (
-                <PressButton
-                  key={section.id}
-                  ref={(element) => {
-                    tabRefs.current[index] = element;
-                  }}
-                  type="button"
-                  id={`${section.id}-tab`}
-                  role="tab"
-                  aria-selected={section.id === activeSection.id}
-                  aria-controls={`${section.id}-panel`}
-                  tabIndex={section.id === activeSection.id ? 0 : -1}
-                  className={`settings-nav-item${
-                    section.id === activeSection.id ? " is-active" : ""
-                  }`}
-                  onClick={() => handleSelectSection(section.id)}
-                  onKeyDown={handleSectionKeyDown(index)}
-                >
-                  {section.label}
-                </PressButton>
-              ))}
+            <div className="settings-nav" data-searching={searching} role={searching ? undefined : "tablist"}>
+              {SETTINGS_SECTION_DEFINITIONS.map((section, index) => {
+                const selected = !searching && section.id === activeSection.id;
+                const matching = matchingSections.has(section.id);
+                return (
+                  <PressButton
+                    key={section.id}
+                    ref={(element) => {
+                      tabRefs.current[index] = element;
+                    }}
+                    type="button"
+                    id={`${section.id}-tab`}
+                    role={searching ? undefined : "tab"}
+                    aria-selected={searching ? undefined : selected}
+                    aria-controls={selected ? `${section.id}-panel` : undefined}
+                    tabIndex={searching || selected ? 0 : -1}
+                    className={`settings-nav-item${selected ? " is-active" : ""}${matching ? " is-search-match" : ""}`}
+                    onClick={() => handleSelectSection(section.id)}
+                    onKeyDown={handleSectionKeyDown(index)}
+                  >
+                    {section.label}
+                  </PressButton>
+                );
+              })}
             </div>
             <div className="settings-sidebar-actions">
               <div className="settings-sidebar-title">Actions</div>
@@ -187,20 +216,57 @@ export const SettingsOverlay = ({
             </div>
             <SettingsVitals open={open} />
           </nav>
-          <div className="settings-content">
-            <div
-              key={activeSection.id}
-              id={`${activeSection.id}-panel`}
-              role="tabpanel"
-              aria-labelledby={`${activeSection.id}-tab`}
-              className="settings-tab-panel"
-            >
-              {activeSection.render({
-                open,
-                onCaptureChange: setCaptureActive,
-                onOpenCacheLocation,
-                onClearCache,
-              })}
+          <div className="settings-main">
+            <div className="settings-search-field">
+              <input
+                ref={searchInputRef}
+                type="search"
+                placeholder="Search settings…"
+                aria-label="Search settings"
+                spellCheck={false}
+                autoComplete="off"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Escape" || !searchQuery) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  clearSearch();
+                }}
+              />
+              {searchQuery ? (
+                <button
+                  className="settings-search-clear"
+                  type="button"
+                  aria-label="Clear settings search"
+                  onClick={clearSearch}
+                >
+                  <TabCloseIcon />
+                </button>
+              ) : null}
+            </div>
+            <div className="settings-content" ref={contentRef}>
+              {searchResults ? (
+                <div className="settings-search-results">
+                  {searchResults.length === 0 ? (
+                    <p className="settings-search-empty" role="status">No settings match your search.</p>
+                  ) : searchResults.map(({ section, matches }) => (
+                    <SettingsSearchMatches.Provider key={section.id} value={matches}>
+                      {section.render(renderContext)}
+                    </SettingsSearchMatches.Provider>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  key={activeSection.id}
+                  id={`${activeSection.id}-panel`}
+                  role="tabpanel"
+                  aria-labelledby={`${activeSection.id}-tab`}
+                  className="settings-tab-panel"
+                >
+                  {activeSection.render(renderContext)}
+                </div>
+              )}
             </div>
           </div>
         </div>

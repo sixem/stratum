@@ -1,14 +1,16 @@
 // Central registry for settings sections so navigation and content stay in sync.
 import type { ReactNode } from "react";
-import { SettingsCacheSection } from "@/components/settings/SettingsCacheSection";
-import { SettingsBarsSection } from "@/components/settings/SettingsBarsSection";
-import { SettingsFlairSection } from "@/components/settings/SettingsFlairSection";
-import { SettingsGeneralSection } from "@/components/settings/SettingsGeneralSection";
-import { SettingsGridSection } from "@/components/settings/SettingsGridSection";
-import { SettingsIndexingSection } from "@/components/settings/SettingsIndexingSection";
-import { SettingsKeybindsSection } from "@/components/settings/SettingsKeybindsSection";
-import { SettingsMenusSection } from "@/components/settings/SettingsMenusSection";
-import { SettingsThumbsSection } from "@/components/settings/SettingsThumbsSection";
+import { KEYBIND_DEFINITIONS } from "@/modules";
+import { BARS_SETTINGS_ITEMS, SettingsBarsSection, TOPBAR_VISIBILITY_OPTIONS } from "./SettingsBarsSection";
+import { CACHE_SETTINGS_ITEMS, SettingsCacheSection } from "./SettingsCacheSection";
+import { FLAIR_SETTINGS_ITEMS, SettingsFlairSection } from "./SettingsFlairSection";
+import { GENERAL_SETTINGS_ITEMS, SettingsGeneralSection } from "./SettingsGeneralSection";
+import { GRID_SETTINGS_ITEMS, SettingsGridSection } from "./SettingsGridSection";
+import { INDEXING_SETTINGS_ITEMS, SettingsIndexingSection } from "./SettingsIndexingSection";
+import type { SettingsItemText } from "./SettingsItem";
+import { KEYBINDS_SETTINGS_ITEMS, SettingsKeybindsSection } from "./SettingsKeybindsSection";
+import { MENUS_SETTINGS_ITEMS, SettingsMenusSection } from "./SettingsMenusSection";
+import { THUMBS_SETTINGS_ITEMS, SettingsThumbsSection } from "./SettingsThumbsSection";
 
 export type SettingsSectionId =
   | "settings-general"
@@ -31,6 +33,7 @@ export type SettingsSectionRenderContext = {
 export type SettingsSectionDefinition = {
   id: SettingsSectionId;
   label: string;
+  items: readonly SettingsItemText[];
   render: (context: SettingsSectionRenderContext) => ReactNode;
 };
 
@@ -38,11 +41,13 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
   {
     id: "settings-general",
     label: "General",
+    items: Object.values(GENERAL_SETTINGS_ITEMS),
     render: () => <SettingsGeneralSection sectionId="settings-general" />,
   },
   {
     id: "settings-indexing",
     label: "Indexing",
+    items: Object.values(INDEXING_SETTINGS_ITEMS),
     render: ({ open }) => (
       <SettingsIndexingSection sectionId="settings-indexing" open={open} />
     ),
@@ -50,31 +55,37 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
   {
     id: "settings-bars",
     label: "Bars",
+    items: [...Object.values(BARS_SETTINGS_ITEMS), ...TOPBAR_VISIBILITY_OPTIONS],
     render: () => <SettingsBarsSection sectionId="settings-bars" />,
   },
   {
     id: "settings-grid",
     label: "Grid",
+    items: Object.values(GRID_SETTINGS_ITEMS),
     render: () => <SettingsGridSection sectionId="settings-grid" />,
   },
   {
     id: "settings-menus",
     label: "Menus",
+    items: Object.values(MENUS_SETTINGS_ITEMS),
     render: () => <SettingsMenusSection sectionId="settings-menus" />,
   },
   {
     id: "settings-flair",
     label: "Flair",
+    items: Object.values(FLAIR_SETTINGS_ITEMS),
     render: () => <SettingsFlairSection sectionId="settings-flair" />,
   },
   {
     id: "settings-thumbnails",
     label: "Thumbnails",
+    items: Object.values(THUMBS_SETTINGS_ITEMS),
     render: () => <SettingsThumbsSection sectionId="settings-thumbnails" />,
   },
   {
     id: "settings-keybinds",
     label: "Keybinds",
+    items: [...Object.values(KEYBINDS_SETTINGS_ITEMS), ...KEYBIND_DEFINITIONS],
     render: ({ open, onCaptureChange }) => (
       <SettingsKeybindsSection
         sectionId="settings-keybinds"
@@ -86,6 +97,7 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
   {
     id: "settings-cache",
     label: "Cache",
+    items: Object.values(CACHE_SETTINGS_ITEMS),
     render: ({ open, onOpenCacheLocation, onClearCache }) => (
       <SettingsCacheSection
         sectionId="settings-cache"
@@ -98,3 +110,17 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
 ];
 
 export const DEFAULT_SETTINGS_SECTION_ID = SETTINGS_SECTION_DEFINITIONS[0].id;
+
+export const searchSettingsSections = (query: string, autoGrid: boolean) => {
+  const terms = query.toLowerCase().split(/[\s-]+/).filter(Boolean);
+  if (terms.length === 0) return null;
+
+  return SETTINGS_SECTION_DEFINITIONS.flatMap((section) => {
+    const items = section.items.filter((item) => {
+      if (item.requiresAutoGrid && !autoGrid) return false;
+      const searchable = [section.label, item.label, item.description, item.keywords].join(" ").toLowerCase();
+      return terms.every((term) => searchable.includes(term));
+    });
+    return items.length > 0 ? [{ section, matches: new Set(items) }] : [];
+  });
+};

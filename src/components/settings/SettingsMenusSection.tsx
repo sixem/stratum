@@ -2,6 +2,21 @@
 import { shallow } from "zustand/shallow";
 import { useSettingsStore } from "@/modules";
 
+import { SettingsItem } from "./SettingsItem";
+import type { SettingsItemText } from "./SettingsItem";
+
+export const MENUS_SETTINGS_ITEMS = {
+  conversionActions: {
+    label: "Conversion actions",
+    description: "Show convert and quick-convert actions in file context menus.",
+  },
+  backgroundActions: {
+    label: "Background actions",
+    description: "Show quick shell launchers when right-clicking the view background.",
+    keywords: "PowerShell WSL",
+  },
+} satisfies Record<string, SettingsItemText>;
+
 type SettingsMenusSectionProps = {
   sectionId: string;
 };
@@ -20,13 +35,7 @@ export const SettingsMenusSection = ({ sectionId }: SettingsMenusSectionProps) =
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Menus</div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Conversion actions</div>
-          <div className="settings-desc">
-            Show convert and quick-convert actions in file context menus.
-          </div>
-        </div>
+      <SettingsItem item={MENUS_SETTINGS_ITEMS.conversionActions}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -37,14 +46,8 @@ export const SettingsMenusSection = ({ sectionId }: SettingsMenusSectionProps) =
           />
           <span />
         </label>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Background actions</div>
-          <div className="settings-desc">
-            Show quick shell launchers when right-clicking the view background.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={MENUS_SETTINGS_ITEMS.backgroundActions}>
         <div className="settings-pills" role="group" aria-label="Background menu">
           <label
             className={`settings-pill settings-pill-check${
@@ -75,7 +78,7 @@ export const SettingsMenusSection = ({ sectionId }: SettingsMenusSectionProps) =
             <span>Open in WSL</span>
           </label>
         </div>
-      </div>
+      </SettingsItem>
     </section>
   );
 };

@@ -1,9 +1,24 @@
 // Indexed-search settings stay user-facing here without exposing backend jargon.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import { shallow } from "zustand/shallow";
 import { getIndexedSearchCatalogPath, openPath } from "@/api";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useSettingsStore } from "@/modules";
+
+import { SettingsItem, SettingsSearchMatches } from "./SettingsItem";
+import type { SettingsItemText } from "./SettingsItem";
+
+export const INDEXING_SETTINGS_ITEMS = {
+  enable: {
+    label: "Enable indexed search",
+    description: "Indexes files your Windows account can browse. On supported NTFS drives, the index catches up with changes made while Stratum was closed.",
+  },
+  database: {
+    label: "Index database",
+    description: "Stored in the app data directory.",
+    keywords: "catalog location reveal in Explorer",
+  },
+} satisfies Record<string, SettingsItemText>;
 
 type SettingsIndexingSectionProps = {
   sectionId: string;
@@ -23,9 +38,11 @@ export const SettingsIndexingSection = ({
   );
   const [catalogPath, setCatalogPath] = useState<string | null>(null);
   const [catalogBusy, setCatalogBusy] = useState(false);
+  const matches = useContext(SettingsSearchMatches);
+  const showCatalogPath = !matches || matches.has(INDEXING_SETTINGS_ITEMS.database);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !showCatalogPath) return;
     let canceled = false;
 
     void getIndexedSearchCatalogPath().catch(() => null).then((path) => {
@@ -35,7 +52,7 @@ export const SettingsIndexingSection = ({
     return () => {
       canceled = true;
     };
-  }, [open]);
+  }, [open, showCatalogPath]);
 
   const handleRevealCatalogDirectory = useCallback(async () => {
     if (!catalogPath || catalogBusy) return;
@@ -54,14 +71,7 @@ export const SettingsIndexingSection = ({
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Indexing</div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Enable indexed search</div>
-          <div className="settings-desc">
-            Indexes files your Windows account can browse. On supported NTFS drives, the index
-            catches up with changes made while Stratum was closed.
-          </div>
-        </div>
+      <SettingsItem item={INDEXING_SETTINGS_ITEMS.enable}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -72,15 +82,11 @@ export const SettingsIndexingSection = ({
           />
           <span />
         </label>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Index database</div>
-          <div className="settings-desc">
-            Stored in the app data directory.
-          </div>
-          <div className="settings-mono">{catalogPath ?? "Unavailable"}</div>
-        </div>
+      </SettingsItem>
+      <SettingsItem
+        item={INDEXING_SETTINGS_ITEMS.database}
+        details={<div className="settings-mono">{catalogPath ?? "Unavailable"}</div>}
+      >
         <div className="settings-actions">
           <PressButton
             type="button"
@@ -91,7 +97,7 @@ export const SettingsIndexingSection = ({
             Reveal in Explorer
           </PressButton>
         </div>
-      </div>
+      </SettingsItem>
     </section>
   );
 };

@@ -4,6 +4,44 @@ import { PressButton } from "@/components/primitives/PressButton";
 import { useSettingsStore } from "@/modules";
 import { useDeferredRange } from "./useDeferredRange";
 
+import { SettingsItem } from "./SettingsItem";
+import type { SettingsItemText } from "./SettingsItem";
+
+export const THUMBS_SETTINGS_ITEMS = {
+  enable: {
+    label: "Enable thumbnails",
+    description: "Generate preview images in grid view.",
+  },
+  size: {
+    label: "Thumbnail size",
+    description: "Max edge size for generated previews.",
+  },
+  quality: {
+    label: "Quality (JPEG)",
+    description: "Balance size against visual detail.",
+  },
+  folderPreviews: {
+    label: "Folder previews",
+    description: "Generate thumbnails for folders using a sampled file from each folder.",
+  },
+  videoPreviews: {
+    label: "Video previews",
+    description: "Attempt thumbnails for local videos when supported.",
+  },
+  svgPreviews: {
+    label: "SVG previews",
+    description: "Rasterize SVGs into safe thumbnails using the same size cap.",
+  },
+  appIcons: {
+    label: "Default app icons",
+    description: "Show the system icon when no thumbnail is available.",
+  },
+  display: {
+    label: "Thumbnail display",
+    description: "Cover fills the frame, Fit keeps the entire image visible.",
+  },
+} satisfies Record<string, SettingsItemText>;
+
 type SettingsThumbsSectionProps = {
   sectionId: string;
 };
@@ -58,11 +96,7 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Thumbnails</div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Enable thumbnails</div>
-          <div className="settings-desc">Generate preview images in grid view.</div>
-        </div>
+      <SettingsItem item={THUMBS_SETTINGS_ITEMS.enable}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -73,12 +107,8 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
           />
           <span />
         </label>
-      </div>
-      <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
-        <div>
-          <div className="settings-label">Thumbnail size</div>
-          <div className="settings-desc">Max edge size for generated previews.</div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={THUMBS_SETTINGS_ITEMS.size} className={isThumbsDisabled ? "is-disabled" : undefined}>
         <div className="settings-range">
           <input
             type="range"
@@ -91,12 +121,11 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
           />
           <span className="settings-value">{sizeRange.draft}px</span>
         </div>
-      </div>
-      <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
-        <div>
-          <div className="settings-label">Quality (JPEG)</div>
-          <div className="settings-desc">Balance size against visual detail.</div>
-        </div>
+      </SettingsItem>
+      <SettingsItem
+        item={THUMBS_SETTINGS_ITEMS.quality}
+        className={isThumbsDisabled ? "is-disabled" : undefined}
+      >
         <div className="settings-range">
           <input
             type="range"
@@ -109,14 +138,11 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
           />
           <span className="settings-value">{qualityLabel}</span>
         </div>
-      </div>
-      <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
-        <div>
-          <div className="settings-label">Folder previews</div>
-          <div className="settings-desc">
-            Generate thumbnails for folders using a sampled file from each folder.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem
+        item={THUMBS_SETTINGS_ITEMS.folderPreviews}
+        className={isThumbsDisabled ? "is-disabled" : undefined}
+      >
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -128,14 +154,11 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
           />
           <span />
         </label>
-      </div>
-      <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
-        <div>
-          <div className="settings-label">Video previews</div>
-          <div className="settings-desc">
-            Attempt thumbnails for local videos when supported.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem
+        item={THUMBS_SETTINGS_ITEMS.videoPreviews}
+        className={isThumbsDisabled ? "is-disabled" : undefined}
+      >
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -147,14 +170,11 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
           />
           <span />
         </label>
-      </div>
-      <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
-        <div>
-          <div className="settings-label">SVG previews</div>
-          <div className="settings-desc">
-            Rasterize SVGs into safe thumbnails using the same size cap.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem
+        item={THUMBS_SETTINGS_ITEMS.svgPreviews}
+        className={isThumbsDisabled ? "is-disabled" : undefined}
+      >
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -166,14 +186,8 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
           />
           <span />
         </label>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Default app icons</div>
-          <div className="settings-desc">
-            Show the system icon when no thumbnail is available.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={THUMBS_SETTINGS_ITEMS.appIcons}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -184,14 +198,11 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
           />
           <span />
         </label>
-      </div>
-      <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
-        <div>
-          <div className="settings-label">Thumbnail display</div>
-          <div className="settings-desc">
-            Cover fills the frame, Fit keeps the entire image visible.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem
+        item={THUMBS_SETTINGS_ITEMS.display}
+        className={isThumbsDisabled ? "is-disabled" : undefined}
+      >
         <div className="settings-pills" role="group" aria-label="Thumbnail display">
           <PressButton
             type="button"
@@ -210,7 +221,7 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
             Fit
           </PressButton>
         </div>
-      </div>
+      </SettingsItem>
     </section>
   );
 };

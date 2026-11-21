@@ -1,11 +1,31 @@
 // Cache format and lifecycle controls.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import { shallow } from "zustand/shallow";
 import { getThumbCacheSize } from "@/api";
 import { formatBytes } from "@/lib";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useSettingsStore } from "@/modules";
 import { useDeferredRange } from "./useDeferredRange";
+
+import { SettingsItem, SettingsSearchMatches } from "./SettingsItem";
+import type { SettingsItemText } from "./SettingsItem";
+
+export const CACHE_SETTINGS_ITEMS = {
+  imageFormat: {
+    label: "Image format",
+    description: "Pick the saved thumbnail format.",
+    keywords: "WebP JPEG",
+  },
+  sizeLimit: {
+    label: "Cache size limit",
+    description: "Approximate max size for disk cache.",
+  },
+  thumbnailCache: {
+    label: "Thumbnail cache",
+    description: "Open the cache folder or clear stored previews.",
+    keywords: "open clear",
+  },
+} satisfies Record<string, SettingsItemText>;
 
 type SettingsCacheSectionProps = {
   sectionId: string;
@@ -36,6 +56,9 @@ export const SettingsCacheSection = ({
     );
   const [cacheBusy, setCacheBusy] = useState(false);
   const [cacheUsageBytes, setCacheUsageBytes] = useState<number | null>(null);
+  const matches = useContext(SettingsSearchMatches);
+  const searching = matches !== null;
+  const showCacheUsage = !matches || matches.has(CACHE_SETTINGS_ITEMS.thumbnailCache);
   const isThumbsDisabled = !thumbnailsEnabled;
   const cacheRange = useDeferredRange({
     value: thumbnailCacheMb,
@@ -52,9 +75,15 @@ export const SettingsCacheSection = ({
   }, []);
 
   useEffect(() => {
-    if (!open) return;
-    refreshCacheUsage();
-  }, [open, refreshCacheUsage]);
+    if (!open || !showCacheUsage) return;
+    if (!searching) {
+      void refreshCacheUsage();
+      return;
+    }
+    // A row can briefly match while typing. Wait before walking the disk cache.
+    const timer = window.setTimeout(() => { void refreshCacheUsage(); }, 200);
+    return () => window.clearTimeout(timer);
+  }, [open, refreshCacheUsage, searching, showCacheUsage]);
 
   const handleOpenCache = async () => {
     if (!open || cacheBusy || !onOpenCacheLocation) return;
@@ -82,11 +111,10 @@ export const SettingsCacheSection = ({
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Cache</div>
-      <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
-        <div>
-          <div className="settings-label">Image format</div>
-          <div className="settings-desc">Pick the saved thumbnail format.</div>
-        </div>
+      <SettingsItem
+        item={CACHE_SETTINGS_ITEMS.imageFormat}
+        className={isThumbsDisabled ? "is-disabled" : undefined}
+      >
         <div className="settings-pills" role="group" aria-label="Thumbnail format">
           <PressButton
             type="button"
@@ -105,12 +133,11 @@ export const SettingsCacheSection = ({
             JPEG
           </PressButton>
         </div>
-      </div>
-      <div className={`settings-item${isThumbsDisabled ? " is-disabled" : ""}`}>
-        <div>
-          <div className="settings-label">Cache size limit</div>
-          <div className="settings-desc">Approximate max size for disk cache.</div>
-        </div>
+      </SettingsItem>
+      <SettingsItem
+        item={CACHE_SETTINGS_ITEMS.sizeLimit}
+        className={isThumbsDisabled ? "is-disabled" : undefined}
+      >
         <div className="settings-range">
           <input
             type="range"
@@ -123,15 +150,11 @@ export const SettingsCacheSection = ({
           />
           <span className="settings-value">{cacheRange.draft} MB</span>
         </div>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label settings-label-row">
-            <span>Thumbnail cache</span>
-            <span className="settings-chip tnum">{cacheUsageLabel}</span>
-          </div>
-          <div className="settings-desc">Open the cache folder or clear stored previews.</div>
-        </div>
+      </SettingsItem>
+      <SettingsItem
+        item={CACHE_SETTINGS_ITEMS.thumbnailCache}
+        labelDetail={<span className="settings-chip tnum">{cacheUsageLabel}</span>}
+      >
         <div className="settings-actions">
           <PressButton
             type="button"
@@ -150,7 +173,7 @@ export const SettingsCacheSection = ({
             Clear
           </PressButton>
         </div>
-      </div>
+      </SettingsItem>
     </section>
   );
 };

@@ -14,6 +14,21 @@ import {
 } from "@/modules";
 import { PressButton } from "@/components/primitives/PressButton";
 
+import { SettingsItem } from "./SettingsItem";
+import type { SettingsItemText } from "./SettingsItem";
+
+export const KEYBINDS_SETTINGS_ITEMS = {
+  customShortcuts: {
+    label: "Custom shortcuts",
+    description: "Click a shortcut to rebind it. Press Escape to cancel.",
+    keywords: "reset keybindings",
+  },
+  smartTabJump: {
+    label: "Smart Tab jump",
+    description: "Double-tap Tab to jump to the top or bottom of the current view.",
+  },
+} satisfies Record<string, SettingsItemText>;
+
 type SettingsKeybindsSectionProps = {
   sectionId: string;
   open: boolean;
@@ -140,26 +155,14 @@ export const SettingsKeybindsSection = ({
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Keybinds</div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Custom shortcuts</div>
-          <div className="settings-desc">
-            Click a shortcut to rebind it. Press Escape to cancel.
-          </div>
-        </div>
+      <SettingsItem item={KEYBINDS_SETTINGS_ITEMS.customShortcuts}>
         <div className="settings-actions">
           <PressButton type="button" className="btn ghost" onClick={handleResetKeybinds}>
             Reset all
           </PressButton>
         </div>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Smart Tab jump</div>
-          <div className="settings-desc">
-            Double-tap Tab to jump to the top or bottom of the current view.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={KEYBINDS_SETTINGS_ITEMS.smartTabJump}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -170,7 +173,7 @@ export const SettingsKeybindsSection = ({
           />
           <span />
         </label>
-      </div>
+      </SettingsItem>
       {KEYBIND_DEFINITIONS.map((definition) => {
         const current = keybinds[definition.id];
         const normalizedCurrent = normalizeKeybind(current);
@@ -181,14 +184,11 @@ export const SettingsKeybindsSection = ({
           ? "Press keys..."
           : formatKeybind(current) || "Unassigned";
         return (
-          <div className="settings-item" key={definition.id}>
-            <div>
-              <div className="settings-label">{definition.label}</div>
-              <div className="settings-desc">{definition.description}</div>
-              {showError ? (
-                <div className="settings-desc settings-desc-error">{captureError}</div>
-              ) : null}
-            </div>
+          <SettingsItem
+            item={definition}
+            key={definition.id}
+            details={showError ? <div className="settings-desc settings-desc-error">{captureError}</div> : null}
+          >
             <div className="settings-actions">
               <PressButton
                 type="button"
@@ -196,6 +196,11 @@ export const SettingsKeybindsSection = ({
                   showError ? " is-error" : ""
                 }`}
                 onClick={() => handleStartCapture(definition.id)}
+                onBlur={() => {
+                  if (!isCapturing) return;
+                  setCaptureAction(null);
+                  setCaptureError(null);
+                }}
               >
                 {displayLabel}
               </PressButton>
@@ -208,7 +213,7 @@ export const SettingsKeybindsSection = ({
                 Reset
               </PressButton>
             </div>
-          </div>
+          </SettingsItem>
         );
       })}
     </section>

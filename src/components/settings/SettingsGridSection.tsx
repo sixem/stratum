@@ -11,6 +11,43 @@ import type { GridNameEllipsis, GridSize } from "@/modules";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useDeferredRange } from "./useDeferredRange";
 
+import { SettingsItem } from "./SettingsItem";
+import type { SettingsItemText } from "./SettingsItem";
+
+export const GRID_SETTINGS_ITEMS = {
+  size: {
+    label: "Grid size",
+    description: "Choose a preset size or let the grid auto-fit by column count. Hold Ctrl and scroll over thumbnails to resize them.",
+    keywords: "auto columns",
+  },
+  autoColumns: {
+    label: "Auto columns",
+    description: "Pick how many columns the grid should fit across the view.",
+    requiresAutoGrid: true,
+  },
+  gap: {
+    label: "Grid gap",
+    description: "Adjust the spacing between grid cards.",
+  },
+  corners: {
+    label: "Grid corners",
+    description: "Rounded cards or straight edges.",
+  },
+  details: {
+    label: "Grid details",
+    description: "Name is always shown in grid cards.",
+    keywords: "file size extension",
+  },
+  hideExtension: {
+    label: "Hide extension in grid names",
+    description: "Keep the base filename in the title line.",
+  },
+  nameTruncation: {
+    label: "Grid name truncation",
+    description: "Choose how long names are shortened. Middle keeps the ending visible.",
+  },
+} satisfies Record<string, SettingsItemText>;
+
 type SettingsGridSectionProps = {
   sectionId: string;
 };
@@ -63,13 +100,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Grid</div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Grid size</div>
-          <div className="settings-desc">
-            Choose a preset size or let the grid auto-fit by column count. Hold Ctrl and scroll over thumbnails to resize them.
-          </div>
-        </div>
+      <SettingsItem item={GRID_SETTINGS_ITEMS.size}>
         <div className="settings-pills" role="group" aria-label="Grid size">
           {GRID_SIZES.map((size) => (
             <PressButton
@@ -82,15 +113,9 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
             </PressButton>
           ))}
         </div>
-      </div>
+      </SettingsItem>
       {gridSize === "auto" ? (
-        <div className="settings-item">
-          <div>
-            <div className="settings-label">Auto columns</div>
-            <div className="settings-desc">
-              Pick how many columns the grid should fit across the view.
-            </div>
-          </div>
+        <SettingsItem item={GRID_SETTINGS_ITEMS.autoColumns}>
           <div className="settings-range">
             <input
               type="range"
@@ -102,13 +127,9 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
             />
             <span className="settings-value">{autoColumnsRange.draft}</span>
           </div>
-        </div>
+        </SettingsItem>
       ) : null}
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Grid gap</div>
-          <div className="settings-desc">Adjust the spacing between grid cards.</div>
-        </div>
+      <SettingsItem item={GRID_SETTINGS_ITEMS.gap}>
         <div className="settings-range">
           <input
             type="range"
@@ -120,12 +141,8 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
           />
           <span className="settings-value">{gridGapRange.draft}px</span>
         </div>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Grid corners</div>
-          <div className="settings-desc">Rounded cards or straight edges.</div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={GRID_SETTINGS_ITEMS.corners}>
         <div className="settings-pills" role="group" aria-label="Grid corners">
           <PressButton
             type="button"
@@ -142,12 +159,8 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
             Straight
           </PressButton>
         </div>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Grid details</div>
-          <div className="settings-desc">Name is always shown in grid cards.</div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={GRID_SETTINGS_ITEMS.details}>
         <div className="settings-pills" role="group" aria-label="Grid details">
           <label
             className={`settings-pill settings-pill-check${gridShowSize ? " is-active" : ""}`}
@@ -176,12 +189,8 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
             <span>Extension</span>
           </label>
         </div>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Hide extension in grid names</div>
-          <div className="settings-desc">Keep the base filename in the title line.</div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={GRID_SETTINGS_ITEMS.hideExtension}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -192,14 +201,8 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
           />
           <span />
         </label>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Grid name truncation</div>
-          <div className="settings-desc">
-            Choose how long names are shortened. Middle keeps the ending visible.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={GRID_SETTINGS_ITEMS.nameTruncation}>
         <div className="settings-pills" role="group" aria-label="Grid name truncation">
           {GRID_NAME_ELLIPSIS.map((mode) => (
             <PressButton
@@ -212,7 +215,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
             </PressButton>
           ))}
         </div>
-      </div>
+      </SettingsItem>
     </section>
   );
 };

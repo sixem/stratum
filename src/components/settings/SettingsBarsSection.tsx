@@ -13,12 +13,40 @@ import { EyeIcon, EyeOffIcon } from "@/components";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useDeferredRange } from "./useDeferredRange";
 
+import { SettingsItem } from "./SettingsItem";
+import type { SettingsItemText } from "./SettingsItem";
+
+export const BARS_SETTINGS_ITEMS = {
+  tabNumbers: {
+    label: "Tab numbers",
+    description: "Show a small index number beside each tab title.",
+  },
+  fixedWidthTabs: {
+    label: "Fixed-width tabs",
+    description: "Keep every tab the same width instead of sizing to the title.",
+  },
+  tabDropSubfolders: {
+    label: "Tab drop subfolders",
+    description: "When dragging onto a tab, reveal its direct subfolders as extra drop targets.",
+  },
+  recentJumps: {
+    label: "Recent jumps window",
+    description: "Control how many locations stay in the rolling list.",
+    keywords: "recent folders sidebar history",
+  },
+  sidebarOrder: {
+    label: "Sidebar order",
+    description: "Reorder sections or toggle visibility to match your flow.",
+    keywords: "sidebar visibility reorder hide show",
+  },
+} satisfies Record<string, SettingsItemText>;
+
 type SettingsBarsSectionProps = {
   sectionId: string;
 };
 
 const RECENT_STEP = 1;
-const TOPBAR_VISIBILITY_OPTIONS = [
+export const TOPBAR_VISIBILITY_OPTIONS = [
   {
     key: "showRecycleBinButton",
     label: "Topbar Recycle Bin button",
@@ -93,13 +121,7 @@ export const SettingsBarsSection = ({
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Bars</div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Tab numbers</div>
-          <div className="settings-desc">
-            Show a small index number beside each tab title.
-          </div>
-        </div>
+      <SettingsItem item={BARS_SETTINGS_ITEMS.tabNumbers}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -110,14 +132,8 @@ export const SettingsBarsSection = ({
           />
           <span />
         </label>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Fixed-width tabs</div>
-          <div className="settings-desc">
-            Keep every tab the same width instead of sizing to the title.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={BARS_SETTINGS_ITEMS.fixedWidthTabs}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -128,14 +144,8 @@ export const SettingsBarsSection = ({
           />
           <span />
         </label>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Tab drop subfolders</div>
-          <div className="settings-desc">
-            When dragging onto a tab, reveal its direct subfolders as extra drop targets.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={BARS_SETTINGS_ITEMS.tabDropSubfolders}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -146,32 +156,25 @@ export const SettingsBarsSection = ({
           />
           <span />
         </label>
-      </div>
-      {TOPBAR_VISIBILITY_OPTIONS.map(({ key, label, description }) => (
-        <div className="settings-item" key={key}>
-          <div>
-            <div className="settings-label">{label}</div>
-            <div className="settings-desc">{description}</div>
-          </div>
-          <label className="settings-toggle">
-            <input
-              type="checkbox"
-              aria-label={label}
-              checked={settings[key]}
-              onChange={(event) => updateSettings({ [key]: event.currentTarget.checked })}
-            />
-            <span />
-          </label>
-        </div>
-      ))}
+      </SettingsItem>
+      {TOPBAR_VISIBILITY_OPTIONS.map((option) => {
+        const { key } = option;
+        return (
+          <SettingsItem item={option} key={key}>
+            <label className="settings-toggle">
+              <input
+                type="checkbox"
+                aria-label={option.label}
+                checked={settings[key]}
+                onChange={(event) => updateSettings({ [key]: event.currentTarget.checked })}
+              />
+              <span />
+            </label>
+          </SettingsItem>
+        );
+      })}
       <div className="settings-section-title">Sidebar</div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Recent jumps window</div>
-          <div className="settings-desc">
-            Control how many locations stay in the rolling list.
-          </div>
-        </div>
+      <SettingsItem item={BARS_SETTINGS_ITEMS.recentJumps}>
         <div className="settings-range">
           <input
             type="range"
@@ -183,14 +186,8 @@ export const SettingsBarsSection = ({
           />
           <span className="settings-value">{recentRange.draft}</span>
         </div>
-      </div>
-      <div className="settings-item is-stacked">
-        <div>
-          <div className="settings-label">Sidebar order</div>
-          <div className="settings-desc">
-            Reorder sections or toggle visibility to match your flow.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={BARS_SETTINGS_ITEMS.sidebarOrder} className="is-stacked">
         <div className="settings-order">
           {normalizedSidebarOrder.map((sectionIdValue, index) => {
             const section = SIDEBAR_SECTION_DEFINITIONS.find(
@@ -245,7 +242,7 @@ export const SettingsBarsSection = ({
             );
           })}
         </div>
-      </div>
+      </SettingsItem>
     </section>
   );
 };

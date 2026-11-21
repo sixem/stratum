@@ -4,6 +4,41 @@ import { shallow } from "zustand/shallow";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useSettingsStore } from "@/modules";
 
+import { SettingsItem } from "./SettingsItem";
+import type { SettingsItemText } from "./SettingsItem";
+
+export const GENERAL_SETTINGS_ITEMS = {
+  defaultView: {
+    label: "Default view",
+    description: "Used for new tabs and new sessions.",
+    keywords: "list thumbnails grid",
+  },
+  smoothScrolling: {
+    label: "Smooth scrolling",
+    description: "Keep the original smooth wheel scroll instead of snapping by row.",
+  },
+  centerGridItems: {
+    label: "Center grid items",
+    description: "Center the grid within the viewport. Will not have an effect with autosized grids.",
+  },
+  parentEntry: {
+    label: "Parent directory entry",
+    description: "Show a pseudo entry for moving up one level.",
+  },
+  keepFilter: {
+    label: "Keep filter when changing folders",
+    description: "Carry the current filter into the next folder in the same tab, in either pane.",
+  },
+  confirmDeletes: {
+    label: "Confirm deletes",
+    description: "Ask before sending items to the trash.",
+  },
+  confirmClose: {
+    label: "Confirm on close",
+    description: "Show a confirmation dialog before closing the app window.",
+  },
+} satisfies Record<string, SettingsItemText>;
+
 type SettingsGeneralSectionProps = {
   sectionId: string;
 };
@@ -37,11 +72,7 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">General</div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Default view</div>
-          <div className="settings-desc">Used for new tabs and new sessions.</div>
-        </div>
+      <SettingsItem item={GENERAL_SETTINGS_ITEMS.defaultView}>
         <div className="settings-pills" role="group" aria-label="Default view">
           <PressButton
             type="button"
@@ -58,14 +89,8 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
             List
           </PressButton>
         </div>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Smooth scrolling</div>
-          <div className="settings-desc">
-            Keep the original smooth wheel scroll instead of snapping by row.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={GENERAL_SETTINGS_ITEMS.smoothScrolling}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -74,12 +99,8 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
           />
           <span />
         </label>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Center grid items</div>
-          <div className="settings-desc">Center the grid within the viewport. Will not have an effect with autosized grids.</div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={GENERAL_SETTINGS_ITEMS.centerGridItems}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -88,12 +109,8 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
           />
           <span />
         </label>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Parent directory entry</div>
-          <div className="settings-desc">Show a pseudo entry for moving up one level.</div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={GENERAL_SETTINGS_ITEMS.parentEntry}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -102,15 +119,13 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
           />
           <span />
         </label>
-      </div>
-      <div className="settings-item">
-        <div>
-          <label className="settings-label" htmlFor={keepFilterId}>Keep filter when changing folders</label>
-          <div className="settings-desc" id={keepFilterDescriptionId}>
-            Carry the current filter into the next folder in the same tab, in either pane.
-          </div>
-        </div>
-        <div className="settings-toggle">
+      </SettingsItem>
+      <SettingsItem
+        item={GENERAL_SETTINGS_ITEMS.keepFilter}
+        labelFor={keepFilterId}
+        descriptionId={keepFilterDescriptionId}
+      >
+        <label className="settings-toggle">
           <input
             type="checkbox"
             id={keepFilterId}
@@ -119,15 +134,9 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
             onChange={(event) => updateSettings({ keepFilterOnNavigation: event.currentTarget.checked })}
           />
           <span aria-hidden="true" />
-        </div>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Confirm deletes</div>
-          <div className="settings-desc">
-            Ask before sending items to the trash.
-          </div>
-        </div>
+        </label>
+      </SettingsItem>
+      <SettingsItem item={GENERAL_SETTINGS_ITEMS.confirmDeletes}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -136,14 +145,8 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
           />
           <span />
         </label>
-      </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Confirm on close</div>
-          <div className="settings-desc">
-            Show a confirmation dialog before closing the app window.
-          </div>
-        </div>
+      </SettingsItem>
+      <SettingsItem item={GENERAL_SETTINGS_ITEMS.confirmClose}>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -152,7 +155,7 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
           />
           <span />
         </label>
-      </div>
+      </SettingsItem>
     </section>
   );
 };
