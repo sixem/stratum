@@ -39,6 +39,8 @@
 .context-menu,
 .context-submenu {
   --context-corner-radius: 0px;
+  --context-item-hover-fill: #ffffff0f;
+  --context-item-hover-stroke: rgba(255, 255, 255, 0.16);
   position: fixed;
   min-width: 190px;
   max-width: min(340px, calc(100vw - 24px));
@@ -173,8 +175,10 @@
     overflow: hidden;
   }
 
-  .context-item:hover, .context-item:focus-visible {
-    background: #ffffff0f;
+  .context-item:is(:hover, :focus-visible):not(:disabled),
+  .context-item-group.is-open > .context-item {
+    background: var(--context-item-hover-fill);
+    box-shadow: inset 0 0 0 var(--surface-border-width) var(--context-item-hover-stroke);
   }
 
   .context-item.is-active {
@@ -188,10 +192,6 @@
 
   .context-item-group {
     position: relative;
-  }
-
-  .context-item-group.is-open > .context-item {
-    background: #ffffff0f;
   }
 
   .context-right {

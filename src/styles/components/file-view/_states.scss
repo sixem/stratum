@@ -60,7 +60,12 @@
 }
 
 :root[data-ambient="true"] :where(.file-list) .row:hover:not(.is-selected):not([data-drop-target="true"]) {
-  background-color: color-mix(in srgb, var(--surface-control-strong) 85%, transparent);
+  background-color: color-mix(in srgb, var(--surface-control-strong) var(--ambient-row-hover-opacity, 85%), transparent);
+}
+
+:root[data-ambient="true"]:where(:not([data-dark-mode="true"])) :where(.file-list, .thumb-shell) {
+  --ambient-row-hover-opacity: 90%;
+  --ambient-card-opacity-boost: 0.02;
 }
 
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card {
@@ -68,19 +73,19 @@
 }
 
 :root[data-ambient="true"]:where(:not([data-dark-mode="true"])) :where(.thumb-shell) .thumb-card {
-  @include shared.entry-state-surface(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02));
+  @include shared.entry-state-surface(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.04));
 }
 
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not(
     [data-drop-target="true"]
   ) {
-  @include shared.entry-state-surface(rgba(124, 157, 226, 0.26), rgba(92, 126, 196, 0.11));
+  @include shared.entry-state-surface(rgba(124, 157, 226, 0.26), rgba(92, 126, 196, calc(0.11 + var(--ambient-card-opacity-boost, 0))));
 }
 
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not(
     [data-drop-target="true"]
   ):hover {
-  @include shared.entry-state-surface(rgba(124, 157, 226, 0.3), rgba(110, 146, 221, 0.14));
+  @include shared.entry-state-surface(rgba(124, 157, 226, 0.3), rgba(110, 146, 221, calc(0.14 + var(--ambient-card-opacity-boost, 0))));
 }
 
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-selected {

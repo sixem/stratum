@@ -242,7 +242,7 @@
 }
 
 .quick-preview-info-error {
-  @include control.eyebrow-label(var(--font-size-xs), 0.08em, null);
+  @include control.eyebrow-label(var(--font-size-xs), 0.08em, 500);
 }
 
 .quick-preview-info-row {
@@ -255,8 +255,8 @@
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
-  @include control.eyebrow-label(var(--font-size-sm), 0.06em, null);
-  line-height: 1;
+  @include control.eyebrow-label(var(--font-size-xs), 0.06em, 500);
+  line-height: var(--font-size-sm);
 }
 
 .quick-preview-info-value {

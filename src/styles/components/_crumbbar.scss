@@ -32,9 +32,9 @@
   }
 
   .crumb {
-    padding: 2px 6px;
+    padding: 1px 5px;
     border-radius: 4px;
-    border: 1px solid transparent;
+    border: var(--surface-border-width) solid transparent;
     font-size: 0.775em;
     font-weight: 600;
     color: var(--text);
@@ -50,7 +50,7 @@
       inset 0 0 0 1px rgba(var(--accent-rgb), 0.35);
   }
 
-  .crumb:hover {
+  .crumb:not([data-drop-target="true"]):is(:hover, :focus-visible) {
     border-color: rgba(255, 255, 255, 0.2);
     background: var(--surface-control);
   }

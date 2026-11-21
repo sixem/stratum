@@ -388,19 +388,19 @@
 // In ambient mode, preserve the translucent look but let category-tinted files read a bit faster.
 :root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
   .thumb-card[data-kind="document"]:not(.is-selected):not([data-drop-target="true"]) {
-  @include shared.entry-state-surface(rgba(82, 132, 255, 0.24), rgba(82, 132, 255, 0.065));
+  @include shared.entry-state-surface(rgba(82, 132, 255, 0.24), rgba(82, 132, 255, calc(0.065 + var(--ambient-card-opacity-boost, 0))));
   --thumb-icon-color: rgba(110, 154, 255, 0.9);
 }
 
 :root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
   .thumb-card[data-kind="image"]:not(.is-selected):not([data-drop-target="true"]) {
-  @include shared.entry-state-surface(rgba(56, 201, 198, 0.24), rgba(56, 201, 198, 0.065));
+  @include shared.entry-state-surface(rgba(56, 201, 198, 0.24), rgba(56, 201, 198, calc(0.065 + var(--ambient-card-opacity-boost, 0))));
   --thumb-icon-color: rgba(88, 223, 219, 0.9);
 }
 
 :root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
   .thumb-card[data-kind="video"]:not(.is-selected):not([data-drop-target="true"]) {
-  @include shared.entry-state-surface(rgba(255, 140, 61, 0.26), rgba(255, 140, 61, 0.07));
+  @include shared.entry-state-surface(rgba(255, 140, 61, 0.26), rgba(255, 140, 61, calc(0.07 + var(--ambient-card-opacity-boost, 0))));
   --thumb-icon-color: rgba(255, 166, 103, 0.9);
 }
 
@@ -408,30 +408,30 @@
   .thumb-card[data-kind="executable"]:not(.is-selected):not([data-drop-target="true"]) {
   @include shared.entry-state-surface(
     rgba(var(--accent-rgb), 0.24),
-    rgba(var(--accent-rgb), 0.065)
+    rgba(var(--accent-rgb), calc(0.065 + var(--ambient-card-opacity-boost, 0)))
   );
   --thumb-icon-color: rgba(var(--accent-rgb), 0.9);
 }
 
 :root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
   .thumb-card[data-kind="document"]:not(.is-selected):not([data-drop-target="true"]):hover {
-  @include shared.entry-state-surface(rgba(82, 132, 255, 0.28), rgba(82, 132, 255, 0.09));
+  @include shared.entry-state-surface(rgba(82, 132, 255, 0.28), rgba(82, 132, 255, calc(0.09 + var(--ambient-card-opacity-boost, 0))));
 }
 
 :root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
   .thumb-card[data-kind="image"]:not(.is-selected):not([data-drop-target="true"]):hover {
-  @include shared.entry-state-surface(rgba(56, 201, 198, 0.28), rgba(56, 201, 198, 0.09));
+  @include shared.entry-state-surface(rgba(56, 201, 198, 0.28), rgba(56, 201, 198, calc(0.09 + var(--ambient-card-opacity-boost, 0))));
 }
 
 :root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
   .thumb-card[data-kind="video"]:not(.is-selected):not([data-drop-target="true"]):hover {
-  @include shared.entry-state-surface(rgba(255, 140, 61, 0.3), rgba(255, 140, 61, 0.1));
+  @include shared.entry-state-surface(rgba(255, 140, 61, 0.3), rgba(255, 140, 61, calc(0.1 + var(--ambient-card-opacity-boost, 0))));
 }
 
 :root[data-ambient="true"] :where(.thumb-shell)[data-category-tint="true"]
   .thumb-card[data-kind="executable"]:not(.is-selected):not([data-drop-target="true"]):hover {
   @include shared.entry-state-surface(
     rgba(var(--accent-rgb), 0.28),
-    rgba(var(--accent-rgb), 0.09)
+    rgba(var(--accent-rgb), calc(0.09 + var(--ambient-card-opacity-boost, 0)))
   );
 }

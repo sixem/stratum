@@ -191,20 +191,13 @@
     bottom: calc(50% + var(--surface-border-width) / 2);
     height: 14px;
     pointer-events: none;
-    background:
-      linear-gradient(to top, var(--pane-shadow-edge, transparent), transparent 7px),
-      linear-gradient(to top, rgb(0 0 0 / 58%), rgb(0 0 0 / 20%) 6px, transparent);
+    background: linear-gradient(to top, rgb(0 0 0 / 32%), transparent);
   }
 
   &:hover::before,
   &:focus-visible::before {
     background: var(--pane-active-edge);
   }
-}
-
-:root[data-dark-mode="true"] .pane-divider {
-  // Define the lip of the divider even over an entirely black file view.
-  --pane-shadow-edge: rgb(187 197 218 / 10%);
 }
 
 .pane-loading { margin: auto; color: var(--muted); }
