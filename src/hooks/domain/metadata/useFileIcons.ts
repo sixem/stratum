@@ -1,110 +1,99 @@
-// Fetches and caches default app icons for file extensions.
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getFileIcons, toFileIconUrl } from "@/api";
+// Share native icon lookups across panes and distinguish a pending request from a miss.
+import { useEffect, useMemo, useReducer } from "react";
+import { getExecutableIcons, getFileIcons, toFileIconUrl } from "@/api/fileIcons";
+import type { ThumbnailRequest } from "@/types";
 
-const MAX_ICON_BATCH = 80;
-const ICON_CACHE_LIMIT = 512;
-const sharedIconCache = new Map<string, string>();
+const CACHE_LIMIT = 512;
+const RETRY_DELAY_MS = 15_000;
 
-const upsertSharedIcon = (extension: string, iconUrl: string) => {
-  if (sharedIconCache.has(extension)) {
-    sharedIconCache.delete(extension);
-  }
-  sharedIconCache.set(extension, iconUrl);
-  while (sharedIconCache.size > ICON_CACHE_LIMIT) {
-    const oldestKey = sharedIconCache.keys().next().value as string | undefined;
-    if (!oldestKey) break;
-    sharedIconCache.delete(oldestKey);
+type IconRequest = { id: string; key: string };
+type CachedIcon = { url: string | null; retryAt: number };
+type FetchIcons = (ids: string[]) => Promise<Map<string, string>>;
+
+const makeLookup = (batchSize: number, fetchIcons: FetchIcons) => ({
+  batchSize,
+  fetchIcons,
+  icons: new Map<string, CachedIcon>(),
+  pending: new Map<string, Promise<void>>(),
+});
+
+const extensionLookup = makeLookup(80, async extensions => new Map(
+  (await getFileIcons(extensions)).map(({ extension, iconPath }) => [extension, toFileIconUrl(iconPath)]),
+));
+const executableLookup = makeLookup(24, async paths => new Map(
+  (await getExecutableIcons(paths)).map(({ path, iconPath }) => [path, toFileIconUrl(iconPath)]),
+));
+
+type IconLookup = ReturnType<typeof makeLookup>;
+
+const recordIcon = (icons: IconLookup["icons"], key: string, url: string | null) => {
+  icons.delete(key);
+  icons.set(key, { url, retryAt: url ? Infinity : Date.now() + RETRY_DELAY_MS });
+  while (icons.size > CACHE_LIMIT) {
+    const oldest = icons.keys().next().value;
+    if (oldest === undefined) break;
+    icons.delete(oldest);
   }
 };
 
-const normalizeExtension = (value: string) => {
-  return value.trim().replace(/^\.+/, "").toLowerCase();
-};
-
-export const useFileIcons = (enabled: boolean) => {
-  const [icons, setIcons] = useState<Map<string, string>>(() => new Map(sharedIconCache));
-  const iconsRef = useRef(icons);
-  const pending = useRef(new Set<string>());
-  const misses = useRef(new Set<string>());
-  const enabledRef = useRef(enabled);
-
-  useEffect(() => {
-    iconsRef.current = icons;
-  }, [icons]);
-
-  useEffect(() => {
-    enabledRef.current = enabled;
-    if (!enabled) {
-      pending.current.clear();
-      return;
-    }
-    misses.current.clear();
-  }, [enabled]);
-
-  const requestIcons = useCallback(
-    async (extensions: string[]) => {
-      if (!enabledRef.current) return;
-      const deduped: string[] = [];
-      const hydrateHits = new Map<string, string>();
-      const seen = new Set<string>();
-      extensions.forEach((extension) => {
-        const normalized = normalizeExtension(extension);
-        if (!normalized) return;
-        if (seen.has(normalized)) return;
-        seen.add(normalized);
-        const shared = sharedIconCache.get(normalized);
-        if (shared && !iconsRef.current.has(normalized)) {
-          hydrateHits.set(normalized, shared);
-          return;
+const loadBatch = ({ icons, pending, fetchIcons }: IconLookup, batch: IconRequest[]) => {
+  const work = new Set<Promise<void>>();
+  const now = Date.now();
+  const needed = batch.filter(({ key }) => {
+    const inFlight = pending.get(key);
+    if (inFlight) work.add(inFlight);
+    return !inFlight && (icons.get(key)?.retryAt ?? 0) <= now;
+  });
+  if (needed.length) {
+    const load = fetchIcons(needed.map(({ id }) => id))
+      .catch(() => new Map<string, string>())
+      .then(hits => {
+        for (const { key, id } of needed) {
+          recordIcon(icons, key, hits.get(id) ?? null);
+          pending.delete(key);
         }
-        if (iconsRef.current.has(normalized)) return;
-        if (misses.current.has(normalized)) return;
-        if (pending.current.has(normalized)) return;
-        deduped.push(normalized);
       });
-      if (hydrateHits.size > 0) {
-        setIcons((prev) => {
-          const next = new Map(prev);
-          let changed = false;
-          hydrateHits.forEach((url, extension) => {
-            if (next.has(extension)) return;
-            next.set(extension, url);
-            changed = true;
-          });
-          return changed ? next : prev;
-        });
-      }
-      if (deduped.length === 0) return;
-      const batch = deduped.slice(0, MAX_ICON_BATCH);
-      batch.forEach((extension) => pending.current.add(extension));
-      const requested = new Set(batch);
-      try {
-        const hits = await getFileIcons(batch);
-        if (!enabledRef.current) return;
-        setIcons((prev) => {
-          const next = new Map(prev);
-          let changed = false;
-          hits.forEach((hit) => {
-            const normalized = normalizeExtension(hit.extension);
-            if (!normalized || next.has(normalized)) return;
-            const iconUrl = toFileIconUrl(hit.iconPath);
-            next.set(normalized, iconUrl);
-            upsertSharedIcon(normalized, iconUrl);
-            changed = true;
-            requested.delete(normalized);
-          });
-          return changed ? next : prev;
-        });
-        requested.forEach((extension) => misses.current.add(extension));
-      } catch {
-        // Ignore icon errors; fallback SVGs remain in place.
-      } finally {
-        batch.forEach((extension) => pending.current.delete(extension));
-      }
-    },
-    [],
-  );
+    needed.forEach(({ key }) => pending.set(key, load));
+    work.add(load);
+  }
+  return work.size ? Promise.all(work) : null;
+};
 
-  return { icons, requestIcons };
+const useIconLookup = (lookup: IconLookup, requests: IconRequest[], canRequest: boolean) => {
+  const [revision, refresh] = useReducer(value => value + 1, 0);
+  useEffect(() => {
+    if (!canRequest) return;
+    let active = true;
+    const loadVisible = async () => {
+      for (let start = 0; active && start < requests.length; start += lookup.batchSize) {
+        const work = loadBatch(lookup, requests.slice(start, start + lookup.batchSize));
+        if (!work) continue;
+        await work;
+        if (active) refresh();
+      }
+    };
+    void loadVisible();
+    return () => { active = false; };
+  }, [lookup, canRequest, requests]);
+
+  // Read the cache again when requests resume after scrolling or resizing.
+  return useMemo(() => {
+    const visible = new Map<string, string | null>();
+    for (const { id, key } of requests) {
+      const match = lookup.icons.get(key);
+      if (match) visible.set(id, match.url);
+    }
+    return visible;
+  }, [lookup, canRequest, requests, revision]);
+};
+
+export const useFileIcons = (extensions: string[], executables: ThumbnailRequest[], canRequest: boolean) => {
+  const typeRequests = useMemo(() => extensions.map(extension => ({ id: extension, key: extension })), [extensions]);
+  const exeRequests = useMemo(() => executables.map(({ path, size, modified }) => ({
+    id: path, key: JSON.stringify([path, size, modified]),
+  })), [executables]);
+  return {
+    fileIcons: useIconLookup(extensionLookup, typeRequests, canRequest),
+    executableIcons: useIconLookup(executableLookup, exeRequests, canRequest),
+  };
 };

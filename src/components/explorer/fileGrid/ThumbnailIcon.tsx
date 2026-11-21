@@ -20,6 +20,38 @@ const markAppIconReady = (url: string) => {
   }
 };
 
+type IconDecode = { url: string; ready: boolean };
+
+const getIconState = (url: string | null | undefined, decoded: IconDecode | undefined) => {
+  if (url === undefined) return "pending";
+  if (url === null) return "missing";
+  if (decoded?.url === url) return decoded.ready ? "ready" : "missing";
+  return readyAppIconUrls.has(url) ? "ready" : "pending";
+};
+
+const NativeIcon = ({ url, ready, onDecode }: {
+  url: string;
+  ready: boolean;
+  onDecode: (result: IconDecode) => void;
+}) => (
+  <img
+    className="thumb-app-icon"
+    src={url}
+    alt=""
+    aria-hidden="true"
+    draggable={false}
+    data-ready={ready ? "true" : "false"}
+    onLoad={() => {
+      markAppIconReady(url);
+      onDecode({ url, ready: true });
+    }}
+    onError={() => {
+      readyAppIconUrls.delete(url);
+      onDecode({ url, ready: false });
+    }}
+  />
+);
+
 export const ThumbnailIcon = ({
   isDir,
   fileKind,
@@ -41,15 +73,17 @@ export const ThumbnailIcon = ({
     setThumbReady(isThumbPreviewReadyCached(thumbUrl));
   }, [thumbUrl]);
 
-  const [failedExecutableIcon, setFailedExecutableIcon] = useState<string>();
-  const [loadedAppIcon, setLoadedAppIcon] = useState<string>();
-  const specificIcon = executableIconUrl !== failedExecutableIcon ? executableIconUrl : undefined;
-  // A refresh can replace a file with a folder at the same path, reusing this card.
-  const iconUrl = !isDir && appIconsEnabled && !thumbReady ? specificIcon ?? appIconUrl : undefined;
-  const appIconReady = Boolean(iconUrl && (loadedAppIcon === iconUrl || readyAppIconUrls.has(iconUrl)));
+  const [embeddedDecode, setEmbeddedDecode] = useState<IconDecode>();
+  const [typeDecode, setTypeDecode] = useState<IconDecode>();
+  const useNativeIcons = !isDir && appIconsEnabled && Boolean(extension) && !thumbReady;
+  const embeddedUrl = useNativeIcons && extension === "exe" ? executableIconUrl : null;
+  const typeUrl = useNativeIcons ? appIconUrl : null;
+  const embeddedState = getIconState(embeddedUrl, embeddedDecode);
+  const typeState = getIconState(typeUrl, typeDecode);
 
-  // Keep fallback visible until either app icon or thumbnail has decoded for this card.
-  const showFallback = !thumbReady && !appIconReady;
+  // Keep the Windows type icon while the preferred EXE image is being decoded.
+  // Wait until all native options are exhausted before showing the SVG.
+  const showFallback = !thumbReady && embeddedState === "missing" && typeState === "missing";
 
   return (
     <>
@@ -61,25 +95,11 @@ export const ThumbnailIcon = ({
           extension={extension}
         />
       ) : null}
-      {iconUrl ? (
-        <img
-          key={iconUrl}
-          className="thumb-app-icon"
-          src={iconUrl}
-          alt=""
-          aria-hidden="true"
-          draggable={false}
-          data-ready={appIconReady ? "true" : "false"}
-          onLoad={() => {
-            markAppIconReady(iconUrl);
-            setLoadedAppIcon(iconUrl);
-          }}
-          onError={() => {
-            readyAppIconUrls.delete(iconUrl);
-            setLoadedAppIcon(undefined);
-            if (specificIcon) setFailedExecutableIcon(iconUrl);
-          }}
-        />
+      {typeUrl && typeState !== "missing" && embeddedState !== "ready" ? (
+        <NativeIcon key={typeUrl} url={typeUrl} ready={typeState === "ready"} onDecode={setTypeDecode} />
+      ) : null}
+      {embeddedUrl && embeddedState !== "missing" ? (
+        <NativeIcon key={embeddedUrl} url={embeddedUrl} ready={embeddedState === "ready"} onDecode={setEmbeddedDecode} />
       ) : null}
       {thumbUrl ? (
         <ThumbnailPreview src={thumbUrl} onReadyChange={setThumbReady} />

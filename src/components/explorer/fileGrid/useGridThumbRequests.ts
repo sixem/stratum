@@ -17,7 +17,6 @@ import type { EntryMeta, ThumbnailRequest } from "@/types";
 import { useGridDisplayMeta } from "./useGridDisplayMeta";
 import type { GridDisplayMeta } from "./useGridDisplayMeta";
 import { useGridFolderSamples } from "./useGridFolderSamples";
-import { useExecutableIcons } from "./useExecutableIcons";
 
 type UseGridThumbRequestsOptions = {
   viewportRef: RefObject<HTMLDivElement | null>;
@@ -41,8 +40,8 @@ type GridThumbRequestsState = {
   gridMetaByPath: Map<string, GridDisplayMeta>;
   thumbSource: Map<string, string>;
   folderThumbSource: Map<string, string>;
-  fileIcons: Map<string, string>;
-  executableIcons: Map<string, string>;
+  fileIcons: Map<string, string | null>;
+  executableIcons: Map<string, string | null>;
   scrolling: boolean;
   interactionActive: boolean;
 };
@@ -147,8 +146,6 @@ export const useGridThumbRequests = ({
   useThumbnailPause(interactionActive, thumbnailsEnabled);
   const canRequestThumbs = thumbnailsEnabled && !loading && !interactionActive;
   const thumbSource = thumbsSuppressed ? thumbSnapshotRef.current : thumbnails;
-  const { icons: fileIcons, requestIcons: requestFileIcons } = useFileIcons(thumbnailAppIcons);
-  const executableIcons = useExecutableIcons(executableFiles, thumbnailAppIcons && !loading && !interactionActive);
   useThumbnailRequest(
     loading || interactionActive,
     canRequestThumbs,
@@ -172,7 +169,7 @@ export const useGridThumbRequests = ({
   });
 
   const iconRequests = useMemo(() => {
-    if (!thumbnailAppIcons || loading || interactionActive || visibleItems.length === 0) {
+    if (!thumbnailAppIcons || visibleItems.length === 0) {
       return [];
     }
     const requests: string[] = [];
@@ -187,12 +184,11 @@ export const useGridThumbRequests = ({
       requests.push(extension);
     }
     return requests;
-  }, [interactionActive, loading, thumbnailAppIcons, visibleItems]);
+  }, [thumbnailAppIcons, visibleItems]);
 
-  useEffect(() => {
-    if (iconRequests.length === 0) return;
-    requestFileIcons(iconRequests);
-  }, [iconRequests, requestFileIcons]);
+  const { fileIcons, executableIcons } = useFileIcons(
+    iconRequests, executableFiles, thumbnailAppIcons && !loading && !interactionActive,
+  );
 
   useEffect(() => {
     if (!perf.enabled) return;
