@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import type { ViewMode } from "@/types";
+import type { ScrollAlignment } from "@/hooks/perf/scroll";
 import { folderPathKey } from "@/lib";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import type { FileViewModel } from "./useFileViewModel";
@@ -21,7 +22,7 @@ type UseFileViewInteractionsOptions = {
   promptOpen: boolean;
   contextMenuOpen: boolean;
   mainRef: RefObject<HTMLElement | null>;
-  requestScrollToIndex: (index: number) => void;
+  requestScrollToIndex: (index: number, alignment?: ScrollAlignment) => void;
 };
 
 export const useFileViewInteractions = ({
@@ -113,9 +114,9 @@ export const useFileViewInteractions = ({
   const handleTypeaheadMatch = useCallback(
     (item: { path: string; index: number }) => {
       setSelection([item.path], item.path);
-      requestScrollToIndex(item.index);
+      requestScrollToIndex(item.index, viewMode === "list" ? "center" : "nearest");
     },
-    [requestScrollToIndex, setSelection],
+    [requestScrollToIndex, setSelection, viewMode],
   );
 
   const shouldHandleTypeahead = useCallback(

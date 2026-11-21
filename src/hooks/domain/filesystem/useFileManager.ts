@@ -3,6 +3,7 @@ import { useCallback, useMemo, useRef } from "react";
 import { openPath } from "@/api";
 import { makeDebug, tabLabel, toMessage } from "@/lib";
 import { usePromptStore } from "@/modules";
+import { useSessionStore } from "@/modules/sessionStore";
 import { useDirectoryLoader } from "./useDirectoryLoader";
 import { useEntryMetaCache } from "./useEntryMetaCache";
 import { useFileActivity } from "./useFileActivity";
@@ -12,6 +13,7 @@ import type { StatusState } from "./fileManager.types";
 
 const log = makeDebug("fs");
 const perf = makeDebug("perf:fs");
+const getRestoreRevision = () => useSessionStore.getState().restoreRevision;
 
 export function useFileManager() {
   // Shared request id allows metadata requests to ignore stale directory loads.
@@ -32,6 +34,7 @@ export function useFileManager() {
     loadIdRef,
     primeEntryMeta: metaCache.primeEntryMeta,
     reportError,
+    getRestoreRevision,
     log,
     perf,
   });
@@ -115,6 +118,7 @@ export function useFileManager() {
     entryMeta: metaCache.entryMeta,
     loading: directoryLoader.loadingPath !== null,
     loadingPath: directoryLoader.loadingPath,
+    failedPath: directoryLoader.failedPath,
     suppressUndoPresence: fileMutations.suppressUndoPresence,
     pendingDeletePaths: fileMutations.pendingDeletePaths,
     status,

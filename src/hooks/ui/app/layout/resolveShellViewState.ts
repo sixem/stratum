@@ -27,6 +27,7 @@ export const resolveShellViewState = ({
   const {
     activeTabId,
     activeTab,
+    restoringTabs,
     displayPath: viewPath,
     displaySearch,
     viewMode,
@@ -45,7 +46,7 @@ export const resolveShellViewState = ({
   const currentPathKey = folderPathKey(currentPath);
   // File actions require the displayed folder to match the committed listing.
   // Refreshing that same listing leaves its rows and selection usable.
-  const viewLoading = Boolean(viewPathKey) && viewPathKey !== currentPathKey;
+  const viewLoading = Boolean(viewPathKey) && (restoringTabs || viewPathKey !== currentPathKey);
   const cachedView =
     viewLoading
       ? fileManager.peekDirCache(viewPath, { sort: sortState, search: displaySearch })

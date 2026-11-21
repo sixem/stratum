@@ -20,6 +20,8 @@ type AppContentProps = {
   fileDrop: PaneDrop;
   layoutClass: string;
   folderBusy: boolean;
+  folderFailed: boolean;
+  onRetryFolder: () => void;
   sidebarOpen: boolean;
   sidebarProps: ComponentProps<typeof Sidebar>;
   mainRef: RefObject<HTMLElement | null>;
@@ -37,6 +39,8 @@ export const AppContent = ({
   fileDrop,
   layoutClass,
   folderBusy,
+  folderFailed,
+  onRetryFolder,
   sidebarOpen,
   sidebarProps,
   mainRef,
@@ -89,7 +93,13 @@ export const AppContent = ({
             <div className="folder-load-progress" role="progressbar" aria-label="Loading folder" />
           )}
           <PerfProfiler id="file-view">
-            <FileView {...paneViewProps} dropTargetPath={fileDrop.hoveredPane === "main" ? fileDrop.dropTargetPath : null} />
+            {folderFailed ? (
+              <div className="pane-loading">
+                <button className="btn ghost" type="button" onClick={onRetryFolder}>Retry opening folder</button>
+              </div>
+            ) : (
+              <FileView {...paneViewProps} dropTargetPath={fileDrop.hoveredPane === "main" ? fileDrop.dropTargetPath : null} />
+            )}
           </PerfProfiler>
         </main>
         {split && <>

@@ -59,6 +59,10 @@
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.9);
 }
 
+:root[data-ambient="true"] :where(.file-list) .row:hover:not(.is-selected):not([data-drop-target="true"]) {
+  background-color: color-mix(in srgb, var(--surface-control-strong) 85%, transparent);
+}
+
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card {
   @include shared.entry-state-surface(rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.025));
 }

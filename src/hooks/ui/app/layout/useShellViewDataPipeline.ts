@@ -162,7 +162,6 @@ export const useShellViewDataPipeline = ({
     visibleCount,
     isFiltered,
     resolvedTotalCount,
-    showEmptyFolder,
     viewParentPath,
     currentDriveInfo,
     refreshClipboardFromOs,

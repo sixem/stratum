@@ -16,6 +16,7 @@ type UseDirectoryLoaderOptions = {
   loadIdRef: MutableRefObject<number>;
   primeEntryMeta: (items: FileEntry[]) => void;
   reportError: (title: string, message: string) => void;
+  getRestoreRevision: () => number;
   log: FileManagerDebug;
   perf: FileManagerDebug;
 };
@@ -28,6 +29,7 @@ export const useDirectoryLoader = ({
   loadIdRef,
   primeEntryMeta,
   reportError,
+  getRestoreRevision,
   log,
   perf,
 }: UseDirectoryLoaderOptions) => {
@@ -36,6 +38,7 @@ export const useDirectoryLoader = ({
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loadingPath, setLoadingPath] = useState<string | null>(null);
+  const [failedPath, setFailedPath] = useState<string | null>(null);
   const currentPathRef = useRef("");
   const [requests] = useState(() => new DirectoryRequests());
   const [cache] = useState(() => new DirectoryCache(DIR_CACHE_LIMIT, DIR_CACHE_ENTRY_LIMIT));
@@ -65,9 +68,11 @@ export const useDirectoryLoader = ({
       const cached = options?.force ? null : cache.get(key);
       const request = requests.start(target, key, query, Boolean(cached), options);
       if (!request) return;
+      const restoreRevision = getRestoreRevision();
       loadIdRef.current += 1;
       const generation = Math.max(Date.now(), lastGeneration[pane] + 1);
       lastGeneration[pane] = generation;
+      setFailedPath(null);
       setLoadingPath(request.foreground ? target : null);
       if (cached) {
         cache.remember(key, cached);
@@ -85,7 +90,7 @@ export const useDirectoryLoader = ({
           generation,
           pane,
         });
-        if (!requests.commit(request)) return;
+        if (restoreRevision !== getRestoreRevision() || !requests.commit(request)) return;
         if (perf.enabled) {
           perf(
             "list_dir_with_parent: %s (%d of %d entries) in %dms",
@@ -96,14 +101,15 @@ export const useDirectoryLoader = ({
         cache.remember(key, result);
         log("loadDir done: %s (%d entries)", target, result.entries.length);
       } catch (error) {
-        if (requests.pending !== request) return;
+        if (restoreRevision !== getRestoreRevision() || requests.pending !== request) return;
+        setFailedPath(target);
         log("loadDir error: %s (%o)", target, error);
         reportError("Couldn't open folder", `Failed to open ${target}: ${toMessage(error, "unknown error")}`);
       } finally {
         if (requests.finish(request)) setLoadingPath(null);
       }
     },
-    [cache, pane, loadIdRef, log, perf, reportError, requests, showSnapshot],
+    [cache, pane, loadIdRef, log, perf, reportError, getRestoreRevision, requests, showSnapshot],
   );
 
   const refresh = useCallback(async () => {
@@ -128,10 +134,11 @@ export const useDirectoryLoader = ({
     setCurrentPath("");
     setParentPath(null);
     setLoadingPath(null);
+    setFailedPath(null);
   }, [loadIdRef, primeEntryMeta, requests]);
 
   return {
-    currentPath, parentPath, entries, totalCount, loadingPath, currentPathRef,
+    currentPath, parentPath, entries, totalCount, loadingPath, failedPath, currentPathRef,
     loadDir, clearDir, peekDirCache, refresh, refreshAfterChange,
   };
 };

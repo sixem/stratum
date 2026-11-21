@@ -1,17 +1,14 @@
 import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
-
-type ScrollRequest = {
-  index: number;
-  nonce: number;
-  scopeKey?: string;
-} | null | undefined;
+import type { ScrollRequest } from "./useScrollRequest";
 
 type UseScrollToIndexOptions = {
   itemCount: number;
   rowHeight: number;
+  rowGap?: number;
+  insetTop?: number;
   itemsPerRow?: number;
-  scrollRequest?: ScrollRequest;
+  scrollRequest?: ScrollRequest | null;
   scrollKey?: string;
 };
 
@@ -20,6 +17,8 @@ export const useScrollToIndex = (
   {
     itemCount,
     rowHeight,
+    rowGap = 0,
+    insetTop = 0,
     itemsPerRow = 1,
     scrollRequest,
     scrollKey,
@@ -40,15 +39,22 @@ export const useScrollToIndex = (
     const targetIndex = Math.min(scrollRequest.index, maxIndex);
     const columns = Math.max(1, itemsPerRow);
     const targetRow = Math.floor(targetIndex / columns);
-    const targetTop = targetRow * rowHeight;
+    const targetTop = insetTop + targetRow * (rowHeight + rowGap);
     const targetBottom = targetTop + rowHeight;
     const viewTop = element.scrollTop;
-    const viewBottom = viewTop + element.clientHeight;
+    const viewportHeight = element.clientHeight;
+    const viewBottom = viewTop + viewportHeight;
 
-    if (targetTop < viewTop) {
+    // Keep a little context around a search match, even in a short split pane.
+    if (scrollRequest.alignment === "center") {
+      const margin = Math.min(rowHeight, viewportHeight / 8);
+      if (targetTop < viewTop + margin || targetBottom > viewBottom - margin) {
+        element.scrollTop = targetTop + (rowHeight - viewportHeight) / 2;
+      }
+    } else if (targetTop < viewTop) {
       element.scrollTop = targetTop;
     } else if (targetBottom > viewBottom) {
-      element.scrollTop = targetBottom - element.clientHeight;
+      element.scrollTop = targetBottom - viewportHeight;
     }
-  }, [itemCount, itemsPerRow, ref, rowHeight, scrollKey, scrollRequest]);
+  }, [insetTop, itemCount, itemsPerRow, ref, rowGap, rowHeight, scrollKey, scrollRequest]);
 };

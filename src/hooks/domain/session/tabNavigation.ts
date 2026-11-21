@@ -39,7 +39,7 @@ export const usePendingJump = ({
   useEffect(() => {
     // Update recent jumps after navigation completes.
     if (!pendingJump) return;
-    if (pendingSourceRef.current === "switch") {
+    if (pendingSourceRef.current === "switch" || pendingTabRef.current !== activeTabId) {
       setPendingJump(null);
       pendingSourceRef.current = null;
       pendingTabRef.current = null;
@@ -55,7 +55,7 @@ export const usePendingJump = ({
     setPendingJump(null);
     pendingSourceRef.current = null;
     pendingTabRef.current = null;
-  }, [currentPath, pendingJump, recentLimit, setRecentJumps]);
+  }, [activeTabId, currentPath, pendingJump, recentLimit, setRecentJumps]);
 
   return { queuePendingJump, shouldSyncEmptyTab };
 };

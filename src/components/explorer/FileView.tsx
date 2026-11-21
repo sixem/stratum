@@ -6,6 +6,7 @@ import type {
 } from "react";
 import type { GridNameEllipsis, GridSize, ThumbnailFit } from "@/modules";
 import type { EntryItem } from "@/lib";
+import type { ScrollRequest } from "@/hooks";
 import type {
   EntryMeta,
   FileEntry,
@@ -50,7 +51,7 @@ type FileViewProps = {
   viewKey: string;
   scrollRestoreKey: string;
   scrollRestoreTop: number;
-  scrollRequest?: { index: number; nonce: number } | null;
+  scrollRequest?: ScrollRequest | null;
   smoothScroll: boolean;
   pendingDeletePaths: Set<string>;
   pendingTransferPaths: Set<string>;

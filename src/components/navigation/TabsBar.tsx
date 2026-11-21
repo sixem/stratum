@@ -1,5 +1,5 @@
 // Tab strip for open folders with drag reordering.
-import type { MouseEvent as ReactMouseEvent, PointerEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, PointerEvent, ReactNode } from "react";
 import {
   Fragment,
   startTransition,
@@ -18,6 +18,7 @@ import { HorizontalChevronButton, PressButton } from "@/components/primitives";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 
 type TabsBarProps = {
+  leading?: ReactNode;
   tabs: Tab[];
   activeId: string | null;
   dropTargetId?: string | null;
@@ -152,6 +153,7 @@ const TabItem = ({
 };
 
 export const TabsBar = ({
+  leading,
   tabs,
   activeId,
   dropTargetId,
@@ -221,6 +223,7 @@ export const TabsBar = ({
 
   return (
     <div className="tabsbar">
+      {leading}
       <div
         className="tabs-scroll-wrap"
         data-overflowed={overflowed ? "true" : "false"}

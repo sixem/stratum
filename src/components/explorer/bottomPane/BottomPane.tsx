@@ -4,6 +4,8 @@ import type { ComponentProps } from "react";
 import { createPortal } from "react-dom";
 import { useDriveInfo } from "@/hooks/domain/filesystem/useDriveInfo";
 import { useStatusLabels } from "@/hooks/domain/metadata/useStatusLabels";
+import { useScrollRequest } from "@/hooks/perf/scroll";
+import type { ScrollAlignment } from "@/hooks/perf/scroll";
 import { FileView } from "../FileView";
 import { TabsBar } from "@/components/navigation/TabsBar";
 import { ChevronDownIcon, ChevronUpIcon, FilterIcon, GridIcon, ListIcon, NavArrowIcon, TabCloseIcon } from "@/components/icons";
@@ -51,7 +53,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   const [draft, setDraft] = useState(tabs.displayPath);
   const gridColumns = useRef(1);
   const updateGridColumns = useCallback((columns: number) => { gridColumns.current = columns; }, []);
-  const [scrollRequest, setScrollRequest] = useState<{index: number; nonce: number} | null>(null);
+  const { scrollRequest, requestScrollToIndex } = useScrollRequest();
   const tabNumbers = useSettingsStore(state => state.showTabNumbers);
   const fixedWidth = useSettingsStore(state => state.fixedWidthTabs);
   const active = useBottomPaneStore(state => state.active);
@@ -66,7 +68,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   useLayoutEffect(() => {
     onSummary({ path, recentJumps: tabs.recentJumps, countLabel, selectionLabel });
   }, [onSummary, path, tabs.recentJumps, countLabel, selectionLabel]);
-  const ready = !!path && !busy && folderPathKey(path) === folderPathKey(tabs.activeTab?.path ?? "");
+  const ready = !!path && !busy && !tabs.restoringTabs && folderPathKey(path) === folderPathKey(tabs.activeTab?.path ?? "");
   const viewVisit = useMemo(() => ({ current: false }), [viewKey, tabs.searchValue]);
   useLayoutEffect(() => {
     viewVisit.current = ready;
@@ -96,9 +98,10 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   const paths = useMemo(() => Array.from(selection.selected).filter(item => model.entryByPath.has(item)),
     [selection.selected, model.entryByPath]);
   useLayoutEffect(() => setDraft(tabs.displayPath), [tabs.displayPath, tabs.activeTabId]);
-  useEffect(() => { setScrollRequest(null); }, [viewKey]);
   const focusFiles = useCallback(() => { files.current?.focus({ preventScroll: true }); }, []);
-  useEffect(focusFiles, [focusFiles]);
+  useEffect(() => {
+    if (useBottomPaneStore.getState().active) focusFiles();
+  }, [focusFiles]);
   // A sidebar jump belongs to the pane it opened. Its next keyboard action
   // should operate on the new folder even when the sidebar button took focus.
   useLayoutEffect(() => {
@@ -131,9 +134,9 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   const dragOut = useDragOutHandler({
     beginFileActivity: actions.beginFileActivity, viewParentPath: dir.parentPath, onRefresh: dir.refreshAfterChange,
   });
-  const scrollTo = useCallback((index: number) => {
-    setScrollRequest(prev => ({ index, nonce: (prev?.nonce ?? 0) + 1 }));
-  }, []);
+  const scrollTo = useCallback((index: number, alignment?: ScrollAlignment) => {
+    requestScrollToIndex(index, viewKey, alignment);
+  }, [requestScrollToIndex, viewKey]);
   const paneActions = useBottomPaneActions({
     folder, actions, menu, files, ready, viewVisit, browseFromView, openGallery: bottomPreview.open, scrollTo,
     hideExtension: upper.gridNameHideExtension,
@@ -146,7 +149,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       // Keep keyboard focus in this pane when scrolling moves a row out of view.
       focusFiles();
       paneActions.handleSelectionChange([path], path);
-      scrollTo(index);
+      scrollTo(index, tabs.viewMode === "list" ? "center" : "nearest");
     },
   });
   const handleTabJump = useSmartTabJump(files, active && ready ? `${viewKey}:${tabs.viewMode}` : null);
@@ -254,7 +257,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         if (el.matches(".list-body,.thumb-viewport")) scrollTop.current = el.scrollTop;
       }}>
       {busy && <div className="folder-load-progress" role="progressbar" aria-label="Loading bottom folder" />}
-      {!ready && tabs.displayPath ? <div className="pane-loading">{busy ? "Loading folder…" : <button onClick={() => navigate(tabs.displayPath)}>Retry opening folder</button>}</div> :
+      {!ready && tabs.displayPath ? <div className="pane-loading">{busy ? "Loading folder…" : <button className="btn ghost" type="button" onClick={() => navigate(tabs.displayPath)}>Retry opening folder</button>}</div> :
       <FileView {...upper} {...model} dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null} currentPath={path} viewMode={tabs.viewMode} viewKey={viewKey}
         showLander={!path} recentJumps={tabs.recentJumps} onOpenPlace={navigate} onOpenRecent={navigate} onOpenDrive={navigate}
         onOpenDriveNewTab={openNew} onOpenPlaceNewTab={openNew} onOpenRecentNewTab={openNew}

@@ -51,7 +51,6 @@ export const useShellFileViewAssembly = ({
     useAppFileViewController({
       sidebarOpen: resolvedView.sidebarOpen,
       showLander: resolvedView.showLander,
-      showEmptyFolder: dataPipeline.showEmptyFolder,
       onLayoutContextMenu: interactionModel.handleLayoutContextMenu,
       onLayoutContextMenuDown: interactionModel.handleLayoutContextMenuDown,
       fileViewOptions: {
@@ -160,6 +159,8 @@ export const useShellFileViewAssembly = ({
     view: {
       layoutClass,
       folderBusy: fileManager.loading,
+      folderFailed: resolvedView.viewLoading && fileManager.failedPath === resolvedView.viewPath,
+      onRetryFolder: interactionModel.handleManualRefresh,
       mainRef: viewState.mainRef,
       onContextMenu: layoutContextMenu,
       onContextMenuDown: layoutContextMenuDown,

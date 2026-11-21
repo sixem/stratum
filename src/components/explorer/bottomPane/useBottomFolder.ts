@@ -13,13 +13,16 @@ import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { useBottomSessionStore } from "@/modules/sessionStore";
 
 const log = makeDebug("bottom-pane");
+const getRestoreRevision = () => useBottomSessionStore.getState().restoreRevision;
 const reportError = (title: string, content: string) =>
   usePromptStore.getState().showPrompt({ title, content, confirmLabel: "OK", cancelLabel: null });
 
 export function useBottomFolder(upperPath: string) {
   const loadIdRef = useRef(0);
   const meta = useEntryMetaCache({ loadIdRef, perf: log });
-  const dir = useDirectoryLoader({ pane: "bottom", loadIdRef, primeEntryMeta: meta.primeEntryMeta, reportError, perf: log, log });
+  const dir = useDirectoryLoader({
+    pane: "bottom", loadIdRef, primeEntryMeta: meta.primeEntryMeta, reportError, getRestoreRevision, perf: log, log,
+  });
   const defaultViewMode = useBottomPaneStore(state => state.defaultViewMode);
   const keepFilterOnNavigation = useSettingsStore(state => state.keepFilterOnNavigation);
   const tabs = useTabSession({

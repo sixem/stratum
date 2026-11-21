@@ -20,6 +20,8 @@ type UseTabPersistenceOptions = {
   sortState: SortState;
   searchValue: string;
   loadDir: (path: string, options?: ListDirOptions) => Promise<void>;
+  clearDir: (options?: { silent?: boolean }) => void;
+  restoreRevision: number;
   setTabs: SetTabs;
   setRecentJumps: SetRecentJumps;
   recentLimit: number;
@@ -65,6 +67,8 @@ export const useTabPersistence = ({
   sortState,
   searchValue,
   loadDir,
+  clearDir,
+  restoreRevision,
   setTabs,
   setRecentJumps,
   recentLimit,
@@ -76,10 +80,26 @@ export const useTabPersistence = ({
     tabs.find((tab) => tab.id === activeTabId)?.path ?? null,
   );
   const restoreRequestedRef = useRef(false);
+  const appliedRevisionRef = useRef(restoreRevision);
   // Hold the target until its listing commits, including any pending filter reset.
   const pendingNavigationRef = useRef<PendingNavigation | null>(null);
 
   useLayoutEffect(() => {
+    if (appliedRevisionRef.current !== restoreRevision) {
+      appliedRevisionRef.current = restoreRevision;
+      restorePathRef.current = null;
+      emptyTabIdsRef.current.clear();
+      // Invalidate the outgoing request before it can write into the new tabs.
+      clearDir({ silent: true });
+      const path = activeTab?.path.trim();
+      pendingNavigationRef.current = path ? { path } : null;
+      if (path && activeTab) {
+        void loadDir(path, { sort: activeTab.sort, search: activeTab.search });
+      } else if (activeTabId) {
+        emptyTabIdsRef.current.add(activeTabId);
+      }
+      return;
+    }
     // Keep the active tab path synced with the current directory.
     if (!currentPath && activeTabId) return;
     if (!activeTabId) return;
@@ -121,7 +141,7 @@ export const useTabPersistence = ({
       next[index] = { ...tab, path: currentPath, crumbTrailPath: nextTrailPath, search: nextSearch };
       return next;
     });
-  }, [activeTab, activeTabId, currentPath, setTabs, shouldSyncEmptyTab]);
+  }, [activeTab, activeTabId, clearDir, currentPath, loadDir, restoreRevision, setTabs, shouldSyncEmptyTab]);
 
   useEffect(() => {
     // Restore the last active tab path once on startup.
@@ -145,5 +165,5 @@ export const useTabPersistence = ({
     });
   }, [recentLimit, setRecentJumps]);
 
-  return { emptyTabIdsRef, pendingNavigationRef };
+  return { emptyTabIdsRef, pendingNavigationRef, restoringTabs: appliedRevisionRef.current !== restoreRevision };
 };

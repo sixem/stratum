@@ -2,7 +2,7 @@
 import { createWithEqualityFn } from "zustand/traditional";
 import type { SortDir, SortKey, SortState, Tab, ViewMode } from "@/types";
 import type { TabHistory } from "@/types/tabs";
-import { DEFAULT_SORT, getDefaultSortDir } from "@/lib";
+import { createTab, DEFAULT_SORT, getDefaultSortDir } from "@/lib";
 import {
   SESSION_LEGACY_STORAGE_KEY,
   SESSION_STORAGE_KEY,
@@ -16,19 +16,22 @@ type SessionState = {
   recentJumps: string[];
 };
 
+export type TabLayout = Pick<SessionState, "tabs" | "activeTabId">;
+
 type ClosedTab = {
   tab: Tab;
   index: number;
   history?: TabHistory;
 };
 
-type SessionRuntimeState = SessionState & { closedTabs: ClosedTab[] };
+type SessionRuntimeState = SessionState & { closedTabs: ClosedTab[]; restoreRevision: number };
 
 type SessionStore = SessionRuntimeState & {
   setTabs: (updater: Tab[] | ((prev: Tab[]) => Tab[])) => void;
   setActiveTabId: (id: string | null) => void;
   setRecentJumps: (updater: string[] | ((prev: string[]) => string[])) => void;
   updateSession: (patch: Partial<SessionRuntimeState>) => void;
+  restoreTabs: (layout: TabLayout) => void;
   resetSession: () => void;
 };
 
@@ -117,18 +120,21 @@ const coerceTabs = (value: unknown) => {
     .filter((item): item is Tab => Boolean(item));
 };
 
-const coerceSession = (value: Partial<SessionState> | null | undefined): SessionState => {
+export const coerceTabLayout = (value: Partial<TabLayout> | null | undefined): TabLayout => {
   const tabs = coerceTabs(value?.tabs);
   const activeTabId =
     typeof value?.activeTabId === "string" && tabs.some((tab) => tab.id === value.activeTabId)
       ? value.activeTabId
       : tabs[0]?.id ?? null;
+  return { tabs, activeTabId };
+};
+
+const coerceSession = (value: Partial<SessionState> | null | undefined): SessionState => {
   const recentJumps = Array.isArray(value?.recentJumps)
     ? value.recentJumps.filter((item) => typeof item === "string")
     : [];
   return {
-    tabs,
-    activeTabId,
+    ...coerceTabLayout(value),
     recentJumps: recentJumps.slice(0, SIDEBAR_RECENT_LIMIT_MAX),
   };
 };
@@ -183,6 +189,7 @@ const createSessionStore = (key: string) => {
     ...readStoredSession(key),
     // Keep undo history for this pane even if its view unmounts.
     closedTabs: [],
+    restoreRevision: 0,
     setTabs: (updater) =>
       set((state) => ({
         tabs: applyUpdater(state.tabs, updater),
@@ -193,6 +200,17 @@ const createSessionStore = (key: string) => {
         recentJumps: applyUpdater(state.recentJumps, updater),
       })),
     updateSession: (patch) => set((state) => ({ ...state, ...patch })),
+    restoreTabs: (layout) => {
+      const activeIndex = layout.tabs.findIndex((tab) => tab.id === layout.activeTabId);
+      // Each restore is a new visit, even if it reopens the same saved tab.
+      const tabs = layout.tabs.map((tab) => ({ ...tab, id: createTab(tab.path).id, sort: { ...tab.sort } }));
+      set((state) => ({
+        tabs,
+        activeTabId: (tabs[activeIndex] ?? tabs[0])?.id ?? null,
+        closedTabs: [],
+        restoreRevision: state.restoreRevision + 1,
+      }));
+    },
     resetSession: () => set({ ...DEFAULT_SESSION, closedTabs: [] }),
   }));
 

@@ -3,6 +3,7 @@ export { useDynamicOverscan } from "./useDynamicOverscan";
 export { useHorizontalOverflowScroll } from "./useHorizontalOverflowScroll";
 export { useHorizontalWheelScroll } from "./useHorizontalWheelScroll";
 export { useScrollRequest } from "./useScrollRequest";
+export type { ScrollAlignment, ScrollRequest } from "./useScrollRequest";
 export { useScrollReset } from "./useScrollReset";
 export { useScrollRestore } from "./useScrollRestore";
 export { useScrollSettled } from "./useScrollSettled";

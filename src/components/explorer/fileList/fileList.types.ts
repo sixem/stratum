@@ -6,6 +6,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import type { EntryItem } from "@/lib";
+import type { ScrollRequest } from "@/hooks";
 import type { GridNameEllipsis } from "@/modules";
 import type { EntryMeta, FileEntry, RenameCommitReason, SortState } from "@/types";
 
@@ -25,7 +26,7 @@ export type FileListViewProps = {
   viewKey: string;
   scrollRestoreKey: string;
   scrollRestoreTop: number;
-  scrollRequest?: { index: number; nonce: number } | null;
+  scrollRequest?: ScrollRequest | null;
   smoothScroll: boolean;
   canGoUp?: boolean;
   onGoUp?: () => void;

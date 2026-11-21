@@ -35,12 +35,13 @@ export const useTabSession = ({
   keepFilterOnNavigation,
   recentJumpsLimit,
 }: TabSessionOptions) => {
-  const { tabs, activeTabId, recentJumps, setTabs, setActiveTabId, setRecentJumps } =
+  const { tabs, activeTabId, recentJumps, restoreRevision, setTabs, setActiveTabId, setRecentJumps } =
     useStore(
       (state) => ({
         tabs: state.tabs,
         activeTabId: state.activeTabId,
         recentJumps: state.recentJumps,
+        restoreRevision: state.restoreRevision,
         setTabs: state.setTabs,
         setActiveTabId: state.setActiveTabId,
         setRecentJumps: state.setRecentJumps,
@@ -84,7 +85,7 @@ export const useTabSession = ({
     recentLimit: safeRecentLimit,
     setRecentJumps,
   });
-  const { emptyTabIdsRef, pendingNavigationRef } = useTabPersistence({
+  const { emptyTabIdsRef, pendingNavigationRef, restoringTabs } = useTabPersistence({
     tabs,
     activeTabId,
     activeTab,
@@ -92,6 +93,8 @@ export const useTabSession = ({
     sortState,
     searchValue,
     loadDir,
+    clearDir,
+    restoreRevision,
     setTabs,
     setRecentJumps,
     recentLimit: safeRecentLimit,
@@ -100,11 +103,12 @@ export const useTabSession = ({
   const { setTabScrollTop } = useTabScroll({ setTabs });
   // The folder snapshot can commit one render before its tab is persisted.
   // Keep the submitted target in the address bar across both renders.
-  const pendingNavigation = pendingNavigationRef.current;
+  const pendingNavigation = restoringTabs ? null : pendingNavigationRef.current;
   const requestedPath = pendingNavigation?.path;
   const requestedPathIsDisplayed = requestedPath &&
     folderPathKey(requestedPath) === folderPathKey(currentPath);
-  const displayPath = loadingPath ?? (
+  // The outgoing loader can still report a path until the restore layout effect runs.
+  const displayPath = restoringTabs ? activeTab?.path ?? "" : loadingPath ?? (
     requestedPathIsDisplayed ? currentPath : activeTab?.path || currentPath
   );
   // Look up cached results with the destination filter while the tab still shows its old search.
@@ -393,6 +397,7 @@ export const useTabSession = ({
     activeTabId,
     recentJumps: visibleRecentJumps,
     activeTab,
+    restoringTabs,
     displayPath,
     displaySearch,
     viewMode,

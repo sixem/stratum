@@ -3,6 +3,7 @@
 // pipeline so interaction code can focus on user intent instead of source
 // derivation.
 import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
+import type { ScrollAlignment } from "@/hooks/perf/scroll";
 import { useDragOutHandler } from "@/hooks/ui/inputs";
 import { useFileViewInteractions, useFileViewModel } from "@/hooks/ui/view";
 import type { PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
@@ -73,7 +74,8 @@ export const useShellViewInteractions = ({
     dataPipeline.viewParentPath,
   );
   const requestScrollToIndexForView = useCallback(
-    (index: number) => scrollState.requestScrollToIndex(index, resolvedView.viewKey),
+    (index: number, alignment?: ScrollAlignment) =>
+      scrollState.requestScrollToIndex(index, resolvedView.viewKey, alignment),
     [resolvedView.viewKey, scrollState],
   );
 

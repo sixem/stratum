@@ -5,6 +5,7 @@ import { PathBar } from "@/components/explorer/PathBar";
 import { PathInputsBar } from "@/components/explorer/PathInputsBar";
 import { PathCrumbsBar } from "@/components/explorer/PathCrumbsBar";
 import { TabsBar } from "@/components/navigation/TabsBar";
+import { WorkspacePicker } from "@/components/navigation/WorkspacePicker";
 
 type AppTopstackProps = {
   pathBar: ComponentProps<typeof PathBar>;
@@ -19,13 +20,17 @@ export const AppTopstack = ({
   tabsBar,
   crumbsBar,
 }: AppTopstackProps) => {
+  const focusMain = (event: { target: EventTarget }) => {
+    if (event.target instanceof Element && event.target.closest("[data-workspace-picker]")) return;
+    setBottomPaneActive(false);
+  };
   return (
-    <div className="topstack" onPointerDownCapture={() => setBottomPaneActive(false)} onFocusCapture={() => setBottomPaneActive(false)}>
+    <div className="topstack" onPointerDownCapture={focusMain} onFocusCapture={focusMain}>
       <div className="header">
         <PathBar {...pathBar} />
         <div className="path-tabs">
           <PathInputsBar {...pathInputsBar} />
-          <TabsBar {...tabsBar} />
+          <TabsBar {...tabsBar} leading={<WorkspacePicker />} />
         </div>
       </div>
       <PathCrumbsBar {...crumbsBar} />

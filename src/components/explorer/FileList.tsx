@@ -13,6 +13,7 @@ import { useListSelection } from "./fileList/useListSelection";
 import { useListVirtual } from "./fileList/useListVirtual";
 
 import { useCutEntries } from "./fileView/useCutEntries";
+import { VIEW_INSET } from "./fileView/constants";
 
 const FileList = ({
   view,
@@ -80,7 +81,9 @@ const FileList = ({
 
   useScrollToIndex(listRef, {
     itemCount: rows.length,
-    rowHeight: itemHeight,
+    rowHeight,
+    rowGap: itemHeight - rowHeight,
+    insetTop: VIEW_INSET,
     scrollRequest: view.scrollRequest,
     scrollKey: view.viewKey,
   });
@@ -109,35 +112,27 @@ const FileList = ({
   const viewAnimate = false;
 
   return (
-    <div className="file-list" inert={view.loading} {...dragHandlers}>
+    <div
+      className="file-list"
+      inert={view.loading}
+      {...dragHandlers}
+      onPointerDown={(event) => {
+        if (event.button !== 2 || !contextMenu.onContextMenuDown) return;
+        if ((event.target as Element).closest(".row")) return;
+        event.stopPropagation();
+        contextMenu.onContextMenuDown(event);
+      }}
+      onPointerUp={(event) => {
+        if (event.button !== 2 || !contextMenu.onContextMenu) return;
+        if ((event.target as Element).closest(".row")) return;
+        event.stopPropagation();
+        contextMenu.onContextMenu(event);
+      }}
+      onContextMenu={(event) => event.preventDefault()}
+    >
       <ListHeader sortState={list.sortState} onSortChange={list.onSortChange} />
       <div className="list-shell" data-category-tint={list.categoryTinting ? "true" : "false"}>
-        <div
-          className="list-body"
-          ref={listRef}
-          style={listVars}
-          onPointerDown={(event) => {
-            if (event.button !== 2) return;
-            if (!contextMenu.onContextMenuDown) return;
-            const target = event.target as HTMLElement | null;
-            if (target?.closest(".row")) return;
-            event.stopPropagation();
-            contextMenu.onContextMenuDown(event);
-          }}
-          onPointerUp={(event) => {
-            if (event.button !== 2) return;
-            if (!contextMenu.onContextMenu) return;
-            const target = event.target as HTMLElement | null;
-            if (target?.closest(".row")) return;
-            event.stopPropagation();
-            contextMenu.onContextMenu(event);
-          }}
-          onContextMenu={(event) => {
-            const target = event.target as HTMLElement | null;
-            if (target?.closest(".row")) return;
-            event.preventDefault();
-          }}
-        >
+        <div className="list-body" ref={listRef} style={listVars}>
           <div
             className="list-content"
             data-ready={contentReady ? "true" : "false"}

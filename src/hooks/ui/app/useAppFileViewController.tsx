@@ -9,7 +9,6 @@ type ContextMenuHandler = ((event: ReactPointerEvent) => void) | undefined;
 type UseAppFileViewControllerOptions = {
   sidebarOpen: boolean;
   showLander: boolean;
-  showEmptyFolder: boolean;
   onLayoutContextMenu: ContextMenuHandler;
   onLayoutContextMenuDown: ContextMenuHandler;
   fileViewOptions: FileViewOptions;
@@ -18,13 +17,12 @@ type UseAppFileViewControllerOptions = {
 export const useAppFileViewController = ({
   sidebarOpen,
   showLander,
-  showEmptyFolder,
   onLayoutContextMenu,
   onLayoutContextMenuDown,
   fileViewOptions,
 }: UseAppFileViewControllerOptions) => {
-  // Gate layout-level context menu handlers when there is no file surface to target.
-  const layoutMenuAvailable = !showLander && !showEmptyFolder && !fileViewOptions.view.loading;
+  // An open folder can accept files even when it has no entries yet.
+  const layoutMenuAvailable = !showLander && !fileViewOptions.view.loading;
   const layoutContextMenu = layoutMenuAvailable ? onLayoutContextMenu : undefined;
   const layoutContextMenuDown = layoutMenuAvailable ? onLayoutContextMenuDown : undefined;
 

@@ -15,6 +15,8 @@ const App = () => {
           fileDrop,
           layoutClass: view.layoutClass,
           folderBusy: view.folderBusy,
+          folderFailed: view.folderFailed,
+          onRetryFolder: view.onRetryFolder,
           sidebarOpen: navigation.sidebarOpen,
           sidebarProps: navigation.sidebarProps,
           mainRef: view.mainRef,
