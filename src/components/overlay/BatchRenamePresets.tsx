@@ -3,6 +3,7 @@ import { DropdownSelect, PressButton } from "@/components/primitives";
 import { isBatchRenameRuleConfigured, type BatchRenameRule } from "@/lib/batchRename";
 import { useBatchRenamePresetStore, type BatchRenamePreset } from "@/modules/batchRenamePresetStore";
 import { usePromptStore } from "@/modules/promptStore";
+import { BatchRenameInput } from "./BatchRenameInput";
 
 type BatchRenamePresetsProps = {
   rule: BatchRenameRule;
@@ -127,22 +128,20 @@ export const BatchRenamePresets = ({ rule, preserveExtensions, disabled, onLoad 
           event.stopPropagation();
           closeEditor();
         }}>
-          <label className="batch-rename-field">
-            Preset name
-            <input
-              ref={nameInputRef}
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value);
-                setError(null);
-              }}
-              onKeyDown={(event) => {
-                if (event.nativeEvent.isComposing || event.key !== "Enter") return;
-                event.preventDefault();
-                savePreset();
-              }}
-            />
-          </label>
+          <BatchRenameInput
+            caption="Preset name"
+            ref={nameInputRef}
+            value={name}
+            onChange={(event) => {
+              setName(event.currentTarget.value);
+              setError(null);
+            }}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing || event.key !== "Enter") return;
+              event.preventDefault();
+              savePreset();
+            }}
+          />
           <PressButton className="btn ghost" type="button" pressOnPointerDown={false} onClick={closeEditor} aria-label="Cancel saving preset">
             Cancel
           </PressButton>

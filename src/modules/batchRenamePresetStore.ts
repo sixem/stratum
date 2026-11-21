@@ -1,5 +1,8 @@
 import { createWithEqualityFn } from "zustand/traditional";
-import { isBatchRenameRuleConfigured, type BatchRenameRule } from "@/lib/batchRename";
+import {
+  BATCH_RENAME_NUMBER_STYLES, BATCH_RENAME_OCCURRENCES, isBatchRenameNumberingValid,
+  isBatchRenameRuleConfigured, type BatchRenameNumbering, type BatchRenameRule,
+} from "@/lib/batchRename";
 
 export type BatchRenamePreset = {
   id: string;
@@ -23,19 +26,34 @@ const STORAGE_VERSION = 1;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const readNumbering = (value: unknown): BatchRenameNumbering | undefined => {
+  if (!isRecord(value)) return;
+  const { start, step, digits, position, numberFirst } = value;
+  const style = BATCH_RENAME_NUMBER_STYLES.find((option) => option === value.style);
+  if (typeof start !== "number" || typeof step !== "number" || typeof digits !== "number" ||
+    (position !== "before" && position !== "after") || typeof numberFirst !== "boolean" || !style) return;
+  const numbering = { start, step, digits, position, style, numberFirst } satisfies BatchRenameNumbering;
+  if (isBatchRenameNumberingValid(numbering)) return numbering;
+};
+
 const readRule = (value: unknown): BatchRenameRule | undefined => {
   if (!isRecord(value)) return;
 
   switch (value.mode) {
     case "number": {
       const { baseName } = value;
-      if (typeof baseName === "string") return { mode: "number", baseName };
+      if (typeof baseName !== "string") return;
+      if (value.numbering === undefined) return { mode: "number", baseName };
+      const numbering = readNumbering(value.numbering);
+      if (numbering) return { mode: "number", baseName, numbering };
       break;
     }
     case "replace": {
       const { find, replacement, matchCase } = value;
       if (typeof find === "string" && typeof replacement === "string" && typeof matchCase === "boolean") {
-        return { mode: "replace", find, replacement, matchCase };
+        if (value.occurrence === undefined) return { mode: "replace", find, replacement, matchCase };
+        const occurrence = BATCH_RENAME_OCCURRENCES.find((option) => option === value.occurrence);
+        if (occurrence) return { mode: "replace", find, replacement, matchCase, occurrence };
       }
       break;
     }

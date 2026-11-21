@@ -5,6 +5,8 @@ import { PressButton } from "@/components/primitives";
 import { useModalFocusTrap } from "@/hooks/ui/app/useModalFocusTrap";
 import {
   buildBatchRenamePreview,
+  DEFAULT_BATCH_RENAME_NUMBERING,
+  isBatchRenameNumberingValid,
   type BatchRenameMode,
   type BatchRenameRequest,
   type BatchRenameRule,
@@ -14,6 +16,7 @@ import type { BatchRenamePreset } from "@/modules/batchRenamePresetStore";
 import type { EntryContextTarget } from "@/types";
 import { BatchRenamePresets } from "./BatchRenamePresets";
 import { BatchRenamePreview } from "./BatchRenamePreview";
+import { BatchRenameRuleFields } from "./BatchRenameRuleFields";
 import { DialogCloseButton } from "./DialogCloseButton";
 import { OverlayPanelHeader } from "./OverlayPanelHeader";
 
@@ -56,14 +59,12 @@ const errorMessage = (error: unknown, fallback: string) => {
 export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialogProps) => {
   const first = items[0];
   const [mode, setMode] = useState<BatchRenameMode>("number");
-  const [baseName, setBaseName] = useState(() =>
-    first?.isDir ? first.name : splitNameExtension(first?.name ?? "").base,
-  );
-  const [find, setFind] = useState("");
-  const [replacement, setReplacement] = useState("");
-  const [matchCase, setMatchCase] = useState(false);
-  const [prefix, setPrefix] = useState("");
-  const [suffix, setSuffix] = useState("");
+  const [rules, setRules] = useState<{ [M in BatchRenameMode]: Extract<BatchRenameRule, { mode: M }> }>(() => ({
+    number: { mode: "number", baseName: first?.isDir ? first.name : splitNameExtension(first?.name ?? "").base },
+    replace: { mode: "replace", find: "", replacement: "", matchCase: false },
+    affix: { mode: "affix", prefix: "", suffix: "" },
+  }));
+  const [numberingExpanded, setNumberingExpanded] = useState(false);
   const [preserveExtensions, setPreserveExtensions] = useState(true);
   const [validation, setValidation] = useState<Validation | null>(null);
   const [applying, setApplying] = useState(false);
@@ -76,13 +77,8 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
   useModalFocusTrap({ open: true, containerRef: panelRef, initialFocusRef: inputRef });
   useLayoutEffect(() => inputRef.current?.select(), []);
 
-  const rule = useMemo<BatchRenameRule>(() => {
-    switch (mode) {
-      case "number": return { mode, baseName };
-      case "replace": return { mode, find, replacement, matchCase };
-      case "affix": return { mode, prefix, suffix };
-    }
-  }, [baseName, find, matchCase, mode, prefix, replacement, suffix]);
+  const rule = rules[mode];
+  const updateRule = (next: BatchRenameRule) => setRules((current) => ({ ...current, [next.mode]: next }));
   const rows = useMemo(() => buildBatchRenamePreview(items, rule, preserveExtensions), [items, rule, preserveExtensions]);
   const requests = useMemo(() => rows.flatMap(({ item, nextName }) =>
     nextName !== item.name ? [{ path: item.path, nextName }] : [],
@@ -120,20 +116,8 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
   const loadPreset = ({ rule: savedRule, preserveExtensions }: BatchRenamePreset) => {
     setMode(savedRule.mode);
     setPreserveExtensions(preserveExtensions);
-    switch (savedRule.mode) {
-      case "number":
-        setBaseName(savedRule.baseName);
-        break;
-      case "replace":
-        setFind(savedRule.find);
-        setReplacement(savedRule.replacement);
-        setMatchCase(savedRule.matchCase);
-        break;
-      case "affix":
-        setPrefix(savedRule.prefix);
-        setSuffix(savedRule.suffix);
-        break;
-    }
+    if (savedRule.mode === "number" && savedRule.numbering) setNumberingExpanded(true);
+    updateRule(savedRule);
   };
 
   const apply = async () => {
@@ -157,6 +141,8 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
     }
   };
 
+  const numberingInvalid = rule.mode === "number" &&
+    !isBatchRenameNumberingValid(rule.numbering ?? DEFAULT_BATCH_RENAME_NUMBERING);
   const status = current?.message
     ?? (applying
       ? "Renaming…"
@@ -164,11 +150,13 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
         ? "Checking names…"
         : hasLocalErrors || (current?.errors?.size ?? 0) > 0
           ? "Resolve the flagged names to continue."
-          : mode === "number" && !baseName.trim()
+          : rule.mode === "number" && !rule.baseName.trim()
             ? "Enter a base name."
-            : requests.length === 0
-              ? "No changes"
-              : `${requests.length} of ${items.length} items will be renamed`);
+            : numberingInvalid
+              ? "Enter valid values for start, step and minimum digits."
+              : requests.length === 0
+                ? "No changes"
+                : `${requests.length} of ${items.length} items will be renamed`);
 
   return (
     <div
@@ -222,44 +210,18 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
               </PressButton>
             ))}
           </div>
-          <div className="batch-rename-fields">
-            {mode === "number" ? (
-              <label className="batch-rename-field">
-                Base name
-                <input ref={inputRef} value={baseName} onChange={(event) => setBaseName(event.target.value)} />
-              </label>
-            ) : mode === "replace" ? (
-              <>
-                <label className="batch-rename-field">
-                  Find
-                  <input value={find} onChange={(event) => setFind(event.target.value)} />
-                </label>
-                <label className="batch-rename-field">
-                  Replace with
-                  <input value={replacement} onChange={(event) => setReplacement(event.target.value)} />
-                </label>
-              </>
-            ) : (
-              <>
-                <label className="batch-rename-field">
-                  Prefix
-                  <input value={prefix} onChange={(event) => setPrefix(event.target.value)} />
-                </label>
-                <label className="batch-rename-field">
-                  Suffix
-                  <input value={suffix} onChange={(event) => setSuffix(event.target.value)} />
-                </label>
-              </>
-            )}
-          </div>
+          <BatchRenameRuleFields rule={rule} disabled={applying} initialInputRef={inputRef}
+            numberingExpanded={numberingExpanded} onToggleNumbering={() => setNumberingExpanded((open) => !open)}
+            onChange={updateRule} />
           <div className="batch-rename-checks">
             <label>
               <input type="checkbox" checked={preserveExtensions} onChange={(event) => setPreserveExtensions(event.target.checked)} />
               Preserve file extensions
             </label>
-            {mode === "replace" ? (
+            {rule.mode === "replace" ? (
               <label>
-                <input type="checkbox" checked={matchCase} onChange={(event) => setMatchCase(event.target.checked)} />
+                <input type="checkbox" checked={rule.matchCase}
+                  onChange={(event) => updateRule({ ...rule, matchCase: event.currentTarget.checked })} />
                 Match case
               </label>
             ) : null}
@@ -273,7 +235,7 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
         </fieldset>
         <BatchRenamePreview rows={rows} diskErrors={current?.errors} />
         <div className="batch-rename-footer">
-          <div className={current?.message ? "batch-rename-error tnum" : "batch-rename-status tnum"} role="status">
+          <div className={current?.message || numberingInvalid ? "batch-rename-error tnum" : "batch-rename-status tnum"} role="status">
             {status}
           </div>
           <div className="batch-rename-actions">

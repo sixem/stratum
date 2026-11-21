@@ -261,6 +261,7 @@ export const DropdownSelect = ({
   const commitValue = (next: string | null) => {
     onChange(next);
     closeMenu();
+    triggerRef.current?.focus({ preventScroll: true });
   };
 
   const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
@@ -410,6 +411,8 @@ export const DropdownSelect = ({
                 id={clearOptionId}
                 role="option"
                 aria-selected={isSameValue(value, null)}
+                pressOnPointerDown={false}
+                onMouseDown={(event) => event.preventDefault()}
                 onPointerEnter={() => setActiveIndex(-1)}
                 onClick={() => commitValue(null)}
               >
@@ -432,6 +435,8 @@ export const DropdownSelect = ({
                         }`}
                         role="option"
                         aria-selected={isSelected}
+                        pressOnPointerDown={false}
+                        onMouseDown={(event) => event.preventDefault()}
                         disabled={option.disabled}
                         onPointerEnter={() => setActiveIndex(index)}
                         onClick={() => {
