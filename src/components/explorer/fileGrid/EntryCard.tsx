@@ -5,6 +5,7 @@ import type {
 } from "react";
 import { memo, useRef } from "react";
 import { stripNameExtension } from "@/lib";
+import { MetadataLabel } from "@/components/primitives/MetadataLabel";
 import { RenameField } from "@/components/primitives/RenameField";
 import { useOverflowEllipsis } from "../fileView/nameEllipsis";
 import type { EntryCardProps } from "./gridCard.types";
@@ -45,7 +46,7 @@ export const EntryCard = memo(({
 }: EntryCardProps) => {
   const resolvedSizeLabel = showSize ? sizeLabel : "";
   const extensionLabel = showExtension && extension ? extension : "";
-  const showInfo = Boolean(resolvedSizeLabel) || Boolean(extensionLabel);
+  const showInfo = resolvedSizeLabel !== "" || Boolean(extensionLabel);
   const displayName =
     hideExtension && !entry.isDir ? stripNameExtension(entry.name) : entry.name;
   const nameRef = useRef<HTMLSpanElement | null>(null);
@@ -190,8 +191,12 @@ export const EntryCard = memo(({
         )}
         {showInfo ? (
           <div className="thumb-info">
-            {resolvedSizeLabel ? (
-              <span className="thumb-info-size tnum">{resolvedSizeLabel}</span>
+            {resolvedSizeLabel !== "" ? (
+              <MetadataLabel
+                className="thumb-info-size tnum"
+                value={resolvedSizeLabel}
+                placeholder="..."
+              />
             ) : null}
             {extensionLabel ? (
               <span className="thumb-info-ext">{extensionLabel}</span>

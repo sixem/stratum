@@ -9,6 +9,7 @@ import loader from "@/assets/icons/loaders/ring.svg";
 import { ErrorIcon, FileTypeIcon, LibraryIcon } from "@/components/icons";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PressButton, ScrollArea } from "@/components/primitives";
+import { MetadataLabel } from "@/components/primitives/MetadataLabel";
 import { useVirtualRange } from "@/hooks/perf/scroll/useVirtualRange";
 import { getExtension, getFileKind } from "@/lib/fileKind";
 import { formatBytes, formatCount } from "@/lib/format";
@@ -201,9 +202,15 @@ export const IndexedSearchResultsList = ({
                       {result.parentPath || result.path}
                     </span>
                   </span>
-                  <span className="indexed-search-result-detail tnum">
-                    {isDirectory ? "Folder" : size == null ? "—" : formatBytes(size)}
-                  </span>
+                  {isDirectory ? (
+                    <span className="indexed-search-result-detail">Folder</span>
+                  ) : (
+                    <MetadataLabel
+                      className="indexed-search-result-detail tnum"
+                      value={size == null ? null : formatBytes(size)}
+                      placeholder="—"
+                    />
+                  )}
                 </PressButton>
               );
             })}

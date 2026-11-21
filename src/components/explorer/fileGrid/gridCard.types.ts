@@ -38,7 +38,7 @@ export type EntryCardProps = {
   index: number;
   fileKind: FileKind;
   extension: string | null;
-  sizeLabel: string;
+  sizeLabel: string | null;
   thumbUrl?: string;
   appIconUrl?: string;
   appIconsEnabled: boolean;

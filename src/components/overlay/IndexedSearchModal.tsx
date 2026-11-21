@@ -212,6 +212,7 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
           className="indexed-search-header"
           title="Indexed Search"
           titleId={titleId}
+          preserveFocusOnMouseDown
           actions={<DialogCloseButton onClose={closeModal} />}
         />
 

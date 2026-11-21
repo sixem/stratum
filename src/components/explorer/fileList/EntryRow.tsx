@@ -10,6 +10,7 @@ import { stripNameExtension } from "@/lib";
 import { FILE_TOOLTIP_DELAY_MS } from "@/constants";
 import type { GridNameEllipsis } from "@/modules";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
+import { MetadataLabel } from "@/components/primitives/MetadataLabel";
 import { RenameField } from "@/components/primitives/RenameField";
 import { useOverflowEllipsis } from "../fileView/nameEllipsis";
 
@@ -18,8 +19,8 @@ type EntryRowProps = {
   index: number;
   tooltipText: string;
   fileKind: FileKind;
-  sizeLabel: string;
-  modifiedLabel: string;
+  sizeLabel: string | null;
+  modifiedLabel: string | null;
   nameEllipsis: GridNameEllipsis;
   hideExtension: boolean;
   selected: boolean;
@@ -145,6 +146,12 @@ export const EntryRow = memo(({
     event.preventDefault();
     onContextMenu?.(event);
   };
+  const metadataLabels = (
+    <>
+      <MetadataLabel className="size" value={sizeLabel} placeholder="..." />
+      <MetadataLabel className="modified" value={modifiedLabel} placeholder="..." />
+    </>
+  );
   if (isRenaming) {
     return (
       <div
@@ -177,8 +184,7 @@ export const EntryRow = memo(({
             onCancel={onRenameCancel}
           />
         </span>
-        <span className="size">{sizeLabel}</span>
-        <span className="modified">{modifiedLabel}</span>
+        {metadataLabels}
       </div>
     );
   }
@@ -224,8 +230,7 @@ export const EntryRow = memo(({
             ) : null}
           </span>
         </span>
-        <span className="size">{sizeLabel}</span>
-        <span className="modified">{modifiedLabel}</span>
+        {metadataLabels}
       </button>
     </TooltipWrapper>
   );

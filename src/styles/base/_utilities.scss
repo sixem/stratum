@@ -3,6 +3,16 @@
   font-variant-numeric: tabular-nums;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .metadata-label-value {
+    transition: opacity 150ms ease-out;
+  }
+
+  .metadata-label-value:empty {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   // Keep motion suppression global so component partials do not leak app-wide behavior.
   * {

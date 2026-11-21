@@ -11,7 +11,7 @@ import type { EntryMeta } from "@/types";
 export type GridDisplayMeta = {
   fileKind: FileKind;
   extension: string | null;
-  sizeLabel: string;
+  sizeLabel: string | null;
 };
 
 type CachedGridDisplayMeta = GridDisplayMeta & {
@@ -84,7 +84,11 @@ export const useGridDisplayMeta = ({
         resolved = {
           fileKind: entry.isDir ? "generic" : getFileKind(entry.name),
           extension,
-          sizeLabel: entry.isDir ? "Folder" : formatBytes(resolvedSize),
+          sizeLabel: entry.isDir
+            ? "Folder"
+            : resolvedSize == null
+              ? null
+              : formatBytes(resolvedSize),
           signature,
         };
         upsertGridMetaCache(cache, cacheKey, resolved);

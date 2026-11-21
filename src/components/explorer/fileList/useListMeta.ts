@@ -9,8 +9,8 @@ import type { EntryMeta } from "@/types";
 type RowDisplayMeta = {
   tooltipText: string;
   fileKind: FileKind;
-  sizeLabel: string;
-  modifiedLabel: string;
+  sizeLabel: string | null;
+  modifiedLabel: string | null;
 };
 
 type CachedRowDisplayMeta = RowDisplayMeta & {
@@ -99,11 +99,15 @@ export const useListMeta = ({
       }
       let resolved = cached;
       if (!resolved || resolved.signature !== signature) {
-        const sizeLabel = entry.isDir ? "-" : formatBytes(resolvedSize);
+        const sizeLabel = entry.isDir
+          ? "-"
+          : resolvedSize == null
+            ? null
+            : formatBytes(resolvedSize);
         const modifiedLabel = entry.isDir
           ? "-"
           : resolvedModified == null
-            ? "..."
+            ? null
             : formatDate(resolvedModified);
         resolved = {
           tooltipText: buildEntryTooltip(row.entry, resolvedMeta),

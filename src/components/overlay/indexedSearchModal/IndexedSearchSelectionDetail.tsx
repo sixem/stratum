@@ -7,6 +7,7 @@ import { OpenExternalIcon } from "@/components/icons";
 import { ContextOpenFolderIcon } from "@/components/icons/contextMenuIcons";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PressButton } from "@/components/primitives";
+import { MetadataLabel } from "@/components/primitives/MetadataLabel";
 import {
   formatBytes,
   formatDate,
@@ -66,13 +67,34 @@ export const IndexedSearchSelectionDetail = ({
   const selectedDriveSummary = selectedDrive
     ? formatIndexedDriveSummary(selectedDrive)
     : null;
+  const size = selectedResultMeta?.size ?? null;
+  const modified = selectedResultMeta?.modified ?? null;
 
   return (
     <section className="indexed-search-selection-detail" aria-label="Selection details">
-      <h3 className="indexed-search-section-title">Details</h3>
-      {selectedResult ? (
-        <>
-          <div className="indexed-search-selection-detail-head">
+      <div className="indexed-search-selection-detail-head">
+        <h3 className="indexed-search-section-title">Details</h3>
+        {selectedResult ? (
+          <PressButton
+            type="button"
+            className="btn indexed-search-selection-detail-action"
+            onClick={() => onOpenResult(selectedResult)}
+          >
+            {selectedResult.kind === "file" ? <OpenExternalIcon /> : <ContextOpenFolderIcon />}
+            Open
+          </PressButton>
+        ) : selectedDrive ? (
+          <IndexedSearchDriveRefresh
+            drive={selectedDrive}
+            rebuildingDrivePath={rebuildingDrivePath}
+            onRebuildDrive={onRebuildDrive}
+          />
+        ) : null}
+      </div>
+
+      <div className="indexed-search-selection-detail-body">
+        {selectedResult ? (
+          <>
             <div className="indexed-search-selection-detail-copy">
               <TooltipWrapper text={selectedResult.name}>
                 <div className="indexed-search-selection-detail-title">{selectedResult.name}</div>
@@ -83,81 +105,68 @@ export const IndexedSearchSelectionDetail = ({
                 </div>
               </TooltipWrapper>
             </div>
-            <PressButton
-              type="button"
-              className="btn indexed-search-selection-detail-action"
-              onClick={() => onOpenResult(selectedResult)}
-            >
-              {selectedResult.kind === "file" ? <OpenExternalIcon /> : <ContextOpenFolderIcon />}
-              Open
-            </PressButton>
-          </div>
 
-          <div className="indexed-search-selection-stats">
-            <div className="indexed-search-selection-stat">
-              <span className="indexed-search-selection-stat-label">Size</span>
-              <span className="indexed-search-selection-stat-value tnum">
-                {selectedResult.kind === "directory"
-                  ? "—"
-                  : formatBytes(selectedResultMeta?.size ?? null)}
-              </span>
+            <div className="indexed-search-selection-stats">
+              <div className="indexed-search-selection-stat">
+                <span className="indexed-search-selection-stat-label">Size</span>
+                <MetadataLabel
+                  className="indexed-search-selection-stat-value tnum"
+                  value={selectedResult.kind === "file" && size != null ? formatBytes(size) : null}
+                  placeholder={selectedResult.kind === "directory" ? "—" : formatBytes(null)}
+                />
+              </div>
+              <div className="indexed-search-selection-stat">
+                <span className="indexed-search-selection-stat-label">Modified</span>
+                <MetadataLabel
+                  className="indexed-search-selection-stat-value tnum"
+                  value={modified != null ? formatDate(modified) : null}
+                  placeholder={formatDate(null)}
+                />
+              </div>
             </div>
-            <div className="indexed-search-selection-stat">
-              <span className="indexed-search-selection-stat-label">Modified</span>
-              <span className="indexed-search-selection-stat-value tnum">
-                {formatDate(selectedResultMeta?.modified ?? null)}
-              </span>
-            </div>
-          </div>
 
-          {selectionError ? (
-            <div className="indexed-search-section-note" role="status">{selectionError}</div>
-          ) : null}
-        </>
-      ) : selectedDrive ? (
-        <>
-          <div className="indexed-search-selection-detail-head">
-            <div className="indexed-search-selection-detail-copy">
+            {selectionError ? (
+              <div className="indexed-search-section-note" role="status">{selectionError}</div>
+            ) : null}
+          </>
+        ) : selectedDrive ? (
+          <>
+            <div className="indexed-search-selection-drive-heading">
               <div className="indexed-search-selection-detail-title">
                 {selectedDriveInfo?.label || selectedDrive.drivePath}
               </div>
               {selectedDriveInfo?.label ? (
-                <div className="indexed-search-selection-detail-meta">{selectedDrive.drivePath}</div>
+                <span className="indexed-search-selection-detail-meta">{selectedDrive.drivePath}</span>
               ) : null}
             </div>
-            <IndexedSearchDriveRefresh
-              drive={selectedDrive}
-              rebuildingDrivePath={rebuildingDrivePath}
-              onRebuildDrive={onRebuildDrive}
-            />
-          </div>
 
-          {selectedDriveSummary ? (
-            <div className="indexed-search-selection-detail-meta tnum">
-              {selectedDriveSummary}
-            </div>
-          ) : null}
+            {selectedDriveSummary ? (
+              <div className="indexed-search-selection-detail-meta tnum">
+                {selectedDriveSummary}
+              </div>
+            ) : null}
 
-          {selectedDriveUsageLabel ? (
-            <div className="indexed-search-selection-usage">
-              <div className="indexed-search-selection-detail-meta tnum">{selectedDriveUsageLabel}</div>
-              {selectedDriveUsagePercentLabel ? (
-                <div
-                  className="indexed-search-selection-progress"
-                  aria-label={`${selectedDriveUsagePercentLabel} used`}
-                >
-                  <span
-                    className="indexed-search-selection-progress-fill"
-                    style={{ width: selectedDriveUsagePercentLabel }}
-                  />
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </>
-      ) : (
-        <p className="indexed-search-selection-detail-empty">Select a result or drive to see details.</p>
-      )}
+            {selectedDriveUsageLabel ? (
+              <div className="indexed-search-selection-usage">
+                <div className="indexed-search-selection-detail-meta tnum">{selectedDriveUsageLabel}</div>
+                {selectedDriveUsagePercentLabel ? (
+                  <div
+                    className="indexed-search-selection-progress"
+                    aria-label={`${selectedDriveUsagePercentLabel} used`}
+                  >
+                    <span
+                      className="indexed-search-selection-progress-fill"
+                      style={{ width: selectedDriveUsagePercentLabel }}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <p className="indexed-search-selection-detail-empty">Select a result or drive to see details.</p>
+        )}
+      </div>
     </section>
   );
 };

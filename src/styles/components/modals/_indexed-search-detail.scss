@@ -4,28 +4,49 @@
   .indexed-search-selection-detail {
     // Always reserve the same space above the drive list as selections change.
     display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     flex: 0 0 auto;
-    align-content: start;
-    gap: 8px;
-    block-size: 136px;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    margin-bottom: 12px;
-    padding-bottom: 12px;
+    gap: 4px;
+    block-size: 114px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
     border-bottom: 1px solid var(--stroke);
   }
 
   .indexed-search-selection-detail-head {
     display: flex;
-    align-items: start;
+    align-items: center;
     justify-content: space-between;
     gap: 8px;
+    min-height: 28px;
+  }
+
+  .indexed-search-selection-detail-body {
+    display: grid;
+    grid-auto-rows: max-content;
+    align-content: start;
+    gap: 4px;
+    min-height: 0;
+    min-width: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
   }
 
   .indexed-search-selection-detail-copy {
     min-width: 0;
     display: grid;
-    gap: 3px;
+    gap: 2px;
+  }
+
+  .indexed-search-selection-drive-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .indexed-search-selection-drive-heading .indexed-search-selection-detail-meta {
+    flex: 0 0 auto;
   }
 
   .indexed-search-selection-detail-title,
@@ -56,7 +77,7 @@
 
   .indexed-search-selection-usage {
     display: grid;
-    gap: 5px;
+    gap: 3px;
   }
 
   .indexed-search-selection-progress {
@@ -96,13 +117,12 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
     gap: 8px;
-    margin-top: 2px;
   }
 
   .indexed-search-selection-stat {
     display: grid;
     align-content: start;
-    gap: 3px;
+    gap: 2px;
     min-width: 0;
   }
 
