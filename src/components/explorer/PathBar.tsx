@@ -13,6 +13,7 @@ type PathBarProps = {
   canGoForward: boolean;
   canGoUp: boolean;
   canGoDown: boolean;
+  showFolderChevrons: boolean;
   leftSlot?: ReactNode;
   driveSlot?: ReactNode;
   rightSlot?: ReactNode;
@@ -28,6 +29,7 @@ export const PathBar = ({
   canGoForward,
   canGoUp,
   canGoDown,
+  showFolderChevrons,
   leftSlot,
   driveSlot,
   rightSlot,
@@ -55,24 +57,28 @@ export const PathBar = ({
         >
           <NavArrowIcon className="btn-icon nav-arrow" />
         </PressButton>
-        <PressButton
-          type="button"
-          className="btn ghost"
-          onClick={onUp}
-          disabled={!canGoUp}
-          aria-label="Up one level"
-        >
-          <ChevronUpIcon className="btn-icon" />
-        </PressButton>
-        <PressButton
-          type="button"
-          className="btn ghost"
-          onClick={onDown}
-          disabled={!canGoDown}
-          aria-label="Down one level"
-        >
-          <ChevronDownIcon className="btn-icon" />
-        </PressButton>
+        {showFolderChevrons ? (
+          <>
+            <PressButton
+              type="button"
+              className="btn ghost"
+              onClick={onUp}
+              disabled={!canGoUp}
+              aria-label="Up one level"
+            >
+              <ChevronUpIcon className="btn-icon" />
+            </PressButton>
+            <PressButton
+              type="button"
+              className="btn ghost"
+              onClick={onDown}
+              disabled={!canGoDown}
+              aria-label="Down one level"
+            >
+              <ChevronDownIcon className="btn-icon" />
+            </PressButton>
+          </>
+        ) : null}
       </div>
       {driveSlot ? <div className="pathbar-drive">{driveSlot}</div> : null}
     </>

@@ -153,6 +153,14 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.showRecycleBinButton === "boolean"
         ? value.showRecycleBinButton
         : DEFAULT_SETTINGS.showRecycleBinButton,
+    showDriveToggle:
+      typeof value?.showDriveToggle === "boolean"
+        ? value.showDriveToggle
+        : DEFAULT_SETTINGS.showDriveToggle,
+    showTopbarFolderChevrons:
+      typeof value?.showTopbarFolderChevrons === "boolean"
+        ? value.showTopbarFolderChevrons
+        : DEFAULT_SETTINGS.showTopbarFolderChevrons,
     smoothScroll:
       typeof value?.smoothScroll === "boolean"
         ? value.smoothScroll

@@ -102,7 +102,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
       <div className="settings-item">
         <div>
           <div className="settings-label">Ambient background</div>
-          <div className="settings-desc">A slow-moving backdrop behind the UI.</div>
+          <div className="settings-desc">A slow-moving backdrop in the main file pane.</div>
         </div>
         <label className="settings-toggle">
           <input

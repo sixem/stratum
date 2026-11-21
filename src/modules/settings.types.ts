@@ -27,6 +27,8 @@ export type Settings = {
   fixedWidthTabs: boolean;
   tabDropSubfolders: boolean;
   showRecycleBinButton: boolean;
+  showDriveToggle: boolean;
+  showTopbarFolderChevrons: boolean;
   smoothScroll: boolean;
   smartTabJump: boolean;
   accentTheme: AccentTheme;

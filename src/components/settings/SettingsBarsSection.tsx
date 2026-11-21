@@ -18,25 +18,35 @@ type SettingsBarsSectionProps = {
 };
 
 const RECENT_STEP = 1;
+const TOPBAR_VISIBILITY_OPTIONS = [
+  {
+    key: "showRecycleBinButton",
+    label: "Topbar Recycle Bin button",
+    description: "Show a shortcut for opening the Windows Recycle Bin.",
+  },
+  {
+    key: "showDriveToggle",
+    label: "Topbar drive toggle",
+    description: "Show the drive picker in the topbar.",
+  },
+  {
+    key: "showTopbarFolderChevrons",
+    label: "Topbar up/down chevrons",
+    description: "Show the folder-level navigation buttons next to Back and Forward.",
+  },
+] as const;
 
 export const SettingsBarsSection = ({
   sectionId,
 }: SettingsBarsSectionProps) => {
-  const {
-    showTabNumbers,
-    fixedWidthTabs,
-    tabDropSubfolders,
-    showRecycleBinButton,
-    sidebarRecentLimit,
-    sidebarSectionOrder,
-    sidebarHiddenSections,
-    updateSettings,
-  } = useSettingsStore(
+  const settings = useSettingsStore(
     (state) => ({
       showTabNumbers: state.showTabNumbers,
       fixedWidthTabs: state.fixedWidthTabs,
       tabDropSubfolders: state.tabDropSubfolders,
       showRecycleBinButton: state.showRecycleBinButton,
+      showDriveToggle: state.showDriveToggle,
+      showTopbarFolderChevrons: state.showTopbarFolderChevrons,
       sidebarRecentLimit: state.sidebarRecentLimit,
       sidebarSectionOrder: state.sidebarSectionOrder,
       sidebarHiddenSections: state.sidebarHiddenSections,
@@ -44,6 +54,10 @@ export const SettingsBarsSection = ({
     }),
     shallow,
   );
+  const {
+    showTabNumbers, fixedWidthTabs, tabDropSubfolders, sidebarRecentLimit,
+    sidebarSectionOrder, sidebarHiddenSections, updateSettings,
+  } = settings;
   const normalizedSidebarOrder = normalizeSidebarSectionOrder(sidebarSectionOrder);
   const normalizedHiddenSections = normalizeSidebarHiddenSections(sidebarHiddenSections);
   const hiddenSet = new Set(normalizedHiddenSections);
@@ -133,24 +147,23 @@ export const SettingsBarsSection = ({
           <span />
         </label>
       </div>
-      <div className="settings-item">
-        <div>
-          <div className="settings-label">Topbar Recycle Bin button</div>
-          <div className="settings-desc">
-            Show a shortcut button for opening the Windows Recycle Bin.
+      {TOPBAR_VISIBILITY_OPTIONS.map(({ key, label, description }) => (
+        <div className="settings-item" key={key}>
+          <div>
+            <div className="settings-label">{label}</div>
+            <div className="settings-desc">{description}</div>
           </div>
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              aria-label={label}
+              checked={settings[key]}
+              onChange={(event) => updateSettings({ [key]: event.currentTarget.checked })}
+            />
+            <span />
+          </label>
         </div>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={showRecycleBinButton}
-            onChange={(event) =>
-              updateSettings({ showRecycleBinButton: event.currentTarget.checked })
-            }
-          />
-          <span />
-        </label>
-      </div>
+      ))}
       <div className="settings-section-title">Sidebar</div>
       <div className="settings-item">
         <div>

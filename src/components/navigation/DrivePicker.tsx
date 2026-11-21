@@ -12,6 +12,7 @@ import { useHorizontalOverflowScroll } from "@/hooks";
 import type { DriveInfo, IndexedDriveState, IndexedSearchServiceState } from "@/types";
 import { HorizontalChevronButton, PressButton } from "@/components/primitives";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
+import { useDrivePickerDragScroll } from "./useDrivePickerDragScroll";
 
 type DrivePickerProps = {
   activePath: string;
@@ -93,14 +94,18 @@ export const DrivePicker = ({
   const displayLabel = extraCount > 0 ? `${label} +${extraCount}` : label;
   const canOpen = drives.length > 1;
   const expanded = canOpen && driveListOpen;
+  // Keep the open strip aligned across local drive letters using the live count.
+  const labelSpacer = expanded && /^[A-Z]:$/.test(label) ? `W: +${extraCount}` : null;
   const activeTooltip = activeIndexedState === "loading"
     ? "Loading drives"
     : buildDriveTooltip(label, activeInfo, activeIndexedState === "checking" ? "Checking index" : undefined);
-  const { canScrollLeft, canScrollRight, scrollByDirection, updateScrollState } =
+  const { canScrollLeft, canScrollRight, overflowed, scrollByDirection, updateScrollState } =
     useHorizontalOverflowScroll(listRef, {
       enabled: expanded,
       refreshKey: drives,
     });
+  const canDrag = expanded && overflowed;
+  const { dragging, dragHandlers } = useDrivePickerDragScroll(canDrag);
 
   useEffect(() => {
     if (!expanded) return;
@@ -149,8 +154,8 @@ export const DrivePicker = ({
                 <DriveStatusMarker state={activeIndexedState} reserveSpace={expanded} />
                 <span className="drive-picker-button-label tnum">
                   <span>{displayLabel}</span>
-                  {expanded ? (
-                    <span className="drive-picker-label-spacer" aria-hidden="true">Drives +{drives.length}</span>
+                  {labelSpacer ? (
+                    <span className="drive-picker-label-spacer" aria-hidden="true">{labelSpacer}</span>
                   ) : null}
                 </span>
               </span>
@@ -171,7 +176,14 @@ export const DrivePicker = ({
                 aria-label="Scroll drives left"
                 disabled={!canScrollLeft}
               />
-              <div className="drive-picker-list" role="presentation" ref={listRef}>
+              <div
+                className="drive-picker-list"
+                role="presentation"
+                ref={listRef}
+                data-window-drag-ignore={canDrag ? "true" : undefined}
+                data-dragging={dragging ? "true" : undefined}
+                {...dragHandlers}
+              >
                 {drives.map((drive) => {
                   const driveKey = normalizePath(drive);
                   const info = driveInfoMap.get(driveKey);
@@ -186,6 +198,7 @@ export const DrivePicker = ({
                         role="menuitem"
                         className={`drive-picker-item${isActive ? " is-active" : ""}`}
                         aria-label={buildDriveAriaLabel(driveLabel, indexedState)}
+                        pressOnPointerDown={false}
                         onClick={() => onSelect(drive)}
                         onMouseDown={(event) => {
                           if (!onSelectNewTab) return;

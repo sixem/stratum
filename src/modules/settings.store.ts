@@ -77,6 +77,8 @@ useSettingsStore.subscribe((state) => {
     fixedWidthTabs: state.fixedWidthTabs,
     tabDropSubfolders: state.tabDropSubfolders,
     showRecycleBinButton: state.showRecycleBinButton,
+    showDriveToggle: state.showDriveToggle,
+    showTopbarFolderChevrons: state.showTopbarFolderChevrons,
     smoothScroll: state.smoothScroll,
     smartTabJump: state.smartTabJump,
     accentTheme: state.accentTheme,

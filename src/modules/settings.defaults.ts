@@ -29,6 +29,8 @@ export const DEFAULT_SETTINGS: Settings = {
   fixedWidthTabs: false,
   tabDropSubfolders: false,
   showRecycleBinButton: false,
+  showDriveToggle: true,
+  showTopbarFolderChevrons: true,
   smoothScroll: false,
   smartTabJump: true,
   accentTheme: "red",

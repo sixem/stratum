@@ -28,7 +28,7 @@ type UseAppTopstackPropsOptions = {
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
   onOpenAbout: () => void;
-  drivePicker: ComponentProps<typeof DrivePicker>;
+  drivePicker?: ComponentProps<typeof DrivePicker>;
   pathBarActions: ComponentProps<typeof PathBarActions>;
 };
 
@@ -74,7 +74,7 @@ export const useAppTopstackProps = ({
     pathBar: {
       ...pathBar,
       leftSlot,
-      driveSlot: <DrivePicker {...drivePicker} />,
+      driveSlot: drivePicker ? <DrivePicker {...drivePicker} /> : null,
       rightSlot: <PathBarActions {...pathBarActions} />,
       windowControlsSlot: <WindowControls />,
     },

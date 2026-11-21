@@ -60,7 +60,11 @@
 }
 
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card {
-  @include shared.entry-state-surface(rgba(255, 255, 255, 0.040), rgba(255, 255, 255, 0.025));
+  @include shared.entry-state-surface(rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.025));
+}
+
+:root[data-ambient="true"]:where(:not([data-dark-mode="true"])) :where(.thumb-shell) .thumb-card {
+  @include shared.entry-state-surface(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02));
 }
 
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-card.is-dir:not(.is-selected):not(

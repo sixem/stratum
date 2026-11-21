@@ -38,20 +38,22 @@ export const TransferStatusItem = ({ job, now }: TransferStatusItemProps) => {
           <span className="transfer-item-file-name">{displayedFileName}</span>
         </div>
       ) : null}
-      <div
-        className="transfer-progress"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={progressValue}
-        aria-valuetext={progressText}
-        data-indeterminate={view.indeterminate ? "true" : "false"}
-      >
+      {view.status === "completed" ? null : (
         <div
-          className="transfer-progress-fill"
-          style={{ width: `${view.progress * 100}%` }}
-        />
-      </div>
+          className="transfer-progress"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progressValue}
+          aria-valuetext={progressText}
+          data-indeterminate={view.indeterminate ? "true" : "false"}
+        >
+          <div
+            className="transfer-progress-fill"
+            style={{ width: `${view.progress * 100}%` }}
+          />
+        </div>
+      )}
       <div className="transfer-item-meta tnum">
         <span>{view.statusLabel}</span>
         <span>{view.rateLabel ?? ""}</span>

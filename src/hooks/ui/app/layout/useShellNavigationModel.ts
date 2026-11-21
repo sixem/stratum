@@ -66,6 +66,7 @@ export const useShellNavigationModel = ({
       canGoForward: resolvedView.canGoForward,
       canGoUp: resolvedView.canGoUp,
       canGoDown: navigationController.canGoDown,
+      showFolderChevrons: settings.showTopbarFolderChevrons,
     },
     pathInputsBar: {
       path: viewState.pathValue,
@@ -108,7 +109,7 @@ export const useShellNavigationModel = ({
     sidebarOpen: resolvedView.sidebarOpen,
     onToggleSidebar: navigationController.handleToggleSidebar,
     onOpenAbout: navigationController.handleOpenAbout,
-    drivePicker: {
+    drivePicker: settings.showDriveToggle ? {
       activePath: resolvedView.viewPath,
       drives: fileManager.drives,
       drivesLoading: !fileManager.drivesLoaded,
@@ -116,7 +117,7 @@ export const useShellNavigationModel = ({
       indexedSearchState: fileManager.indexedSearchStatus?.state,
       onSelect: navigationController.handleSelectDrive,
       onSelectNewTab: navigationController.handleOpenInNewTab,
-    },
+    } : undefined,
     pathBarActions: {
       viewMode: resolvedView.viewMode,
       settingsOpen: menuState.settingsOpen,

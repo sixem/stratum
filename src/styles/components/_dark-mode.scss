@@ -207,13 +207,24 @@
 
   // Borderless actions use an inset edge so hover cannot shift nearby content.
   :is(.quick-preview-topbar-nav > .btn,
-      .drive-picker-scroll-button, .tab-close, .tab-scroll-button,
+      .drive-picker-scroll-button, .tab-scroll-button,
       .quick-preview-strip-toggle, .indexed-search-clear, .pathbar-brand) {
     background: var(--surface-control);
     transition: none;
 
     &:hover:not(:disabled) {
       box-shadow: inset 0 0 0 1px var(--dark-hover-stroke);
+    }
+  }
+
+  .tab-close {
+    border: 0;
+    background: #242428;
+    transition: none;
+
+    &:is(:hover, :focus-visible):not(:disabled) {
+      background: var(--surface-control);
+      color: var(--text);
     }
   }
 
@@ -287,11 +298,6 @@
 }
 
 :root[data-dark-mode="true"][data-ambient="true"] {
-  .upper-files :is(.file-list, .view-lander) {
-    // Reveal the main pane's ambient background beneath its folder or lander.
-    background: transparent;
-  }
-
   .thumb-card:not(.is-selected):not([data-drop-target="true"]) {
     background-color: color-mix(in srgb, var(--surface-card) 90%, transparent);
   }

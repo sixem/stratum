@@ -177,6 +177,18 @@
     cursor: pointer;
   }
 
+  .drive-picker-list[data-window-drag-ignore="true"] {
+    &,
+    .drive-picker-item {
+      cursor: grab;
+    }
+
+    &[data-dragging="true"],
+    &[data-dragging="true"] .drive-picker-item {
+      cursor: grabbing;
+    }
+  }
+
   .drive-picker-status {
     width: 7px;
     height: 7px;
