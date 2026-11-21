@@ -192,6 +192,10 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.confirmClose === "boolean"
         ? value.confirmClose
         : DEFAULT_SETTINGS.confirmClose,
+    warnOnUnsavedWorkspaces:
+      typeof value?.warnOnUnsavedWorkspaces === "boolean"
+        ? value.warnOnUnsavedWorkspaces
+        : DEFAULT_SETTINGS.warnOnUnsavedWorkspaces,
     ambientBackground:
       typeof value?.ambientBackground === "boolean"
         ? value.ambientBackground

@@ -10,6 +10,7 @@ import { useScrollRequest } from "@/hooks/perf/scroll";
 import { makeDebug } from "@/lib";
 import { useIndexedSearchUiStore, usePlacesStore, usePromptStore } from "@/modules";
 import { useBatchRenameStore } from "@/modules/batchRenameStore";
+import { setWorkspaceDefaultPlaces } from "@/modules/workspaceStore";
 import { useAppMenuState } from "./useAppMenuState";
 import { useAppNavigationController } from "./useAppNavigationController";
 import { useAppViewState } from "./useAppViewState";
@@ -70,6 +71,11 @@ export const useAppShellModel = () => {
   const unpinPlace = usePlacesStore((state) => state.unpinPlace);
   const reorderPinnedPlace = usePlacesStore((state) => state.reorderPinnedPlace);
   const removePlace = usePlacesStore((state) => state.removePlace);
+
+  useEffect(() => {
+    if (!fileManager.placesLoaded) return;
+    setWorkspaceDefaultPlaces(fileManager.places);
+  }, [fileManager.places, fileManager.placesLoaded]);
 
   useEffect(() => {
     if (placesInitialized) return;

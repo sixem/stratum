@@ -40,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   keepFilterOnNavigation: false,
   confirmDelete: true,
   confirmClose: true,
+  warnOnUnsavedWorkspaces: true,
   ambientBackground: true,
   blurOverlays: true,
   keybinds: DEFAULT_KEYBINDS,

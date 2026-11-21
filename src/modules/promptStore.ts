@@ -17,6 +17,7 @@ export type PromptConfig = {
   onConfirm?: () => void;
   onCancel?: () => void;
   blocking?: boolean;
+  aboveOverlays?: boolean;
 };
 
 type PromptStore = {

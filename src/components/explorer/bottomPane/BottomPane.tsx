@@ -232,9 +232,9 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       <ToolbarIconButton
         label={viewSwitchLabel}
         onClick={() => {
-          // With no tab, keep the chosen layout for the next folder opened here.
+          // Keep the last choice as the default for new tabs in any workspace.
+          useBottomPaneStore.setState({ defaultViewMode: nextView });
           if (tabs.activeTab) tabs.setViewMode(nextView);
-          else useBottomPaneStore.setState({ defaultViewMode: nextView });
         }}
         pressOnPointerDown={false}
       >

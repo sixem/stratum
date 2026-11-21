@@ -88,6 +88,7 @@ useSettingsStore.subscribe((state) => {
     keepFilterOnNavigation: state.keepFilterOnNavigation,
     confirmDelete: state.confirmDelete,
     confirmClose: state.confirmClose,
+    warnOnUnsavedWorkspaces: state.warnOnUnsavedWorkspaces,
     ambientBackground: state.ambientBackground,
     blurOverlays: state.blurOverlays,
     keybinds: state.keybinds,

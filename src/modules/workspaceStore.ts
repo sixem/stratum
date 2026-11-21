@@ -1,6 +1,8 @@
-// Named workspaces are explicit snapshots of both pane layouts.
+// Named workspaces are explicit snapshots. Keep a draft when leaving a changed workspace.
 import { createWithEqualityFn } from "zustand/traditional";
+import { folderPathKey } from "@/lib/paths";
 import { createTab } from "@/lib/tabs";
+import type { Place } from "@/types";
 import { coerceBottomPaneHeight, DEFAULT_BOTTOM_PANE_LAYOUT, useBottomPaneStore } from "./bottomPaneStore";
 import type { BottomPaneLayout } from "./bottomPaneStore";
 import { coercePlacesState, DEFAULT_PLACES_STATE, usePlacesStore } from "./placesStore";
@@ -23,15 +25,23 @@ export type Workspace = {
 };
 
 type WorkspaceSession = { id: string | null; layout: WorkspaceLayout };
+type WorkspaceDraft = Pick<Workspace, "id" | "layout">;
 type WorkspaceState = {
   workspaces: Workspace[];
   activeId: string | null;
   previous: WorkspaceSession | null;
+  drafts: WorkspaceDraft[];
 };
 
 const STORAGE_KEY = "stratum.workspaces";
 const STORAGE_VERSION = 1;
-const EMPTY: WorkspaceState = { workspaces: [], activeId: null, previous: null };
+const EMPTY: WorkspaceState = { workspaces: [], activeId: null, previous: null, drafts: [] };
+
+let defaultPlaces = DEFAULT_PLACES_STATE;
+
+export const setWorkspaceDefaultPlaces = (places: Place[]) => {
+  defaultPlaces = coercePlacesState({ initialized: true, places });
+};
 
 const readLayout = (value: Partial<WorkspaceLayout> | undefined): WorkspaceLayout | null => {
   if (!value || !Array.isArray(value.main?.tabs) || !Array.isArray(value.bottom?.tabs)) return null;
@@ -45,7 +55,6 @@ const readLayout = (value: Partial<WorkspaceLayout> | undefined): WorkspaceLayou
     pane: {
       open,
       ...coerceBottomPaneHeight(pane),
-      defaultViewMode: pane?.defaultViewMode === "thumbs" ? "thumbs" : "list",
       active: open && pane?.active === true,
     },
   };
@@ -75,7 +84,15 @@ const readWorkspaces = (): WorkspaceState => {
     const previousLayout = readLayout(payload.previous?.layout);
     const previousId = payload.previous?.id;
     const previous = previousLayout ? { id: previousId && ids.has(previousId) ? previousId : null, layout: previousLayout } : null;
-    return { workspaces, activeId, previous };
+    // The old format kept only the previous session. Recover it as a potential draft.
+    const storedDrafts = Array.isArray(payload.drafts) ? payload.drafts : previous ? [previous] : [];
+    const drafts: WorkspaceDraft[] = [];
+    for (const entry of storedDrafts) {
+      if (!entry?.id || !ids.has(entry.id)) continue;
+      const layout = readLayout(entry.layout);
+      if (layout) drafts.push({ id: entry.id, layout });
+    }
+    return { workspaces, activeId, previous, drafts };
   } catch {
     return EMPTY;
   }
@@ -104,14 +121,68 @@ const defineWorkspace = (workspaces: Workspace[], name: string, layout: Workspac
   return { id: existingId ?? globalThis.crypto.randomUUID(), name: trimmed, layout };
 };
 
+const sameTabs = (saved: SessionState, current: SessionState) =>
+  saved.tabs.length === current.tabs.length && saved.tabs.every((tab, index) => {
+    const other = current.tabs[index];
+    const samePath = tab.path === other.path || folderPathKey(tab.path) === folderPathKey(other.path);
+    return samePath && tab.viewMode === other.viewMode && tab.search === other.search &&
+      tab.sort.key === other.sort.key && tab.sort.dir === other.sort.dir;
+  });
+
+// Focus, scroll, recent jumps, and regenerated tab IDs are saved when available,
+// but ordinary browsing state on its own should never trigger the exit warning.
+const hasLayoutChanges = (saved: WorkspaceLayout, current: WorkspaceLayout) => {
+  if (!sameTabs(saved.main, current.main) || !sameTabs(saved.bottom, current.bottom)) return true;
+  if (saved.pane.open !== current.pane.open) return true;
+  // Old percentage-based heights can be converted automatically on display.
+  if (saved.pane.heightUnit === current.pane.heightUnit && saved.pane.height !== current.pane.height) return true;
+  const savedPlaces = (saved.places.initialized ? saved.places : defaultPlaces).places;
+  const currentPlaces = (current.places.initialized ? current.places : defaultPlaces).places;
+  return savedPlaces.length !== currentPlaces.length || savedPlaces.some((place, index) => {
+    const other = currentPlaces[index];
+    return place.path !== other.path || place.name !== other.name || Boolean(place.pinned) !== Boolean(other.pinned);
+  });
+};
+
+const collectDrafts = ({ workspaces, activeId, drafts }: WorkspaceState, live: WorkspaceLayout) => {
+  const layouts = new Map(drafts.map(({ id, layout }) => [id, layout]));
+  if (activeId) layouts.set(activeId, live);
+  return workspaces.flatMap((workspace) => {
+    const layout = layouts.get(workspace.id);
+    return layout && hasLayoutChanges(workspace.layout, layout) ? [{ ...workspace, layout }] : [];
+  });
+};
+
+export const getWorkspaceChanges = (live: WorkspaceLayout) => collectDrafts(useWorkspaceStore.getState(), live);
+
+export const saveWorkspaceChanges = (changes: WorkspaceDraft[]) => {
+  if (!changes.length) return;
+  const state = useWorkspaceStore.getState();
+  const layouts = new Map(changes.map(({ id, layout }) => [id, layout]));
+  // Save all checked layouts together so a storage failure cannot leave a partial save.
+  persist({
+    ...state,
+    workspaces: state.workspaces.map((workspace) => {
+      const layout = layouts.get(workspace.id);
+      return layout ? { ...workspace, layout } : workspace;
+    }),
+    drafts: state.drafts.filter(({ id }) => !layouts.has(id)),
+  });
+};
+
 export const saveWorkspace = (name: string, layout: WorkspaceLayout, existingId?: string, activate = true) => {
   const state = useWorkspaceStore.getState();
   const { workspaces, activeId } = state;
   const workspace = defineWorkspace(workspaces, name, layout, existingId);
+  // Saving the live layout under another name can leave edits to the old workspace pending.
+  const drafts = activate
+    ? collectDrafts(state, layout).filter(({ id }) => id !== workspace.id)
+    : state.drafts;
   persist({
     ...state,
     workspaces: existingId ? workspaces.map((item) => item.id === existingId ? workspace : item) : [...workspaces, workspace],
     activeId: activate ? workspace.id : activeId,
+    drafts,
   });
 };
 
@@ -121,6 +192,7 @@ export const removeWorkspace = (id: string) => {
     ...state,
     workspaces: state.workspaces.filter((item) => item.id !== id),
     activeId: state.activeId === id ? null : state.activeId,
+    drafts: state.drafts.filter((draft) => draft.id !== id),
   });
 };
 
@@ -132,23 +204,28 @@ const restoreLayout = (layout: WorkspaceLayout) => {
 };
 
 export const switchWorkspace = (target: WorkspaceSession, outgoing: WorkspaceLayout) => {
-  const { workspaces, activeId } = useWorkspaceStore.getState();
+  const state = useWorkspaceStore.getState();
   // The previous session remains switchable if its named snapshot was deleted.
-  const id = workspaces.some((item) => item.id === target.id) ? target.id : null;
-  persist({ workspaces, activeId: id, previous: { id: activeId, layout: outgoing } });
+  const id = state.workspaces.some((item) => item.id === target.id) ? target.id : null;
+  persist({ ...state, activeId: id, previous: { id: state.activeId, layout: outgoing }, drafts: collectDrafts(state, outgoing) });
   restoreLayout(target.layout);
 };
 
 export const createFreshWorkspace = (name: string, outgoing: WorkspaceLayout) => {
-  const { workspaces, activeId } = useWorkspaceStore.getState();
+  const state = useWorkspaceStore.getState();
   const start = createTab("", { viewMode: useSettingsStore.getState().defaultViewMode });
   const layout: WorkspaceLayout = {
     main: { tabs: [start], activeTabId: start.id, recentJumps: [] },
     bottom: { tabs: [], activeTabId: null, recentJumps: [] },
     pane: { ...DEFAULT_BOTTOM_PANE_LAYOUT },
-    places: { ...DEFAULT_PLACES_STATE },
+    places: defaultPlaces,
   };
-  const workspace = defineWorkspace(workspaces, name, layout);
-  persist({ workspaces: [...workspaces, workspace], activeId: workspace.id, previous: { id: activeId, layout: outgoing } });
+  const workspace = defineWorkspace(state.workspaces, name, layout);
+  persist({
+    workspaces: [...state.workspaces, workspace],
+    activeId: workspace.id,
+    previous: { id: state.activeId, layout: outgoing },
+    drafts: collectDrafts(state, outgoing),
+  });
   restoreLayout(layout);
 };

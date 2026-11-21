@@ -54,7 +54,8 @@ export const PromptModal = () => {
     const handleKey = (event: KeyboardEvent) => {
       if (usePromptStore.getState().prompt !== prompt) return;
       if (event.repeat) return;
-      if (isEditableElement(document.activeElement)) return;
+      const focused = document.activeElement;
+      if (isEditableElement(focused) && !(event.key === "Escape" && focused?.matches('input[type="checkbox"]'))) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
 
       const lowerKey = event.key.toLowerCase();
@@ -108,6 +109,7 @@ export const PromptModal = () => {
     <div
       className="prompt-modal"
       data-open="true"
+      data-above-overlays={prompt.aboveOverlays || undefined}
       aria-hidden="false"
       onMouseDown={(event) => {
         backdropPromptRef.current = event.target === event.currentTarget ? prompt : null;

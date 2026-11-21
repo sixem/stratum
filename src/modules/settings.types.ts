@@ -38,6 +38,7 @@ export type Settings = {
   keepFilterOnNavigation: boolean;
   confirmDelete: boolean;
   confirmClose: boolean;
+  warnOnUnsavedWorkspaces: boolean;
   ambientBackground: boolean;
   blurOverlays: boolean;
   keybinds: KeybindMap;

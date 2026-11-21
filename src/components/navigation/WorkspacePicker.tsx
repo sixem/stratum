@@ -4,42 +4,13 @@ import { ChevronDownIcon, PlusIcon } from "@/components/icons";
 import { ContextMoreOptionsIcon } from "@/components/icons/contextMenuIcons";
 import { useOverlayDismiss } from "@/components/overlay/useOverlayDismiss";
 import { ToolbarPopover } from "@/components/primitives/ToolbarPopover";
-import { folderPathKey } from "@/lib";
+import { captureWorkspaceLayout } from "@/lib/captureWorkspaceLayout";
 import { usePromptStore } from "@/modules";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
-import { usePlacesStore } from "@/modules/placesStore";
-import { useBottomSessionStore, useSessionStore } from "@/modules/sessionStore";
-import type { SessionState } from "@/modules/sessionStore";
+import { useSessionStore } from "@/modules/sessionStore";
 import { createFreshWorkspace, removeWorkspace, saveWorkspace, switchWorkspace, useWorkspaceStore } from "@/modules/workspaceStore";
 import type { Workspace, WorkspaceLayout } from "@/modules/workspaceStore";
 import { promptWorkspaceName, runWorkspaceAction } from "./workspaceDialogs";
-
-const captureSession = ({ tabs, activeTabId, recentJumps }: SessionState, pane: "main" | "bottom"): SessionState => {
-  const files = document.querySelector<HTMLElement>(`[data-file-pane="${pane}"]`);
-  const viewport = files?.querySelector<HTMLElement>(".list-body, .thumb-viewport");
-  const displayedPath = folderPathKey(files?.dataset.panePath ?? "");
-  return {
-    activeTabId,
-    recentJumps: [...recentJumps],
-    tabs: tabs.map((tab) => ({
-      ...tab,
-      sort: { ...tab.sort },
-      scrollTop: viewport && displayedPath && tab.id === activeTabId && displayedPath === folderPathKey(tab.path)
-        ? viewport.scrollTop : tab.scrollTop,
-    })),
-  };
-};
-
-const captureLayout = (): WorkspaceLayout => {
-  const { open, height, heightUnit, defaultViewMode, active } = useBottomPaneStore.getState();
-  const { initialized, places } = usePlacesStore.getState();
-  return {
-    main: captureSession(useSessionStore.getState(), "main"),
-    bottom: captureSession(useBottomSessionStore.getState(), "bottom"),
-    pane: { open, height, heightUnit, defaultViewMode, active: open && active },
-    places: { initialized, places: places.map((place) => ({ ...place })) },
-  };
-};
 
 const focusRestoredPane = () => {
   const revision = useSessionStore.getState().restoreRevision;
@@ -85,21 +56,30 @@ export const WorkspacePicker = () => {
   const load = (target: { id: string | null; layout: WorkspaceLayout }) => {
     closeAndFocus();
     runWorkspaceAction(() => {
-      switchWorkspace(target, captureLayout());
+      switchWorkspace(target, captureWorkspaceLayout());
       focusRestoredPane();
     });
+  };
+
+  const loadNamed = (workspace: Workspace) => {
+    if (workspace.id === activeId) {
+      closeAndFocus();
+      return;
+    }
+    const draft = useWorkspaceStore.getState().drafts.find(({ id }) => id === workspace.id);
+    load(draft ?? workspace);
   };
 
   const create = () => {
     closeAndFocus();
     promptWorkspaceName("New workspace", "Create", "", (name) => {
-      createFreshWorkspace(name, captureLayout());
+      createFreshWorkspace(name, captureWorkspaceLayout());
       focusRestoredPane();
     });
   };
   const save = () => {
     closeAndFocus();
-    promptWorkspaceName("Save workspace", "Save", "", (name) => saveWorkspace(name, captureLayout()));
+    promptWorkspaceName("Save workspace", "Save", "", (name) => saveWorkspace(name, captureWorkspaceLayout()));
   };
 
   const rename = (workspace: Workspace) => {
@@ -121,7 +101,7 @@ export const WorkspacePicker = () => {
       content: `Replace the saved tabs, panes, and places for “${workspace.name}” with the current ones?`,
       confirmLabel: "Replace",
       cancelLabel: "Cancel",
-      onConfirm: () => runWorkspaceAction(() => saveWorkspace(workspace.name, captureLayout(), workspace.id)),
+      onConfirm: () => runWorkspaceAction(() => saveWorkspace(workspace.name, captureWorkspaceLayout(), workspace.id)),
     });
   };
   const remove = (workspace: Workspace) => {
@@ -181,7 +161,7 @@ export const WorkspacePicker = () => {
               {workspaces.map((workspace) => (
                 <li key={workspace.id}>
                   <div className="workspace-row">
-                    <button type="button" className="workspace-name" onClick={() => load(workspace)}
+                    <button type="button" className="workspace-name" onClick={() => loadNamed(workspace)}
                       aria-current={workspace.id === activeId ? "true" : undefined}>
                       {workspace.name}
                     </button>

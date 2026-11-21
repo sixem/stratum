@@ -1,9 +1,12 @@
-// Shows a close confirmation prompt when the window is requested to close.
+// Route native close requests through the workspace warning or regular confirmation.
 import { useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { CloseRequestedEvent } from "@tauri-apps/api/window";
+import { showWorkspaceClosePrompt } from "@/components/overlay/WorkspaceClosePrompt";
 import { makeDebug } from "@/lib";
-import { usePromptStore } from "@/modules";
+import { captureWorkspaceLayout } from "@/lib/captureWorkspaceLayout";
+import { usePromptStore, useSettingsStore } from "@/modules";
+import { getWorkspaceChanges, useWorkspaceStore } from "@/modules/workspaceStore";
 
 const log = makeDebug("window");
 
@@ -23,9 +26,6 @@ export const useCloseConfirm = ({
   const confirmRef = useRef(confirmClose);
   const onBeforeCloseRef = useRef(onBeforeClose);
   const onBeforePromptRef = useRef(onBeforePrompt);
-  // Once the user confirms, let the next close request pass through.
-  const allowCloseRef = useRef(false);
-
   useEffect(() => {
     confirmRef.current = confirmClose;
   }, [confirmClose]);
@@ -40,18 +40,30 @@ export const useCloseConfirm = ({
     if (!enabled) return;
     const appWindow = getCurrentWindow();
     let disposed = false;
+    let closing = false;
     let unlistenClose: (() => void) | null = null;
     let promptTimer: number | null = null;
 
+    const closeWindow = () => {
+      if (closing) return;
+      closing = true;
+      // Destroy bypasses the listener so a confirmed close cannot show another prompt.
+      void appWindow.destroy().catch((error) => {
+        closing = false;
+        log("window close failed: %o", error);
+      });
+    };
+
     const handleCloseRequest = (event: CloseRequestedEvent) => {
-      if (disposed) {
-        // Tauri would otherwise close the window from this stale listener.
+      if (disposed || closing) {
         event.preventDefault();
         return;
       }
       onBeforeCloseRef.current?.();
-      if (!confirmRef.current) return;
-      if (allowCloseRef.current) return;
+      const warnOnUnsaved = useSettingsStore.getState().warnOnUnsavedWorkspaces;
+      const changes = warnOnUnsaved && useWorkspaceStore.getState().workspaces.length
+        ? getWorkspaceChanges(captureWorkspaceLayout()) : [];
+      if (!changes.length && !confirmRef.current) return;
       event.preventDefault();
 
       const promptStore = usePromptStore.getState();
@@ -60,18 +72,16 @@ export const useCloseConfirm = ({
       const showClosePrompt = () => {
         const activePromptStore = usePromptStore.getState();
         if (activePromptStore.prompt) return;
+        if (changes.length) {
+          showWorkspaceClosePrompt(changes, closeWindow);
+          return;
+        }
         activePromptStore.showPrompt({
           title: "Close Stratum?",
           content: "Are you sure you want to close the window?",
           confirmLabel: "Close",
           cancelLabel: "Cancel",
-          onConfirm: () => {
-            allowCloseRef.current = true;
-            // Use destroy to bypass close-requested events and avoid double-close clicks.
-            void appWindow.destroy().catch(() => {
-              allowCloseRef.current = false;
-            });
-          },
+          onConfirm: closeWindow,
         });
       };
 

@@ -11,6 +11,10 @@
   @include modal.overlay-open();
 }
 
+.prompt-modal[data-above-overlays="true"] {
+  z-index: 2460;
+}
+
 .prompt-panel {
   @include modal.panel-shell(
     min(520px, calc(100vw - 32px)),
@@ -82,5 +86,37 @@
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+  }
+
+  .workspace-close-choices {
+    display: grid;
+    gap: 8px;
+
+    .prompt-actions {
+      flex-wrap: wrap;
+    }
+  }
+
+  .workspace-close-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: min(13rem, 28vh);
+    overflow-y: auto;
+    border-block: var(--surface-border-width) solid var(--stroke);
+    color: var(--text);
+
+    label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 4px;
+      cursor: pointer;
+    }
+
+    input {
+      flex: none;
+      accent-color: var(--accent);
+    }
   }
 }

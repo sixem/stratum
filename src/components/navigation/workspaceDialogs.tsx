@@ -35,11 +35,12 @@ export const promptWorkspaceName = (
       onConfirm,
       content: (
         <div className="prompt-field">
-          <label className="prompt-label" htmlFor={id}>Name</label>
+          <span className="prompt-label" id={`${id}-label`}>Name</span>
           <input
             id={id}
             className="prompt-input"
             type="text"
+            aria-labelledby={`${id}-label`}
             autoComplete="off"
             defaultValue={value}
             aria-invalid={Boolean(error)}

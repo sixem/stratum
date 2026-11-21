@@ -37,6 +37,11 @@ export const GENERAL_SETTINGS_ITEMS = {
     label: "Confirm on close",
     description: "Show a confirmation dialog before closing the app window.",
   },
+  warnOnUnsavedWorkspaces: {
+    label: "Warn about unsaved workspaces",
+    description: "Choose which changed workspaces to save before exiting.",
+    keywords: "close quit exit draft",
+  },
 } satisfies Record<string, SettingsItemText>;
 
 type SettingsGeneralSectionProps = {
@@ -46,6 +51,8 @@ type SettingsGeneralSectionProps = {
 export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProps) => {
   const keepFilterId = useId();
   const keepFilterDescriptionId = useId();
+  const workspaceWarningId = useId();
+  const workspaceWarningDescriptionId = useId();
   const {
     defaultViewMode,
     smoothScroll,
@@ -54,6 +61,7 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
     keepFilterOnNavigation,
     confirmDelete,
     confirmClose,
+    warnOnUnsavedWorkspaces,
     updateSettings,
   } = useSettingsStore(
     (state) => ({
@@ -64,6 +72,7 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
       keepFilterOnNavigation: state.keepFilterOnNavigation,
       confirmDelete: state.confirmDelete,
       confirmClose: state.confirmClose,
+      warnOnUnsavedWorkspaces: state.warnOnUnsavedWorkspaces,
       updateSettings: state.updateSettings,
     }),
     shallow,
@@ -154,6 +163,22 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
             onChange={(event) => updateSettings({ confirmClose: event.currentTarget.checked })}
           />
           <span />
+        </label>
+      </SettingsItem>
+      <SettingsItem
+        item={GENERAL_SETTINGS_ITEMS.warnOnUnsavedWorkspaces}
+        labelFor={workspaceWarningId}
+        descriptionId={workspaceWarningDescriptionId}
+      >
+        <label className="settings-toggle">
+          <input
+            id={workspaceWarningId}
+            type="checkbox"
+            aria-describedby={workspaceWarningDescriptionId}
+            checked={warnOnUnsavedWorkspaces}
+            onChange={(event) => updateSettings({ warnOnUnsavedWorkspaces: event.currentTarget.checked })}
+          />
+          <span aria-hidden="true" />
         </label>
       </SettingsItem>
     </section>
