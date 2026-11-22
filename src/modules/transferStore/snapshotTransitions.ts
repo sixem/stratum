@@ -27,16 +27,6 @@ const TRANSFER_PHASE_ORDER: Record<TransferJobPhase, number> = {
   finalizing: 3,
 };
 
-const orderedSnapshotJobs = (snapshot: TransferQueueSnapshot): TransferJobSnapshot[] => {
-  const ordered: TransferJobSnapshot[] = [];
-  if (snapshot.activeJob) {
-    ordered.push(snapshot.activeJob);
-  }
-  ordered.push(...snapshot.queuedJobs);
-  ordered.push(...snapshot.completedJobs);
-  return ordered;
-};
-
 const resolveSnapshotStatus = (
   snapshotStatus: TransferStatus,
   snapshotPhase: TransferJobPhase,
@@ -192,10 +182,13 @@ export const applyQueueSnapshotTransition = (
   snapshot: TransferQueueSnapshot | TransferJobsSnapshotEvent,
   now: number,
 ): TransferStoreState => {
+  // Multiple workers may emit snapshots out of order after releasing the manager lock.
+  if (snapshot.revision <= state.snapshotRevision) return state;
+
   const previousJobsById = new Map(
     selectTransferJobs(state).map((job) => [job.id, job]),
   );
-  const backendJobs = orderedSnapshotJobs(snapshot)
+  const backendJobs = [...snapshot.activeJobs, ...snapshot.queuedJobs, ...snapshot.completedJobs]
     .filter((job) => {
       const dismissed = state.dismissedJobIds[job.id];
       if (!dismissed) {
@@ -214,6 +207,7 @@ export const applyQueueSnapshotTransition = (
 
   return {
     ...state,
+    snapshotRevision: snapshot.revision,
     backendJobs,
   };
 };

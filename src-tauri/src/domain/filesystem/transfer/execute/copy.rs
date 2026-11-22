@@ -8,7 +8,9 @@ use super::super::manifest::{TransferManifestEntry, TransferManifestRoot};
 use super::paths::existing_entry_kind;
 use super::progress::{emit_file_bytes, emit_file_start, emit_path_progress};
 use super::staging::TransferStage;
-use crate::domain::filesystem::{TransferControlCallback, TransferProgressCallback};
+use crate::domain::filesystem::{
+    CompletedFileWork, TransferControlCallback, TransferProgressCallback,
+};
 use std::fs;
 use std::path::Path;
 
@@ -37,7 +39,14 @@ fn copy_file_entry_fallback(
             .write_all(&buffer[..bytes])
             .map_err(|err| err.to_string())?;
         copied = copied.saturating_add(bytes as u64);
-        emit_file_bytes(processed, total, copied, entry.bytes_total, on_progress);
+        emit_file_bytes(
+            processed,
+            total,
+            copied,
+            entry.bytes_total,
+            None,
+            on_progress,
+        );
     }
     if let Ok(metadata) = reader.metadata() {
         let _ = fs::set_permissions(destination, metadata.permissions());
@@ -96,6 +105,10 @@ pub(super) fn copy_staged_entry(
         total,
         entry.bytes_total,
         entry.bytes_total,
+        Some(CompletedFileWork {
+            files: 1,
+            bytes: entry.bytes_total,
+        }),
         on_progress,
     );
     Ok(())

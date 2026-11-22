@@ -2,6 +2,7 @@
 // Uses IFileOperation on an STA-initialized worker thread so the app keeps
 // ownership of queue state, cancellation, and fallback prompts while still
 // getting Explorer-like delete semantics.
+use super::common::normalize_path_key;
 use super::delete_discovery::{DeleteDiscoveryPlan, DeleteDiscoveryRoot};
 use crate::domain::filesystem::fs_recycle_windows::{
     can_use_recycle_bin, current_user_sid, RecycleEntry,
@@ -72,6 +73,11 @@ pub(crate) fn shell_delete_entries(
         on_progress: progress_ptr,
         on_control: control_ptr,
         roots: discovery.roots.clone(),
+        pending_roots: discovery
+            .roots
+            .iter()
+            .map(|root| (normalize_path_key(Path::new(&root.path)), root.path.clone()))
+            .collect(),
         root_failures: HashMap::new(),
         recycle_source_ids: (mode == ShellDeleteMode::Recycle).then(HashMap::new),
         recycled_items: Vec::new(),
@@ -104,6 +110,9 @@ pub(crate) fn shell_delete_entries(
             report
                 .failures
                 .push(format!("{}: Recycle Bin unavailable", root.path));
+            if let Ok(mut state) = sink_state.lock() {
+                state.mark_processed(Some(root.path.clone()), false);
+            }
             continue;
         }
 
@@ -112,6 +121,9 @@ pub(crate) fn shell_delete_entries(
             Err(error) => {
                 report.remaining_paths.push(root.path.clone());
                 report.failures.push(format!("{}: {}", root.path, error));
+                if let Ok(mut state) = sink_state.lock() {
+                    state.mark_processed(Some(root.path.clone()), false);
+                }
                 continue;
             }
         };

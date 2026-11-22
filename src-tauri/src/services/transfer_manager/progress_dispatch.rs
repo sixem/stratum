@@ -52,9 +52,10 @@ impl TransferProgressDispatcher {
 
     pub(super) fn handle_update(&mut self, update: fs::TransferProgressUpdate) {
         let force_progress = is_immediate_progress_event(&update);
-        let force_snapshot = is_root_completion_update(&update);
         self.pending_update = Some(update);
-        self.flush_pending(force_progress, force_snapshot);
+        // Per-item events must reach the view immediately, but the complete
+        // queue snapshot still uses the regular cadence for large selections.
+        self.flush_pending(force_progress, false);
     }
 
     pub(super) fn flush_all(&mut self) {
@@ -165,9 +166,6 @@ impl PlanningProgressDispatcher {
             processed: 0,
             total: update.discovered_items,
             current_path: update.current_path.clone(),
-            current_bytes: None,
-            current_total_bytes: None,
-            progress_percent: None,
             status_text: Some(build_discovery_status_text(
                 self.operation_label,
                 update.discovered_items,
@@ -177,6 +175,7 @@ impl PlanningProgressDispatcher {
                 .current_path
                 .as_ref()
                 .map(|path| format!("Scanning {path}")),
+            ..Default::default()
         });
         self.last_progress_emit = Some(now);
 
@@ -189,23 +188,10 @@ impl PlanningProgressDispatcher {
     }
 }
 
-fn is_root_completion_update(update: &fs::TransferProgressUpdate) -> bool {
-    update.current_path.is_none()
-        && update.current_bytes.is_none()
-        && update.current_total_bytes.is_none()
-}
-
-fn is_file_completion_update(update: &fs::TransferProgressUpdate) -> bool {
-    matches!(
-        (update.current_bytes, update.current_total_bytes),
-        (Some(current), Some(total)) if current >= total
-    )
-}
-
 fn is_immediate_progress_event(update: &fs::TransferProgressUpdate) -> bool {
     update.current_path.is_some()
-        || is_file_completion_update(update)
-        || is_root_completion_update(update)
+        || update.completed_item.is_some()
+        || update.completed_file_work.is_some()
 }
 
 fn build_discovery_status_text(operation_label: &str, items: usize, bytes: u64) -> String {

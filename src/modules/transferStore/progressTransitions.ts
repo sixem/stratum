@@ -1,9 +1,9 @@
 // Backend progress-hint transitions.
 // These hints supplement queue snapshots with richer current-file presentation.
 import type { TransferProgressEvent } from "@/types";
-import type { TransferStoreState, TransferStatus } from "../transferStore.types";
+import type { TransferStoreState } from "../transferStore.types";
 import { applyProgressUpdateToJob } from "./progress";
-import { mapJobs } from "./shared";
+import { isTerminalStatus, mapJobs } from "./shared";
 
 export const applyProgressHintTransition = (
   state: TransferStoreState,
@@ -11,15 +11,13 @@ export const applyProgressHintTransition = (
   now: number,
 ): TransferStoreState => {
   const updateJob = (job: (typeof state.backendJobs)[number]) => {
-    if (job.id !== event.id) {
+    if (job.id !== event.id || isTerminalStatus(job.status)) {
       return job;
     }
 
-    const nextStatus: TransferStatus =
-      job.status === "queued" ? "running" : job.status;
+    // The queue snapshot owns status so late hints cannot turn waiting work active.
     return applyProgressUpdateToJob(job, event, {
       now,
-      nextStatus,
       resetByteHintsOnPathChange: false,
     });
   };

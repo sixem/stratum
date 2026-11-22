@@ -48,12 +48,9 @@ impl NativeCopyContext {
             (*handler)(TransferProgressUpdate {
                 processed: self.processed,
                 total: self.total,
-                current_path: None,
                 current_bytes: Some(current_bytes),
                 current_total_bytes: Some(self.current_total_bytes),
-                progress_percent: None,
-                status_text: None,
-                rate_text: None,
+                ..Default::default()
             });
         }
     }

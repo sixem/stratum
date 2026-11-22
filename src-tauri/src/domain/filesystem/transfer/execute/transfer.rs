@@ -5,6 +5,7 @@ use super::super::common::{check_transfer_control, same_drive};
 use super::super::manifest::TransferManifestRoot;
 use super::move_source::{remove_manifest_source, SourceSnapshot};
 use super::paths::existing_entry_kind;
+use super::progress::emit_manifest_move_completion;
 use super::staging::TransferStage;
 use crate::domain::filesystem::staging::rename_new;
 use crate::domain::filesystem::{TransferControlCallback, TransferProgressCallback};
@@ -85,7 +86,10 @@ pub(super) fn execute_transfer_root(
             existing,
             cleanup_failures,
         ) {
-            Ok(()) => return Ok(true),
+            Ok(()) => {
+                emit_manifest_move_completion(root, processed, total, on_progress);
+                return Ok(true);
+            }
             Err(error) if error.kind() == ErrorKind::CrossesDevices => {}
             Err(error) => return Err(error.to_string()),
         }

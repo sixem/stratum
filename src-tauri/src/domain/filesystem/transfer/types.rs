@@ -69,8 +69,8 @@ pub struct TransferJobSnapshot {
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransferQueueSnapshot {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub active_job: Option<TransferJobSnapshot>,
+    pub revision: u64,
+    pub active_jobs: Vec<TransferJobSnapshot>,
     pub queued_jobs: Vec<TransferJobSnapshot>,
     pub completed_jobs: Vec<TransferJobSnapshot>,
 }

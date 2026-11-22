@@ -10,17 +10,17 @@ export type NativeFileDrag =
   | { type: "error"; message: string }
   | (PositionedDrag & { type: "drop"; paths: string[]; mode: TransferMode; stage: number | null });
 
-// Prompts and transfers run in release order. A rejection leaves the queue usable.
+// Conflict prompts run in release order. The backend schedules the transfers.
 export class FileDropQueue {
   private tail = Promise.resolve();
   private pending = 0;
 
   get busy() { return this.pending > 0; }
 
-  add(run: () => Promise<void>) {
+  add<T>(run: () => T | Promise<T>) {
     this.pending++;
     const result = this.tail.then(run).finally(() => { this.pending--; });
-    this.tail = result.catch(() => {});
+    this.tail = result.then(() => {}, () => {});
     return result;
   }
 }

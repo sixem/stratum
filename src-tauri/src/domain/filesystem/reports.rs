@@ -69,9 +69,28 @@ pub struct TransferProgress {
     pub status_text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rate_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_item: Option<CompletedTransferItem>,
 }
 
-#[derive(Clone)]
+// Selected source item whose execution has settled. For copies and failed
+// attempts the source still belongs in the directory view.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletedTransferItem {
+    pub path: String,
+    pub source_removed: bool,
+}
+
+// Delta reported only after file work succeeds. Byte callbacks describe
+// in-flight data, and can report the full size more than once.
+#[derive(Clone, Copy)]
+pub(crate) struct CompletedFileWork {
+    pub files: usize,
+    pub bytes: u64,
+}
+
+#[derive(Clone, Default)]
 pub(crate) struct TransferProgressUpdate {
     pub processed: usize,
     pub total: usize,
@@ -81,6 +100,8 @@ pub(crate) struct TransferProgressUpdate {
     pub progress_percent: Option<f64>,
     pub status_text: Option<String>,
     pub rate_text: Option<String>,
+    pub completed_item: Option<CompletedTransferItem>,
+    pub completed_file_work: Option<CompletedFileWork>,
 }
 
 // Optional per-item progress reporting for copy/transfer commands.

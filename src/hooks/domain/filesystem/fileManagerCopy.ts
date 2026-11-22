@@ -37,7 +37,7 @@ export const useFileManagerCopy = ({
   // answer "is any copy-related work pending?" without blocking queueing.
   const activeCopyRequestCountRef = useRef(0);
   const activeCuts = useRef(new Set<number>());
-  const registerTransferJob = useTransferStore((state) => state.registerJob);
+  const registerTransferJob = useTransferStore((state) => state.registerFileJob);
   const recordTransferJobOutcome = useTransferStore((state) => state.recordJobOutcome);
 
   // Shared copy pipeline for duplicate/paste actions.
@@ -66,6 +66,7 @@ export const useFileManagerCopy = ({
         job = registerTransferJob({
           label: operationLabel,
           items: unique,
+          kind: "transfer",
         });
         const report = await copyEntries(
           unique,
@@ -118,6 +119,7 @@ export const useFileManagerCopy = ({
         });
         return null;
       } finally {
+        job?.finish();
         finishPreparing();
         activeCopyRequestCountRef.current = Math.max(
           activeCopyRequestCountRef.current - 1,

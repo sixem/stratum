@@ -55,6 +55,17 @@ export type TransferJobRegistration = {
   id: string;
 };
 
+export type FileJobKind = "transfer" | "delete";
+
+export type FileJobRegistration = TransferJobRegistration & {
+  finish: () => void;
+};
+
+export type PendingFileJob = {
+  kind: FileJobKind;
+  paths: Set<string>;
+};
+
 export type TransferJobMetadata = {
   label: string;
   items?: string[];
@@ -65,8 +76,10 @@ export type TransferJobMetadata = {
 };
 
 export type TransferStoreState = {
+  snapshotRevision: number;
   backendJobs: TransferJob[];
   localJobs: TransferJob[];
   jobMetadata: Record<string, TransferJobMetadata>;
   dismissedJobIds: Record<string, true>;
+  pendingFileJobs: Record<string, PendingFileJob>;
 };

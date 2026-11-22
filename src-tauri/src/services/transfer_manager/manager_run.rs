@@ -3,14 +3,15 @@
 use super::job_execution::{run_operation, terminal_status_for_error};
 use super::job_planning::plan_job;
 use super::job_state_updates::{
-    activate_job, mark_job_finished, mark_job_planning, mark_job_ready, mark_queued_job_finished,
+    mark_job_finished, mark_job_planning, mark_job_ready, mark_queued_job_finished,
 };
-use super::manager_state::{TransferJobRequest, TransferManagerInner};
+use super::manager_state::{snapshot_from_state, TransferJobRequest, TransferManagerInner};
 use crate::domain::filesystem::transfer::job_plan::PlannedTransferJob;
 use std::sync::Arc;
 use std::thread;
 
 const PLANNING_WORKER_COUNT: usize = 2;
+const EXECUTION_WORKER_COUNT: usize = 2;
 
 pub(super) fn start_workers(inner: Arc<TransferManagerInner>) {
     for worker_index in 0..PLANNING_WORKER_COUNT {
@@ -27,16 +28,19 @@ pub(super) fn start_workers(inner: Arc<TransferManagerInner>) {
             .spawn(planner);
     }
 
-    let worker = move || loop {
-        let Some((job, plan)) = wait_for_next_ready_job(&inner) else {
-            return;
+    for worker_index in 0..EXECUTION_WORKER_COUNT {
+        let worker_inner = Arc::clone(&inner);
+        let worker = move || loop {
+            let Some((job, plan)) = wait_for_next_ready_job(&worker_inner) else {
+                return;
+            };
+            run_job(&worker_inner, job, plan);
         };
-        run_job(&inner, job, plan);
-    };
 
-    let _ = thread::Builder::new()
-        .name("transfer-executor".to_string())
-        .spawn(worker);
+        let _ = thread::Builder::new()
+            .name(format!("transfer-executor-{worker_index}"))
+            .spawn(worker);
+    }
 }
 
 fn wait_for_next_planning_job(inner: &Arc<TransferManagerInner>) -> Option<TransferJobRequest> {
@@ -67,7 +71,6 @@ fn run_planning_job(inner: &Arc<TransferManagerInner>, job: TransferJobRequest) 
     match plan_result {
         Ok(plan) => {
             mark_job_ready(inner, &job.snapshot.id, plan, &job.event_emitter);
-            inner.queue_signal.notify_all();
         }
         Err(error) => {
             let terminal_status = terminal_status_for_error(&error);
@@ -81,6 +84,7 @@ fn run_planning_job(inner: &Arc<TransferManagerInner>, job: TransferJobRequest) 
             }
         }
     }
+    inner.queue_signal.notify_all();
 }
 
 fn wait_for_next_ready_job(
@@ -88,15 +92,17 @@ fn wait_for_next_ready_job(
 ) -> Option<(TransferJobRequest, PlannedTransferJob)> {
     let mut guard = inner.state.lock().ok()?;
     loop {
-        if let Some(job) = guard.take_next_ready_job() {
-            return Some(job);
+        if let Some((job, plan)) = guard.activate_next_ready_job() {
+            let snapshot = snapshot_from_state(&mut guard);
+            drop(guard);
+            job.event_emitter.emit_snapshot(&snapshot);
+            return Some((job, plan));
         }
         guard = inner.queue_signal.wait(guard).ok()?;
     }
 }
 
 fn run_job(inner: &Arc<TransferManagerInner>, job: TransferJobRequest, plan: PlannedTransferJob) {
-    activate_job(inner, &job, &plan);
     let TransferJobRequest {
         snapshot,
         event_emitter,
@@ -114,5 +120,6 @@ fn run_job(inner: &Arc<TransferManagerInner>, job: TransferJobRequest, plan: Pla
         operation,
     );
     mark_job_finished(inner, &snapshot.id, outcome.terminal_status, &event_emitter);
+    inner.queue_signal.notify_all();
     let _ = completion_tx.send(outcome.result);
 }

@@ -28,7 +28,8 @@ pub use reports::{
     RestoreRecycleReport, TransferProgress, TransferReport, TrashReport,
 };
 pub(crate) use reports::{
-    TransferControlCallback, TransferProgressCallback, TransferProgressUpdate,
+    CompletedFileWork, CompletedTransferItem, TransferControlCallback, TransferProgressCallback,
+    TransferProgressUpdate,
 };
 pub(crate) use time::to_epoch_ms;
 pub use transfer::types::TransferQueueSnapshot;

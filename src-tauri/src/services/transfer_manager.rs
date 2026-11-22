@@ -1,9 +1,11 @@
-// Sequential backend work queue used by filesystem and conversion commands.
+// Bounded backend work queue used by filesystem and conversion commands.
 // The public handle stays small here while submodules own state, events, and execution.
 #[path = "transfer_manager/control.rs"]
 mod control;
 #[path = "transfer_manager/job_execution.rs"]
 mod job_execution;
+#[path = "transfer_manager/job_paths.rs"]
+mod job_paths;
 #[path = "transfer_manager/job_planning.rs"]
 mod job_planning;
 #[path = "transfer_manager/job_state_updates.rs"]

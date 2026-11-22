@@ -13,8 +13,25 @@ export const useTransferProgress = ({ enabled }: UseTransferProgressOptions) => 
   useEffect(() => {
     if (!enabled) return;
     let active = true;
-    let receivedLiveSnapshot = false;
     const unlisten: Array<() => void> = [];
+    const settledPaths = new Map<string, Set<string>>();
+    let settledPathsFrame: number | null = null;
+    const queueSettledPath = (id: string, path: string) => {
+      let paths = settledPaths.get(id);
+      if (!paths) {
+        paths = new Set();
+        settledPaths.set(id, paths);
+      }
+      paths.add(path);
+      if (settledPathsFrame != null) return;
+
+      // Batch fast same-drive moves into one explorer update per frame.
+      settledPathsFrame = window.requestAnimationFrame(() => {
+        settledPathsFrame = null;
+        useTransferStore.getState().settleFilePaths(settledPaths);
+        settledPaths.clear();
+      });
+    };
     const setup = async () => {
       const stopSnapshots = await listen<TransferJobsSnapshotEvent>(
         "transfer_jobs_snapshot",
@@ -22,7 +39,6 @@ export const useTransferProgress = ({ enabled }: UseTransferProgressOptions) => 
           if (!active) return;
           const payload = event.payload;
           if (!payload) return;
-          receivedLiveSnapshot = true;
           useTransferStore.getState().applyQueueSnapshot(payload);
         },
       );
@@ -38,6 +54,10 @@ export const useTransferProgress = ({ enabled }: UseTransferProgressOptions) => 
           if (!active) return;
           const payload = event.payload;
           if (!payload) return;
+          if (payload.completedItem) {
+            queueSettledPath(payload.id, payload.completedItem.path);
+            return;
+          }
           useTransferStore.getState().applyProgressHint(payload);
         },
       );
@@ -48,7 +68,7 @@ export const useTransferProgress = ({ enabled }: UseTransferProgressOptions) => 
       unlisten.push(stopProgress);
 
       const snapshot = await listTransferJobs().catch(() => null);
-      if (!active || receivedLiveSnapshot || !snapshot) {
+      if (!active || !snapshot) {
         return;
       }
       useTransferStore.getState().applyQueueSnapshot(snapshot);
@@ -56,6 +76,7 @@ export const useTransferProgress = ({ enabled }: UseTransferProgressOptions) => 
     void setup();
     return () => {
       active = false;
+      if (settledPathsFrame != null) window.cancelAnimationFrame(settledPathsFrame);
       unlisten.forEach((stop) => stop());
     };
   }, [enabled]);

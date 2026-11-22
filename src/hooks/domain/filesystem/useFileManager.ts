@@ -120,7 +120,6 @@ export function useFileManager() {
     loadingPath: directoryLoader.loadingPath,
     failedPath: directoryLoader.failedPath,
     suppressUndoPresence: fileMutations.suppressUndoPresence,
-    pendingDeletePaths: fileMutations.pendingDeletePaths,
     status,
     loadDir: directoryLoader.loadDir,
     clearDir: directoryLoader.clearDir,

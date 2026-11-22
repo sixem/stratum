@@ -160,6 +160,8 @@
 }
 
 .pane-stack {
+  // Keep file overlays and pane controls below the toolbar popovers.
+  isolation: isolate;
   display: grid;
   grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   min-height: 0;

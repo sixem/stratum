@@ -8,17 +8,18 @@ import type { NativeFileDrag } from "./nativeFileDrag";
 import {
   getDropTargetFromPoint,
   makeDebug,
-  normalizePath,
   normalizeDropPath,
   toMessage,
 } from "@/lib";
 import { usePromptStore, useTransferStore } from "@/modules";
+import type { PromptConfig } from "@/modules";
 import type { DropTarget } from "@/lib";
 import { createTabLocationHover, getTabLocationDropTarget, openDroppedLocation } from "@/lib/tabLocationDrop";
 import {
   planDropTransfer,
   resolveDropTransferConflicts,
 } from "./dropTransferPlanning";
+import type { ResolvedDropTransferPlan } from "./dropTransferPlanning";
 import type { UndoMoveEntry } from "./fileManagerUndo";
 import { runDropTransfer } from "./runDropTransfer";
 import { useTabDropSubmenu } from "./useTabDropSubmenu";
@@ -62,18 +63,16 @@ export const useFileDrop = ({
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
   const [dropTargetTabId, setDropTargetTabId] = useState<string | null>(null);
   const [dragPoint, setDragPoint] = useState<ClientPoint | null>(null);
-  // Track source entries that are currently being moved or copied so the
-  // explorer can show immediate busy feedback before backend progress arrives.
-  const [pendingTransferPaths, setPendingTransferPaths] = useState<Set<string>>(new Set());
   const [hoveredPane, setHoveredPane] = useState<DropTarget["pane"]>();
   const [backgroundHovered, setBackgroundHovered] = useState(false);
   // Cache the normalized path to keep drop comparisons cheap.
   const currentPathKeyRef = useRef(normalizeDropPath(currentPath));
   const refreshRef = useRef(onRefresh);
+  const activeTransfers = useRef(0);
   const [dropQueue] = useState(() => new FileDropQueue());
   const [highlightTabStrip] = useState(createTabLocationHover);
   const promptStore = useMemo(() => usePromptStore.getState(), []);
-  const registerTransferJob = useTransferStore((state) => state.registerJob);
+  const registerTransferJob = useTransferStore((state) => state.registerFileJob);
   const updateTransferLabel = useTransferStore((state) => state.updateJobLabel);
   const recordTransferJobOutcome = useTransferStore((state) => state.recordJobOutcome);
   const {
@@ -126,34 +125,24 @@ export const useFileDrop = ({
   }, [onRefresh]);
 
   const executeDrop = useCallback(
-    async (plan: NonNullable<ReturnType<typeof planDropTransfer>>, dropStage?: number) => {
+    async (plan: ResolvedDropTransferPlan, dropStage?: number) => {
       if (log.enabled) {
         log("drop-handle: count=%d destination=%s", plan.items.length, plan.destination);
       }
 
-      const resolvedPlan = await resolveDropTransferConflicts(plan, promptStore);
-      if (!resolvedPlan) return;
-
-      const pendingPathKeys = new Set(
-        resolvedPlan.items
-          .map((item) => normalizePath(item.candidate.path))
-          .filter((value): value is string => Boolean(value)),
-      );
-
-      onTransferInFlightChange?.(true);
-      if (pendingPathKeys.size > 0) {
-        setPendingTransferPaths((previous) => {
-          if (previous.size === 0) return new Set(pendingPathKeys);
-          const merged = new Set(previous);
-          pendingPathKeys.forEach((pathKey) => merged.add(pathKey));
-          return merged;
-        });
-      }
+      activeTransfers.current++;
+      if (activeTransfers.current === 1) onTransferInFlightChange?.(true);
       try {
         await runDropTransfer({
-          plan: resolvedPlan,
+          plan,
           dropStage,
-          promptStore,
+          promptStore: {
+            // A finished transfer can report issues while a later drop is
+            // waiting for an overwrite decision.
+            showPrompt: (prompt: PromptConfig) => {
+              void dropQueue.add(() => promptStore.showPrompt(prompt));
+            },
+          },
           currentPathKey: currentPathKeyRef.current,
           onRefresh: refreshRef.current,
           onRecordMoveUndo,
@@ -164,18 +153,12 @@ export const useFileDrop = ({
           },
         });
       } finally {
-        if (pendingPathKeys.size > 0) {
-          setPendingTransferPaths((previous) => {
-            if (previous.size === 0) return previous;
-            const next = new Set(previous);
-            pendingPathKeys.forEach((pathKey) => next.delete(pathKey));
-            return next;
-          });
-        }
-        onTransferInFlightChange?.(false);
+        activeTransfers.current--;
+        if (activeTransfers.current === 0) onTransferInFlightChange?.(false);
       }
     },
     [
+      dropQueue,
       onRecordMoveUndo,
       onTransferInFlightChange,
       promptStore,
@@ -207,17 +190,15 @@ export const useFileDrop = ({
     if (!plan) return;
     const finishWaiting = dropQueue.busy
       ? beginFileActivity(`Drop queued for ${plan.destination}`) : null;
-    return dropQueue.add(() => {
-      finishWaiting?.();
-      return executeDrop(plan, dropStage);
-    }).catch((error) => {
-      promptStore.showPrompt({
-        title: "Drop failed",
-        content: toMessage(error, "Unable to prepare the dropped files."),
-        confirmLabel: "OK",
-        cancelLabel: null,
+    try {
+      const resolvedPlan = await dropQueue.add(() => {
+        finishWaiting?.();
+        return resolveDropTransferConflicts(plan, promptStore);
       });
-    });
+      if (resolvedPlan) await executeDrop(resolvedPlan, dropStage);
+    } catch (error) {
+      await queueDropError(toMessage(error, "Unable to prepare the dropped files."));
+    }
   }, [beginFileActivity, dropQueue, executeDrop, promptStore, queueDropError]);
 
   const onDragEvent = useRef<(event: NativeFileDrag) => void>(() => {});
@@ -292,7 +273,6 @@ export const useFileDrop = ({
     dropTargetPath,
     dropTargetTabId,
     dragPoint,
-    pendingTransferPaths,
     tabDropSubmenu,
     setDropTarget,
     clearDragState,

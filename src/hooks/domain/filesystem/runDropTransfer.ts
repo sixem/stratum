@@ -7,6 +7,7 @@ import {
 } from "@/lib";
 import { bumpDirectoryChildVersions } from "@/modules";
 import type { PromptConfig } from "@/modules";
+import type { FileJobRegistration } from "@/modules/transferStore";
 import type { UndoMoveEntry } from "./fileManagerUndo";
 import {
   getTransferErrorMessage,
@@ -19,7 +20,7 @@ type PromptStoreLike = {
 };
 
 type TransferJobStoreLike = {
-  registerTransferJob: (input: { label: string; items?: string[] }) => { id: string };
+  registerTransferJob: (input: { label: string; items: string[]; kind: "transfer" }) => FileJobRegistration;
   updateTransferLabel: (id: string, label: string) => void;
   recordTransferJobOutcome: (
     id: string,
@@ -81,6 +82,7 @@ export const runDropTransfer = async ({
   const job = transferStore.registerTransferJob({
     label: plan.mode === "move" ? "Move" : plan.mode === "copy" ? "Copy" : "Transfer",
     items: plan.items.map((item) => item.candidate.path),
+    kind: "transfer",
   });
 
   try {
@@ -150,5 +152,7 @@ export const runDropTransfer = async ({
       confirmLabel: "OK",
       cancelLabel: null,
     });
+  } finally {
+    job.finish();
   }
 };

@@ -1,6 +1,7 @@
 // Translates the shell data + interaction models into the render-facing slices
 // consumed by AppContent, status UI, and overlay builders.
 import { useStatusLabels } from "@/hooks/domain/metadata";
+import { usePendingFilePaths } from "@/modules/transferStore";
 import type { FileEntry } from "@/types";
 import { useAppFileViewController } from "../useAppFileViewController";
 import type { UseShellViewModelOptions } from "./shellViewModel.types";
@@ -38,6 +39,7 @@ export const useShellFileViewAssembly = ({
   dataPipeline,
   interactionModel,
 }: UseShellFileViewAssemblyOptions) => {
+  const { pendingDeletePaths, pendingTransferPaths } = usePendingFilePaths();
   const { countLabel, selectionLabel } = useStatusLabels({
     isFiltered: dataPipeline.isFiltered,
     visibleCount: dataPipeline.visibleCount,
@@ -68,8 +70,8 @@ export const useShellFileViewAssembly = ({
           scrollRestoreTop: resolvedView.scrollRestoreTop,
           scrollRequest: scrollState.scrollRequest,
           smoothScroll: settings.smoothScroll,
-          pendingDeletePaths: fileManager.pendingDeletePaths,
-          pendingTransferPaths: fileDrop.pendingTransferPaths,
+          pendingDeletePaths,
+          pendingTransferPaths,
           sortState: resolvedView.sortState,
           canGoUp: resolvedView.canGoUp,
         },

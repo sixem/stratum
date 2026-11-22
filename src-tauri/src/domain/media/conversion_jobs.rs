@@ -64,7 +64,7 @@ impl ConversionJobItem {
         }
     }
 
-    fn destination_path(&self) -> &str {
+    pub(crate) fn destination_path(&self) -> &str {
         match self {
             Self::Image {
                 destination_path, ..
@@ -130,11 +130,9 @@ pub fn convert_items(
                 processed: processed_before,
                 total: total_items,
                 current_path: Some(item.source_path().to_string()),
-                current_bytes: None,
-                current_total_bytes: None,
                 progress_percent: batch_progress_percent(processed_before, total_items),
                 status_text: Some(format!("Starting {}", item_label(item.source_path()))),
-                rate_text: None,
+                ..Default::default()
             },
         );
 
@@ -160,11 +158,8 @@ pub fn convert_items(
                         processed,
                         total: total_items,
                         current_path: Some(item.destination_path().to_string()),
-                        current_bytes: None,
-                        current_total_bytes: None,
                         progress_percent: batch_progress_percent(processed, total_items),
-                        status_text: None,
-                        rate_text: None,
+                        ..Default::default()
                     },
                 );
             }
@@ -188,11 +183,9 @@ pub fn convert_items(
                             processed,
                             total: total_items,
                             current_path: Some(item.source_path().to_string()),
-                            current_bytes: None,
-                            current_total_bytes: None,
                             progress_percent: batch_progress_percent(processed, total_items),
                             status_text: Some("Failed".to_string()),
-                            rate_text: None,
+                            ..Default::default()
                         },
                     );
                 }
@@ -280,11 +273,10 @@ fn run_encoder(
                         processed: update.processed,
                         total: update.total,
                         current_path: update.current_path,
-                        current_bytes: None,
-                        current_total_bytes: None,
                         progress_percent: update.progress_percent,
                         status_text: update.status_text,
                         rate_text: update.rate_text,
+                        ..Default::default()
                     },
                 );
             };

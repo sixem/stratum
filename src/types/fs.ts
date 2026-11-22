@@ -147,7 +147,8 @@ export type TransferJobSnapshot = {
 };
 
 export type TransferQueueSnapshot = {
-  activeJob?: TransferJobSnapshot | null;
+  revision: number;
+  activeJobs: TransferJobSnapshot[];
   queuedJobs: TransferJobSnapshot[];
   completedJobs: TransferJobSnapshot[];
 };
@@ -163,6 +164,7 @@ export type TransferProgressEvent = {
   progressPercent?: number | null;
   statusText?: string | null;
   rateText?: string | null;
+  completedItem?: { path: string; sourceRemoved: boolean };
 };
 
 export type TransferJobsSnapshotEvent = TransferQueueSnapshot;

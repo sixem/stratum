@@ -5,7 +5,7 @@ use crate::domain::filesystem::{
     CopyOptions, CopyReport, TransferControlCallback, TransferMode, TransferOptions,
     TransferProgressCallback, TransferProgressUpdate,
 };
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -67,6 +67,55 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.root);
     }
+}
+
+#[test]
+fn copy_releases_each_source_after_its_destination_is_published() {
+    let fixture = Fixture::new();
+    let second_source = fixture.root.join("second");
+    let second_destination = fixture.target.join("second");
+    fs::create_dir(&fixture.source).unwrap();
+    fs::write(fixture.source.join("child"), b"first bytes").unwrap();
+    fs::write(&second_source, b"").unwrap();
+
+    let completed_items = Rc::new(RefCell::new(Vec::new()));
+    let recorded_items = completed_items.clone();
+    let directory_destination = fixture.destination.clone();
+    let mut progress = move |update: TransferProgressUpdate| {
+        let Some(item) = update.completed_item else {
+            return;
+        };
+        assert!(!item.source_removed);
+        assert_eq!(update.total, 2);
+        match update.processed {
+            1 => {
+                assert_eq!(
+                    fs::read(directory_destination.join("child")).unwrap(),
+                    b"first bytes"
+                );
+                assert!(!second_destination.exists());
+            }
+            2 => assert!(second_destination.is_file()),
+            _ => panic!("unexpected root completion count"),
+        }
+        recorded_items.borrow_mut().push(item.path);
+    };
+    let sources = vec![
+        fixture.source.to_str().unwrap().to_owned(),
+        second_source.to_str().unwrap().to_owned(),
+    ];
+
+    let report = copy_entries(
+        sources.clone(),
+        fixture.target.to_str().unwrap().to_owned(),
+        None,
+        Some(&mut progress),
+        None,
+    )
+    .unwrap();
+    assert!(report.failures.is_empty());
+    assert_eq!(report.copied, 2);
+    assert_eq!(*completed_items.borrow(), sources);
 }
 
 #[test]

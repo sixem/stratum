@@ -77,7 +77,7 @@ pub fn copy_entries(
             Ok(manifest) => manifest,
             Err(error) => {
                 record_root_failure(&mut report.failures, &raw_path, error)?;
-                emit_root_completion(&mut on_progress, completed, total);
+                emit_root_completion(raw_path, false, completed, total, &mut on_progress);
                 continue;
             }
         };
@@ -100,7 +100,7 @@ pub fn copy_entries(
             Err(error) => record_root_failure(&mut report.failures, &raw_path, error)?,
         }
 
-        emit_root_completion(&mut on_progress, completed, total);
+        emit_root_completion(raw_path, false, completed, total, &mut on_progress);
     }
 
     Ok(report)
@@ -164,12 +164,12 @@ fn transfer_roots(
             match classify_transfer_root(&raw_path, target_path, options, &mut on_control) {
                 Ok(Some(strategy)) => strategy,
                 Ok(None) => {
-                    emit_root_completion(&mut on_progress, completed, total);
+                    emit_root_completion(raw_path, false, completed, total, &mut on_progress);
                     continue;
                 }
                 Err(error) => {
                     record_root_failure(&mut report.failures, &raw_path, error)?;
-                    emit_root_completion(&mut on_progress, completed, total);
+                    emit_root_completion(raw_path, false, completed, total, &mut on_progress);
                     continue;
                 }
             };
@@ -183,12 +183,12 @@ fn transfer_roots(
                         source_path: strategy.source.to_string_lossy().to_string(),
                         destination_path: strategy.destination.to_string_lossy().to_string(),
                     });
-                    emit_root_completion(&mut on_progress, completed, total);
+                    emit_root_completion(raw_path, true, completed, total, &mut on_progress);
                     continue;
                 }
                 Err(error) => {
                     record_root_failure(&mut report.failures, &raw_path, error)?;
-                    emit_root_completion(&mut on_progress, completed, total);
+                    emit_root_completion(raw_path, false, completed, total, &mut on_progress);
                     continue;
                 }
                 Ok(false) => {}
@@ -200,12 +200,12 @@ fn transfer_roots(
                 Ok(manifest) => manifest,
                 Err(error) => {
                     record_root_failure(&mut report.failures, &raw_path, error)?;
-                    emit_root_completion(&mut on_progress, completed, total);
+                    emit_root_completion(raw_path, false, completed, total, &mut on_progress);
                     continue;
                 }
             };
 
-        match execute_transfer_root(
+        let source_removed = match execute_transfer_root(
             &manifest,
             strategy.overwrite,
             strategy.should_move,
@@ -221,12 +221,19 @@ fn transfer_roots(
                     source_path: strategy.source.to_string_lossy().to_string(),
                     destination_path: strategy.destination.to_string_lossy().to_string(),
                 });
+                true
             }
-            Ok(false) => report.copied = report.copied.saturating_add(1),
-            Err(error) => record_root_failure(&mut report.failures, &raw_path, error)?,
-        }
+            Ok(false) => {
+                report.copied = report.copied.saturating_add(1);
+                false
+            }
+            Err(error) => {
+                record_root_failure(&mut report.failures, &raw_path, error)?;
+                false
+            }
+        };
 
-        emit_root_completion(&mut on_progress, completed, total);
+        emit_root_completion(raw_path, source_removed, completed, total, &mut on_progress);
     }
 
     Ok(())
