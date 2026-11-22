@@ -14,7 +14,7 @@ export const handleContextMenuKey = (event: KeyboardEvent<HTMLDivElement>) => {
   const menu = button?.closest('[role="menu"]') ?? event.currentTarget;
   const items = enabledItems(menu);
   const index = button ? items.indexOf(button) : -1;
-  const focus = (at: number) => items[at]?.focus({ preventScroll: true });
+  const focus = (at: number) => items[at]?.focus({ preventScroll: menu === event.currentTarget });
   switch (event.key) {
     case "ArrowDown": focus((index + 1) % items.length); break;
     case "ArrowUp": focus(index <= 0 ? items.length - 1 : index - 1); break;

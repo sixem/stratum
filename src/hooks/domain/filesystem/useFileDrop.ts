@@ -12,6 +12,7 @@ import {
   toMessage,
 } from "@/lib";
 import { usePromptStore, useTransferStore } from "@/modules";
+import { captureMoveHistoryWorkspace } from "@/modules/recentMoveStore";
 import type { PromptConfig } from "@/modules";
 import type { DropTarget } from "@/lib";
 import { createTabLocationHover, getTabLocationDropTarget, openDroppedLocation } from "@/lib/tabLocationDrop";
@@ -125,7 +126,7 @@ export const useFileDrop = ({
   }, [onRefresh]);
 
   const executeDrop = useCallback(
-    async (plan: ResolvedDropTransferPlan, dropStage?: number) => {
+    async (plan: ResolvedDropTransferPlan, dropStage?: number, moveHistoryWorkspace?: string | null) => {
       if (log.enabled) {
         log("drop-handle: count=%d destination=%s", plan.items.length, plan.destination);
       }
@@ -136,6 +137,7 @@ export const useFileDrop = ({
         await runDropTransfer({
           plan,
           dropStage,
+          moveHistoryWorkspace,
           promptStore: {
             // A finished transfer can report issues while a later drop is
             // waiting for an overwrite decision.
@@ -188,6 +190,7 @@ export const useFileDrop = ({
     // Capture the destination on release, even when an earlier drop has a prompt open.
     const plan = planDropTransfer(paths, target, mode);
     if (!plan) return;
+    const moveHistoryWorkspace = captureMoveHistoryWorkspace();
     const finishWaiting = dropQueue.busy
       ? beginFileActivity(`Drop queued for ${plan.destination}`) : null;
     try {
@@ -195,7 +198,7 @@ export const useFileDrop = ({
         finishWaiting?.();
         return resolveDropTransferConflicts(plan, promptStore);
       });
-      if (resolvedPlan) await executeDrop(resolvedPlan, dropStage);
+      if (resolvedPlan) await executeDrop(resolvedPlan, dropStage, moveHistoryWorkspace);
     } catch (error) {
       await queueDropError(toMessage(error, "Unable to prepare the dropped files."));
     }

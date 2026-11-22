@@ -122,6 +122,10 @@ export function useBottomPaneActions({
     onClearSelection: clearSelectionForVisit,
     onRenameEntry: selectionHandlers.handleRenameStart,
     onPasteEntries: actions.pasteEntries,
+    onMoveEntries: async (paths, destination) => {
+      const report = await actions.moveEntries(paths, destination);
+      if (report?.moved && viewVisit.current) await dir.refreshAfterChange();
+    },
     onRemoveRecentJump: tabs.removeRecentJump,
   });
 

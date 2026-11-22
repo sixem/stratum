@@ -106,6 +106,8 @@ useSettingsStore.subscribe((state) => {
     menuOpenPwsh: state.menuOpenPwsh,
     menuOpenWsl: state.menuOpenWsl,
     menuShowConvert: state.menuShowConvert,
+    rememberMoveDestinations: state.rememberMoveDestinations,
+    recentMoveLimit: state.recentMoveLimit,
     indexedSearchEnabled: state.indexedSearchEnabled,
     thumbnailsEnabled: state.thumbnailsEnabled,
     thumbnailSize: state.thumbnailSize,

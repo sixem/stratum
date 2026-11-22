@@ -153,6 +153,10 @@
 :where(.context-submenu) {
   .context-submenu-list {
     display: grid;
+    max-height: calc(100dvh - 36px);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
   }
 }
 
@@ -248,6 +252,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .context-label[data-wrap="true"] {
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .context-hint {

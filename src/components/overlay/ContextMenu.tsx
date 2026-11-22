@@ -107,7 +107,8 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
     };
   }, [open, scrollContainer]);
 
-  const handleScroll = useCallback(() => {
+  const handleScroll = useCallback((event: Event) => {
+    if (event.target instanceof Node && menuRef.current?.contains(event.target)) return;
     const position = scrollPositionRef.current;
     // A scroll event can arrive after opening even if the anchor has already settled.
     if (position && position.element.scrollTop === position.top && position.element.scrollLeft === position.left) return;
@@ -191,7 +192,7 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
     const safeMax = maxTop < minTop ? minTop : maxTop;
     const clampedTop = clamp(anchorRect.top, minTop, safeMax);
     setSubmenuOffset(clampedTop - anchorRect.top);
-  }, [items.length, open, openSubmenuId]);
+  }, [items, open, openSubmenuId]);
 
   const renderMenuItems = (menuItems: ContextMenuItem[], depth = 0) =>
     menuItems.map((item) => {
@@ -295,7 +296,7 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
               />
             ) : item.icon ? renderContextIcon(item.icon) : item.active ? "x" : ""}
           </span>
-          <span className="context-label">{item.label}</span>
+          <span className="context-label" data-wrap={item.wrapLabel || undefined}>{item.label}</span>
           {item.hint ? <span className="context-hint">{item.hint}</span> : null}
         </PressButton>
       );

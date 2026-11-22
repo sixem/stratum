@@ -70,6 +70,7 @@ type UseAppContextMenusOptions = {
   onClearSelection: () => void;
   onRenameEntry: (target: EntryContextTarget) => void;
   onPasteEntries: (destination?: string) => void;
+  onMoveEntries: (paths: string[], destination: string) => void;
   onOpenConvertModal: (request: ConversionModalRequest) => void;
   onQuickConvertImages: (request: ConversionModalRequest, targetFormat: string) => void;
   places: Place[];
@@ -127,6 +128,7 @@ export const useAppContextMenus = ({
   onClearSelection,
   onRenameEntry,
   onPasteEntries,
+  onMoveEntries,
   onOpenConvertModal,
   onQuickConvertImages,
   places,
@@ -301,6 +303,7 @@ export const useAppContextMenus = ({
     onClearSelection,
     onRenameEntry,
     onPasteEntries,
+    onMoveEntries,
     onOpenConvertModal,
     onQuickConvertImages,
     menuShowConvert,

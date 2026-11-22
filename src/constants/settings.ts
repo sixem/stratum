@@ -1,6 +1,8 @@
 // Settings defaults and bounds shared by modules/UI.
 export const SIDEBAR_RECENT_LIMIT_MIN = 1;
 export const SIDEBAR_RECENT_LIMIT_MAX = 20;
+export const RECENT_MOVE_LIMIT_MIN = 1;
+export const RECENT_MOVE_LIMIT_MAX = 20;
 export const SIDEBAR_WIDTH_DEFAULT = 250;
 export const SIDEBAR_WIDTH_MIN = 180;
 export const SIDEBAR_WIDTH_MAX = 400;

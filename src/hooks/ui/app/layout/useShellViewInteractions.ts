@@ -336,6 +336,7 @@ export const useShellViewInteractions = ({
     onClearSelection: handleClearSelection,
     onRenameEntry: handleRenameStart,
     onPasteEntries: fileManager.pasteEntries,
+    onMoveEntries: fileManager.moveEntries,
     onRemoveRecentJump: tabSession.removeRecentJump,
   });
 
@@ -362,6 +363,7 @@ export const useShellViewInteractions = ({
         onRename: fileManager.renameEntry,
         onDeleteEntries: fileManager.deleteEntries,
         onPasteEntries: fileManager.pasteEntries,
+        onMoveEntries: fileManager.moveEntries,
         onOpenConvertModal: dataPipeline.openConversionModal,
         onQuickConvertImages: dataPipeline.handleQuickConvertImages,
       },

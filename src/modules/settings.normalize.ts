@@ -5,6 +5,8 @@ import {
   GRID_AUTO_COLUMNS_MIN,
   GRID_GAP_MAX,
   GRID_GAP_MIN,
+  RECENT_MOVE_LIMIT_MAX,
+  RECENT_MOVE_LIMIT_MIN,
   SETTINGS_STORAGE_VERSION,
   SIDEBAR_RECENT_LIMIT_MAX,
   SIDEBAR_RECENT_LIMIT_MIN,
@@ -246,6 +248,10 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.menuShowConvert === "boolean"
         ? value.menuShowConvert
         : DEFAULT_SETTINGS.menuShowConvert,
+    rememberMoveDestinations: value?.rememberMoveDestinations === true,
+    recentMoveLimit: clampNumber(
+      value?.recentMoveLimit, DEFAULT_SETTINGS.recentMoveLimit, RECENT_MOVE_LIMIT_MIN, RECENT_MOVE_LIMIT_MAX,
+    ),
     indexedSearchEnabled:
       typeof value?.indexedSearchEnabled === "boolean"
         ? value.indexedSearchEnabled

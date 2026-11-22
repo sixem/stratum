@@ -11,7 +11,7 @@ import type { ContextMenuItem, EntryContextTarget, IndexedPathMatch } from "@/ty
 
 export type IndexedSearchMenuActions = Pick<Parameters<typeof useEntryMenuItems>[0],
   "confirmDelete" | "menuShowConvert" | "onDeleteEntries" | "onPasteEntries" |
-  "onOpenConvertModal" | "onQuickConvertImages"
+  "onMoveEntries" | "onOpenConvertModal" | "onQuickConvertImages"
 > & {
   windowsMenuEnabled: boolean;
   beginFileActivity: BeginFileActivity;

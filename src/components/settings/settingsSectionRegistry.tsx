@@ -111,13 +111,14 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
 
 export const DEFAULT_SETTINGS_SECTION_ID = SETTINGS_SECTION_DEFINITIONS[0].id;
 
-export const searchSettingsSections = (query: string, autoGrid: boolean) => {
+export const searchSettingsSections = (query: string, autoGrid: boolean, moveHistoryEnabled: boolean) => {
   const terms = query.toLowerCase().split(/[\s-]+/).filter(Boolean);
   if (terms.length === 0) return null;
 
   return SETTINGS_SECTION_DEFINITIONS.flatMap((section) => {
     const items = section.items.filter((item) => {
       if (item.requiresAutoGrid !== undefined && item.requiresAutoGrid !== autoGrid) return false;
+      if (item.requiresMoveHistory && !moveHistoryEnabled) return false;
       const searchable = [section.label, item.label, item.description, item.keywords].join(" ").toLowerCase();
       return terms.every((term) => searchable.includes(term));
     });

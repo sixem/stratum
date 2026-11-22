@@ -58,6 +58,8 @@ export const DEFAULT_SETTINGS: Settings = {
   menuOpenPwsh: true,
   menuOpenWsl: false,
   menuShowConvert: true,
+  rememberMoveDestinations: false,
+  recentMoveLimit: 8,
   indexedSearchEnabled: false,
   thumbnailsEnabled: true,
   thumbnailSize: 224,

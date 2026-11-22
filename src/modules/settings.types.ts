@@ -57,6 +57,8 @@ export type Settings = {
   menuOpenPwsh: boolean;
   menuOpenWsl: boolean;
   menuShowConvert: boolean;
+  rememberMoveDestinations: boolean;
+  recentMoveLimit: number;
   indexedSearchEnabled: boolean;
   thumbnailsEnabled: boolean;
   thumbnailSize: number;

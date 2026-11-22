@@ -7,6 +7,7 @@ import {
   openPathWithHandler,
 } from "@/api";
 import { useClipboardStore, usePromptStore } from "@/modules";
+import { clearMoveDestinations, useRecentMoveDestinations } from "@/modules/recentMoveStore";
 import type {
   ContextMenuItem,
   ConversionModalRequest,
@@ -16,6 +17,7 @@ import type {
 import { buildEntryConvertItems } from "./entryMenu/buildEntryConvertItems";
 import { buildEntryCopyItems } from "./entryMenu/buildEntryCopyItems";
 import { buildEntryDeleteItems } from "./entryMenu/buildEntryDeleteItems";
+import { buildEntryMoveItems } from "./entryMenu/buildEntryMoveItems";
 import { buildEntryOpenItems } from "./entryMenu/buildEntryOpenItems";
 import { buildEntryOpenWithItems } from "./entryMenu/buildEntryOpenWithItems";
 import { buildEntryPasteItems } from "./entryMenu/buildEntryPasteItems";
@@ -44,6 +46,7 @@ type UseEntryMenuItemsOptions = {
   onClearSelection?: () => void;
   onRenameEntry?: (target: EntryContextTarget) => void;
   onPasteEntries?: (destination: string) => Promise<unknown> | void;
+  onMoveEntries?: (paths: string[], destination: string) => void;
   onOpenConvertModal: (request: ConversionModalRequest) => void;
   onQuickConvertImages: (request: ConversionModalRequest, targetFormat: string) => void;
   menuShowConvert: boolean;
@@ -70,11 +73,13 @@ export const useEntryMenuItems = ({
   onClearSelection,
   onRenameEntry,
   onPasteEntries,
+  onMoveEntries,
   onOpenConvertModal,
   onQuickConvertImages,
   menuShowConvert,
 }: UseEntryMenuItemsOptions) => {
   const clipboard = useClipboardStore((state) => state.clipboard);
+  const { workspaceId, destinations } = useRecentMoveDestinations();
   const openWithMenuState = useOpenWithMenuState(target);
 
   return useMemo<ContextMenuItem[]>(() => {
@@ -163,6 +168,12 @@ export const useEntryMenuItems = ({
         hasTargets,
         showShortcuts: showClipboardShortcuts,
       }),
+      ...(onMoveEntries ? buildEntryMoveItems({
+        destinations,
+        actionTargets,
+        onMoveEntries,
+        onClear: () => clearMoveDestinations(workspaceId),
+      }) : []),
       ...(onRenameEntry ? buildEntryRenameItems({
         target,
         hasTargets,
@@ -192,6 +203,7 @@ export const useEntryMenuItems = ({
   }, [
     clipboard,
     currentPath,
+    destinations,
     entryByPath,
     extraOpenItems,
     menuShowConvert,
@@ -204,6 +216,7 @@ export const useEntryMenuItems = ({
     onOpenDirNewTab,
     onOpenEntry,
     onOpenGallery,
+    onMoveEntries,
     onPasteEntries,
     onQuickConvertImages,
     onRenameEntry,
@@ -212,5 +225,6 @@ export const useEntryMenuItems = ({
     selected,
     showClipboardShortcuts,
     target,
+    workspaceId,
   ]);
 };

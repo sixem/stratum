@@ -33,6 +33,7 @@ export const SettingsOverlay = ({
 }: SettingsOverlayProps) => {
   const resetSettings = useSettingsStore((state) => state.resetSettings);
   const autoGrid = useSettingsStore((state) => state.gridSize === "auto");
+  const moveHistoryEnabled = useSettingsStore((state) => state.rememberMoveDestinations);
   const titleId = useId();
   const [activeSectionId, setActiveSectionId] = useState<SettingsSectionId>(
     DEFAULT_SETTINGS_SECTION_ID,
@@ -52,7 +53,10 @@ export const SettingsOverlay = ({
         SETTINGS_SECTION_DEFINITIONS[0],
       [activeSectionId],
     );
-  const searchResults = useMemo(() => searchSettingsSections(searchQuery, autoGrid), [searchQuery, autoGrid]);
+  const searchResults = useMemo(
+    () => searchSettingsSections(searchQuery, autoGrid, moveHistoryEnabled),
+    [searchQuery, autoGrid, moveHistoryEnabled],
+  );
   const searching = searchResults !== null;
   const matchingSections = new Set(searchResults?.map(({ section }) => section.id));
   const renderContext = { open, onCaptureChange: setCaptureActive, onOpenCacheLocation, onClearCache };

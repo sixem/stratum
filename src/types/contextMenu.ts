@@ -50,6 +50,7 @@ export type ContextMenuItem =
       onSelect: () => void;
       active?: boolean;
       hint?: string;
+      wrapLabel?: boolean;
       disabled?: boolean;
       icon?: ContextMenuIcon;
       iconUrl?: string;

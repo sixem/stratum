@@ -73,7 +73,7 @@ export const useFileMutations = ({
     onDirectoryChildrenChanged: notifyDirectoryChildrenChanged,
   });
 
-  const { duplicateEntriesInView, pasteEntriesInView } = useFileManagerCopy({
+  const { duplicateEntriesInView, moveEntriesInView, pasteEntriesInView } = useFileManagerCopy({
     beginFileActivity,
     currentPathRef,
     copyInFlightRef,
@@ -206,6 +206,7 @@ export const useFileMutations = ({
     suppressUndoPresence,
     deleteEntriesInView,
     duplicateEntriesInView,
+    moveEntriesInView,
     pasteEntriesInView,
     createFolderInView,
     createFileInView,

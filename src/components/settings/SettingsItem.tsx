@@ -7,6 +7,7 @@ export type SettingsItemText = {
   description: string;
   keywords?: string;
   requiresAutoGrid?: boolean;
+  requiresMoveHistory?: boolean;
 };
 
 export const SettingsSearchMatches = createContext<ReadonlySet<SettingsItemText> | null>(null);
