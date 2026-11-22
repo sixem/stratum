@@ -271,9 +271,26 @@
   }
 }
 
-.drop-submenu {
+.drop-submenu-surface {
   position: fixed;
   z-index: 35;
+
+  // Keep a continuous hover surface between the tab and its popup.
+  &::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    bottom: 100%;
+    height: var(--drop-submenu-gap);
+  }
+
+  &[data-drop-up="true"]::before {
+    top: 100%;
+    bottom: auto;
+  }
+}
+
+.drop-submenu {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 4px;

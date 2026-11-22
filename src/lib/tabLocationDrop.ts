@@ -8,6 +8,7 @@ export const registerTabLocationDrop = (strip: HTMLElement, open: (path: string)
 
 export const getTabLocationDropTarget = (x: number, y: number, allowExistingTabs = true) => {
   const hit = document.elementFromPoint(x, y);
+  if (hit?.closest("[data-drop-submenu-tab-id]")) return null;
   const strip = hit?.closest<HTMLElement>("[data-tab-location-strip]");
   if (!strip || !openByStrip.has(strip)) return null;
   const bounds = strip.getBoundingClientRect();

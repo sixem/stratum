@@ -93,7 +93,7 @@ export const useFileDrop = ({
       updateTabDropSubmenuTarget(null);
       return;
     }
-    if (target.kind === "tab") {
+    if (target.kind === "tab" || target.kind === "tab-submenu") {
       setDropTargetTabId((prev) => (prev === target.tabId ? prev : target.tabId ?? null));
       setDropTargetPath(null);
       updateTabDropSubmenuTarget(target);
@@ -226,7 +226,9 @@ export const useFileDrop = ({
             openDroppedLocation(strip, payload.paths[0]);
             return;
           }
-          if (target) await performDrop(payload.paths, target.path, payload.mode, payload.stage ?? undefined);
+          if (target && target.kind !== "tab-submenu") {
+            await performDrop(payload.paths, target.path, payload.mode, payload.stage ?? undefined);
+          }
         } finally {
           if (payload.stage != null) await releaseDropStage(payload.stage).catch((error) => log("release drop stage: %o", error));
         }

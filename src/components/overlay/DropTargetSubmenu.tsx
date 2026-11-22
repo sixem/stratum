@@ -1,5 +1,6 @@
 // Anchored drag-drop submenu for revealing secondary destinations near a host target.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { ScrollArea } from "@/components/primitives";
 import { getDropTargetFromPoint } from "@/lib";
@@ -52,7 +53,7 @@ export const DropTargetSubmenu = ({
   const followupPositionFrameRef = useRef<number | null>(null);
   const autoScrollFrameRef = useRef<number | null>(null);
   const autoScrollLastTimestampRef = useRef<number | null>(null);
-  const autoScrollVelocityRef = useRef(0);
+  const autoScrollRemainderRef = useRef(0);
   const lastDragPointRef = useRef<{ x: number; y: number } | null>(null);
   const [menuReady, setMenuReady] = useState(false);
   const [menuPosition, setMenuPosition] = useState({
@@ -129,7 +130,7 @@ export const DropTargetSubmenu = ({
   }, []);
 
   const stopAutoScroll = useCallback(() => {
-    autoScrollVelocityRef.current = 0;
+    autoScrollRemainderRef.current = 0;
     autoScrollLastTimestampRef.current = null;
     if (autoScrollFrameRef.current != null) {
       window.cancelAnimationFrame(autoScrollFrameRef.current);
@@ -150,8 +151,9 @@ export const DropTargetSubmenu = ({
     ) {
       return 0;
     }
+    const edgeSize = Math.min(AUTO_SCROLL_EDGE_PX, rect.height / 2);
     const resolveVelocity = (distanceFromEdge: number, direction: -1 | 1) => {
-      const normalized = 1 - distanceFromEdge / AUTO_SCROLL_EDGE_PX;
+      const normalized = 1 - distanceFromEdge / edgeSize;
       const eased = normalized * normalized;
       const speed =
         AUTO_SCROLL_MIN_SPEED_PX_PER_SECOND +
@@ -160,11 +162,11 @@ export const DropTargetSubmenu = ({
       return direction * speed;
     };
     const topDistance = point.y - rect.top;
-    if (topDistance <= AUTO_SCROLL_EDGE_PX) {
+    if (topDistance < edgeSize) {
       return resolveVelocity(topDistance, -1);
     }
     const bottomDistance = rect.bottom - point.y;
-    if (bottomDistance <= AUTO_SCROLL_EDGE_PX) {
+    if (bottomDistance < edgeSize) {
       return resolveVelocity(bottomDistance, 1);
     }
     return 0;
@@ -175,8 +177,7 @@ export const DropTargetSubmenu = ({
       const viewport = viewportRef.current;
       const point = lastDragPointRef.current;
       const velocity = computeAutoScrollVelocity(point);
-      autoScrollVelocityRef.current = velocity;
-      if (!viewport || !point || Math.abs(velocity) < 0.01) {
+      if (!viewport || !point || velocity === 0) {
         stopAutoScroll();
         return;
       }
@@ -191,18 +192,23 @@ export const DropTargetSubmenu = ({
       autoScrollLastTimestampRef.current = timestamp;
       const deltaSeconds = Math.min(0.032, (timestamp - previousTimestamp) / 1000);
       const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+      const previousScrollTop = viewport.scrollTop;
+      const scrollDelta = autoScrollRemainderRef.current + velocity * deltaSeconds;
       const nextScrollTop = Math.max(
         0,
-        Math.min(maxScrollTop, viewport.scrollTop + velocity * deltaSeconds),
+        Math.min(maxScrollTop, previousScrollTop + scrollDelta),
       );
-      const didScroll = Math.abs(nextScrollTop - viewport.scrollTop) > 0.5;
-      if (!didScroll) {
+      viewport.scrollTop = nextScrollTop;
+      const appliedScrollTop = viewport.scrollTop;
+      // The browser can round scrollTop to whole pixels. Carry the difference into the next frame.
+      autoScrollRemainderRef.current = nextScrollTop - appliedScrollTop;
+      if (appliedScrollTop !== previousScrollTop) {
+        onHoverTargetChange?.(getDropTargetFromPoint(point.x, point.y));
+      }
+      if (nextScrollTop === (velocity > 0 ? maxScrollTop : 0)) {
         stopAutoScroll();
         return;
       }
-
-      viewport.scrollTop = nextScrollTop;
-      onHoverTargetChange?.(getDropTargetFromPoint(point.x, point.y));
       autoScrollFrameRef.current = window.requestAnimationFrame(runAutoScrollStep);
     },
     [computeAutoScrollVelocity, onHoverTargetChange, stopAutoScroll],
@@ -216,9 +222,7 @@ export const DropTargetSubmenu = ({
   const updateAutoScrollFromPoint = useCallback(
     (point: { x: number; y: number } | null) => {
       lastDragPointRef.current = point;
-      const nextVelocity = computeAutoScrollVelocity(point);
-      autoScrollVelocityRef.current = nextVelocity;
-      if (Math.abs(nextVelocity) < 0.01) {
+      if (computeAutoScrollVelocity(point) === 0) {
         stopAutoScroll();
         return;
       }
@@ -309,46 +313,53 @@ export const DropTargetSubmenu = ({
 
   return createPortal(
     <div
-      ref={menuRef}
-      className={`drop-submenu${menuPosition.dropUp ? " is-drop-up" : " is-drop-down"}`}
-      data-open="true"
+      className="drop-submenu-surface"
+      data-drop-submenu-tab-id={hostTabId}
+      data-drop-up={menuPosition.dropUp || undefined}
       onContextMenu={(event) => event.preventDefault()}
       style={{
+        "--drop-submenu-gap": `${MENU_GAP}px`,
         top: `${menuPosition.top}px`,
         left: `${menuPosition.left}px`,
         width: `${menuPosition.width}px`,
-        maxHeight: `${menuPosition.maxHeight}px`,
         visibility: menuReady ? "visible" : "hidden",
         pointerEvents: menuReady ? "auto" : "none",
-      }}
+      } as CSSProperties}
     >
-      <div className="drop-submenu-title">
-        <span>Subfolders</span>
-      </div>
-      <ScrollArea
-        ref={viewportRef}
-        className="drop-submenu-scroll"
-        viewportClassName="drop-submenu-viewport"
-        contentClassName="drop-submenu-content"
-        scrollbarVariant="nav"
+      <div
+        ref={menuRef}
+        className={`drop-submenu${menuPosition.dropUp ? " is-drop-up" : " is-drop-down"}`}
+        data-open="true"
+        style={{ maxHeight: menuPosition.maxHeight }}
       >
-        {loading ? (
-          <div className="drop-submenu-status">Loading folders...</div>
-        ) : (
-          items.map((item) => (
-            <div
-              key={item.path}
-              className="drop-submenu-item"
-              data-drop-kind="tab-subfolder"
-              data-drop-path={item.path}
-              data-drop-tab-id={hostTabId}
-              data-drop-target={activePath === item.path ? "true" : "false"}
-            >
-              <span className="drop-submenu-item-name">{item.name}</span>
-            </div>
-          ))
-        )}
-      </ScrollArea>
+        <div className="drop-submenu-title">
+          <span>Subfolders</span>
+        </div>
+        <ScrollArea
+          ref={viewportRef}
+          className="drop-submenu-scroll"
+          viewportClassName="drop-submenu-viewport"
+          contentClassName="drop-submenu-content"
+          scrollbarVariant="nav"
+        >
+          {loading ? (
+            <div className="drop-submenu-status">Loading folders...</div>
+          ) : (
+            items.map((item) => (
+              <div
+                key={item.path}
+                className="drop-submenu-item"
+                data-drop-kind="tab-subfolder"
+                data-drop-path={item.path}
+                data-drop-tab-id={hostTabId}
+                data-drop-target={activePath === item.path ? "true" : "false"}
+              >
+                <span className="drop-submenu-item-name">{item.name}</span>
+              </div>
+            ))
+          )}
+        </ScrollArea>
+      </div>
     </div>,
     document.body,
   );

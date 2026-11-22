@@ -119,8 +119,10 @@ export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
       const cacheKey = normalizePath(trimmedPath);
       const currentVersion = getDirectoryChildVersion(trimmedPath);
       const cachedEntry = cacheRef.current.get(cacheKey) ?? null;
+      const requestId = ++requestIdRef.current;
 
       if (cachedEntry && cachedEntry.version === currentVersion) {
+        touchCache(cacheKey, cachedEntry);
         setSubmenu(
           cachedEntry.items.length === 0
             ? EMPTY_SUBMENU_STATE
@@ -141,21 +143,23 @@ export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
         loading: true,
       });
 
-      const requestId = requestIdRef.current + 1;
-      requestIdRef.current = requestId;
-
-      try {
+      let version = currentVersion;
+      while (true) {
         const result = await listDir(trimmedPath, {
           sort: { key: "name", dir: "asc" },
           fast: true,
-        });
+        }).catch(() => null);
         if (requestIdRef.current !== requestId) return;
         if (activeHostKeyRef.current !== hostKey) return;
-        const items = toSubmenuItems(result.entries);
-        touchCache(cacheKey, {
-          items,
-          version: getDirectoryChildVersion(trimmedPath),
-        });
+
+        const latestVersion = getDirectoryChildVersion(trimmedPath);
+        if (version !== latestVersion) {
+          // A file operation changed this folder while the listing was in flight.
+          version = latestVersion;
+          continue;
+        }
+        const items = result ? toSubmenuItems(result.entries) : [];
+        touchCache(cacheKey, { items, version });
         setSubmenu(
           items.length === 0
             ? EMPTY_SUBMENU_STATE
@@ -166,14 +170,7 @@ export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
                 loading: false,
               },
         );
-      } catch {
-        if (requestIdRef.current !== requestId) return;
-        if (activeHostKeyRef.current !== hostKey) return;
-        touchCache(cacheKey, {
-          items: [],
-          version: getDirectoryChildVersion(trimmedPath),
-        });
-        setSubmenu(EMPTY_SUBMENU_STATE);
+        return;
       }
     },
     [clearCloseTimer, clearOpenTimer, closeSubmenu, enabled, touchCache],
@@ -181,13 +178,13 @@ export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
 
   const scheduleClose = useCallback(() => {
     clearOpenTimer();
-    if (submenu.hostTabId == null && pendingHostRef.current == null) return;
-    clearCloseTimer();
+    pendingHostRef.current = null;
+    if (submenu.hostTabId == null || closeTimerRef.current != null) return;
     closeTimerRef.current = window.setTimeout(() => {
       closeTimerRef.current = null;
       closeSubmenu();
     }, TAB_SUBMENU_CLOSE_DELAY_MS);
-  }, [clearCloseTimer, clearOpenTimer, closeSubmenu, submenu.hostTabId]);
+  }, [clearOpenTimer, closeSubmenu, submenu.hostTabId]);
 
   const updateTarget = useCallback(
     (target: DropTarget | null) => {
@@ -201,11 +198,11 @@ export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
         return;
       }
 
-      if (target.kind === "tab-subfolder") {
+      if (target.kind === "tab-subfolder" || target.kind === "tab-submenu") {
         if (
           !target.tabId ||
           target.tabId !== submenu.hostTabId ||
-          !itemBelongsToSubmenu(submenu.items, target.path)
+          (target.kind === "tab-subfolder" && !itemBelongsToSubmenu(submenu.items, target.path))
         ) {
           closeSubmenu();
           return;

@@ -1,10 +1,11 @@
 // DOM hit testing for file drop targets (tabs and folder entries).
 export type DropTarget = {
-  kind: "entry" | "tab" | "tab-subfolder" | "pane";
-  path: string;
   tabId?: string | null;
   pane?: "main" | "bottom";
-};
+} & (
+  | { kind: "entry" | "tab" | "tab-subfolder" | "pane"; path: string }
+  | { kind: "tab-submenu" }
+);
 
 export type DropTargetSubmenuItem = {
   name: string;
@@ -37,6 +38,14 @@ export const getDropTargetHit = (x: number, y: number): DropTargetHit => {
         tabId: tabSubfolderTarget?.dataset.dropTabId ?? null,
       },
       element: tabSubfolderTarget ?? null,
+    };
+  }
+  // The gap, heading, and scrollbar keep the submenu open but accept no drops.
+  const tabSubmenu = element?.closest<HTMLElement>("[data-drop-submenu-tab-id]");
+  if (tabSubmenu?.dataset.dropSubmenuTabId) {
+    return {
+      target: { kind: "tab-submenu", tabId: tabSubmenu.dataset.dropSubmenuTabId },
+      element: tabSubmenu,
     };
   }
   const tabTarget = element?.closest<HTMLElement>("[data-drop-kind=\"tab\"][data-drop-path]");
