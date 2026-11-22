@@ -50,7 +50,7 @@ pub(super) fn materialize_shell_id_list_paths(
     // Keep reads with the COM provider on its calling apartment. Only our
     // bounded writer creates files, including for virtual folder descendants.
     let stage = DropStage::new(slots)?;
-    let mut budget = StagingBudget::new();
+    let mut budget = StagingBudget::for_directory(stage.path())?;
     let mut paths = Vec::with_capacity(count);
     for index in 0..count {
         let item =

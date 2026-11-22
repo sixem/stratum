@@ -117,7 +117,7 @@ fn declared_bytes_and_directory_depth_are_checked_before_reading_contents() {
     let result = materialize_selection(stage, items, budget(3, 5), |_, _, _| {
         panic!("File contents should not be requested beyond the declared budget")
     });
-    assert!(matches!(result, Err(DropDataError::TooLarge)));
+    assert!(matches!(result, Err(DropDataError::InsufficientSpace)));
     assert!(!root.exists());
 
     let stage = DropStage::new(&StageSlots::default()).unwrap();
@@ -168,7 +168,7 @@ fn size_less_streams_share_the_budget_and_never_write_an_over_budget_chunk() {
         );
         result
     });
-    assert!(matches!(result, Err(DropDataError::TooLarge)));
+    assert!(matches!(result, Err(DropDataError::InsufficientSpace)));
     assert!(!root.exists());
 }
 

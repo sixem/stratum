@@ -9,6 +9,9 @@ use windows::Win32::System::Com::{
 use windows::Win32::System::DataExchange::RegisterClipboardFormatW;
 use windows::Win32::System::Ole::{ReleaseStgMedium, CF_HDROP};
 use windows::Win32::UI::Shell::{DragQueryFileW, CFSTR_FILECONTENTS, CFSTR_FILEDESCRIPTORW, HDROP};
+use windows_sys::Win32::Foundation::{
+    ERROR_DISK_FULL, ERROR_DISK_QUOTA_EXCEEDED, ERROR_HANDLE_DISK_FULL,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum DropDataError {
@@ -16,7 +19,7 @@ pub(super) enum DropDataError {
     UnsupportedShellItems,
     TooManyItems,
     TooDeep,
-    TooLarge,
+    InsufficientSpace,
     StagingBusy,
     StagingFailed,
 }
@@ -28,9 +31,18 @@ impl DropDataError {
             Self::UnsupportedShellItems => "This source does not provide files or folders Stratum can copy safely. Save the selection to a local folder first.",
             Self::TooManyItems => "This drop contains too many temporary entries. Drop up to 4,096 files and folders at a time.",
             Self::TooDeep => "This drop has a temporary path nested more than 32 levels deep. Save the files to a folder first.",
-            Self::TooLarge => "This drop exceeds the 1 GiB staging limit. Drop a smaller selection or save it to a folder first.",
+            Self::InsufficientSpace => "There isn't enough space on the drive that holds the Windows temporary folder. Free some space or save the files directly to the destination.",
             Self::StagingBusy => "Temporary drop storage is busy. Finish or cancel a pending drop and try again.",
             Self::StagingFailed => "Windows could not save the dropped files to temporary storage. Check the available disk space and try again.",
+        }
+    }
+
+    pub(super) fn from_staging_io(error: std::io::Error) -> Self {
+        match error.raw_os_error().map(|code| code as u32) {
+            Some(ERROR_DISK_FULL | ERROR_DISK_QUOTA_EXCEEDED | ERROR_HANDLE_DISK_FULL) => {
+                Self::InsufficientSpace
+            }
+            _ => Self::StagingFailed,
         }
     }
 }

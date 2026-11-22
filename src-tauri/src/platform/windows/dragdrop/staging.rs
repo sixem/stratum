@@ -50,7 +50,7 @@ impl DropStage {
 
     fn in_root(root: &Path, slots: &StageSlots) -> Result<Self, DropDataError> {
         let slot = slots.reserve()?;
-        let directory = StageDirectory::create(root).map_err(|_| DropDataError::StagingFailed)?;
+        let directory = StageDirectory::create(root).map_err(DropDataError::from_staging_io)?;
         Ok(Self { directory, slot })
     }
 
@@ -207,34 +207,38 @@ pub(super) fn stage_temp_hdrop_paths(
     paths: &[String],
     slots: &StageSlots,
 ) -> Result<ReceivedFiles, DropDataError> {
-    stage_from(paths, &std::env::temp_dir(), slots, StagingBudget::new())
+    stage_from(
+        paths,
+        &std::env::temp_dir(),
+        slots,
+        StagingBudget::for_directory,
+    )
 }
 
 fn stage_from(
     paths: &[String],
     temp: &Path,
     slots: &StageSlots,
-    mut budget: StagingBudget,
+    budget_for: impl FnOnce(&Path) -> Result<StagingBudget, DropDataError>,
 ) -> Result<ReceivedFiles, DropDataError> {
-    let mut stage = None;
+    let Some(first_temporary) = paths.iter().position(|path| in_temp(Path::new(path), temp)) else {
+        return Ok(ReceivedFiles::direct(paths.to_vec()));
+    };
+
+    let stage = DropStage::in_root(&temp.join(DROP_ROOT_DIR), slots)?;
+    let mut budget = budget_for(stage.path())?;
     let mut received = Vec::with_capacity(paths.len());
-    for path in paths {
+    received.extend_from_slice(&paths[..first_temporary]);
+    for path in &paths[first_temporary..] {
         let source = Path::new(path);
         if !in_temp(source, temp) {
             received.push(path.clone());
             continue;
         }
-        let stage = match &stage {
-            Some(s) => s,
-            None => stage.insert(DropStage::in_root(&temp.join(DROP_ROOT_DIR), slots)?),
-        };
         let dest = stage_filesystem_item(source, stage.path(), stage.path(), 1, &mut budget)?;
         received.push(dest.to_string_lossy().into_owned());
     }
-    Ok(match stage {
-        Some(s) => ReceivedFiles::staged(received, s),
-        None => ReceivedFiles::direct(received),
-    })
+    Ok(ReceivedFiles::staged(received, stage))
 }
 
 pub(super) fn stage_filesystem_item(
@@ -326,7 +330,7 @@ fn try_create_stage_entry<T>(
     match create(path) {
         Ok(value) => Ok(Some(value)),
         Err(error) if error.kind() == ErrorKind::AlreadyExists => Ok(None),
-        Err(_) => Err(DropDataError::StagingFailed),
+        Err(error) => Err(DropDataError::from_staging_io(error)),
     }
 }
 
@@ -360,7 +364,7 @@ fn copy_stage_source(
     }
 
     if metadata.len() > budget.remaining_bytes() {
-        return Err(DropDataError::TooLarge);
+        return Err(DropDataError::InsufficientSpace);
     }
     let (destination, mut file) = create_stage_entry(parent, name, |path| File::create_new(path))?;
     let mut buffer = vec![0; 64 * 1024];
@@ -402,7 +406,7 @@ mod tests {
         temp: &Path,
         budget: StagingBudget,
     ) -> Result<ReceivedFiles, DropDataError> {
-        stage_from(paths, temp, &StageSlots::default(), budget)
+        stage_from(paths, temp, &StageSlots::default(), |_| Ok(budget))
     }
 
     #[test]
@@ -435,17 +439,14 @@ mod tests {
                 &[name(&temporary)],
                 &temp,
                 &incoming.staging_slots,
-                StagingBudget::new(),
+                StagingBudget::for_directory,
             )
         };
         assert!(matches!(stage(), Err(DropDataError::StagingBusy)));
         assert_eq!(fs::read_dir(&root).unwrap().count(), MAX_STAGED_DROPS);
-        let direct = stage_from(
-            &[name(&ordinary)],
-            &temp,
-            &incoming.staging_slots,
-            StagingBudget::new(),
-        )
+        let direct = stage_from(&[name(&ordinary)], &temp, &incoming.staging_slots, |_| {
+            panic!("Direct paths do not need temporary storage")
+        })
         .unwrap();
         assert_eq!(direct.paths, [name(&ordinary)]);
         assert!(direct.stage.is_none());
@@ -581,7 +582,7 @@ mod tests {
         assert!(stage_test_paths(
             &[name(&source), name(&missing)],
             fixture.path(),
-            StagingBudget::new()
+            StagingBudget::with_limits(MAX_ITEMS, 128)
         )
         .is_err());
         let root = fixture.path().join(DROP_ROOT_DIR);
@@ -606,10 +607,11 @@ mod tests {
             "{}",
             String::from_utf8_lossy(&status.stderr)
         );
-        assert!(stage_test_paths(&[name(temp)], temp, StagingBudget::new()).is_err());
-        assert!(stage_test_paths(&[name(&nested)], temp, StagingBudget::new()).is_err());
+        let budget = || StagingBudget::with_limits(MAX_ITEMS, 128);
+        assert!(stage_test_paths(&[name(temp)], temp, budget()).is_err());
+        assert!(stage_test_paths(&[name(&nested)], temp, budget()).is_err());
         let via_alias = nested.join("back").join("archive").join("back");
-        assert!(stage_test_paths(&[name(&via_alias)], temp, StagingBudget::new()).is_err());
+        assert!(stage_test_paths(&[name(&via_alias)], temp, budget()).is_err());
         assert!(nested.join("back").exists());
         assert_eq!(fs::read_dir(temp.join(DROP_ROOT_DIR)).unwrap().count(), 0);
     }
@@ -625,7 +627,7 @@ mod tests {
         }
         let paths = [name(&directory)];
         let result = stage_test_paths(&paths, temp, StagingBudget::with_limits(3, 5));
-        assert!(matches!(result, Err(DropDataError::TooLarge)));
+        assert!(matches!(result, Err(DropDataError::InsufficientSpace)));
         assert_eq!(fs::read_dir(temp.join(DROP_ROOT_DIR)).unwrap().count(), 0);
         assert_eq!(fs::read_dir(directory).unwrap().count(), 2);
     }
@@ -640,7 +642,7 @@ mod tests {
         let all = [name(&directory)];
         let result = stage_test_paths(&all, temp, StagingBudget::with_limits(2, 0));
         assert!(matches!(result, Err(DropDataError::TooManyItems)));
-        let result = stage_test_paths(&all, temp, StagingBudget::new());
+        let result = stage_test_paths(&all, temp, StagingBudget::with_limits(MAX_ITEMS, 0));
         assert!(matches!(result, Err(DropDataError::TooDeep)));
         assert_eq!(fs::read_dir(temp.join(DROP_ROOT_DIR)).unwrap().count(), 0);
     }

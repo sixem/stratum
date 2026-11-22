@@ -16,6 +16,8 @@ mod registration;
 mod shell;
 mod stage_slots;
 mod staging;
+#[cfg(test)]
+mod tests;
 
 pub(crate) use leases::staged_path_spelling_supported;
 #[cfg(test)]
