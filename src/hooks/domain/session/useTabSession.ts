@@ -8,7 +8,6 @@ import { createSessionTab } from "@/modules/sessionStore";
 import { useTabHistory } from "./tabHistory";
 import { usePendingJump } from "./tabNavigation";
 import { useTabPersistence } from "./useTabPersistence";
-import { useTabScroll } from "./useTabScroll";
 
 type TabSessionOptions = {
   useStore?: typeof useSessionStore;
@@ -36,19 +35,28 @@ export const useTabSession = ({
   keepFilterOnNavigation,
   recentJumpsLimit,
 }: TabSessionOptions) => {
-  const { tabs, activeTabId, recentJumps, restoreRevision, setTabs, setActiveTabId, setRecentJumps } =
-    useStore(
-      (state) => ({
-        tabs: state.tabs,
-        activeTabId: state.activeTabId,
-        recentJumps: state.recentJumps,
-        restoreRevision: state.restoreRevision,
-        setTabs: state.setTabs,
-        setActiveTabId: state.setActiveTabId,
-        setRecentJumps: state.setRecentJumps,
-      }),
-      shallow,
-    );
+  const {
+    tabs,
+    activeTabId,
+    recentJumps,
+    restoreRevision,
+    setTabs,
+    setActiveTabId,
+    setRecentJumps,
+    setTabScrollTop,
+  } = useStore(
+    (state) => ({
+      tabs: state.tabs,
+      activeTabId: state.activeTabId,
+      recentJumps: state.recentJumps,
+      restoreRevision: state.restoreRevision,
+      setTabs: state.setTabs,
+      setActiveTabId: state.setActiveTabId,
+      setRecentJumps: state.setRecentJumps,
+      setTabScrollTop: state.setTabScrollTop,
+    }),
+    shallow,
+  );
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? null,
@@ -101,7 +109,6 @@ export const useTabSession = ({
     recentLimit: safeRecentLimit,
     shouldSyncEmptyTab,
   });
-  const { setTabScrollTop } = useTabScroll({ setTabs });
   // The folder snapshot can commit one render before its tab is persisted.
   // Keep the submitted target in the address bar across both renders.
   const pendingNavigation = restoringTabs ? null : pendingNavigationRef.current;

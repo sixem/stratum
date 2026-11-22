@@ -15,6 +15,18 @@ export const useEntryMetaRequest = (
   const lastDispatchedSignatureRef = useRef("");
 
   useEffect(() => {
+    // Cancel work for the previous handler before the next effect schedules it again.
+    return () => {
+      if (timerRef.current != null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      pendingSignatureRef.current = "";
+      lastDispatchedSignatureRef.current = "";
+    };
+  }, [onRequestMeta]);
+
+  useEffect(() => {
     if (loading || paths.length === 0) return;
 
     const signature = buildMetaRequestSignature(paths);
@@ -43,23 +55,4 @@ export const useEntryMetaRequest = (
       pendingSignatureRef.current = "";
     }
   }, [loading, paths.length]);
-
-  useEffect(() => {
-    if (timerRef.current != null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    pendingSignatureRef.current = "";
-    lastDispatchedSignatureRef.current = "";
-  }, [onRequestMeta]);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current != null) {
-        window.clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-      pendingSignatureRef.current = "";
-    };
-  }, []);
 };

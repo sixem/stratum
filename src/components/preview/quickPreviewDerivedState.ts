@@ -1,15 +1,14 @@
-// Pure state shaping for the quick preview overlay. This keeps labels, preview
-// lists, and UI-friendly values testable without rendering the preview stack.
+// Pure state shaping for the quick preview overlay. This keeps labels and
+// UI-friendly values testable without rendering the preview stack.
 import type { CSSProperties } from "react";
 import {
   formatBytes,
   formatCount,
   formatDate,
   getPathName,
-  isPreviewableEntry,
   splitNameExtension,
 } from "@/lib";
-import type { EntryMeta, FileEntry } from "@/types";
+import type { EntryMeta } from "@/types";
 
 export type QuickPreviewLoadState = "loading" | "ready" | "error";
 
@@ -19,7 +18,6 @@ type BuildQuickPreviewDerivedStateParams = {
   src: string;
   isVideo: boolean;
   meta?: EntryMeta | null;
-  items: FileEntry[];
   thumbnails: Map<string, string>;
   zoom: number;
   loadState: QuickPreviewLoadState;
@@ -41,7 +39,6 @@ export const buildQuickPreviewDerivedState = ({
   src,
   isVideo,
   meta,
-  items,
   thumbnails,
   zoom,
   loadState,
@@ -51,7 +48,6 @@ export const buildQuickPreviewDerivedState = ({
   canUseExternalActions,
 }: BuildQuickPreviewDerivedStateParams) => {
   const label = !open || !path ? "Media preview" : getPathName(path) || "Media preview";
-  const previewItems = open ? items.filter(isPreviewableEntry) : [];
 
   const isReady = loadState === "ready" && loadedSrc === src;
   const isLoading = loadState === "loading" || (!isReady && loadState !== "error");
@@ -86,7 +82,6 @@ export const buildQuickPreviewDerivedState = ({
     src,
     label,
     isVideo,
-    previewItems,
     isReady,
     isLoading,
     hasError,

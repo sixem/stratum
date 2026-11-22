@@ -3,7 +3,7 @@
 // derived-state builder.
 import { useMemo } from "react";
 import { getFileKind, getPathName } from "@/lib";
-import type { EntryMeta, FileEntry } from "@/types";
+import type { EntryMeta } from "@/types";
 import type { RefObject } from "react";
 import { buildQuickPreviewDerivedState } from "./quickPreviewDerivedState";
 import { usePreviewMediaLifecycle } from "./usePreviewMediaLifecycle";
@@ -14,7 +14,6 @@ type UseQuickPreviewMediaOptions = {
   open: boolean;
   path: string | null;
   meta?: EntryMeta | null;
-  items: FileEntry[];
   thumbnails: Map<string, string>;
   zoom: number;
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -28,7 +27,6 @@ export const useQuickPreviewMedia = ({
   open,
   path,
   meta,
-  items,
   thumbnails,
   zoom,
   videoRef,
@@ -66,7 +64,6 @@ export const useQuickPreviewMedia = ({
         src,
         isVideo,
         meta,
-        items,
         thumbnails,
         zoom,
         loadState,
@@ -78,7 +75,6 @@ export const useQuickPreviewMedia = ({
     [
       canUseExternalActions,
       isVideo,
-      items,
       lifecycle.loadedSrc,
       lifecycle.mediaSize,
       loadState,

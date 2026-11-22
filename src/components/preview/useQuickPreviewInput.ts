@@ -1,8 +1,8 @@
 // Handles preview-stage interaction: zoom, pan, pointer drag, and keyboard shortcuts.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { FileEntry } from "@/types";
-import { isEditableElement, isPreviewableEntry, normalizePath } from "@/lib";
+import { isEditableElement, normalizePath } from "@/lib";
 
 type DragState = {
   active: boolean;
@@ -17,7 +17,7 @@ type UseQuickPreviewInputOptions = {
   open: boolean;
   isVideo: boolean;
   stripOpen: boolean;
-  items: FileEntry[];
+  previewItems: FileEntry[];
   activePath: string;
   onSelectPreview: (path: string) => void;
   smartTabJump: boolean;
@@ -41,7 +41,7 @@ export const useQuickPreviewInput = ({
   open,
   isVideo,
   stripOpen,
-  items,
+  previewItems,
   activePath,
   onSelectPreview,
   smartTabJump,
@@ -68,11 +68,6 @@ export const useQuickPreviewInput = ({
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const [transforming, setTransforming] = useState(false);
-  const previewItems = useMemo(
-    () => items.filter(isPreviewableEntry),
-    [items],
-  );
-
   useLayoutEffect(() => {
     if (!open) return;
     const previous = document.activeElement;

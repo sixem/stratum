@@ -32,6 +32,7 @@ type SessionRuntimeState = SessionState & { closedTabs: ClosedTab[]; restoreRevi
 type SessionStore = SessionRuntimeState & {
   setTabs: (updater: Tab[] | ((prev: Tab[]) => Tab[])) => void;
   setTabGridSize: (id: string, gridSize: FixedGridSize) => void;
+  setTabScrollTop: (id: string, scrollTop: number) => void;
   setActiveTabId: (id: string | null) => void;
   setRecentJumps: (updater: string[] | ((prev: string[]) => string[])) => void;
   updateSession: (patch: Partial<SessionRuntimeState>) => void;
@@ -210,6 +211,15 @@ const createSessionStore = (key: string) => {
       if (index < 0 || state.tabs[index].gridSize === gridSize) return state;
       const tabs = state.tabs.slice();
       tabs[index] = { ...tabs[index], gridSize };
+      return { tabs };
+    }),
+    setTabScrollTop: (id, scrollTop) => set((state) => {
+      if (!id) return state;
+      const index = state.tabs.findIndex(tab => tab.id === id);
+      const nextTop = coerceScrollTop(scrollTop);
+      if (index < 0 || state.tabs[index].scrollTop === nextTop) return state;
+      const tabs = state.tabs.slice();
+      tabs[index] = { ...tabs[index], scrollTop: nextTop };
       return { tabs };
     }),
     setActiveTabId: (id) => set({ activeTabId: id }),

@@ -1,6 +1,6 @@
 // Full-screen media preview overlay composed from focused hooks and view blocks.
 import { useCallback, useId, useMemo, useRef, useState } from "react";
-import { getFileKind, getPathName, normalizePath } from "@/lib";
+import { getFileKind, getPathName, isPreviewableEntry, normalizePath } from "@/lib";
 import type { EntryMeta, FileEntry, ThumbnailRequest } from "@/types";
 import { LoadingIndicator } from "@/components/primitives/LoadingIndicator";
 import { QuickPreviewFooter } from "./QuickPreviewFooter";
@@ -64,6 +64,7 @@ const QuickPreviewOverlayContent = ({
     return getFileKind(getPathName(path)) === "video";
   }, [path]);
   const activePathKey = useMemo(() => normalizePath(path), [path]);
+  const previewItems = useMemo(() => items.filter(isPreviewableEntry), [items]);
 
   const {
     containerRef,
@@ -85,7 +86,7 @@ const QuickPreviewOverlayContent = ({
     open,
     isVideo: previewPathIsVideo,
     stripOpen,
-    items,
+    previewItems,
     activePath: path,
     onSelectPreview,
     smartTabJump,
@@ -96,7 +97,6 @@ const QuickPreviewOverlayContent = ({
     open,
     path,
     meta,
-    items,
     thumbnails,
     zoom,
     videoRef,
@@ -104,30 +104,28 @@ const QuickPreviewOverlayContent = ({
     fitMediaToViewport,
   });
   const activePreviewIndex = useMemo(() => {
-    const strictIndex = preview.previewItems.findIndex((entry) => entry.path === path);
+    const strictIndex = previewItems.findIndex((entry) => entry.path === path);
     if (strictIndex >= 0) return strictIndex;
-    return preview.previewItems.findIndex((entry) => normalizePath(entry.path) === activePathKey);
-  }, [activePathKey, path, preview.previewItems]);
+    return previewItems.findIndex((entry) => normalizePath(entry.path) === activePathKey);
+  }, [activePathKey, path, previewItems]);
   const canGoPreviewBack = activePreviewIndex > 0;
-  const canGoPreviewForward =
-    activePreviewIndex >= 0 && activePreviewIndex < preview.previewItems.length - 1;
-  const showPreviewNavigation = preview.previewItems.length > 1;
-  const previewPositionLabel =
-    showPreviewNavigation && preview.previewItems.length > 0
-      ? `${Math.max(activePreviewIndex + 1, 1)} / ${preview.previewItems.length}`
-      : null;
+  const canGoPreviewForward = activePreviewIndex >= 0 && activePreviewIndex < previewItems.length - 1;
+  const showPreviewNavigation = previewItems.length > 1;
+  const previewPositionLabel = showPreviewNavigation
+    ? `${Math.max(activePreviewIndex + 1, 1)} / ${previewItems.length}`
+    : null;
   const handleGoPreviewBack = useCallback(() => {
     if (!canGoPreviewBack) return;
-    const previous = preview.previewItems[activePreviewIndex - 1];
+    const previous = previewItems[activePreviewIndex - 1];
     if (!previous) return;
     onSelectPreview(previous.path);
-  }, [activePreviewIndex, canGoPreviewBack, onSelectPreview, preview.previewItems]);
+  }, [activePreviewIndex, canGoPreviewBack, onSelectPreview, previewItems]);
   const handleGoPreviewForward = useCallback(() => {
     if (!canGoPreviewForward) return;
-    const next = preview.previewItems[activePreviewIndex + 1];
+    const next = previewItems[activePreviewIndex + 1];
     if (!next) return;
     onSelectPreview(next.path);
-  }, [activePreviewIndex, canGoPreviewForward, onSelectPreview, preview.previewItems]);
+  }, [activePreviewIndex, canGoPreviewForward, onSelectPreview, previewItems]);
 
   const handleToggleStrip = () => {
     const next = !stripOpen;
@@ -209,7 +207,7 @@ const QuickPreviewOverlayContent = ({
         {stripOpen ? (
           <QuickPreviewStrip
             open={open}
-            items={preview.previewItems}
+            items={previewItems}
             activePath={path}
             entryMeta={entryMeta}
             thumbnails={thumbnails}
