@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 type UseSelectionOptions = {
   items: string[];
@@ -39,7 +39,8 @@ export const useSelection = ({ items, resetKey, indexMap }: UseSelectionOptions)
     return map;
   }, [indexMap, items]);
 
-  useEffect(() => {
+  // Reset before a folder navigation can select an item in the new listing.
+  useLayoutEffect(() => {
     if (selectedRef.current.size === 0 && !anchorPathRef.current) {
       return;
     }
@@ -61,10 +62,6 @@ export const useSelection = ({ items, resetKey, indexMap }: UseSelectionOptions)
       }
     }
   }, [items, selectionIndexMap, updateSelection]);
-
-  useEffect(() => {
-    selectedRef.current = selected;
-  }, [selected]);
 
   const clearSelection = useCallback(() => {
     const next = new Set<string>();

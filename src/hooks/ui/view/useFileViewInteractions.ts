@@ -6,6 +6,7 @@ import type { ScrollAlignment } from "@/hooks/perf/scroll";
 import { folderPathKey } from "@/lib";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import type { FileViewModel } from "./useFileViewModel";
+import { useNavigationReveal } from "./useNavigationReveal";
 import { useFileViewSelection } from "../selection/useFileViewSelection";
 import { useTypeaheadSelection } from "../selection/useTypeaheadSelection";
 
@@ -13,6 +14,7 @@ type UseFileViewInteractionsOptions = {
   viewModel: FileViewModel;
   activeTabId: string | null;
   currentPath: string;
+  navigationRevealPath: string | null;
   deferredSearchValue: string;
   viewMode: ViewMode;
   previewOpenRef: RefObject<boolean>;
@@ -29,6 +31,7 @@ export const useFileViewInteractions = ({
   viewModel,
   activeTabId,
   currentPath,
+  navigationRevealPath,
   deferredSearchValue,
   viewMode,
   previewOpenRef,
@@ -102,14 +105,23 @@ export const useFileViewInteractions = ({
     const validPaths = pendingSelection.paths.filter((path) =>
       viewModel.indexMap.has(path),
     );
-    if (validPaths.length > 0) {
+    if (!navigationRevealPath && validPaths.length > 0) {
       setSelection(validPaths, pendingSelection.anchor ?? validPaths[validPaths.length - 1]);
     }
     // One-shot restore: once applied (or discarded), wait until this scope is left again.
     selectionCacheRef.current.delete(selectionScopeKey);
     pendingRestoreRef.current = null;
     pendingRestoreScopeRef.current = null;
-  }, [loading, selectionScopeKey, setSelection, viewModel.indexMap]);
+  }, [loading, navigationRevealPath, selectionScopeKey, setSelection, viewModel.indexMap]);
+
+  useNavigationReveal({
+    path: navigationRevealPath,
+    viewKey: selectionResetKey,
+    loading,
+    viewModel,
+    setSelection,
+    scrollToIndex: requestScrollToIndex,
+  });
 
   const handleTypeaheadMatch = useCallback(
     (item: { path: string; index: number }) => {

@@ -9,6 +9,7 @@ type SetRecentJumps = (next: string[] | ((prev: string[]) => string[])) => void;
 
 type PendingNavigation = {
   path: string;
+  revealPath?: string | null;
   resetFilter?: { tabId: string; previousSearch: string };
 };
 
@@ -138,7 +139,14 @@ export const useTabPersistence = ({
         return prev;
       }
       const next = [...prev];
-      next[index] = { ...tab, path: currentPath, crumbTrailPath: nextTrailPath, search: nextSearch };
+      next[index] = {
+        ...tab,
+        path: currentPath,
+        crumbTrailPath: nextTrailPath,
+        search: nextSearch,
+        // The folder reveal supplies the new offset. Do not restore an offset from the child.
+        scrollTop: pending?.revealPath ? 0 : tab.scrollTop,
+      };
       return next;
     });
   }, [activeTab, activeTabId, clearDir, currentPath, loadDir, restoreRevision, setTabs, shouldSyncEmptyTab]);

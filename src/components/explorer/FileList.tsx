@@ -72,21 +72,25 @@ const FileList = ({
     loading: view.loading,
   });
 
-  const { virtual, visibleRows } = useListVirtual({
-    listRef,
-    viewKey: view.viewKey,
-    itemHeight,
-    rows,
-  });
-
-  useScrollToIndex(listRef, {
+  const applyScrollRequest = useScrollToIndex(listRef, {
     itemCount: rows.length,
     rowHeight,
     rowGap: itemHeight - rowHeight,
     insetTop: VIEW_INSET,
     scrollRequest: view.scrollRequest,
     scrollKey: view.viewKey,
+    ready: !view.loading,
   });
+
+  const { virtual, visibleRows } = useListVirtual({
+    listRef,
+    viewKey: view.viewKey,
+    itemHeight,
+    rows,
+    applyScrollRequest,
+  });
+  // The full scroll area must exist on the first layout, before measuring the visible range.
+  const contentHeight = rows.length * itemHeight + VIEW_INSET * 2;
 
   const rowMetaByPath = useListMeta({
     listRef,
@@ -138,7 +142,7 @@ const FileList = ({
             data-ready={contentReady ? "true" : "false"}
             data-animate={viewAnimate ? "true" : "false"}
           >
-            <div className="list-spacer" style={{ height: `${virtual.totalHeight}px` }} />
+            <div className="list-spacer" style={{ height: contentHeight }} />
             <div
               className="list-virtual"
               style={{ transform: `translate3d(0, ${virtual.offsetTop}px, 0)` }}

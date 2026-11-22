@@ -58,7 +58,7 @@ export function useBottomFolder(upperPath: string) {
     requestEntryMeta: meta.requestEntryMeta, loading: busy,
   });
   const showParentEntry = useSettingsStore(state => state.showParentEntry);
-  const showParent = showParentEntry && !tabs.searchValue.trim() && dir.entries.length > 0;
+  const showParent = showParentEntry && !tabs.displaySearch.trim() && dir.entries.length > 0;
   const model = useFileViewModel(dir.entries, showParent ? dir.parentPath : null);
   const viewKey = JSON.stringify([tabs.activeTabId, path]);
   const selection = useFileViewSelection({ viewModel: model, resetKey: viewKey });

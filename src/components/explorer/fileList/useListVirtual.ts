@@ -14,6 +14,7 @@ type UseListVirtualOptions = {
   viewKey: string;
   itemHeight: number;
   rows: EntryItem[];
+  applyScrollRequest: () => void;
 };
 
 type ListVirtualState = {
@@ -26,6 +27,7 @@ export const useListVirtual = ({
   viewKey,
   itemHeight,
   rows,
+  applyScrollRequest,
 }: UseListVirtualOptions): ListVirtualState => {
   const overscan = useDynamicOverscan({
     resetKey: viewKey,
@@ -40,6 +42,7 @@ export const useListVirtual = ({
     overscan,
     VIEW_INSET,
     VIEW_INSET,
+    { beforeLayoutMeasure: applyScrollRequest },
   );
   // Memoize the visible slice so selection drags don't rebuild row metadata.
   const visibleRows = useMemo(

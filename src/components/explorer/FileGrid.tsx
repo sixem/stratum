@@ -18,6 +18,7 @@ import { useGridTooltip } from "./fileGrid/useGridTooltip";
 import { useGridVirtual } from "./fileGrid/useGridVirtual";
 import { useGridWheelSize } from "./fileGrid/useGridWheelSize";
 import { useCutEntries } from "./fileView/useCutEntries";
+import { VIEW_INSET } from "./fileView/constants";
 
 const FileGrid = ({
   view,
@@ -83,6 +84,7 @@ const FileGrid = ({
     gridVars,
     gridStyle,
     viewportHeight,
+    layoutReady,
     columnCount,
     columnWidth,
     columnGap,
@@ -124,6 +126,17 @@ const FileGrid = ({
     contentHeight,
   });
 
+  const applyScrollRequest = useScrollToIndex(viewportRef, {
+    itemCount: viewItems.length,
+    rowHeight: rowHeight - columnGap,
+    rowGap: columnGap,
+    insetTop: VIEW_INSET,
+    itemsPerRow: columnCount,
+    scrollRequest: view.scrollRequest,
+    scrollKey: view.viewKey,
+    ready: !view.loading && layoutReady,
+  });
+
   const { virtual, visibleItems, startIndex } = useGridVirtual({
     viewportRef,
     viewportHeight,
@@ -132,14 +145,7 @@ const FileGrid = ({
     rowCount,
     rowHeight,
     viewItems,
-  });
-
-  useScrollToIndex(viewportRef, {
-    itemCount: viewItems.length,
-    rowHeight,
-    itemsPerRow: columnCount,
-    scrollRequest: view.scrollRequest,
-    scrollKey: view.viewKey,
+    applyScrollRequest,
   });
 
   const {

@@ -2,7 +2,7 @@
 import { useCallback, useMemo } from "react";
 import { shallow } from "zustand/shallow";
 import type { ListDirOptions, SortState, Tab, ViewMode } from "@/types";
-import { DEFAULT_TAB_STATE, makeDebug, folderPathKey } from "@/lib";
+import { DEFAULT_TAB_STATE, makeDebug, folderPathKey, getNextTrailPath } from "@/lib";
 import { useSessionStore } from "@/modules";
 import { createSessionTab } from "@/modules/sessionStore";
 import { useTabHistory } from "./tabHistory";
@@ -116,6 +116,10 @@ export const useTabSession = ({
   const displaySearch = requestedPath === displayPath && pendingNavigation?.resetFilter
     ? ""
     : searchValue;
+  const navigationRevealPath = pendingNavigation?.revealPath &&
+    folderPathKey(pendingNavigation.path) === folderPathKey(displayPath)
+    ? pendingNavigation.revealPath
+    : null;
 
   const ensureActiveTab = useCallback(
     (path: string) => {
@@ -160,14 +164,19 @@ export const useTabSession = ({
         && folderPathKey(tab.path) !== folderPathKey(target)
         ? { tabId: tab.id, previousSearch: tab.search }
         : undefined;
-      pendingNavigationRef.current = { path: target, resetFilter };
+      // On an upward navigation, reveal the first folder on the way back to
+      // the listing we are leaving, including when skipping several ancestors.
+      const revealPath = source === "navigate" && tabId === activeTabId
+        ? getNextTrailPath(target, currentPath)
+        : null;
+      pendingNavigationRef.current = { path: target, resetFilter, revealPath };
       queuePendingJump(target, source, tabId);
       const nextSort = options?.sort ?? tab?.sort ?? sortState;
       const nextSearch = resetFilter ? "" : options?.search ?? tab?.search ?? searchValue;
       void loadDir(target, { ...options, sort: nextSort, search: nextSearch });
     },
     [
-      clearDir, emptyTabIdsRef, keepFilterOnNavigation, loadDir, pendingNavigationRef,
+      activeTabId, clearDir, currentPath, emptyTabIdsRef, keepFilterOnNavigation, loadDir, pendingNavigationRef,
       queuePendingJump, searchValue, sortState, useStore,
     ],
   );
@@ -401,6 +410,7 @@ export const useTabSession = ({
     restoringTabs,
     displayPath,
     displaySearch,
+    navigationRevealPath,
     viewMode,
     sortState,
     searchValue,

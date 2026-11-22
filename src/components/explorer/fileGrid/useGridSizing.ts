@@ -129,6 +129,7 @@ export type GridSizingState = {
   gridVars: CSSProperties;
   gridStyle: CSSProperties;
   viewportHeight: number;
+  layoutReady: boolean;
   columnCount: number;
   columnWidth: number;
   columnGap: number;
@@ -232,7 +233,7 @@ export const useGridSizing = ({
   const rowHeight = gridSizing.rowHeight + gridSizing.gap;
   // The last virtual row already includes the grid gap as its bottom padding.
   const contentHeight = rowCount * rowHeight + VIEW_INSET;
-  const layoutReady = viewportWidth > 0;
+  const layoutReady = viewportWidth > 0 && layoutViewportWidth > 0;
 
   useEffect(() => {
     if (!perf.enabled) return;
@@ -308,6 +309,7 @@ export const useGridSizing = ({
     gridVars,
     gridStyle,
     viewportHeight,
+    layoutReady,
     columnCount,
     columnWidth: gridSizing.column,
     columnGap,

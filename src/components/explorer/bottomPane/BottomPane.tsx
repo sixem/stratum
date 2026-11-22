@@ -17,6 +17,7 @@ import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
 import { useSmartTabJump } from "@/hooks/ui/selection/useSmartTabJump";
 import { useTypeaheadSelection } from "@/hooks/ui/selection/useTypeaheadSelection";
 import type { PanePreviewBindings, PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
+import { useNavigationReveal } from "@/hooks/ui/view/useNavigationReveal";
 import { useSettingsStore } from "@/modules";
 import { hideBottomPane, setBottomPaneActive, useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { folderPathKey, getNextTrailPath } from "@/lib";
@@ -70,7 +71,8 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   useLayoutEffect(() => {
     onSummary({ path, recentJumps: tabs.recentJumps, countLabel, selectionLabel });
   }, [onSummary, path, tabs.recentJumps, countLabel, selectionLabel]);
-  const ready = !!path && !busy && !tabs.restoringTabs && folderPathKey(path) === folderPathKey(tabs.activeTab?.path ?? "");
+  // The listing can commit one render before its tab is updated.
+  const ready = !!path && !busy && !tabs.restoringTabs && folderPathKey(path) === folderPathKey(tabs.displayPath);
   const viewVisit = useMemo(() => ({ current: false }), [viewKey, tabs.searchValue]);
   useLayoutEffect(() => {
     viewVisit.current = ready;
@@ -143,6 +145,14 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   const scrollTo = useCallback((index: number, alignment?: ScrollAlignment) => {
     requestScrollToIndex(index, viewKey, alignment);
   }, [requestScrollToIndex, viewKey]);
+  useNavigationReveal({
+    path: tabs.navigationRevealPath,
+    viewKey,
+    loading: !ready,
+    viewModel: model,
+    setSelection: selectEntry,
+    scrollToIndex: scrollTo,
+  });
   const paneActions = useBottomPaneActions({
     folder, actions, menu, files, ready, viewVisit, browseFromView, openGallery: bottomPreview.open, scrollTo,
     hideExtension: upper.gridNameHideExtension,
@@ -285,7 +295,8 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       <FileView {...upper} {...model} pane="bottom" dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null} currentPath={path} viewMode={tabs.viewMode} viewKey={viewKey}
         showLander={!path} recentJumps={tabs.recentJumps} onOpenPlace={navigate} onOpenRecent={navigate} onOpenDrive={navigate}
         onOpenDriveNewTab={openNew} onOpenPlaceNewTab={openNew} onOpenRecentNewTab={openNew}
-        searchQuery={tabs.searchValue} loading={busy} scrollRestoreKey={viewKey} scrollRestoreTop={tabs.activeTab?.scrollTop ?? 0}
+        searchQuery={tabs.searchValue} loading={busy} scrollRestoreKey={viewKey}
+        scrollRestoreTop={tabs.navigationRevealPath ? 0 : tabs.activeTab?.scrollTop ?? 0}
         scrollRequest={scrollRequest} selectedPaths={selection.selected} onSelectItem={paneActions.handleSelectItemWithRename}
         onSetSelection={paneActions.handleSelectionChange} onClearSelection={paneActions.handleClearSelection}
         onOpenDir={browseFromView} onOpenDirNewTab={openNew} onGoUp={() => dir.parentPath && navigate(dir.parentPath)} canGoUp={!!dir.parentPath}

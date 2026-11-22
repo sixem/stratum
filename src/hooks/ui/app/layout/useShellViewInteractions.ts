@@ -116,6 +116,7 @@ export const useShellViewInteractions = ({
     viewModel,
     activeTabId: resolvedView.activeTabId,
     currentPath: resolvedView.viewPath,
+    navigationRevealPath: tabSession.navigationRevealPath,
     deferredSearchValue: viewState.deferredSearchValue,
     viewMode: resolvedView.viewMode,
     previewOpenRef,

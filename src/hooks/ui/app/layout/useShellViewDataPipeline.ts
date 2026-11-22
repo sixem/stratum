@@ -33,6 +33,7 @@ type UseShellViewDataPipelineResolvedView = Pick<
   | "viewLoading"
   | "showLander"
   | "viewEntries"
+  | "displaySearch"
   | "viewTotalCount"
   | "viewParentPathBase"
   | "canGoUp"
@@ -101,7 +102,7 @@ export const useShellViewDataPipeline = ({
     resolvedView.viewParentPathBase &&
     resolvedView.canGoUp &&
     settings.showParentEntry &&
-    !isFiltered &&
+    !resolvedView.displaySearch.trim() &&
     !showEmptyFolder
       ? resolvedView.viewParentPathBase
       : null;

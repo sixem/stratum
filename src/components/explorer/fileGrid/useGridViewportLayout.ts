@@ -68,6 +68,8 @@ export const useGridViewportLayout = ({
       // A sidebar drag moves the viewport while the auto grid keeps its current width.
       const width = deferWidth && previousWidth > 0 ? previousWidth : element.clientWidth;
       commitViewportSize(width, element.clientHeight);
+      // A newly mounted grid needs its first column geometry before it can reveal a row.
+      if (stableViewportWidthRef.current <= 0) commitStableViewportWidth(width);
     };
 
     measure();
