@@ -48,8 +48,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             #[cfg(target_os = "windows")]
-            platform::windows::window_frame::hide_system_border(app.handle());
-            #[cfg(target_os = "windows")]
             if let Err(error) = platform::windows::profile_instance::register_window(app.handle()) {
                 eprintln!("Failed to register the profile window: {error}");
             }
