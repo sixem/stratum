@@ -9,3 +9,4 @@ pub(crate) mod process_token;
 pub(crate) mod profile_instance;
 pub(crate) mod shell_menu;
 pub(crate) mod webview_navigation;
+pub(crate) mod window_frame;

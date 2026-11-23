@@ -3,8 +3,6 @@ import { useContext, useEffect, useRef, useState } from "react";
 import { formatBytes, getPlatformLabel } from "@/lib";
 import { SettingsSearchMatches, type SettingsItemText } from "./SettingsItem";
 
-export const SETTINGS_DIAGNOSTICS_ID = "settings-diagnostics";
-
 export const DIAGNOSTICS_SETTINGS_ITEM = {
   label: "Diagnostics",
   description: "Window size, pixel ratio, JavaScript heap, CPU cores, platform, and uptime.",
@@ -85,7 +83,6 @@ export const SettingsDiagnostics = ({ open }: { open: boolean }) => {
   return (
     <details
       className="settings-diagnostics"
-      id={SETTINGS_DIAGNOSTICS_ID}
       ref={detailsRef}
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >

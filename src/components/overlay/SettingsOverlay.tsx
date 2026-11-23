@@ -3,7 +3,6 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { TabCloseIcon } from "@/components/icons";
 import { SettingsSearchMatches } from "@/components/settings/SettingsItem";
-import { SETTINGS_DIAGNOSTICS_ID } from "@/components/settings/SettingsDiagnostics";
 import { OverlayPanelHeader } from "@/components/overlay/OverlayPanelHeader";
 import { DialogCloseButton } from "./DialogCloseButton";
 import {
@@ -41,7 +40,6 @@ export const SettingsOverlay = ({
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [captureActive, setCaptureActive] = useState(false);
-  const [diagnosticsRequest, setDiagnosticsRequest] = useState(0);
   const shouldCloseRef = useRef(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -66,15 +64,6 @@ export const SettingsOverlay = ({
   useLayoutEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [activeSectionId, searchQuery]);
-
-  useLayoutEffect(() => {
-    if (diagnosticsRequest === 0) return;
-    const details = contentRef.current?.querySelector<HTMLDetailsElement>(`#${SETTINGS_DIAGNOSTICS_ID}`);
-    if (!details) return;
-    details.open = true;
-    details.querySelector("summary")?.focus({ preventScroll: true });
-    details.scrollIntoView({ block: "nearest" });
-  }, [diagnosticsRequest]);
 
   useModalFocusTrap({
     open,
@@ -104,11 +93,6 @@ export const SettingsOverlay = ({
     setCaptureActive(false);
     setSearchQuery("");
   }, []);
-
-  const handleOpenDiagnostics = () => {
-    handleSelectSection("settings-general");
-    setDiagnosticsRequest((request) => request + 1);
-  };
 
   const clearSearch = useCallback(() => {
     setSearchQuery("");
@@ -273,14 +257,6 @@ export const SettingsOverlay = ({
         </div>
         <footer className="settings-footer">
           <span className="tnum">v{APP_VERSION}</span>
-          <PressButton
-            type="button"
-            className="settings-footer-button"
-            pressOnPointerDown={false}
-            onClick={handleOpenDiagnostics}
-          >
-            Diagnostics
-          </PressButton>
           <PressButton type="button" className="settings-footer-button settings-footer-reset" onClick={handleResetSettings}>
             Reset settings
           </PressButton>

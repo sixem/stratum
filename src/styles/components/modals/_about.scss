@@ -79,6 +79,7 @@
     max-width: 35ch;
     color: color-mix(in srgb, var(--text) 78%, var(--muted));
     font-size: var(--font-size-md);
+    font-weight: 500;
     line-height: 1.6;
     text-wrap: balance;
   }

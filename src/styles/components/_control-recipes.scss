@@ -130,7 +130,7 @@
   gap: 6px;
   padding: 4px 11px;
   @include control-surface(5px, transparent, transparent);
-  font-size: var(--font-size-xs);
+  font-size: calc(var(--font-size-xs) + 0.02rem);
   font-weight: 600;
   color: var(--muted);
   cursor: pointer;
@@ -153,6 +153,12 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+}
+
+@mixin footer-text() {
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.04em;
+  color: rgba(228, 234, 244, 0.8);
 }
 
 @mixin eyebrow-label(

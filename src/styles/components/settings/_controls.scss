@@ -57,11 +57,12 @@
 
   .settings-mono {
     margin-top: 6px;
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
     line-height: 1.45;
-    color: var(--muted);
+    color: var(--text);
     font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-    word-break: break-all;
+    overflow-wrap: anywhere;
   }
 
   .settings-toggle {

@@ -13,10 +13,7 @@
   }
 
   .settings-subtitle {
-    font-size: var(--font-size-sm);
-    color: var(--muted);
     max-width: 520px;
-    line-height: 1.4;
   }
 
   .settings-body {
@@ -55,8 +52,7 @@
     gap: 10px;
     padding: 4px 18px;
     border-top: var(--surface-border-width) solid var(--stroke);
-    color: var(--muted);
-    font-size: var(--font-size-xs);
+    @include control.footer-text();
   }
 
   .settings-footer-button {
@@ -66,6 +62,7 @@
     background: transparent;
     color: inherit;
     font: inherit;
+    letter-spacing: inherit;
     cursor: pointer;
 
     &:hover,
@@ -136,7 +133,7 @@
 
     summary {
       color: var(--text);
-      font-size: var(--font-size-sm);
+      font-size: var(--font-size-md);
       font-weight: 600;
       cursor: pointer;
     }
@@ -163,8 +160,9 @@
     display: grid;
     gap: 4px;
     min-width: 0;
-    font-size: var(--font-size-xs);
-    color: var(--muted);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: color-mix(in srgb, var(--text) 50%, var(--muted));
   }
 
   .settings-stat dd {
