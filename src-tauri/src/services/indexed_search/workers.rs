@@ -86,6 +86,9 @@ impl IndexedSearchHandle {
         let mut status = self.inner.state.lock().expect("indexed search state lock");
         for (drive, path) in paths.iter().filter_map(|path| normalize_path(path)) {
             let key = state::normalize_drive_key(&drive);
+            if !status.includes_drive(&key) {
+                continue;
+            }
             if status.service_status.state == IndexedSearchServiceState::Starting {
                 // Keep early filesystem changes bounded and let the worker
                 // check their mount before acting. They cannot schedule scans.
@@ -134,6 +137,9 @@ impl IndexedSearchHandle {
         let mut wake_worker = false;
         for (drive, path) in paths.iter().filter_map(|path| normalize_path(path)) {
             let key = state::normalize_drive_key(&drive);
+            if !state.includes_drive(&key) {
+                continue;
+            }
             if state.has_verified_journal(&key) {
                 wake_worker |= queue.queue_journal_hint(drive, now);
                 continue;
@@ -193,8 +199,10 @@ impl IndexedSearchHandle {
             return Ok(());
         }
         let state = self.inner.state.lock().expect("indexed search state lock");
-        if state.service_status.state != IndexedSearchServiceState::Starting
-            && !state.uses_folder_reconciliation(&state::normalize_drive_key(&drive))
+        let key = state::normalize_drive_key(&drive);
+        if !state.includes_drive(&key)
+            || (state.service_status.state != IndexedSearchServiceState::Starting
+                && !state.uses_folder_reconciliation(&key))
         {
             return Ok(());
         }
@@ -575,7 +583,7 @@ impl IndexedSearchHandle {
         if self.should_cancel_work(generation) {
             // A disable/re-enable cycle cannot revive the old worker's scan.
             // Queue another attempt so the cancelled work isn't lost.
-            if scanned.is_err() {
+            if scanned.is_err() && status.includes_drive(&mount.key()) {
                 queue.queue_rebuild(drive);
             }
             return;
@@ -669,9 +677,12 @@ impl IndexedSearchHandle {
             return;
         }
         if self.should_cancel_work(generation) {
+            let mut state = self.inner.state.lock().expect("indexed search state lock");
             for (drive, path) in paths.iter().filter_map(|path| normalize_path(path)) {
-                if queue.queue_path(drive.clone(), path) {
-                    self.transition_drive_state(&drive, IndexedDriveState::Queued, None);
+                if state.includes_drive(&state::normalize_drive_key(&drive))
+                    && queue.queue_path(drive.clone(), path)
+                {
+                    state.transition_drive_state(&drive, IndexedDriveState::Queued, None);
                 }
             }
             return;
@@ -693,8 +704,11 @@ impl IndexedSearchHandle {
         {
             let catalog = self.catalog().expect("queued work has a catalog");
             let mut changed = false;
-            for WatchedPath { path, size_only } in paths {
+            // A scope change can interrupt a mixed-drive batch. Keep pending
+            // notifications for drives that remain included.
+            for (index, WatchedPath { path, size_only }) in paths.iter().enumerate() {
                 if self.should_cancel_work(generation) {
+                    self.requeue_watched_paths(&paths[index..]);
                     break;
                 }
                 let mount = {
@@ -710,10 +724,10 @@ impl IndexedSearchHandle {
                     continue;
                 };
                 let cancelled = || self.should_cancel_work(generation);
-                let result = if size_only {
-                    super::watched_paths::refresh_file_size(catalog, &mount, &path, &cancelled)
+                let result = if *size_only {
+                    super::watched_paths::refresh_file_size(catalog, &mount, path, &cancelled)
                 } else {
-                    super::watched_paths::refresh(catalog, &mount, &path, &cancelled)
+                    super::watched_paths::refresh(catalog, &mount, path, &cancelled)
                 };
                 match result {
                     Ok(committed) => changed |= committed,
@@ -721,9 +735,34 @@ impl IndexedSearchHandle {
                         eprintln!("[indexed-search] Folder notification update failed: {error}")
                     }
                 }
+                if self.should_cancel_work(generation) {
+                    // Reprocessing the interrupted notification is harmless
+                    // if it committed just before the scope change.
+                    self.requeue_watched_paths(&paths[index..]);
+                    break;
+                }
             }
             if changed {
                 self.bump_catalog_revision();
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    fn requeue_watched_paths(&self, paths: &[WatchedPath]) {
+        let mut queue = self
+            .inner
+            .work_queue
+            .lock()
+            .expect("indexed search work queue");
+        if self.is_shutting_down() {
+            return;
+        }
+        let state = self.inner.state.lock().expect("indexed search state lock");
+        for WatchedPath { path, size_only } in paths {
+            let drive = &path[..3];
+            if state.includes_drive(&state::normalize_drive_key(drive)) {
+                queue.queue_watched_path(drive, path.clone(), *size_only);
             }
         }
     }
@@ -761,6 +800,17 @@ impl IndexedSearchHandle {
                 }
                 Ok((false, _)) => {}
                 Err(error) => eprintln!("[indexed-search] Visited folder update failed: {error}"),
+            }
+            if self.should_cancel_work(generation) && !self.is_shutting_down() {
+                let mut queue = self
+                    .inner
+                    .work_queue
+                    .lock()
+                    .expect("indexed search work queue");
+                let state = self.inner.state.lock().expect("indexed search state lock");
+                if state.includes_drive(&mount.key()) {
+                    queue.queue_visited_folder(drive, folder.to_owned());
+                }
             }
         }
     }

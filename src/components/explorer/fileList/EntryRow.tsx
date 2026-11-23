@@ -21,6 +21,8 @@ type EntryRowProps = {
   fileKind: FileKind;
   sizeLabel: string | null;
   modifiedLabel: string | null;
+  showSize: boolean;
+  showModified: boolean;
   nameEllipsis: GridNameEllipsis;
   hideExtension: boolean;
   selected: boolean;
@@ -50,6 +52,8 @@ export const EntryRow = memo(({
   fileKind,
   sizeLabel,
   modifiedLabel,
+  showSize,
+  showModified,
   nameEllipsis,
   hideExtension,
   selected,
@@ -148,8 +152,8 @@ export const EntryRow = memo(({
   };
   const metadataLabels = (
     <>
-      <MetadataLabel className="size" value={sizeLabel} placeholder="..." />
-      <MetadataLabel className="modified" value={modifiedLabel} placeholder="..." />
+      {showSize && <MetadataLabel className="size" value={sizeLabel} placeholder="..." />}
+      {showModified && <MetadataLabel className="modified" value={modifiedLabel} placeholder="..." />}
     </>
   );
   if (isRenaming) {

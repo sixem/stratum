@@ -49,6 +49,7 @@ export type ContextMenuItem =
       label: string;
       onSelect: () => void;
       active?: boolean;
+      checked?: boolean;
       hint?: string;
       tooltip?: string;
       disabled?: boolean;

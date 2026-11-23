@@ -6,6 +6,8 @@ import { useSettingsStore } from "@/modules";
 
 import { SettingsItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
+import { NAVIGATION_SETTINGS_ITEMS, SettingsNavigationDefaults } from "./SettingsNavigationDefaults";
+import { DIAGNOSTICS_SETTINGS_ITEM, SettingsDiagnostics } from "./SettingsDiagnostics";
 
 export const GENERAL_SETTINGS_ITEMS = {
   defaultView: {
@@ -13,6 +15,7 @@ export const GENERAL_SETTINGS_ITEMS = {
     description: "Used for new tabs and new sessions.",
     keywords: "list thumbnails grid",
   },
+  ...NAVIGATION_SETTINGS_ITEMS,
   smoothScrolling: {
     label: "Smooth scrolling",
     description: "Keep the original smooth wheel scroll instead of snapping by row.",
@@ -42,13 +45,15 @@ export const GENERAL_SETTINGS_ITEMS = {
     description: "Choose which changed workspaces to save before exiting.",
     keywords: "close quit exit draft",
   },
+  diagnostics: DIAGNOSTICS_SETTINGS_ITEM,
 } satisfies Record<string, SettingsItemText>;
 
 type SettingsGeneralSectionProps = {
   sectionId: string;
+  open: boolean;
 };
 
-export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProps) => {
+export const SettingsGeneralSection = ({ sectionId, open }: SettingsGeneralSectionProps) => {
   const keepFilterId = useId();
   const keepFilterDescriptionId = useId();
   const workspaceWarningId = useId();
@@ -99,6 +104,7 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
           </PressButton>
         </div>
       </SettingsItem>
+      <SettingsNavigationDefaults />
       <SettingsItem item={GENERAL_SETTINGS_ITEMS.smoothScrolling}>
         <label className="settings-toggle">
           <input
@@ -181,6 +187,7 @@ export const SettingsGeneralSection = ({ sectionId }: SettingsGeneralSectionProp
           <span aria-hidden="true" />
         </label>
       </SettingsItem>
+      <SettingsDiagnostics open={open} />
     </section>
   );
 };

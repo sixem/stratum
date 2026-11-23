@@ -171,6 +171,7 @@ const QuickPreviewOverlayContent = ({
         src={preview.src}
         label={preview.label}
         isVideo={preview.isVideo}
+        videoAutoplay={preview.videoAutoplay}
         isReady={preview.isReady}
         dragging={dragging}
         transforming={transforming}

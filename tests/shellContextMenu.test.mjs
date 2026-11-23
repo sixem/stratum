@@ -35,7 +35,10 @@ test("right-click preserves a multi-selection only when the clicked item is part
 });
 
 test("keyboard uses the current selection after arrow navigation, even if focus stays on another row", (t) => {
-  const oldRow = { dataset: { path: "old" }, closest() { return this; } };
+  const oldRow = {
+    dataset: { path: "old" },
+    closest(selector) { return selector === '[data-selectable="true"]' ? this : null; },
+  };
   globalThis.document = { activeElement: oldRow };
   globalThis.CSS = { escape: (path) => path };
   t.after(() => { delete globalThis.document; delete globalThis.CSS; });
@@ -55,6 +58,20 @@ test("keyboard uses the current selection after arrow navigation, even if focus 
     target: { backgroundPath: "folder" }, point: { x: 108, y: 108 },
   });
   assert.equal(getKeyboardMenuRequest(main, "", [], null), null);
+});
+
+test("a focused list header opens the folder menu with column controls", (t) => {
+  const header = {};
+  const active = {
+    closest: (selector) => selector === "[data-list-header]" ? header : null,
+    getBoundingClientRect: () => ({ left: 52, bottom: 110 }),
+  };
+  globalThis.document = { activeElement: active };
+  t.after(() => { delete globalThis.document; });
+  const main = { contains: (element) => element === active || element === header };
+  assert.deepEqual(getKeyboardMenuRequest(main, "folder", ["selected"], null), {
+    target: { backgroundPath: "folder" }, listHeader: true, point: { x: 52, y: 110 },
+  });
 });
 
 test("a focused sidebar place keeps its own menu and name when file rows are selected", (t) => {

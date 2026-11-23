@@ -86,7 +86,14 @@ impl IndexedSearchHandle {
             }
             state.volumes.mounted.get(&key).cloned()
         };
-        mount.is_some_and(|mount| mount.verify().is_ok())
+        mount.is_some_and(|mount| {
+            if mount.verify().is_err() || self.is_shutting_down() || !self.is_enabled() {
+                return false;
+            }
+            // Physical verification can race a settings change or unmount.
+            let state = self.inner.state.lock().expect("indexed search state lock");
+            state.volumes.verified.contains(&key) && state.volumes.mounted.get(&key) == Some(&mount)
+        })
     }
 
     fn query_catalog(

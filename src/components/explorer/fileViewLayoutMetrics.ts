@@ -2,6 +2,7 @@
 // rendered styles stay aligned.
 export type FileViewLayoutMetrics = {
   listRowHeight: number;
+  listCompactRowHeight: number;
   listRowGap: number;
   gridCardBorder: number;
   gridCardPadding: number;
@@ -15,6 +16,7 @@ export type FileViewLayoutMetrics = {
 
 const DEFAULT_FILE_VIEW_LAYOUT_METRICS: FileViewLayoutMetrics = {
   listRowHeight: 30,
+  listCompactRowHeight: 24,
   listRowGap: 1,
   gridCardBorder: 2,
   gridCardPadding: 6,
@@ -51,6 +53,11 @@ export const getFileViewLayoutMetrics = (): FileViewLayoutMetrics => {
       styles,
       "--file-view-list-row-height",
       DEFAULT_FILE_VIEW_LAYOUT_METRICS.listRowHeight,
+    ),
+    listCompactRowHeight: readRootNumberVar(
+      styles,
+      "--file-view-list-row-height-compact",
+      DEFAULT_FILE_VIEW_LAYOUT_METRICS.listCompactRowHeight,
     ),
     listRowGap: readRootNumberVar(
       styles,

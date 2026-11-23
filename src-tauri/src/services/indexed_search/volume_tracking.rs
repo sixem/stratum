@@ -5,7 +5,7 @@ use crate::domain::indexed_search::IndexedDriveState;
 
 use super::{
     catalog::DriveCatalogSnapshot,
-    state::{normalize_drive_key, IndexedSearchState},
+    state::{mark_drive_excluded, normalize_drive_key, IndexedSearchState},
 };
 
 #[cfg(target_os = "windows")]
@@ -98,8 +98,14 @@ impl IndexedSearchState {
         let mut statuses = BTreeMap::new();
         for drive in drives {
             let key = normalize_drive_key(&drive.status.drive_path);
-            let mount = VolumeMount::from_discovery(&drive);
+            let excluded = !self.includes_drive(&key);
+            let mount = (!excluded)
+                .then(|| VolumeMount::from_discovery(&drive))
+                .flatten();
             let mut status = drive.status;
+            if excluded && status.indexable {
+                mark_drive_excluded(&mut status);
+            }
             if let Some(mount) = mount {
                 if self.volumes.mounted.get(&key) == Some(&mount) {
                     if let Some(existing) = self.drive_statuses.remove(&key) {

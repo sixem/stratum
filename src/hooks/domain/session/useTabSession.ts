@@ -5,6 +5,7 @@ import type { ListDirOptions, SortState, Tab, ViewMode } from "@/types";
 import { DEFAULT_TAB_STATE, makeDebug, folderPathKey, getNextTrailPath } from "@/lib";
 import { useSessionStore } from "@/modules";
 import { createSessionTab, useBottomSessionStore } from "@/modules/sessionStore";
+import { useSettingsStore } from "@/modules/settings.store";
 import { beginLinkedNavigation, closeLinkedTab, registerPaneLinkReceiver } from "@/modules/paneLinkNavigation";
 import type { LinkedNavigation } from "@/modules/paneLinkNavigation";
 import type { LoadDirOptions } from "@/hooks/domain/filesystem/fileManager.types";
@@ -26,6 +27,7 @@ type TabSessionOptions = {
 
 const log = makeDebug("tabs");
 const CLOSED_TAB_LIMIT = 20;
+const NO_RECENT_LOCATIONS: string[] = [];
 
 export const useTabSession = ({
   useStore = useSessionStore,
@@ -39,6 +41,8 @@ export const useTabSession = ({
   recentJumpsLimit,
 }: TabSessionOptions) => {
   const pane = useStore === useBottomSessionStore ? "bottom" : "main";
+  const rememberRecentLocations = useSettingsStore((state) => state.rememberRecentLocations);
+  const newTabSort = useSettingsStore((state) => state.newTabSort);
   const {
     tabs,
     activeTabId,
@@ -69,10 +73,10 @@ export const useTabSession = ({
   const defaultTabState = useMemo(
     () => ({
       viewMode: defaultViewMode,
-      sort: DEFAULT_TAB_STATE.sort,
+      sort: newTabSort ?? DEFAULT_TAB_STATE.sort,
       search: DEFAULT_TAB_STATE.search,
     }),
-    [defaultViewMode],
+    [defaultViewMode, newTabSort],
   );
   const viewMode = activeTab?.viewMode ?? defaultTabState.viewMode;
   const nextViewMode = newTabViewMode ?? viewMode;
@@ -84,8 +88,11 @@ export const useTabSession = ({
     : 1;
 
   const visibleRecentJumps = useMemo(
-    () => recentJumps.length <= safeRecentLimit ? recentJumps : recentJumps.slice(0, safeRecentLimit),
-    [recentJumps, safeRecentLimit],
+    () => {
+      if (!rememberRecentLocations) return NO_RECENT_LOCATIONS;
+      return recentJumps.length <= safeRecentLimit ? recentJumps : recentJumps.slice(0, safeRecentLimit);
+    },
+    [recentJumps, rememberRecentLocations, safeRecentLimit],
   );
 
   const pathForHistory = loadingPath ?? (activeTab?.path || currentPath);

@@ -12,6 +12,7 @@ type PreviewStageProps = {
   src: string;
   label: string;
   isVideo: boolean;
+  videoAutoplay: boolean;
   isReady: boolean;
   dragging: boolean;
   transforming: boolean;
@@ -37,6 +38,7 @@ export const PreviewStage = ({
   src,
   label,
   isVideo,
+  videoAutoplay,
   isReady,
   dragging,
   transforming,
@@ -82,7 +84,7 @@ export const PreviewStage = ({
             poster={videoPoster}
             playsInline
             preload="metadata"
-            autoPlay
+            autoPlay={videoAutoplay}
             loop
             draggable={false}
             onLoadedMetadata={onVideoMetadata}

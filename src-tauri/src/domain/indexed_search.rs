@@ -36,6 +36,7 @@ pub enum IndexedDriveState {
     Scanning,
     Ready,
     Saved,
+    Excluded,
     Unsupported,
     Unavailable,
     Stale,

@@ -3,9 +3,16 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { PerfProfiler } from "@/components";
 import { initDebug } from "@/lib";
+import { applyStartupSession } from "@/modules/startupSession";
 
 // Initialize debug logging before the app renders.
 initDebug();
+try {
+  applyStartupSession();
+} catch (error) {
+  // If persisting the previous workspace fails, let the saved session open.
+  console.warn("Couldn't apply the startup preference", error);
+}
 
 if (import.meta.hot) {
   const HMR_RELOAD_MATCHERS = [

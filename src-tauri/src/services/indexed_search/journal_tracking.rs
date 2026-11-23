@@ -476,4 +476,68 @@ mod tests {
         assert!(state.drive_statuses[&key].state == IndexedDriveState::RescanRequired);
         assert!(state.volumes.verified.contains(&key));
     }
+
+    #[test]
+    fn excluded_drive_stays_dormant_and_resumes_its_saved_checkpoint() {
+        let mut state = IndexedSearchState::new();
+        let drive = r"C:\";
+        let included = r"E:\";
+        let checkpoint = JournalCheckpoint {
+            journal_id: 7,
+            next_usn: 11,
+        };
+        let mut snapshot = saved_snapshot(drive, "saved");
+        snapshot.journal_checkpoint = Some(checkpoint);
+        state
+            .volumes
+            .load_snapshots(vec![snapshot, saved_snapshot(included, "other")]);
+        let discover = || {
+            vec![
+                discovered_drive(drive, "saved"),
+                discovered_drive(included, "other"),
+            ]
+        };
+        state.update_mounts(discover());
+        let mut queue = WorkQueue::default();
+        let checks = prepare_volume_checks(&state, &mut queue);
+        assert!(expose_saved_volumes(&mut state, &mut queue, &checks));
+        assert_eq!(state.volumes.verified_mounts().len(), 2);
+        for root in [drive, included] {
+            queue.queue_path(root.to_string(), format!("{root}entry.txt"));
+            queue.queue_journal_continuation(root.to_string());
+        }
+
+        state.set_excluded_drives(super::super::state::normalize_excluded_drives(vec![
+            r" c:/ ".into(),
+            r"X:\Nested".into(),
+        ]));
+        queue.discard_out_of_scope(|root| {
+            state.includes_drive(&super::super::state::normalize_drive_key(root))
+        });
+        assert_eq!(
+            queue.next(),
+            Some(Work::Reconcile(vec![format!("{included}entry.txt")]))
+        );
+        assert_eq!(queue.next(), Some(Work::ContinueJournal(included.into())));
+        assert!(queue.is_empty());
+        assert_eq!(state.volumes.verified_mounts().len(), 1);
+
+        for _ in 0..2 {
+            state.update_mounts(discover());
+            let checks = prepare_volume_checks(&state, &mut queue);
+            assert!(checks.iter().all(|(mount, _)| mount.drive_path == included));
+            assert!(queue.is_empty());
+            let excluded = state.drive_statuses_snapshot(true).remove(0);
+            assert!(excluded.state == IndexedDriveState::Excluded);
+            assert!(!excluded.searchable);
+        }
+
+        state.set_excluded_drives(Default::default());
+        state.update_mounts(discover());
+        let restored = state.volumes.active_mount(drive).unwrap();
+        let checks = prepare_volume_checks(&state, &mut queue);
+        assert!(checks.contains(&(restored, Some(checkpoint))));
+        assert!(expose_saved_volumes(&mut state, &mut queue, &checks));
+        assert_eq!(state.volumes.verified_mounts().len(), 2);
+    }
 }

@@ -38,12 +38,30 @@ const coerceFormat = (value: unknown): ThumbnailFormat => {
   return value === "jpeg" ? "jpeg" : "webp";
 };
 
+const coerceExcludedIndexedDrives = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  const roots = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const root = item.trim().replace(/[\\/]+$/, "");
+    if (/^[a-z]:$/i.test(root)) roots.add(root.toUpperCase() + "\\");
+  }
+  return [...roots].sort();
+};
+
 const coerceThumbnailFit = (value: unknown): ThumbnailFit => {
   return value === "contain" ? "contain" : "cover";
 };
 
 const coerceViewMode = (value: unknown): ViewMode => {
   return value === "list" ? "list" : "thumbs";
+};
+
+const coerceNewTabSort = (value: unknown): Settings["newTabSort"] => {
+  if (!value || typeof value !== "object") return null;
+  const { key, dir } = value as Partial<NonNullable<Settings["newTabSort"]>>;
+  if (key !== "name" && key !== "modified" && key !== "size") return null;
+  return dir === "asc" || dir === "desc" ? { key, dir } : null;
 };
 
 const coerceAccentTheme = (value: unknown): AccentTheme => {
@@ -139,6 +157,13 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
     sidebarSectionOrder: normalizeSidebarSectionOrder(value?.sidebarSectionOrder),
     sidebarHiddenSections: normalizeSidebarHiddenSections(value?.sidebarHiddenSections),
     defaultViewMode: coerceViewMode(value?.defaultViewMode),
+    startupMode: value?.startupMode === "workspace" || value?.startupMode === "start"
+      ? value.startupMode : DEFAULT_SETTINGS.startupMode,
+    startupWorkspaceId: typeof value?.startupWorkspaceId === "string" && value.startupWorkspaceId.length
+      ? value.startupWorkspaceId : DEFAULT_SETTINGS.startupWorkspaceId,
+    newTabSort: coerceNewTabSort(value?.newTabSort),
+    rememberRecentLocations: typeof value?.rememberRecentLocations === "boolean"
+      ? value.rememberRecentLocations : DEFAULT_SETTINGS.rememberRecentLocations,
     showTabNumbers:
       typeof value?.showTabNumbers === "boolean"
         ? value.showTabNumbers
@@ -236,6 +261,9 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.gridNameHideExtension === "boolean"
         ? value.gridNameHideExtension
         : DEFAULT_SETTINGS.gridNameHideExtension,
+    listDensity: value?.listDensity === "compact" ? "compact" : DEFAULT_SETTINGS.listDensity,
+    listShowSize: value?.listShowSize !== false,
+    listShowModified: value?.listShowModified !== false,
     menuOpenPwsh:
       typeof value?.menuOpenPwsh === "boolean"
         ? value.menuOpenPwsh
@@ -256,6 +284,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.indexedSearchEnabled === "boolean"
         ? value.indexedSearchEnabled
         : DEFAULT_SETTINGS.indexedSearchEnabled,
+    excludedIndexedDrives: coerceExcludedIndexedDrives(value?.excludedIndexedDrives),
     thumbnailsEnabled:
       typeof value?.thumbnailsEnabled === "boolean"
         ? value.thumbnailsEnabled
@@ -291,6 +320,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.thumbnailAppIcons === "boolean"
         ? value.thumbnailAppIcons
         : DEFAULT_SETTINGS.thumbnailAppIcons,
+    videoAutoplay: typeof value?.videoAutoplay === "boolean" ? value.videoAutoplay : DEFAULT_SETTINGS.videoAutoplay,
     ffmpegPath:
       typeof value?.ffmpegPath === "string" ? value.ffmpegPath : DEFAULT_SETTINGS.ffmpegPath,
   };

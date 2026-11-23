@@ -24,6 +24,7 @@ import type {
 import { useEntryMenuItems } from "../menus/useEntryMenuItems";
 import { appendWindowsMenuItem } from "../menus/appendWindowsMenuItem";
 import { useLayoutMenuItems } from "../menus/useLayoutMenuItems";
+import { useListColumnMenu } from "../menus/useListColumnMenu";
 import { resolveContextTargets } from "../menus/entryMenu/shared";
 import type { CreateFolderWithSelection } from "../menus/entryMenu/showFolderWithSelectionPrompt";
 import { getKeyboardMenuRequest } from "../menus/keyboardContextMenu";
@@ -180,7 +181,7 @@ export const useAppContextMenus = ({
     const paths = getSelectionTargets(selected, viewParentPath);
     const request = getKeyboardMenuRequest(main, currentPath, paths, viewParentPath, Boolean(defaultTabGridSize));
     if (!request) return false;
-    const { target, point, place } = request;
+    const { target, point, place, listHeader } = request;
     if (native) {
       if (!target) return false;
       const entry = !place && "paths" in target ? entryByPath.get(target.paths[0]) : undefined;
@@ -194,7 +195,7 @@ export const useAppContextMenus = ({
       if (!selected.has(entry.path)) onSelectionChange([entry.path], entry.path);
       openContextMenuAt({ kind: "entry", entry, ...point });
     } else {
-      openContextMenuAt({ kind: "sort", ...point });
+      openContextMenuAt({ kind: "sort", listHeader, ...point });
     }
     return true;
   }, [contextMenu, currentPath, defaultTabGridSize, entryByPath, galleryAction, mainRef, menuTarget, onSelectionChange,
@@ -349,13 +350,15 @@ export const useAppContextMenus = ({
       : contextMenu?.kind === "place-target"
         ? placeTargetMenuItems
         : layoutMenuItems;
+  const columnMenu = useListColumnMenu(contextMenu?.kind === "sort" && contextMenu.listHeader === true);
   const contextMenuItems = useMemo<ContextMenuItem[]>(() => {
-    if (!contextMenu || !menuTarget) return baseItems;
+    const items = columnMenu ? [columnMenu, ...baseItems] : baseItems;
+    if (!contextMenu || !menuTarget) return items;
     const entry = contextMenu.kind === "entry" ? contextMenu.entry : undefined;
-    return appendWindowsMenuItem(baseItems, () => {
+    return appendWindowsMenuItem(items, () => {
       openWindowsMenu(menuTarget, contextMenu, false, galleryAction(entry, menuTarget));
     });
-  }, [baseItems, contextMenu, galleryAction, menuTarget, openWindowsMenu]);
+  }, [baseItems, columnMenu, contextMenu, galleryAction, menuTarget, openWindowsMenu]);
   const contextMenuOpen = Boolean(contextMenu && contextMenuItems.length > 0);
 
   return {

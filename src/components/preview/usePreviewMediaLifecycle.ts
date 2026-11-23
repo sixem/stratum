@@ -18,6 +18,7 @@ type UsePreviewMediaLifecycleOptions = {
   resetViewport: () => void;
   fitMediaToViewport: (width: number, height: number) => void;
   videoVolume: number;
+  videoAutoplay: boolean;
   canUseExternalActions: boolean;
 };
 
@@ -31,6 +32,7 @@ export const usePreviewMediaLifecycle = ({
   resetViewport,
   fitMediaToViewport,
   videoVolume,
+  videoAutoplay,
   canUseExternalActions,
 }: UsePreviewMediaLifecycleOptions) => {
   const previewSessionRef = useRef("");
@@ -96,11 +98,11 @@ export const usePreviewMediaLifecycle = ({
   }, [isVideo, open, src, videoRef, videoVolume]);
 
   useEffect(() => {
-    if (!open || !isVideo) return;
+    if (!open || !isVideo || !src || !videoAutoplay) return;
     const video = videoRef.current;
     if (!video || !video.paused) return;
     void video.play().catch(() => {});
-  }, [isVideo, open, src, videoRef]);
+  }, [isVideo, open, src, videoAutoplay, videoRef]);
 
   const handleVideoPlay = useCallback(() => {
     setVideoPausedIfChanged(false);

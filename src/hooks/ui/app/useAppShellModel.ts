@@ -93,7 +93,7 @@ export const useAppShellModel = () => {
     let canceled = false;
 
     const syncIndexedSearchState = async () => {
-      await setIndexedSearchEnabled(settings.indexedSearchEnabled);
+      await setIndexedSearchEnabled(settings.indexedSearchEnabled, settings.excludedIndexedDrives);
       await setIndexingLaunchPreferences({
         indexedSearchEnabled: settings.indexedSearchEnabled,
       });
@@ -109,6 +109,7 @@ export const useAppShellModel = () => {
   }, [
     fileManager.refreshDriveInfo,
     launchPreferencesReady,
+    settings.excludedIndexedDrives,
     settings.indexedSearchEnabled,
     tauriEnv,
   ]);

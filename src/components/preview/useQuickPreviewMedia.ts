@@ -3,6 +3,7 @@
 // derived-state builder.
 import { useMemo } from "react";
 import { getFileKind, getPathName } from "@/lib";
+import { useSettingsStore } from "@/modules";
 import type { EntryMeta } from "@/types";
 import type { RefObject } from "react";
 import { buildQuickPreviewDerivedState } from "./quickPreviewDerivedState";
@@ -33,6 +34,7 @@ export const useQuickPreviewMedia = ({
   resetViewport,
   fitMediaToViewport,
 }: UseQuickPreviewMediaOptions) => {
+  const videoAutoplay = useSettingsStore((state) => state.videoAutoplay);
   const previewSessionKey = open ? `open:${path ?? ""}` : "closed";
   const { src, failed: sourceFailed } = usePreviewSource(open ? path : null);
   const isVideo = useMemo(() => {
@@ -52,6 +54,7 @@ export const useQuickPreviewMedia = ({
     resetViewport,
     fitMediaToViewport,
     videoVolume: volume.videoVolume,
+    videoAutoplay,
     canUseExternalActions,
   });
   const loadState = sourceFailed ? "error" : src ? lifecycle.loadState : "loading";
@@ -91,6 +94,7 @@ export const useQuickPreviewMedia = ({
   return {
     ...derivedState,
     loadState,
+    videoAutoplay,
     videoPaused: lifecycle.videoPaused,
     videoVolume: volume.videoVolume,
     volumePickerOpen: volume.volumePickerOpen,

@@ -12,7 +12,7 @@ type ContextMenuPoint = { x: number; y: number };
 type ContextMenuEvent = ReactMouseEvent | ReactPointerEvent;
 
 type ContextMenuState =
-  | ({ kind: "sort" } & ContextMenuPoint)
+  | ({ kind: "sort"; listHeader?: boolean } & ContextMenuPoint)
   | ({ kind: "entry"; entry: EntryContextTarget } & ContextMenuPoint)
   | ({ kind: "place-target"; target: PlaceContextTarget } & ContextMenuPoint)
   | null;
@@ -28,7 +28,8 @@ function usePaneMenuState(pane: MenuPane, active: OwnedMenu | null, setActive: D
 
   const openSortMenu = useCallback((event: ContextMenuEvent) => {
     event.preventDefault();
-    openContextMenuAt({ kind: "sort", x: event.clientX, y: event.clientY });
+    const listHeader = event.target instanceof Element && Boolean(event.target.closest("[data-list-header]"));
+    openContextMenuAt({ kind: "sort", listHeader, x: event.clientX, y: event.clientY });
   }, [openContextMenuAt]);
 
   const openEntryMenu = useCallback((event: ContextMenuEvent, entry: EntryContextTarget) => {

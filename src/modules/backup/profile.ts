@@ -164,6 +164,10 @@ export const applyStratumBackup = (backup: StratumBackup, options: BackupImportO
     ...session,
     id: session.id ? importedIds.get(session.id) ?? null : null,
   });
+  // Imported workspaces receive new IDs unless they replace a named snapshot.
+  if (settings?.startupWorkspaceId) {
+    settings.startupWorkspaceId = importedIds.get(settings.startupWorkspaceId) ?? null;
+  }
   const restored = profile && options.openSession ? resolveSession(profile.current) : null;
   const prepared = restored ? prepareWorkspaceRestore(restored.layout, getDefaultTabGridSize(settings ?? currentSettings)) : null;
   // Keep the live layout available if an explicit replacement takes its saved name.

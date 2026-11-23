@@ -17,6 +17,7 @@ export type IndexedDriveState =
   | "scanning"
   | "ready"
   | "saved"
+  | "excluded"
   | "unsupported"
   | "unavailable"
   | "stale"

@@ -43,8 +43,16 @@ pub async fn get_indexed_search_status(
 pub fn set_indexed_search_enabled(
     indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
     enabled: bool,
+    excluded_drive_roots: Vec<String>,
 ) {
-    indexed_search.set_enabled(enabled);
+    indexed_search.set_configuration(enabled, excluded_drive_roots);
+}
+
+#[tauri::command]
+pub async fn list_indexable_drive_roots() -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(indexed_search::indexable_drive_roots)
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]

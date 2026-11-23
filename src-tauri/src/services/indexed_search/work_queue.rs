@@ -52,6 +52,20 @@ pub(super) struct WatchedPath {
 }
 
 impl WorkQueue {
+    pub(super) fn discard_out_of_scope(&mut self, includes: impl Fn(&str) -> bool) {
+        self.rebuilds.retain(|drive| includes(drive));
+        self.paths.retain(|_, path| includes(&path[..3]));
+        self.watched_paths.retain(|hint| includes(&hint.path[..3]));
+        self.visited_folders.retain(|folder| includes(&folder[..3]));
+        self.journal_hints.retain(|drive, _| includes(drive));
+        self.last_journal_check.retain(|drive, _| includes(drive));
+        self.count_refreshes.retain(|drive| includes(drive));
+        self.background.retain(|work| match work {
+            Work::ContinueJournal(drive) => includes(drive),
+            _ => true,
+        });
+    }
+
     pub(super) fn queue_volume_check(&mut self) {
         self.volume_check_pending = true;
     }

@@ -7,9 +7,11 @@ import { CACHE_SETTINGS_ITEMS, SettingsCacheSection } from "./SettingsCacheSecti
 import { FLAIR_SETTINGS_ITEMS, SettingsFlairSection } from "./SettingsFlairSection";
 import { GENERAL_SETTINGS_ITEMS, SettingsGeneralSection } from "./SettingsGeneralSection";
 import { GRID_SETTINGS_ITEMS, SettingsGridSection } from "./SettingsGridSection";
+import { LIST_SETTINGS_ITEMS, SettingsListSection } from "./SettingsListSection";
 import { INDEXING_SETTINGS_ITEMS, SettingsIndexingSection } from "./SettingsIndexingSection";
 import type { SettingsItemText } from "./SettingsItem";
 import { KEYBINDS_SETTINGS_ITEMS, SettingsKeybindsSection } from "./SettingsKeybindsSection";
+import { MEDIA_SETTINGS_ITEMS, SettingsMediaSection } from "./SettingsMediaSection";
 import { MENUS_SETTINGS_ITEMS, SettingsMenusSection } from "./SettingsMenusSection";
 import { THUMBS_SETTINGS_ITEMS, SettingsThumbsSection } from "./SettingsThumbsSection";
 
@@ -18,9 +20,11 @@ export type SettingsSectionId =
   | "settings-indexing"
   | "settings-bars"
   | "settings-grid"
+  | "settings-list"
   | "settings-menus"
   | "settings-flair"
   | "settings-thumbnails"
+  | "settings-media"
   | "settings-keybinds"
   | "settings-cache"
   | "settings-backup";
@@ -44,7 +48,7 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
     id: "settings-general",
     label: "General",
     items: Object.values(GENERAL_SETTINGS_ITEMS),
-    render: () => <SettingsGeneralSection sectionId="settings-general" />,
+    render: ({ open }) => <SettingsGeneralSection sectionId="settings-general" open={open} />,
   },
   {
     id: "settings-indexing",
@@ -67,6 +71,12 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
     render: () => <SettingsGridSection sectionId="settings-grid" />,
   },
   {
+    id: "settings-list",
+    label: "List",
+    items: Object.values(LIST_SETTINGS_ITEMS),
+    render: () => <SettingsListSection sectionId="settings-list" />,
+  },
+  {
     id: "settings-menus",
     label: "Menus",
     items: Object.values(MENUS_SETTINGS_ITEMS),
@@ -83,6 +93,12 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
     label: "Thumbnails",
     items: Object.values(THUMBS_SETTINGS_ITEMS),
     render: () => <SettingsThumbsSection sectionId="settings-thumbnails" />,
+  },
+  {
+    id: "settings-media",
+    label: "Media",
+    items: Object.values(MEDIA_SETTINGS_ITEMS),
+    render: () => <SettingsMediaSection sectionId="settings-media" />,
   },
   {
     id: "settings-keybinds",

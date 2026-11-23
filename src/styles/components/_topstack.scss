@@ -63,6 +63,32 @@
       0.02em,
       var(--muted)
     );
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .work-pill-fill {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: rgba(var(--accent-rgb), 0.14);
+    transform-origin: left center;
+    transition: transform 140ms linear, opacity var(--work-pill-fade-duration) ease-out;
+    animation: work-pill-fill-in 180ms ease-out;
+  }
+
+  .work-pill-fill[data-phase="fade"] {
+    opacity: 0;
+    animation: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .work-pill-fill {
+      transition: none;
+      animation: none;
+    }
   }
 
   .transfer-button:hover {
@@ -309,6 +335,10 @@
     padding-top: 8px;
     line-height: 1.35;
   }
+}
+
+@keyframes work-pill-fill-in {
+  from { opacity: 0; }
 }
 
 .view-btn {

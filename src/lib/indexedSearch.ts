@@ -43,6 +43,8 @@ export const formatIndexedDriveState = (state: IndexedDriveState) => {
       return "Ready";
     case "saved":
       return "Saved index";
+    case "excluded":
+      return "Excluded";
     case "unsupported":
       return "Unsupported";
     case "unavailable":

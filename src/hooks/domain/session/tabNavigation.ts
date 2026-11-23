@@ -1,6 +1,7 @@
 // Pending navigation helpers for tab session flows.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { folderPathKey } from "@/lib";
+import { useSettingsStore } from "@/modules/settings.store";
 
 type PendingJumpSource = "navigate" | "switch";
 
@@ -20,11 +21,13 @@ export const usePendingJump = ({
   const [pendingJump, setPendingJump] = useState<string | null>(null);
   const pendingSourceRef = useRef<PendingJumpSource | null>(null);
   const pendingTabRef = useRef<string | null>(null);
+  const recordRecentRef = useRef(false);
 
   const queuePendingJump = useCallback(
     (path: string, source: PendingJumpSource, tabId?: string | null) => {
       pendingSourceRef.current = source;
       pendingTabRef.current = source === "navigate" ? tabId ?? activeTabId : null;
+      recordRecentRef.current = useSettingsStore.getState().rememberRecentLocations;
       setPendingJump(path);
     },
     [activeTabId],
@@ -48,10 +51,12 @@ export const usePendingJump = ({
     const pendingKey = folderPathKey(pendingJump);
     const currentKey = folderPathKey(currentPath);
     if (!pendingKey || pendingKey !== currentKey) return;
-    setRecentJumps((prev) => {
-      const next = [pendingJump, ...prev.filter((item) => folderPathKey(item) !== pendingKey)];
-      return next.slice(0, recentLimit);
-    });
+    if (recordRecentRef.current && useSettingsStore.getState().rememberRecentLocations) {
+      setRecentJumps((prev) => {
+        const next = [pendingJump, ...prev.filter((item) => folderPathKey(item) !== pendingKey)];
+        return next.slice(0, recentLimit);
+      });
+    }
     setPendingJump(null);
     pendingSourceRef.current = null;
     pendingTabRef.current = null;

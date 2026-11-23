@@ -1,6 +1,7 @@
 // Virtualized list view for file entries.
 import { useMemo } from "react";
 import { useEntryPresence, useScrollToIndex } from "@/hooks";
+import { useSettingsStore } from "@/modules";
 import { EmptyState } from "@/components/primitives/EmptyState";
 import { SelectionRect } from "./SelectionRect";
 import { EntryRow, ParentRow } from "./fileList/index";
@@ -28,6 +29,9 @@ const FileList = ({
   creation,
 }: FileListProps) => {
   const isCut = useCutEntries();
+  const density = useSettingsStore((state) => state.listDensity);
+  const showSize = useSettingsStore((state) => state.listShowSize);
+  const showModified = useSettingsStore((state) => state.listShowModified);
   const {
     isDeletePending,
     isTransferPending,
@@ -66,6 +70,7 @@ const FileList = ({
   );
 
   const { listRef, itemHeight, rowHeight, listVars } = useListLayout({
+    density,
     smoothScroll: view.smoothScroll,
     scrollRestoreKey: view.scrollRestoreKey,
     scrollRestoreTop: view.scrollRestoreTop,
@@ -118,6 +123,9 @@ const FileList = ({
   return (
     <div
       className="file-list"
+      data-density={density}
+      data-show-size={showSize}
+      data-show-modified={showModified}
       inert={view.loading}
       {...dragHandlers}
       onPointerDown={(event) => {
@@ -134,7 +142,12 @@ const FileList = ({
       }}
       onContextMenu={(event) => event.preventDefault()}
     >
-      <ListHeader sortState={list.sortState} onSortChange={list.onSortChange} />
+      <ListHeader
+        sortState={list.sortState}
+        onSortChange={list.onSortChange}
+        showSize={showSize}
+        showModified={showModified}
+      />
       <div className="list-shell" data-category-tint={list.categoryTinting ? "true" : "false"}>
         <div className="list-body" ref={listRef} style={listVars}>
           <div
@@ -159,6 +172,8 @@ const FileList = ({
                       index={baseIndex}
                       selected={selection.selectedPaths.has(row.path)}
                       dropTarget={isDropTarget}
+                      showSize={showSize}
+                      showModified={showModified}
                       onSelect={handleRowSelect}
                       onOpen={handleRowOpen}
                       onOpenNewTab={handleRowOpenNewTab}
@@ -179,6 +194,8 @@ const FileList = ({
                     fileKind={rowMeta?.fileKind ?? "generic"}
                     sizeLabel={rowMeta ? rowMeta.sizeLabel : ""}
                     modifiedLabel={rowMeta ? rowMeta.modifiedLabel : ""}
+                    showSize={showSize}
+                    showModified={showModified}
                     nameEllipsis={list.nameEllipsis}
                     hideExtension={list.hideExtension}
                     selected={selection.selectedPaths.has(row.entry.path)}

@@ -14,6 +14,11 @@ export const GRID_GAP_MIN = 2;
 export const GRID_GAP_MAX = 24;
 export const GRID_GAP_DEFAULT = 8;
 
+export const LIST_COLUMN_OPTIONS = [
+  { key: "listShowSize", label: "Size" },
+  { key: "listShowModified", label: "Modified" },
+] as const;
+
 export const SETTINGS_STORAGE_KEY = "stratum.settings";
 export const SETTINGS_STORAGE_VERSION = 19;
 export const PREVIEW_STRIP_OPEN_KEY = "stratum.preview.strip-open";

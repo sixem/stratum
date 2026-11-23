@@ -124,6 +124,7 @@ pub fn run() {
             app::commands::set_indexed_search_enabled,
             app::commands::nudge_indexed_search,
             app::commands::list_indexed_drive_statuses,
+            app::commands::list_indexable_drive_roots,
             app::commands::query_indexed_paths,
             app::commands::query_indexed_path_page,
             app::commands::query_indexed_folder_page,

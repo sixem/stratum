@@ -2,6 +2,7 @@
 import { useCallback, useContext, useEffect, useState } from "react";
 import { shallow } from "zustand/shallow";
 import { getIndexedSearchCatalogPath, openPath } from "@/api";
+import { listIndexableDriveRoots } from "@/api/indexedSearch";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useSettingsStore } from "@/modules";
 
@@ -12,6 +13,11 @@ export const INDEXING_SETTINGS_ITEMS = {
   enable: {
     label: "Enable indexed search",
     description: "Indexes files your Windows account can browse. On supported NTFS drives, the index catches up with changes made while Stratum was closed.",
+  },
+  scope: {
+    label: "Indexed drives",
+    description: "Choose drive letters on this PC. Excluded drives stop updating and disappear from results. Their saved indexes remain available to resume later.",
+    keywords: "scope exclude include disk volume",
   },
   database: {
     label: "Index database",
@@ -29,17 +35,21 @@ export const SettingsIndexingSection = ({
   sectionId,
   open,
 }: SettingsIndexingSectionProps) => {
-  const { indexedSearchEnabled, updateSettings } = useSettingsStore(
+  const { indexedSearchEnabled, excludedIndexedDrives, updateSettings } = useSettingsStore(
     (state) => ({
       indexedSearchEnabled: state.indexedSearchEnabled,
+      excludedIndexedDrives: state.excludedIndexedDrives,
       updateSettings: state.updateSettings,
     }),
     shallow,
   );
   const [catalogPath, setCatalogPath] = useState<string | null>(null);
   const [catalogBusy, setCatalogBusy] = useState(false);
+  const [driveRoots, setDriveRoots] = useState<string[] | null>();
   const matches = useContext(SettingsSearchMatches);
   const showCatalogPath = !matches || matches.has(INDEXING_SETTINGS_ITEMS.database);
+  const showScope = !matches || matches.has(INDEXING_SETTINGS_ITEMS.scope);
+  const roots = [...new Set([...(driveRoots ?? []), ...excludedIndexedDrives])].sort();
 
   useEffect(() => {
     if (!open || !showCatalogPath) return;
@@ -53,6 +63,15 @@ export const SettingsIndexingSection = ({
       canceled = true;
     };
   }, [open, showCatalogPath]);
+
+  useEffect(() => {
+    if (!open || !showScope) return;
+    let canceled = false;
+    void listIndexableDriveRoots().catch(() => null).then((roots) => {
+      if (!canceled) setDriveRoots(roots);
+    });
+    return () => { canceled = true; };
+  }, [open, showScope]);
 
   const handleRevealCatalogDirectory = useCallback(async () => {
     if (!catalogPath || catalogBusy) return;
@@ -82,6 +101,37 @@ export const SettingsIndexingSection = ({
           />
           <span />
         </label>
+      </SettingsItem>
+      <SettingsItem item={INDEXING_SETTINGS_ITEMS.scope} className="is-stacked">
+        {roots.length > 0 && (
+          <div className="settings-pills" role="group" aria-label="Indexed drives">
+            {roots.map((root) => {
+              const included = !excludedIndexedDrives.includes(root);
+              return (
+                <PressButton
+                  key={root}
+                  type="button"
+                  className={included ? "settings-pill is-active" : "settings-pill"}
+                  aria-label={`Index drive ${root.slice(0, 2)}`}
+                  aria-pressed={included}
+                  onClick={() => {
+                    const current = useSettingsStore.getState().excludedIndexedDrives;
+                    updateSettings({
+                      excludedIndexedDrives: current.includes(root)
+                        ? current.filter((item) => item !== root)
+                        : [...current, root].sort(),
+                    });
+                  }}
+                >
+                  {root.slice(0, 2)}
+                </PressButton>
+              );
+            })}
+          </div>
+        )}
+        {driveRoots === undefined && <span className="settings-desc" role="status">Checking drives…</span>}
+        {driveRoots === null && <span className="settings-desc" role="status">Unable to check drives.</span>}
+        {driveRoots?.length === 0 && <span className="settings-desc">No fixed NTFS drives detected.</span>}
       </SettingsItem>
       <SettingsItem
         item={INDEXING_SETTINGS_ITEMS.database}

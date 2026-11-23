@@ -12,6 +12,7 @@ import {
 } from "@/components/transfer/transferStatusView";
 import { PressButton } from "@/components/primitives/PressButton";
 import { ToolbarPopover } from "@/components/primitives/ToolbarPopover";
+import { WorkPillFill } from "./WorkPillFill";
 
 export const TransferStatusButton = () => {
   const jobs = useTransferJobs();
@@ -76,6 +77,7 @@ export const TransferStatusButton = () => {
         onClick={() => setOpen((prev) => !prev)}
         ref={buttonRef}
       >
+        <WorkPillFill jobs={jobs} />
         <span
           className={`transfer-indicator${summary.hasActive ? " is-active" : " is-complete"}`}
           aria-hidden="true"

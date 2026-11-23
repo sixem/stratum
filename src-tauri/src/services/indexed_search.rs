@@ -53,4 +53,4 @@ mod work_queue;
 #[path = "indexed_search/workers.rs"]
 mod workers;
 
-pub use service::{catalog_path_for_app, IndexedSearchHandle};
+pub use service::{catalog_path_for_app, indexable_drive_roots, IndexedSearchHandle};

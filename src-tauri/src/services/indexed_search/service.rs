@@ -90,7 +90,8 @@ impl IndexedSearchHandle {
         status
     }
 
-    pub fn set_enabled(&self, enabled: bool) {
+    pub fn set_configuration(&self, enabled: bool, excluded_drive_roots: Vec<String>) {
+        let excluded_drives = state::normalize_excluded_drives(excluded_drive_roots);
         let mut queue = self
             .inner
             .work_queue
@@ -100,19 +101,21 @@ impl IndexedSearchHandle {
             return;
         }
 
-        if self.inner.enabled.swap(enabled, Ordering::SeqCst) == enabled {
-            return;
-        }
-        self.inner.work_generation.fetch_add(1, Ordering::SeqCst);
-
-        if enabled {
-            if self.catalog_error().is_some() {
-                self.mark_catalog_unavailable();
+        {
+            let mut state = self.inner.state.lock().expect("indexed search state lock");
+            let enable_changed = self.is_enabled() != enabled;
+            let scope_changed = state.excluded_drives != excluded_drives;
+            if !enable_changed && !scope_changed {
                 return;
             }
-
-            {
-                let mut state = self.inner.state.lock().expect("indexed search state lock");
+            self.inner.work_generation.fetch_add(1, Ordering::SeqCst);
+            if scope_changed {
+                state.set_excluded_drives(excluded_drives);
+                queue.discard_out_of_scope(|drive| {
+                    state.includes_drive(&super::state::normalize_drive_key(drive))
+                });
+            }
+            if enabled && enable_changed {
                 state.volumes.verified.clear();
                 state.volumes.journal_rebuilds.clear();
                 state.volumes.unavailable_journals.clear();
@@ -122,9 +125,20 @@ impl IndexedSearchHandle {
                     }
                 }
             }
+            self.inner.enabled.store(enabled, Ordering::SeqCst);
+            // Publish the new scope before a running read validates its revision.
+            self.bump_catalog_revision();
+        }
+
+        if enabled {
+            if self.catalog_error().is_some() {
+                self.mark_catalog_unavailable();
+                return;
+            }
+
             queue.queue_volume_check();
             queue.queue_search_backfill();
-            self.bump_catalog_revision();
+            queue.queue_size_backfill();
             self.set_service_state(
                 IndexedSearchServiceState::Starting,
                 Some("Checking saved indexes".to_string()),
@@ -133,7 +147,6 @@ impl IndexedSearchHandle {
             return;
         }
 
-        self.bump_catalog_revision();
         self.reset_disabled_drive_statuses();
         self.set_service_state(IndexedSearchServiceState::Disabled, None);
         self.inner.work_available.notify_one();
@@ -244,6 +257,14 @@ impl IndexedSearchHandle {
 
 pub fn catalog_path_for_app(app_handle: &AppHandle) -> Result<std::path::PathBuf, String> {
     profile_catalog::path_for_app(app_handle)
+}
+
+pub fn indexable_drive_roots() -> Result<Vec<String>, String> {
+    Ok(super::volume_tracking::discover_drives()?
+        .into_iter()
+        .filter(|drive| drive.status.indexable)
+        .map(|drive| drive.status.drive_path)
+        .collect())
 }
 
 #[cfg(test)]

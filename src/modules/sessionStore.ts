@@ -55,10 +55,13 @@ const DEFAULT_SESSION: SessionState = {
   recentJumps: [],
 };
 
-export const createSessionTab = (...args: Parameters<typeof createTab>): Tab => ({
-  ...createTab(...args),
-  gridSize: getDefaultTabGridSize(useSettingsStore.getState()),
-});
+export const createSessionTab = (...[path, base, defaults]: Parameters<typeof createTab>): Tab => {
+  const settings = useSettingsStore.getState();
+  return {
+    ...createTab(path, settings.newTabSort ? { ...base, sort: settings.newTabSort } : base, defaults),
+    gridSize: getDefaultTabGridSize(settings),
+  };
+};
 
 // A restore is a new visit, even if it opens the same saved tab.
 export const prepareSessionRestore = (layout: SessionState, gridSize: FixedGridSize | undefined): SessionState => {

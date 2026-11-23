@@ -236,7 +236,7 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
               aria-expanded={isOpen}
               disabled={item.disabled}
             >
-              <span className="context-check">{item.icon ? renderContextIcon(item.icon) : null}</span>
+              <span className="context-check" aria-hidden="true">{item.icon ? renderContextIcon(item.icon) : null}</span>
               <span className="context-label">{item.label}</span>
               <span className="context-right">
                 {item.hint ? <span className="context-hint">{item.hint}</span> : null}
@@ -261,13 +261,14 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
           </div>
         );
       }
-      const isRadio = typeof item.active === "boolean";
+      const isCheckbox = typeof item.checked === "boolean";
+      const checked = item.checked ?? item.active;
       const label = <span className="context-label">{item.label}</span>;
       const button = (
         <PressButton
           key={item.id}
           type="button"
-          className={`context-item${item.active ? " is-active" : ""}`}
+          className={`context-item${checked ? " is-active" : ""}`}
           pressOnPointerDown={false}
           onPointerDown={(event) => event.preventDefault()}
           onClick={() => {
@@ -282,11 +283,11 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
                 }
               : undefined
           }
-          role={isRadio ? "menuitemradio" : "menuitem"}
-          aria-checked={isRadio ? (item.active ? true : false) : undefined}
+          role={isCheckbox ? "menuitemcheckbox" : typeof item.active === "boolean" ? "menuitemradio" : "menuitem"}
+          aria-checked={checked}
           disabled={item.disabled}
         >
-          <span className="context-check">
+          <span className="context-check" aria-hidden="true">
             {item.iconUrl ? (
               <img
                 key={item.iconUrl}
@@ -297,7 +298,7 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
                 decoding="async"
                 onError={(event) => { event.currentTarget.style.visibility = "hidden"; }}
               />
-            ) : item.icon ? renderContextIcon(item.icon) : item.active ? "x" : ""}
+            ) : item.icon ? renderContextIcon(item.icon) : checked ? "x" : ""}
           </span>
           {item.disabled && item.tooltip ? (
             <TooltipWrapper text={item.tooltip} withinContextMenu>{label}</TooltipWrapper>

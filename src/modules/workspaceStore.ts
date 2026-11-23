@@ -3,11 +3,13 @@ import { createWithEqualityFn } from "zustand/traditional";
 import { folderPathKey } from "@/lib/paths";
 import { coercePaneLink } from "@/lib/paneLink";
 import type { Place } from "@/types";
+import { writeBackupRecords } from "./backup/persistence";
+import type { BackupStorageRecord } from "./backup/persistence";
 import { coerceBottomPaneHeight, DEFAULT_BOTTOM_PANE_LAYOUT, useBottomPaneStore } from "./bottomPaneStore";
 import type { BottomPaneLayout, BottomPanePreferences } from "./bottomPaneStore";
 import { coercePlacesState, DEFAULT_PLACES_STATE, usePlacesStore } from "./placesStore";
 import type { PlacesState } from "./placesStore";
-import { coerceSession, createSessionTab, prepareSessionRestore, useBottomSessionStore, useSessionStore } from "./sessionStore";
+import { coerceSession, createSessionTab, prepareSessionRestore, serializePaneSession, useBottomSessionStore, useSessionStore } from "./sessionStore";
 import type { SessionState } from "./sessionStore";
 import { useSettingsStore } from "./settings.store";
 import type { FixedGridSize } from "./settings.types";
@@ -218,6 +220,45 @@ const collectDrafts = ({ workspaces, activeId, drafts }: WorkspaceState, live: W
 };
 
 export const getWorkspaceChanges = (live: WorkspaceLayout) => collectDrafts(useWorkspaceStore.getState(), live);
+
+export const clearRecentLocations = () => {
+  const state = useWorkspaceStore.getState();
+  const clearLayout = <T extends { layout: WorkspaceLayout }>(entry: T): T => {
+    const { layout } = entry;
+    if (!layout.main.recentJumps.length && !layout.bottom.recentJumps.length) return entry;
+    return {
+      ...entry,
+      layout: {
+        ...layout,
+        main: { ...layout.main, recentJumps: [] },
+        bottom: { ...layout.bottom, recentJumps: [] },
+      },
+    };
+  };
+  const workspaces = state.workspaces.map(clearLayout);
+  const drafts = state.drafts.map(clearLayout);
+  const previous = state.previous && clearLayout(state.previous);
+  const changed = workspaces.some((item, index) => item !== state.workspaces[index]) ||
+    drafts.some((item, index) => item !== state.drafts[index]) || previous !== state.previous;
+  const next = { ...state, workspaces, drafts, previous };
+  const main = useSessionStore.getState();
+  const bottom = useBottomSessionStore.getState();
+  const records: BackupStorageRecord[] = [];
+  if (changed) records.push(serializeWorkspaceState(next));
+  if (main.recentJumps.length) records.push(serializePaneSession("main", { ...main, recentJumps: [] }));
+  if (bottom.recentJumps.length) records.push(serializePaneSession("bottom", { ...bottom, recentJumps: [] }));
+  if (!records.length) return;
+
+  // Persist both panes and the workspace snapshots together before publishing them.
+  try {
+    writeBackupRecords(records);
+  } catch {
+    throw new Error("Couldn't update the saved location history.");
+  }
+  if (changed) useWorkspaceStore.setState(next);
+  if (main.recentJumps.length) main.setRecentJumps([]);
+  if (bottom.recentJumps.length) bottom.setRecentJumps([]);
+};
 
 export const saveWorkspaceChanges = (changes: WorkspaceDraft[]) => {
   if (!changes.length) return;

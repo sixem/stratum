@@ -1,5 +1,5 @@
 // Shared settings types and enums used across the settings store and UI.
-import type { ViewMode } from "@/types";
+import type { SortState, ViewMode } from "@/types";
 import type { KeybindMap } from "./keybinds";
 
 export type ThumbnailFormat = "webp" | "jpeg";
@@ -7,6 +7,7 @@ export type ThumbnailFit = "cover" | "contain";
 export type FixedGridSize = "small" | "normal" | "large";
 export type GridSize = FixedGridSize | "auto";
 export type GridNameEllipsis = "end" | "middle";
+export type ListDensity = "compact" | "comfortable";
 export type AccentTheme =
   | "red"
   | "purple"
@@ -16,6 +17,7 @@ export type AccentTheme =
   | "teal"
   | "white";
 export type SidebarSectionId = "places" | "recent" | "tips";
+export type StartupMode = "resume" | "workspace" | "start";
 
 export type Settings = {
   sidebarOpen: boolean;
@@ -24,6 +26,10 @@ export type Settings = {
   sidebarSectionOrder: SidebarSectionId[];
   sidebarHiddenSections: SidebarSectionId[];
   defaultViewMode: ViewMode;
+  startupMode: StartupMode;
+  startupWorkspaceId: string | null;
+  newTabSort: SortState | null;
+  rememberRecentLocations: boolean;
   showTabNumbers: boolean;
   fixedWidthTabs: boolean;
   tabDropSubfolders: boolean;
@@ -54,12 +60,16 @@ export type Settings = {
   gridShowExtension: boolean;
   gridNameEllipsis: GridNameEllipsis;
   gridNameHideExtension: boolean;
+  listDensity: ListDensity;
+  listShowSize: boolean;
+  listShowModified: boolean;
   menuOpenPwsh: boolean;
   menuOpenWsl: boolean;
   menuShowConvert: boolean;
   rememberMoveDestinations: boolean;
   recentMoveLimit: number;
   indexedSearchEnabled: boolean;
+  excludedIndexedDrives: string[];
   thumbnailsEnabled: boolean;
   thumbnailSize: number;
   thumbnailQuality: number;
@@ -70,5 +80,6 @@ export type Settings = {
   thumbnailCacheMb: number;
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;
+  videoAutoplay: boolean;
   ffmpegPath: string;
 };

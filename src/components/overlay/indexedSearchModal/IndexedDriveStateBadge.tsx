@@ -18,6 +18,7 @@ const statusDescriptions: Partial<Record<IndicatorState, string>> = {
   rescanrequired: "This drive needs a fresh index.",
   stale: "The saved index may be out of date.",
   unavailable: "Stratum couldn't access this drive.",
+  excluded: "This drive is excluded from indexing in Settings.",
   unsupported: "Indexed search supports fixed NTFS drives.",
   unknown: "The drive's indexing status hasn't been determined.",
   error: "Stratum couldn't finish updating this index.",
