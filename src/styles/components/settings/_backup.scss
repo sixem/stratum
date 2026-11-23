@@ -1,0 +1,94 @@
+// Keep import details readable in the settings panel and in search results.
+:where(.settings-panel) {
+  .settings-backup-form {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .settings-backup-review {
+    border-top: var(--surface-border-width) solid var(--stroke);
+    padding-top: 12px;
+    gap: 12px;
+  }
+
+  .settings-backup-form p {
+    margin: 0;
+  }
+
+  .settings-backup-list {
+    overflow: auto;
+    max-height: 10rem;
+    margin: 0;
+    padding: 4px 8px;
+    border: var(--surface-border-width) solid var(--stroke);
+    border-radius: 6px;
+    list-style: none;
+  }
+
+  .settings-backup-list li {
+    padding-block: 4px;
+    overflow-wrap: anywhere;
+  }
+
+  .settings-backup-check,
+  .settings-backup-mapping {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .settings-backup-mapping {
+    justify-content: space-between;
+  }
+
+  .settings-backup-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+    gap: 8px;
+  }
+
+  .settings-backup-fields > div,
+  .settings-backup-choice {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .settings-backup-choice {
+    justify-self: start;
+  }
+
+  .settings-backup-input {
+    min-width: 0;
+    padding: 6px 8px;
+    border: var(--surface-border-width) solid var(--stroke);
+    border-radius: 6px;
+    background: var(--surface-card);
+    color: var(--text);
+  }
+
+  .settings-backup-locations summary {
+    margin-bottom: 4px;
+    cursor: pointer;
+  }
+
+  .settings-backup-path {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+
+  .settings-backup-path:hover {
+    text-decoration: underline;
+  }
+
+  .settings-backup-example {
+    overflow-wrap: anywhere;
+  }
+}

@@ -50,7 +50,7 @@ export type ContextMenuItem =
       onSelect: () => void;
       active?: boolean;
       hint?: string;
-      wrapLabel?: boolean;
+      tooltip?: string;
       disabled?: boolean;
       icon?: ContextMenuIcon;
       iconUrl?: string;
@@ -60,6 +60,7 @@ export type ContextMenuItem =
       id: string;
       label: string;
       items: ContextMenuItem[];
+      wide?: boolean;
       hint?: string;
       disabled?: boolean;
       icon?: ContextMenuIcon;

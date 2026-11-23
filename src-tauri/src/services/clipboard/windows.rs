@@ -54,6 +54,15 @@ impl Drop for OpenGuard {
 struct Memory(HGLOBAL);
 
 impl Memory {
+    fn from_text(text: &str) -> Result<Self, String> {
+        let bytes: Vec<u8> = text
+            .encode_utf16()
+            .chain(Some(0))
+            .flat_map(u16::to_le_bytes)
+            .collect();
+        Self::from_bytes(&bytes)
+    }
+
     fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
         unsafe {
             let block =
@@ -97,17 +106,11 @@ impl FileFormats {
             ClipboardMode::Copy => DROPEFFECT_COPY,
             ClipboardMode::Move => DROPEFFECT_MOVE,
         };
-        let text: Vec<u8> = paths
-            .join("\r\n")
-            .encode_utf16()
-            .chain(Some(0))
-            .flat_map(u16::to_le_bytes)
-            .collect();
         Ok(Self {
             files: Memory(write_dropfiles(paths)?),
             effect: Memory::from_bytes(&effect.0.to_le_bytes())?,
             effect_format: effect_format()?,
-            text: Memory::from_bytes(&text)?,
+            text: Memory::from_text(&paths.join("\r\n"))?,
         })
     }
 
@@ -120,6 +123,16 @@ impl FileFormats {
         let _ = self.text.publish(CF_UNICODETEXT.0.into());
         Ok(())
     }
+}
+
+pub fn set_clipboard_text(owner: usize, text: String) -> Result<(), String> {
+    if text.contains('\0') {
+        return Err("Clipboard text contains a null character.".into());
+    }
+    let text = Memory::from_text(&text)?;
+    let _guard = OpenGuard::open(Some(HWND(owner as _)))?;
+    unsafe { EmptyClipboard() }.map_err(|err| err.to_string())?;
+    text.publish(CF_UNICODETEXT.0.into())
 }
 
 fn validate_path(path: &str) -> Result<(), String> {

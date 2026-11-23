@@ -182,7 +182,10 @@ export const useFileDrop = ({
     });
   }, [dropQueue, promptStore]);
 
-  const performDrop = useCallback(async (paths: string[], target: string, mode: TransferMode, dropStage?: number) => {
+  const performDrop = useCallback(async (
+    paths: string[], target: string, mode: TransferMode, dropStage: number | undefined,
+    moveHistoryWorkspace: ReturnType<typeof captureMoveHistoryWorkspace>,
+  ) => {
     if (dropStage != null && /^[\s\u0085]|[\s\u0085]$/u.test(target)) {
       await queueDropError("Choose a destination folder whose name does not end in whitespace.");
       return;
@@ -190,7 +193,6 @@ export const useFileDrop = ({
     // Capture the destination on release, even when an earlier drop has a prompt open.
     const plan = planDropTransfer(paths, target, mode);
     if (!plan) return;
-    const moveHistoryWorkspace = captureMoveHistoryWorkspace();
     const finishWaiting = dropQueue.busy
       ? beginFileActivity(`Drop queued for ${plan.destination}`) : null;
     try {
@@ -204,12 +206,21 @@ export const useFileDrop = ({
     }
   }, [beginFileActivity, dropQueue, executeDrop, promptStore, queueDropError]);
 
+  const pendingDrops = useRef(new Map<number, {
+    target: string;
+    workspace: ReturnType<typeof captureMoveHistoryWorkspace>;
+    finish: () => void;
+  }>());
   const onDragEvent = useRef<(event: NativeFileDrag) => void>(() => {});
   useLayoutEffect(() => {
     onDragEvent.current = async (payload) => {
+      const pendingId = payload.type === "drop" || payload.type === "error" ? payload.pendingDrop : null;
+      const pending = pendingId == null ? undefined : pendingDrops.current.get(pendingId);
+      if (pendingId != null) pendingDrops.current.delete(pendingId);
+      pending?.finish();
       if (payload.type === "error") {
-        clearDragState();
-        await queueDropError(payload.message);
+        if (pendingId == null) clearDragState();
+        if (pendingId == null || pending) await queueDropError(payload.message);
         return;
       }
       if (payload.type === "leave") {
@@ -217,9 +228,27 @@ export const useFileDrop = ({
         return;
       }
       const point = getClientPoint(payload.position);
+      if (payload.type === "receiving") {
+        const target = getDropTargetFromPoint(point.x, point.y);
+        clearDragState();
+        if (target && target.kind !== "tab-submenu") {
+          pendingDrops.current.set(payload.pendingDrop, {
+            target: target.path,
+            workspace: captureMoveHistoryWorkspace(),
+            finish: beginFileActivity("Receiving dropped files"),
+          });
+        }
+        return;
+      }
       const strip = payload.canOpenFolderTab ? getTabLocationDropTarget(point.x, point.y, false) : null;
       if (payload.type === "drop") {
         try {
+          if (pendingId != null) {
+            if (pending) {
+              await performDrop(payload.paths, pending.target, payload.mode, payload.stage ?? undefined, pending.workspace);
+            }
+            return;
+          }
           const target = strip ? null : getDropTargetFromPoint(point.x, point.y);
           clearDragState();
           if (strip && payload.paths.length === 1 && payload.stage == null) {
@@ -227,7 +256,7 @@ export const useFileDrop = ({
             return;
           }
           if (target && target.kind !== "tab-submenu") {
-            await performDrop(payload.paths, target.path, payload.mode, payload.stage ?? undefined);
+            await performDrop(payload.paths, target.path, payload.mode, payload.stage ?? undefined, captureMoveHistoryWorkspace());
           }
         } finally {
           if (payload.stage != null) await releaseDropStage(payload.stage).catch((error) => log("release drop stage: %o", error));
@@ -251,12 +280,13 @@ export const useFileDrop = ({
       }
       setDropTarget(target);
     };
-  }, [clearDragState, closeTabDropSubmenu, enableTabDropSubfolders, highlightTabStrip, performDrop, queueDropError, setDropTarget]);
+  }, [beginFileActivity, clearDragState, closeTabDropSubmenu, enableTabDropSubfolders, highlightTabStrip, performDrop, queueDropError, setDropTarget]);
 
   useEffect(() => {
     if (!enabled) return;
     let active = true;
     let unlisten: (() => void) | null = null;
+    const receives = pendingDrops.current;
 
     getCurrentWebview().listen<NativeFileDrag>("stratum-file-drag", ({ payload }) => {
       if (active) onDragEvent.current(payload);
@@ -268,6 +298,8 @@ export const useFileDrop = ({
     return () => {
       active = false;
       highlightTabStrip(null);
+      receives.forEach(({ finish }) => finish());
+      receives.clear();
       unlisten?.();
     };
   }, [enabled, highlightTabStrip]);

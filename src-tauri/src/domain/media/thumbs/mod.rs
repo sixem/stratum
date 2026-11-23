@@ -68,9 +68,6 @@ pub struct ThumbnailState {
     trim_state: Mutex<CacheTrimState>,
     // Serialize trimming and clearing without holding the growth accounting lock during I/O.
     cache_maintenance: Mutex<()>,
-    // Keep a lightweight in-memory view of generated files so scroll-driven
-    // batches do not need to hit the filesystem for every cache lookup.
-    cache_index: Mutex<HashSet<String>>,
 }
 
 pub type ThumbnailHandle = Arc<ThumbnailState>;
@@ -89,7 +86,7 @@ pub fn init(app_handle: AppHandle) -> ThumbnailHandle {
 
     let state = Arc::new(ThumbnailState {
         app_handle,
-        cache_dir: cache_dir.clone(),
+        cache_dir,
         queue: Mutex::new(ThumbQueue {
             items: VecDeque::new(),
             in_flight: HashSet::new(),
@@ -102,7 +99,6 @@ pub fn init(app_handle: AppHandle) -> ThumbnailHandle {
             pending_growth_bytes: 0,
         }),
         cache_maintenance: Mutex::new(()),
-        cache_index: Mutex::new(cache::load_cache_index(&cache_dir)),
     });
 
     // Leave room for UI threads by keeping the worker pool intentionally small.
@@ -181,8 +177,6 @@ fn worker_loop(state: ThumbnailHandle) {
         }
 
         if let Ok(output) = result {
-            cache::mark_cache_entry(&state, &job.id);
-            cache::maybe_trim_cache(state.as_ref(), job.options.cache_mb, output.added_bytes);
             let payload = ThumbReady {
                 path: job.path.to_string_lossy().to_string(),
                 thumb_path: output.path.to_string_lossy().to_string(),
@@ -190,6 +184,7 @@ fn worker_loop(state: ThumbnailHandle) {
                 signature: job.signature,
             };
             let _ = state.app_handle.emit("thumb_ready", payload);
+            cache::maybe_trim_cache(state.as_ref(), job.options.cache_mb, output.added_bytes);
         }
     }
 }

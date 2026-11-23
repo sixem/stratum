@@ -29,6 +29,8 @@ export const getIndexedSearchSnapshot = () => {
 export const setIndexedSearchEnabled = (enabled: boolean) =>
   invoke<void>("set_indexed_search_enabled", { enabled });
 
+export const nudgeIndexedSearch = () => invoke<void>("nudge_indexed_search");
+
 export const getIndexedSearchCatalogPath = () =>
   invoke<string>("get_indexed_search_catalog_path");
 

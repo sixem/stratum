@@ -1,5 +1,6 @@
 // Shared file manager types used across focused filesystem hooks.
 import type { FileEntry, ListDirOptions, SortState } from "@/types";
+import type { LinkedNavigation } from "@/modules/paneLinkNavigation";
 
 export type StatusLevel = "idle" | "loading" | "error";
 
@@ -16,6 +17,8 @@ export type ListDirQuery = {
 export type LoadDirOptions = ListDirOptions & {
   force?: boolean;
   silent?: boolean;
+  suppressError?: boolean;
+  linked?: LinkedNavigation & { onCommit: () => void };
 };
 
 export type DirCacheEntry = {
@@ -26,13 +29,14 @@ export type DirCacheEntry = {
 
 export type MetaRequestOptions = {
   defer?: boolean;
-  // Force re-stat even when metadata is already cached.
+  // Queue a watcher invalidation even when metadata is already cached.
   force?: boolean;
 };
 
 export type RenameRequest = {
   path: string;
   nextName: string;
+  expectedIdentity?: string;
 };
 
 export type RenameFailure = {

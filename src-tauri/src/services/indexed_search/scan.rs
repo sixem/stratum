@@ -2,8 +2,6 @@
 use std::fs;
 use std::path::Path;
 
-use crate::domain::indexed_search::IndexedEntryKind;
-
 use super::{
     catalog::{CatalogEntryRecord, IndexedCatalogStore, IndexedCatalogWriter, JournalCheckpoint},
     state::now_epoch_ms,
@@ -121,13 +119,7 @@ pub(super) fn scan_drive_into_catalog(
             };
             entries_seen = entries_seen.saturating_add(1);
             let is_directory = metadata.is_dir();
-            let kind = if is_directory {
-                IndexedEntryKind::Directory
-            } else {
-                IndexedEntryKind::File
-            };
-
-            if let Some(record) = CatalogEntryRecord::from_path(&logical_path, kind) {
+            if let Some(record) = CatalogEntryRecord::from_metadata(&logical_path, &metadata) {
                 batch.push(record);
             }
 
@@ -236,13 +228,7 @@ fn scan_path_into_writer_with_batch(
         }
 
         let is_directory = metadata.is_dir();
-        let kind = if is_directory {
-            IndexedEntryKind::Directory
-        } else {
-            IndexedEntryKind::File
-        };
-
-        if let Some(record) = CatalogEntryRecord::from_path(&current_logical_path, kind) {
+        if let Some(record) = CatalogEntryRecord::from_metadata(&current_logical_path, &metadata) {
             batch.push(record);
         }
 

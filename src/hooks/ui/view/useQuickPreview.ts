@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isEditableElement, isPreviewableEntry } from "@/lib";
 import { buildKeybindFromEvent, normalizeKeybind, useIndexedSearchUiStore } from "@/modules";
+import { useQuickMoveSession } from "@/modules/quickMoveSession";
 import { scopeGalleryToSelection, type PreviewGallerySource } from "./previewGallerySource";
 
 export type { PreviewGallerySource } from "./previewGallerySource";
@@ -87,6 +88,7 @@ export const useQuickPreview = ({
 
   const canTriggerPreview = useCallback((target: PreviewTarget, mouse: boolean, modified: boolean) => {
     if (settingsOpen || contextMenuOpen || promptOpen) return false;
+    if (useQuickMoveSession.getState().request) return false;
     const source = sourcesRef.current[target.source];
     if (!source?.isCurrent()) return false;
     const active = document.activeElement;

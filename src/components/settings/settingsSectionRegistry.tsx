@@ -1,6 +1,7 @@
 // Central registry for settings sections so navigation and content stay in sync.
 import type { ReactNode } from "react";
 import { KEYBIND_DEFINITIONS } from "@/modules";
+import { BACKUP_SETTINGS_ITEMS, SettingsBackupSection } from "./SettingsBackupSection";
 import { BARS_SETTINGS_ITEMS, SettingsBarsSection, TOPBAR_SETTINGS_OPTIONS } from "./SettingsBarsSection";
 import { CACHE_SETTINGS_ITEMS, SettingsCacheSection } from "./SettingsCacheSection";
 import { FLAIR_SETTINGS_ITEMS, SettingsFlairSection } from "./SettingsFlairSection";
@@ -21,7 +22,8 @@ export type SettingsSectionId =
   | "settings-flair"
   | "settings-thumbnails"
   | "settings-keybinds"
-  | "settings-cache";
+  | "settings-cache"
+  | "settings-backup";
 
 export type SettingsSectionRenderContext = {
   open: boolean;
@@ -106,6 +108,12 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
         onClearCache={onClearCache}
       />
     ),
+  },
+  {
+    id: "settings-backup",
+    label: "Backup",
+    items: Object.values(BACKUP_SETTINGS_ITEMS),
+    render: () => <SettingsBackupSection sectionId="settings-backup" />,
   },
 ];
 

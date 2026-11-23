@@ -1,4 +1,6 @@
 // Verify mounted volumes and maintain the standard user's saved index.
+use std::time::Instant;
+
 use crate::domain::indexed_search::{IndexedDriveState, IndexedSearchServiceState};
 
 use super::{
@@ -103,6 +105,7 @@ impl IndexedSearchHandle {
             drop(state);
             if changed || newly_verified {
                 self.bump_catalog_revision();
+                queue.queue_size_backfill();
             }
             mounts_to_check
         };
@@ -121,6 +124,9 @@ impl IndexedSearchHandle {
             let Some(mount) = state.volumes.active_mount(drive) else {
                 return;
             };
+            if !state.has_verified_journal(&mount.key()) {
+                return;
+            }
             let Some(snapshot) = state.volumes.matching_snapshot(&mount) else {
                 return;
             };
@@ -135,6 +141,11 @@ impl IndexedSearchHandle {
         previous: Option<JournalCheckpoint>,
         generation: u64,
     ) {
+        self.inner
+            .work_queue
+            .lock()
+            .expect("indexed search work queue")
+            .note_journal_check(&mount.drive_path, Instant::now());
         let Some(previous) = previous else {
             // Jumping to the current cursor would miss changes made between
             // the saved scan and this launch. Capture a cursor before rescanning.
@@ -276,6 +287,9 @@ impl IndexedSearchHandle {
         }
         if warning.is_none() {
             state.volumes.journal_rebuilds.remove(&key);
+            state.volumes.unavailable_journals.remove(&key);
+        } else {
+            state.volumes.unavailable_journals.insert(key);
         }
         let changed = if has_checkpoint {
             state.mark_volume_verified(mount, warning)
@@ -361,6 +375,7 @@ mod tests {
                 filesystem: Some("NTFS".into()),
                 state: IndexedDriveState::Queued,
                 indexable: true,
+                searchable: false,
                 started_at: None,
                 last_updated_at: 0,
                 entry_count: None,
@@ -405,11 +420,26 @@ mod tests {
         assert!(saved.state == IndexedDriveState::Stale);
         assert_eq!(saved.entry_count, Some(25));
         assert_eq!(saved.message.as_deref(), Some("Checking the saved index."));
+        assert!(!state
+            .drive_statuses_snapshot(true)
+            .iter()
+            .any(|drive| drive.searchable));
         assert!(expose_saved_volumes(&mut state, &mut queue, &checks));
         assert!(!expose_saved_volumes(&mut state, &mut queue, &checks));
         let saved = &state.drive_statuses[&mount.key()];
         assert!(saved.state == IndexedDriveState::Stale);
         assert_eq!(state.volumes.verified_mounts(), [mount]);
+        let searchable = state
+            .drive_statuses_snapshot(true)
+            .into_iter()
+            .filter(|drive| drive.searchable)
+            .map(|drive| drive.drive_path)
+            .collect::<Vec<_>>();
+        assert_eq!(searchable, [r"C:\"]);
+        assert!(!state
+            .drive_statuses_snapshot(false)
+            .iter()
+            .any(|drive| drive.searchable));
         assert_eq!(saved.entry_count, Some(25));
         assert_eq!(queue.next(), Some(Work::Rebuild(r"D:\".into())));
         assert_eq!(queue.next(), Some(Work::Rebuild(r"E:\".into())));

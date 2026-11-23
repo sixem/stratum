@@ -21,7 +21,7 @@ export const isThumbPreviewReadyCached = (src: string) => {
   return readyThumbSrcCache.has(src);
 };
 
-export const ThumbnailPreview = ({ src, onReadyChange }: ThumbnailPreviewProps) => {
+export const ThumbnailPreview = ({ src, onReadyChange, onLoadError }: ThumbnailPreviewProps) => {
   const isKnownReady = isThumbPreviewReadyCached(src);
 
   useEffect(() => {
@@ -51,6 +51,7 @@ export const ThumbnailPreview = ({ src, onReadyChange }: ThumbnailPreviewProps) 
         readyThumbSrcCache.delete(src);
         onReadyChange?.(false);
         event.currentTarget.dataset.ready = "false";
+        onLoadError?.(src);
       }}
     />
   );

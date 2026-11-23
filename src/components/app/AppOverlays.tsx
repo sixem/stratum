@@ -11,6 +11,7 @@ import type { SettingsOverlayProps } from "@/components/overlay/SettingsOverlay"
 import type { QuickPreviewOverlayProps } from "@/components/preview/QuickPreviewOverlay";
 import { useBatchRenameStore } from "@/modules/batchRenameStore";
 import type { ComponentProps } from "react";
+import { QuickMoveOverlay } from "./QuickMoveOverlay";
 
 const LazyConversionModal = lazy(async () => {
   const module = await import("@/components/overlay/conversionModal");
@@ -125,6 +126,7 @@ export const AppOverlays = ({
         </Suspense>
       ) : null}
       <IndexedSearchModal {...indexedSearch} previewOpen={quickPreview.open} />
+      <QuickMoveOverlay />
       <TooltipDisplay />
       {quickPreviewMounted ? (
         <Suspense fallback={null}>

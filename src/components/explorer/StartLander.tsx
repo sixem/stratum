@@ -1,11 +1,12 @@
 // Landing content shown when no folder is selected in the active tab.
-import { buildDriveTooltip, formatBytes, handleMiddleClick, normalizePath } from "@/lib";
+import { handleMiddleClick } from "@/lib";
 import { useLocationDrag } from "@/hooks/ui/inputs/useLocationDrag";
 import type { DriveInfo, Place } from "@/types";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PinIcon } from "@/components/icons";
 import { EmptyState } from "@/components/primitives/EmptyState";
 import { PressButton } from "@/components/primitives/PressButton";
+import { StartLanderDrives } from "./StartLanderDrives";
 
 type StartLanderProps = {
   recentJumps: string[];
@@ -13,29 +14,13 @@ type StartLanderProps = {
   onOpenRecentNewTab?: (path: string) => void;
   drives: string[];
   drivesLoaded?: boolean;
+  driveInfoLoaded?: boolean;
   driveInfo: DriveInfo[];
   onOpenDrive: (path: string) => void;
   onOpenDriveNewTab?: (path: string) => void;
   places: Place[];
   onOpenPlace: (path: string) => void;
   onOpenPlaceNewTab?: (path: string) => void;
-};
-
-const formatDriveLabel = (drive: string) => {
-  const trimmed = drive.trim().replace(/[\\/]+$/, "");
-  if (!trimmed) return "";
-  if (trimmed.startsWith("\\\\")) {
-    return trimmed;
-  }
-  if (/^[a-zA-Z]:$/.test(trimmed)) {
-    return trimmed.toUpperCase();
-  }
-  return trimmed;
-};
-
-const formatDriveName = (info?: DriveInfo) => {
-  const label = info?.label?.trim();
-  return label ? label : null;
 };
 
 const formatRecentLabel = (path: string) => {
@@ -60,56 +45,13 @@ const formatRecentDriveTag = (path: string) => {
   return match ? match[0].toUpperCase() : null;
 };
 
-const buildDriveInfoMap = (driveInfo: DriveInfo[]) => {
-  const map = new Map<string, DriveInfo>();
-  driveInfo.forEach((info) => {
-    map.set(normalizePath(info.path), info);
-  });
-  return map;
-};
-
-const formatUsage = (info?: DriveInfo) => {
-  if (!info || info.total == null || info.free == null) {
-    return {
-      label: "Size unknown",
-      percent: null,
-    };
-  }
-  const used = Math.max(0, info.total - info.free);
-  const percent = info.total > 0 ? Math.round((used / info.total) * 100) : 0;
-  return {
-    label: `${formatBytes(used)} / ${formatBytes(info.total)}`,
-    percent: Math.min(100, Math.max(0, percent)),
-  };
-};
-
-const summarizeStorage = (
-  drives: string[],
-  driveInfoMap: Map<string, DriveInfo>,
-) => {
-  let total = 0;
-  let free = 0;
-  drives.forEach((drive) => {
-    const info = driveInfoMap.get(normalizePath(drive));
-    if (!info || info.total == null || info.free == null) return;
-    total += info.total;
-    free += info.free;
-  });
-  if (total <= 0) return null;
-  const used = Math.max(0, total - free);
-  const percent = total > 0 ? Math.round((used / total) * 100) : 0;
-  return {
-    label: `${formatBytes(used)} / ${formatBytes(total)}`,
-    percent: Math.min(100, Math.max(0, percent)),
-  };
-};
-
 export const StartLander = ({
   recentJumps,
   onOpenRecent,
   onOpenRecentNewTab,
   drives,
   drivesLoaded = true,
+  driveInfoLoaded = true,
   driveInfo,
   onOpenDrive,
   onOpenDriveNewTab,
@@ -119,8 +61,6 @@ export const StartLander = ({
 }: StartLanderProps) => {
   const visibleRecents = recentJumps;
   const visiblePlaces = places;
-  const driveInfoMap = buildDriveInfoMap(driveInfo);
-  const storageSummary = summarizeStorage(drives, driveInfoMap);
   const locationDrag = useLocationDrag();
   return (
     <div className="view-lander" {...locationDrag}>
@@ -130,79 +70,13 @@ export const StartLander = ({
           subtitle="Choose a location below or enter a path above."
         />
         <div className="lander-columns">
-          <div
-            className={`lander-drives lander-section${drives.length === 0 ? " is-empty" : ""}`}
-          >
-            <div className="lander-section-head">
-              <div className="lander-section-title">Drives</div>
-              {drivesLoaded ? <span className="lander-section-count">{drives.length}</span> : null}
-            </div>
-            {storageSummary ? (
-              <>
-                <div className="lander-storage-summary">
-                  <span className="lander-storage-title">Total storage</span>
-                  <span className="lander-storage-value tnum">{storageSummary.label}</span>
-                  <span className="lander-storage-percent tnum">{storageSummary.percent}% used</span>
-                </div>
-                <div className="lander-storage-bar">
-                  <span className="lander-storage-bar-fill" style={{ width: `${storageSummary.percent}%` }} />
-                </div>
-              </>
-            ) : null}
-            {drives.length === 0 ? (
-              <div className="lander-drives-empty">{drivesLoaded ? "No drives found" : "Loading drives…"}</div>
-            ) : (
-              <div className="lander-drives-list">
-                {drives.map((drive) => {
-                  const info = driveInfoMap.get(normalizePath(drive));
-                  const name = formatDriveName(info);
-                  const usage = formatUsage(info);
-                  return (
-                    <TooltipWrapper
-                      key={drive}
-                      text={buildDriveTooltip(formatDriveLabel(drive), info)}
-                    >
-                      <PressButton
-                        type="button"
-                        className="lander-drive"
-                        data-location-path={drive}
-                        pressOnPointerDown={false}
-                        onClick={() => onOpenDrive(drive)}
-                        onMouseDown={(event) => {
-                          if (!onOpenDriveNewTab) return;
-                          handleMiddleClick(event, () => onOpenDriveNewTab(drive));
-                        }}
-                      >
-                        <div className="lander-drive-head">
-                          <span className="lander-drive-label">
-                            {formatDriveLabel(drive)}
-                          </span>
-                          {name ? <span className="lander-drive-name">{name}</span> : null}
-                        </div>
-                        <div className="lander-drive-usage">
-                          <span className="lander-drive-usage-label tnum">{usage.label}</span>
-                          {usage.percent != null ? (
-                            <span className="lander-drive-usage-percent tnum">
-                              {usage.percent}% used
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="lander-drive-bar" data-known={usage.percent != null}>
-                          <span
-                            className="lander-drive-bar-fill"
-                            style={{
-                              width:
-                                usage.percent != null ? `${usage.percent}%` : "0%",
-                            }}
-                          />
-                        </div>
-                      </PressButton>
-                    </TooltipWrapper>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          <StartLanderDrives
+            drives={drives}
+            driveInfo={driveInfo}
+            loading={!drivesLoaded || !driveInfoLoaded}
+            onOpenDrive={onOpenDrive}
+            onOpenDriveNewTab={onOpenDriveNewTab}
+          />
           <div
             className={`lander-recents lander-section${visibleRecents.length === 0 ? " is-empty" : ""}`}
           >

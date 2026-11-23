@@ -23,12 +23,12 @@ const captureSession = ({ tabs, activeTabId, recentJumps }: SessionState, pane: 
 };
 
 export const captureWorkspaceLayout = (): WorkspaceLayout => {
-  const { open, height, heightUnit, active } = useBottomPaneStore.getState();
+  const { open, height, heightUnit, active, link } = useBottomPaneStore.getState();
   const { initialized, places } = usePlacesStore.getState();
   return {
     main: captureSession(useSessionStore.getState(), "main"),
     bottom: captureSession(useBottomSessionStore.getState(), "bottom"),
-    pane: { open, height, heightUnit, active: open && active },
+    pane: { open, height, heightUnit, active: open && active, link },
     places: { initialized, places: places.map((place) => ({ ...place })) },
   };
 };

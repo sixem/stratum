@@ -29,10 +29,17 @@ pub(super) struct TransferManagerInner {
 
 #[derive(Default)]
 pub(super) struct TransferManagerState {
-    active_jobs: Vec<ActiveTransferJobState>,
+    pub(super) active_jobs: Vec<ActiveTransferJobState>,
     // Arrival order keeps overlapping operations from leapfrogging each other.
     pub(super) queued_jobs: VecDeque<QueuedTransferJobState>,
     pub(super) completed_jobs: VecDeque<TransferJobSnapshot>,
+    // A cancelled queue entry can disappear before its planner or staging
+    // cleanup finishes. Shutdown also waits for those owners.
+    pub(super) planning_jobs: usize,
+    pub(super) releasing_jobs: usize,
+    pub(super) shutdown_ticket: Option<u64>,
+    pub(super) next_shutdown_ticket: u64,
+    pub(super) process_exit_requested: bool,
     snapshot_revision: u64,
 }
 
@@ -141,6 +148,7 @@ impl TransferManagerState {
         let index = self.next_available_job(QueuedTransferPlanningState::is_pending)?;
         let queued = &mut self.queued_jobs[index];
         queued.planning_state = QueuedTransferPlanningState::Planning;
+        self.planning_jobs += 1;
         Some(queued.request.clone())
     }
 

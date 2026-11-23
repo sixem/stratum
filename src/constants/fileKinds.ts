@@ -1,191 +1,26 @@
-// File extension buckets for type detection.
-export const CONFIG_EXTENSIONS = new Set([
-  "cfg",
-  "conf",
-  "config",
-  "json",
-  "jsonc",
-  "json5",
-  "yaml",
-  "yml",
-  "toml",
-  "ini",
-  "properties",
-  "env",
-]);
+// File extension buckets for type detection and search.
+import fileKinds from "./fileKinds.json";
 
-export const CODE_EXTENSIONS = new Set([
-  "mdx",
-  "xml",
-  "html",
-  "htm",
-  "css",
-  "scss",
-  "sass",
-  "less",
-  "js",
-  "jsx",
-  "ts",
-  "tsx",
-  "mjs",
-  "cjs",
-  "c",
-  "h",
-  "cpp",
-  "hpp",
-  "cc",
-  "hh",
-  "cs",
-  "java",
-  "kt",
-  "kts",
-  "swift",
-  "py",
-  "rb",
-  "php",
-  "go",
-  "rs",
-  "sql",
-  "gql",
-  "graphql",
-  "lua",
-  "pl",
-  "svelte",
-  "vue",
-  "zig",
-]);
+export const CONFIG_EXTENSIONS = new Set(fileKinds.config);
 
-export const SCRIPT_EXTENSIONS = new Set([
-  "bat",
-  "cmd",
-  "ps1",
-  "psm1",
-  "vbs",
-  "vbe",
-  "sh",
-  "bash",
-  "zsh",
-  "fish",
-]);
+export const CODE_EXTENSIONS = new Set(fileKinds.code);
 
-export const DOCUMENT_EXTENSIONS = new Set([
-  ...CONFIG_EXTENSIONS,
-  ...CODE_EXTENSIONS,
-  "adoc",
-  "asciidoc",
-  "doc",
-  "docx",
-  "odt",
-  "rtf",
-  "txt",
-  "md",
-  "markdown",
-  "rst",
-  "pdf",
-  "ppt",
-  "pptx",
-  "xls",
-  "xlsx",
-  "csv",
-  "tsv",
-  "log",
-  "svg",
-  "svgz",
-  "pages",
-  "numbers",
-  "key",
-  "epub",
-]);
+export const SCRIPT_EXTENSIONS = new Set(fileKinds.script);
 
-export const SECURE_EXTENSIONS = new Set([
-  "pem",
-  "key",
-  "p8",
-  "p12",
-  "pfx",
-  "p7b",
-  "p7c",
-  "p7s",
-  "cer",
-  "crt",
-  "der",
-  "csr",
-  "ppk",
-  "gpg",
-  "pgp",
-  "jks",
-  "keystore",
-  "kdb",
-  "kdbx",
-]);
+export const DOCUMENT_EXTENSIONS = new Set([...CONFIG_EXTENSIONS, ...CODE_EXTENSIONS, ...fileKinds.document]);
+
+export const SECURE_EXTENSIONS = new Set(fileKinds.secure);
 
 export const PDF_LIKE_EXTENSIONS = new Set(["pdf"]);
 // Vector formats that should use the SVG-style icon in the grid.
 export const SVG_LIKE_EXTENSIONS = new Set(["svg", "svgz"]);
 
-export const ARCHIVE_EXTENSIONS = new Set([
-  "zip",
-  "zipx",
-  "rar",
-  "7z",
-  "tar",
-  "gz",
-  "tgz",
-  "bz2",
-  "xz",
-  "zst",
-]);
+export const ARCHIVE_EXTENSIONS = new Set(fileKinds.archive);
 
-export const VIDEO_EXTENSIONS = new Set([
-  "mp4",
-  "mov",
-  "mkv",
-  "avi",
-  "webm",
-  "m4v",
-  "mpg",
-  "mpeg",
-  "wmv",
-  "flv",
-  "3gp",
-  "ogv",
-]);
+export const VIDEO_EXTENSIONS = new Set(fileKinds.video);
 
-export const IMAGE_EXTENSIONS = new Set([
-  "jpg",
-  "jpeg",
-  "jfif",
-  "png",
-  "webp",
-  "gif",
-  "bmp",
-  "tif",
-  "tiff",
-  "ico",
-]);
+export const IMAGE_EXTENSIONS = new Set(fileKinds.image);
 
-export const AUDIO_EXTENSIONS = new Set([
-  "mp3",
-  "wav",
-  "flac",
-  "aac",
-  "m4a",
-  "ogg",
-  "oga",
-  "opus",
-  "wma",
-  "aiff",
-  "aif",
-  "alac",
-]);
+export const AUDIO_EXTENSIONS = new Set(fileKinds.audio);
 
-export const EXECUTABLE_EXTENSIONS = new Set([
-  ...SCRIPT_EXTENSIONS,
-  "exe",
-  "msi",
-  "com",
-  "app",
-  "appimage",
-  "run",
-  "bin",
-]);
+export const EXECUTABLE_EXTENSIONS = new Set([...SCRIPT_EXTENSIONS, ...fileKinds.executable]);

@@ -28,6 +28,7 @@ pub fn run() {
     });
     #[cfg(target_os = "windows")]
     let builder = builder
+        .plugin(platform::windows::profile_instance::init())
         .plugin(platform::windows::webview_navigation::init())
         .manage(platform::windows::dragdrop::IncomingDrops::default())
         .manage(platform::windows::menu_host::MenuHost::default())
@@ -47,6 +48,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             #[cfg(target_os = "windows")]
+            if let Err(error) = platform::windows::profile_instance::register_window(app.handle()) {
+                eprintln!("Failed to register the profile window: {error}");
+            }
+            #[cfg(target_os = "windows")]
             if let Err(error) =
                 platform::windows::console::install_console_exit_handler(&app.handle().clone())
             {
@@ -63,11 +68,16 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            app::commands::open_stratum_backup,
+            app::commands::save_stratum_backup,
+            app::commands::probe_backup_folders,
             app::commands::get_home,
             app::commands::get_places,
             app::commands::list_drives,
             app::commands::ensure_dir,
             app::commands::create_folder,
+            app::commands::create_tracked_folder,
+            app::commands::remove_created_folder_if_empty,
             app::commands::create_file,
             app::commands::list_drive_info,
             app::commands::list_dir,
@@ -82,7 +92,11 @@ pub fn run() {
             app::commands::pause_transfer_job,
             app::commands::resume_transfer_job,
             app::commands::cancel_transfer_job,
+            app::commands::begin_transfer_shutdown,
+            app::commands::wait_for_transfer_shutdown,
+            app::commands::reopen_transfer_queue,
             app::commands::set_clipboard_paths,
+            app::commands::set_clipboard_text,
             app::commands::get_clipboard_paths,
             app::commands::get_file_clipboard,
             app::commands::finish_file_cut,
@@ -108,9 +122,12 @@ pub fn run() {
             app::commands::get_indexed_search_catalog_path,
             app::commands::get_indexed_search_status,
             app::commands::set_indexed_search_enabled,
+            app::commands::nudge_indexed_search,
             app::commands::list_indexed_drive_statuses,
             app::commands::query_indexed_paths,
             app::commands::query_indexed_path_page,
+            app::commands::query_indexed_folder_page,
+            app::commands::quick_move_destination_exists,
             app::commands::rebuild_indexed_drive,
             app::commands::get_thumb_cache_dir,
             app::commands::clear_thumb_cache,
@@ -130,6 +147,15 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { code, ref api, .. } = event {
+                if let Some(jobs) =
+                    app.try_state::<services::transfer_manager::TransferManagerHandle>()
+                {
+                    if jobs.defer_process_exit(app, code, api) {
+                        return;
+                    }
+                }
+            }
             if matches!(
                 event,
                 tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit

@@ -32,6 +32,7 @@ type UseAppFileViewPropsOptions = {
     | "onOpenRecentNewTab"
     | "drives"
     | "drivesLoaded"
+    | "driveInfoLoaded"
     | "driveInfo"
     | "onOpenDrive"
     | "onOpenDriveNewTab"

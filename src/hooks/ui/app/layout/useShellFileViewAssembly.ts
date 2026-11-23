@@ -81,6 +81,7 @@ export const useShellFileViewAssembly = ({
           onOpenRecentNewTab: navigationController.handleOpenInNewTab,
           drives: fileManager.drives,
           drivesLoaded: fileManager.drivesLoaded,
+          driveInfoLoaded: fileManager.driveInfoLoaded,
           driveInfo: fileManager.driveInfo,
           onOpenDrive: navigationController.handleSelectDrive,
           onOpenDriveNewTab: navigationController.handleOpenInNewTab,

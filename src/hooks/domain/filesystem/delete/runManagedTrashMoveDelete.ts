@@ -33,6 +33,7 @@ export const runManagedTrashMoveDelete = async ({
   const trashGroups = new Map<string, string[]>();
   const trashFailures: string[] = [];
   const moved: UndoTrashEntry[] = [];
+  let movedCount = 0;
   const remaining = new Set<string>();
   const transferFailures: string[] = [];
   let cancelled = false;
@@ -63,7 +64,12 @@ export const runManagedTrashMoveDelete = async ({
       const report = await operations.runManagedTrashMove(trashCandidates, batchDir);
       transferFailures.push(...report.failures);
       for (const entry of report.movedEntries) {
-        moved.push({ originalPath: entry.sourcePath, trashPath: entry.destinationPath });
+        if (entry.identity) {
+          moved.push({
+            originalPath: entry.sourcePath, trashPath: entry.destinationPath, identity: entry.identity,
+          });
+        }
+        movedCount += 1;
         pending.delete(entry.sourcePath);
       }
       cancelled = report.cancelled;
@@ -95,6 +101,8 @@ export const runManagedTrashMoveDelete = async ({
 
   if (moved.length > 0) {
     context.pushUndo({ type: "trash", entries: moved });
+  }
+  if (movedCount > 0) {
     await context.refreshAfterChange();
   }
 
@@ -102,8 +110,8 @@ export const runManagedTrashMoveDelete = async ({
   const combinedFailures = [...trashFailures, ...transferFailures];
   if (cancelled) {
     return buildDeleteReport(
-      moved.length,
-      Math.max(0, paths.length - moved.length),
+      movedCount,
+      Math.max(0, paths.length - movedCount),
       true,
       combinedFailures,
     );
@@ -138,8 +146,8 @@ export const runManagedTrashMoveDelete = async ({
           }
           showDeleteIssues(context.promptStore, hardReport.cancelled ? [] : hardReport.failures);
           return buildDeleteReport(
-            moved.length + hardReport.deleted,
-            Math.max(0, paths.length - moved.length - hardReport.deleted),
+            movedCount + hardReport.deleted,
+            Math.max(0, paths.length - movedCount - hardReport.deleted),
             hardReport.cancelled,
             [...combinedFailures, ...hardReport.failures],
           );
@@ -158,8 +166,8 @@ export const runManagedTrashMoveDelete = async ({
             "Failed to delete selected items.",
           );
           return buildDeleteReport(
-            moved.length,
-            Math.max(0, paths.length - moved.length),
+            movedCount,
+            Math.max(0, paths.length - movedCount),
             false,
             combinedFailures,
           );
@@ -167,8 +175,8 @@ export const runManagedTrashMoveDelete = async ({
       },
       onCancel: () =>
         buildDeleteReport(
-          moved.length,
-          Math.max(0, paths.length - moved.length),
+            movedCount,
+            Math.max(0, paths.length - movedCount),
           false,
           combinedFailures,
         ),
@@ -177,8 +185,8 @@ export const runManagedTrashMoveDelete = async ({
 
   showDeleteIssues(context.promptStore, combinedFailures);
   return buildDeleteReport(
-    moved.length,
-    Math.max(0, paths.length - moved.length),
+    movedCount,
+    Math.max(0, paths.length - movedCount),
     false,
     combinedFailures,
   );

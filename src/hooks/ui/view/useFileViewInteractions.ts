@@ -5,6 +5,7 @@ import type { ViewMode } from "@/types";
 import type { ScrollAlignment } from "@/hooks/perf/scroll";
 import { folderPathKey } from "@/lib";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
+import { useQuickMoveSession } from "@/modules/quickMoveSession";
 import type { FileViewModel } from "./useFileViewModel";
 import { useNavigationReveal } from "./useNavigationReveal";
 import { useFileViewSelection } from "../selection/useFileViewSelection";
@@ -134,6 +135,7 @@ export const useFileViewInteractions = ({
   const shouldHandleTypeahead = useCallback(
     (activeElement: Element | null) => {
       if (settingsOpen || contextMenuOpen || promptOpen) return false;
+      if (useQuickMoveSession.getState().request) return false;
       if (useBottomPaneStore.getState().active) return false;
       // Block typeahead while quick preview is active to avoid stealing focus.
       if (previewOpenRef.current) return false;

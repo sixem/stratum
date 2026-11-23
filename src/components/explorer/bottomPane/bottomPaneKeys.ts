@@ -6,6 +6,7 @@ import { releaseInputFocusOnEscape } from "@/hooks/ui/inputs/inputFocus";
 import { handleSearchHotkey } from "@/hooks/ui/inputs/useSearchHotkey";
 import { moveFileSelection } from "@/hooks/ui/selection/moveFileSelection";
 import { buildKeybindFromEvent, useIndexedSearchUiStore, useSettingsStore, usePromptStore, writeFileClipboard } from "@/modules";
+import { openQuickMove, useQuickMoveSession } from "@/modules/quickMoveSession";
 import type { EntryContextTarget } from "@/types";
 import type { PaneActions } from "./BottomPane";
 import type { useBottomFolder } from "./useBottomFolder";
@@ -27,6 +28,7 @@ type Options = {
   startRename: (item: EntryContextTarget) => void;
   clearSelection: () => void;
   undo: () => Promise<void>;
+  moveEntries: (paths: string[], destination: string) => void;
   scrollTo: (index: number) => void;
   handleTypeahead: (event: KeyboardEvent) => boolean;
   handleTabJump: (event: KeyboardEvent) => boolean;
@@ -35,7 +37,7 @@ type Options = {
 export function bottomPaneKeys({
   folder, actions, address, files, searchInput, clearSearchAndFocusFiles, browseFromView,
   openContextMenu, paths, ready, commandsBlocked, gridColumns, closeTab,
-  startRename, clearSelection, undo, scrollTo, handleTypeahead, handleTabJump,
+  startRename, clearSelection, undo, moveEntries, scrollTo, handleTypeahead, handleTabJump,
 }: Options) {
   const { dir, tabs, model, selection } = folder;
   const navigate = tabs.browseTo;
@@ -48,7 +50,8 @@ export function bottomPaneKeys({
     // Indexed search belongs to the window, even when the lower pane has focus.
     if (binding === keybinds.openIndexedSearch) return;
     event.stopPropagation();
-    if (commandsBlocked || usePromptStore.getState().prompt || useIndexedSearchUiStore.getState().open) return;
+    if (commandsBlocked || usePromptStore.getState().prompt || useIndexedSearchUiStore.getState().open ||
+        useQuickMoveSession.getState().request) return;
     if (event.defaultPrevented || event.nativeEvent.isComposing) return;
     if (releaseInputFocusOnEscape(event.nativeEvent, files.current)) return;
     if (handleSearchHotkey(event, searchInput.current, clearSearchAndFocusFiles)) return;
@@ -79,6 +82,9 @@ export function bottomPaneKeys({
       if (!openContextMenu(binding === "Shift+F10")) return;
     }
     else if (!ready) return;
+    else if (binding === keybinds.quickMove) {
+      if (!openQuickMove(paths, moveEntries)) return;
+    }
     // These gestures also work after a tab or toolbar button has taken focus.
     else if (handleTypeahead(event.nativeEvent) || (smartTabJump && handleTabJump(event.nativeEvent))) {
       event.preventDefault();

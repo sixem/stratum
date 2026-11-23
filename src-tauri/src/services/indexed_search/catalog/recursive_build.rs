@@ -259,7 +259,8 @@ impl RecursiveBuild {
         ensure_owned(&tx, &self.drive, &self.volume_id, &self.attempt)?;
         let inserted = {
             let mut insert = tx.prepare_cached(
-                "INSERT OR IGNORE INTO indexed_entries (path, normalized_name, kind) VALUES (?1, ?2, ?3)",
+                "INSERT OR IGNORE INTO indexed_entries (path, normalized_name, kind, size_bytes)
+                 VALUES (?1, ?2, ?3, ?4)",
             ).map_err(database_error)?;
             let mut pending = tx
                 .prepare_cached(
@@ -272,7 +273,8 @@ impl RecursiveBuild {
                     .execute(params![
                         record.path,
                         record.normalized_name,
-                        kind_to_int(record.kind)
+                        kind_to_int(record.kind),
+                        record.size_bytes
                     ])
                     .map_err(database_error)?;
             }

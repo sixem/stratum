@@ -17,6 +17,7 @@ import type { EntryMeta, ThumbnailRequest } from "@/types";
 import { useGridDisplayMeta } from "./useGridDisplayMeta";
 import type { GridDisplayMeta } from "./useGridDisplayMeta";
 import { useGridFolderSamples } from "./useGridFolderSamples";
+import type { FolderThumbnail } from "./useGridFolderSamples";
 
 type UseGridThumbRequestsOptions = {
   viewportRef: RefObject<HTMLDivElement | null>;
@@ -39,7 +40,7 @@ type UseGridThumbRequestsOptions = {
 type GridThumbRequestsState = {
   gridMetaByPath: Map<string, GridDisplayMeta>;
   thumbSource: Map<string, string>;
-  folderThumbSource: Map<string, string>;
+  folderThumbSource: Map<string, FolderThumbnail>;
   fileIcons: Map<string, string | null>;
   executableIcons: Map<string, string | null>;
   scrolling: boolean;

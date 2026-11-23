@@ -14,14 +14,16 @@ mod transfer;
 use self::copy::execute_copy_manifest_root;
 use self::manifest_roots::build_copy_manifest_for_path;
 use self::progress::{emit_path_progress, emit_root_completion};
-use self::transfer::{execute_fast_move_root, execute_transfer_root};
+use self::transfer::{
+    execute_fast_move_root, execute_transfer_root, FastMoveOutcome, TransferOutcome,
+};
 use super::common::{build_copy_decision_sets, check_transfer_control};
 use super::manifest::{build_manifest_root, requested_roots, validate_destination};
-use super::strategy::classify_transfer_root;
+use super::strategy::{classify_transfer_root, TransferRootStrategy};
 use super::TRANSFER_CANCELLED_MESSAGE;
 use crate::domain::filesystem::{
-    CopyOptions, CopyReport, MovedTransferEntry, TransferControlCallback, TransferOptions,
-    TransferProgressCallback, TransferReport,
+    CopyOptions, CopyReport, EntryIdentity, MovedTransferEntry, TransferControlCallback,
+    TransferOptions, TransferProgressCallback, TransferReport,
 };
 
 // A cancelled root ends the job, including when it is the last item in the batch.
@@ -115,6 +117,11 @@ pub fn transfer_entries(
     on_progress: Option<&mut TransferProgressCallback>,
     on_control: Option<&mut TransferControlCallback>,
 ) -> Result<TransferReport, String> {
+    let _protected_folder = options
+        .as_ref()
+        .and_then(|options| options.protected_folder.as_ref())
+        .map(|folder| folder.pin_for_transfer())
+        .transpose()?;
     let target_path = validate_destination(&destination)?;
     let mut report = TransferReport::default();
 
@@ -160,6 +167,22 @@ fn transfer_roots(
         let processed = index;
         let completed = index + 1;
 
+        let expected =
+            if let Some(sources) = options.and_then(|value| value.expected_sources.as_ref()) {
+                let Some(identity) = sources.get(&raw_path) else {
+                    record_root_failure(
+                        &mut report.failures,
+                        &raw_path,
+                        "Undo cannot verify this item's identity.".into(),
+                    )?;
+                    emit_root_completion(raw_path, false, completed, total, &mut on_progress);
+                    continue;
+                };
+                Some(identity)
+            } else {
+                None
+            };
+
         let strategy =
             match classify_transfer_root(&raw_path, target_path, options, &mut on_control) {
                 Ok(Some(strategy)) => strategy,
@@ -174,15 +197,20 @@ fn transfer_roots(
                 }
             };
 
-        if strategy.use_fast_move {
+        // Grouping uses sibling paths on one volume. Never fall back to merging
+        // or copying over a name that appeared while the move was queued.
+        let grouped_move = strategy.should_move
+            && options.is_some_and(|options| options.protected_folder.is_some());
+        if strategy.use_fast_move || grouped_move {
             emit_path_progress(&strategy.source, processed, total, &mut on_progress);
-            match execute_fast_move_root(&strategy.source, &strategy.destination, &mut on_control) {
-                Ok(true) => {
-                    report.moved = report.moved.saturating_add(1);
-                    report.moved_entries.push(MovedTransferEntry {
-                        source_path: strategy.source.to_string_lossy().to_string(),
-                        destination_path: strategy.destination.to_string_lossy().to_string(),
-                    });
+            match execute_fast_move_root(
+                &strategy.source,
+                &strategy.destination,
+                expected,
+                &mut on_control,
+            ) {
+                Ok(FastMoveOutcome::Moved(identity)) => {
+                    record_move(report, &strategy, identity);
                     emit_root_completion(raw_path, true, completed, total, &mut on_progress);
                     continue;
                 }
@@ -191,7 +219,16 @@ fn transfer_roots(
                     emit_root_completion(raw_path, false, completed, total, &mut on_progress);
                     continue;
                 }
-                Ok(false) => {}
+                Ok(FastMoveOutcome::CrossVolume) if grouped_move => {
+                    record_root_failure(
+                        &mut report.failures,
+                        &raw_path,
+                        "The folder has to be on the same volume.".into(),
+                    )?;
+                    emit_root_completion(raw_path, false, completed, total, &mut on_progress);
+                    continue;
+                }
+                Ok(FastMoveOutcome::CrossVolume) => {}
             }
         }
 
@@ -209,21 +246,18 @@ fn transfer_roots(
             &manifest,
             strategy.overwrite,
             strategy.should_move,
+            expected,
             processed,
             total,
             &mut on_progress,
             &mut on_control,
             &mut report.failures,
         ) {
-            Ok(true) => {
-                report.moved = report.moved.saturating_add(1);
-                report.moved_entries.push(MovedTransferEntry {
-                    source_path: strategy.source.to_string_lossy().to_string(),
-                    destination_path: strategy.destination.to_string_lossy().to_string(),
-                });
+            Ok(TransferOutcome::Moved(identity)) => {
+                record_move(report, &strategy, identity);
                 true
             }
-            Ok(false) => {
+            Ok(TransferOutcome::Copied) => {
                 report.copied = report.copied.saturating_add(1);
                 false
             }
@@ -237,4 +271,17 @@ fn transfer_roots(
     }
 
     Ok(())
+}
+
+fn record_move(
+    report: &mut TransferReport,
+    strategy: &TransferRootStrategy,
+    identity: Option<EntryIdentity>,
+) {
+    report.moved = report.moved.saturating_add(1);
+    report.moved_entries.push(MovedTransferEntry {
+        source_path: strategy.source.to_string_lossy().into_owned(),
+        destination_path: strategy.destination.to_string_lossy().into_owned(),
+        identity,
+    });
 }

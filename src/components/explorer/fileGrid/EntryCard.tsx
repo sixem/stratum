@@ -18,6 +18,8 @@ export const EntryCard = memo(({
   extension,
   sizeLabel,
   thumbUrl,
+  thumbPath,
+  onThumbError,
   appIconUrl,
   executableIconUrl,
   appIconsEnabled,
@@ -166,6 +168,7 @@ export const EntryCard = memo(({
           fileKind={fileKind}
           extension={extension}
           thumbUrl={thumbUrl}
+          onThumbError={thumbPath && onThumbError ? (url) => onThumbError(thumbPath, url) : undefined}
           appIconUrl={appIconUrl}
           executableIconUrl={executableIconUrl}
           appIconsEnabled={appIconsEnabled}

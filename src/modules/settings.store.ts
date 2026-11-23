@@ -42,11 +42,15 @@ const readStoredSettings = () => {
   }
 };
 
+export const serializeSettings = (settings: Settings) => {
+  const payload: StoredSettings = { version: STORAGE_VERSION, settings };
+  return [STORAGE_KEY, JSON.stringify(payload)] as const;
+};
+
 const writeStoredSettings = (settings: Settings) => {
   try {
     if (!("localStorage" in globalThis)) return;
-    const payload: StoredSettings = { version: STORAGE_VERSION, settings };
-    globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    globalThis.localStorage.setItem(...serializeSettings(settings));
   } catch {
     // Ignore storage errors (private mode, denied, etc.).
   }

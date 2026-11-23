@@ -28,6 +28,7 @@ export type IndexedDriveStatus = {
   filesystem?: string | null;
   state: IndexedDriveState;
   indexable: boolean;
+  searchable: boolean;
   startedAt?: number | null;
   lastUpdatedAt: number;
   entryCount?: number | null;
@@ -43,6 +44,7 @@ export type IndexedPathMatch = {
   parentPath?: string | null;
   drivePath?: string | null;
   kind: IndexedEntryKind;
+  sizeBytes?: number | null;
 };
 
 export type IndexedPathQuery = {

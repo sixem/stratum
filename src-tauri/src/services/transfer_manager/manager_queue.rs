@@ -217,6 +217,9 @@ impl TransferManagerHandle {
                 .state
                 .lock()
                 .map_err(|_| "transfer manager state unavailable".to_string())?;
+            if guard.shutdown_ticket.is_some() {
+                return Ok(false);
+            }
             let Some(active) = guard.active_job_mut(job_id) else {
                 return Ok(false);
             };
@@ -269,6 +272,7 @@ impl TransferManagerHandle {
             let Some(queued) = guard.remove_queued_job(job_id) else {
                 return Ok(false);
             };
+            guard.releasing_jobs += 1;
             let request = queued.request;
             let _ = request.control.cancel();
             let mut cancelled = request.snapshot.clone();
@@ -282,6 +286,11 @@ impl TransferManagerHandle {
         let _ = request
             .completion_tx
             .send(Err(TRANSFER_CANCELLED_MESSAGE.to_string()));
+        drop(request);
+        if let Ok(mut guard) = self.inner.state.lock() {
+            guard.releasing_jobs -= 1;
+        }
+        self.inner.queue_signal.notify_all();
         Ok(true)
     }
 
@@ -294,6 +303,9 @@ impl TransferManagerHandle {
                 .state
                 .lock()
                 .map_err(|_| "transfer manager state unavailable".to_string())?;
+            if guard.shutdown_ticket.is_some() {
+                return Err("Stratum is closing and cannot start a new job.".to_string());
+            }
             if guard.has_pending_job(&job.snapshot.id) {
                 return Err("A transfer with this ID is already queued or running".to_string());
             }

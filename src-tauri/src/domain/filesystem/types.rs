@@ -51,6 +51,7 @@ pub struct ListDirOptions {
     pub sort: Option<SortState>,
     pub search: Option<String>,
     pub fast: Option<bool>,
+    pub include_meta: Option<bool>,
     // Generation counter from the UI; newer generations cancel older scans.
     pub generation: Option<u64>,
     #[serde(default)]
@@ -140,4 +141,7 @@ pub struct TransferOptions {
     pub mode: Option<TransferMode>,
     pub overwrite: Option<bool>,
     pub overwrite_paths: Option<HashSet<PathBuf>>,
+    pub protected_folder: Option<super::CreatedFolder>,
+    // Undo requires an identity for every requested source.
+    pub expected_sources: Option<std::collections::HashMap<String, super::EntryIdentity>>,
 }

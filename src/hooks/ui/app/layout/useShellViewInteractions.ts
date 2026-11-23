@@ -337,6 +337,13 @@ export const useShellViewInteractions = ({
     onRenameEntry: handleRenameStart,
     onPasteEntries: fileManager.pasteEntries,
     onMoveEntries: fileManager.moveEntries,
+    onCreateFolderWithSelection: async (paths, parent, name, onCreated) => {
+      const created = await fileManager.createFolderWithSelection(paths, parent, name, onCreated);
+      if (created && viewVisit.current) {
+        tabSession.setSearch("");
+        queueCreateSelection(created, parent);
+      }
+    },
     onRemoveRecentJump: tabSession.removeRecentJump,
   });
 

@@ -1,5 +1,5 @@
 // Debounce typing and keep one running search plus the latest queued refresh.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { queryIndexedPathPage } from "@/api";
 import { toMessage } from "@/lib";
@@ -8,6 +8,13 @@ import {
   INDEXED_SEARCH_QUERY_DEBOUNCE_MS,
   INDEXED_SEARCH_PAGE_SIZE,
 } from "./indexedSearchModalConfig";
+import {
+  captureIndexedSearchAnchor,
+  hasIndexedSearchAnchor,
+  indexedSearchAnchorScrollTop,
+  MAX_REFRESH_PAGES,
+} from "./indexedSearchRefresh";
+import type { IndexedSearchRefreshAnchor } from "./indexedSearchRefresh";
 
 type UseIndexedSearchResultsParams = {
   catalogPending: boolean;
@@ -23,8 +30,14 @@ type SearchResult = SearchScope & {
   paged: boolean;
   error: string | null;
   pageError: string | null;
+  refreshError?: string;
+  scrollRestore?: { top: number };
 };
-type SearchRequest = SearchScope & { previous?: SearchResult };
+type SearchRequest = SearchScope & (
+  | { kind: "head" }
+  | { kind: "next"; previous: SearchResult }
+  | { kind: "refresh"; previous: SearchResult; anchor: IndexedSearchRefreshAnchor | null }
+);
 
 const EMPTY_RESULTS: IndexedPathMatch[] = [];
 
@@ -41,12 +54,14 @@ export const useIndexedSearchResults = ({
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [lastResult, setLastResult] = useState<SearchResult | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const trimmedQuery = query.trim();
 
   useEffect(() => {
     lastResultRef.current = null;
     setLastResult(null);
     setLoadingMore(false);
+    setRefreshing(false);
     if (!open || !trimmedQuery) {
       setDebouncedQuery("");
       return;
@@ -68,36 +83,54 @@ export const useIndexedSearchResults = ({
     try {
       while (latestRequestRef.current) {
         const request = latestRequestRef.current;
-        const { previous, query, catalogRevision } = request;
+        const { query, catalogRevision } = request;
+        const previousPage = request.kind === "next" ? request.previous : null;
         let result: SearchResult;
 
         try {
-          let cursor = previous?.nextCursor ?? null;
-          let matches: IndexedPathMatch[];
-          const existingPaths = previous && new Set(previous.matches.map(({ path }) => path));
-          // Drive changes can invalidate hits or move already shown paths beyond the cursor.
-          // Keep advancing through pages that add nothing to the current results.
+          let cursor = previousPage?.nextCursor ?? null;
+          const added: IndexedPathMatch[] = [];
+          const previousPaths = previousPage && new Set(previousPage.matches.map(({ path }) => path));
+          const addedIndexes = new Map<string, number>();
+          const visitedCursors = new Set<string>();
+          let pages = 0;
           do {
+            if (cursor) visitedCursors.add(cursor);
             const page = await queryIndexedPathPage({ query, limit: INDEXED_SEARCH_PAGE_SIZE, cursor });
-            matches = existingPaths
-              ? page.matches.filter(({ path }) => !existingPaths.has(path))
-              : page.matches;
-            cursor = page.nextCursor === cursor ? null : page.nextCursor;
-          } while (matches.length === 0 && cursor !== null && latestRequestRef.current === request);
+            if (latestRequestRef.current !== request) break;
+            pages += 1;
+            for (const match of page.matches) {
+              if (previousPaths?.has(match.path) || addedIndexes.has(match.path)) continue;
+              addedIndexes.set(match.path, added.length);
+              added.push(match);
+            }
+            cursor = page.nextCursor && !visitedCursors.has(page.nextCursor) ? page.nextCursor : null;
+            if (request.kind === "refresh") {
+              if (pages >= MAX_REFRESH_PAGES || hasIndexedSearchAnchor(addedIndexes, request.anchor)) break;
+            } else if (added.length) break;
+            // A cursor can traverse a page whose paths are already in the list.
+          } while (cursor !== null);
 
           if (latestRequestRef.current !== request) continue;
-          if (previous) matches = previous.matches.concat(matches);
           result = {
-            query, catalogRevision, matches, nextCursor: cursor, paged: Boolean(previous),
+            query, catalogRevision, matches: previousPage ? previousPage.matches.concat(added) : added,
+            nextCursor: cursor, paged: request.kind !== "head",
             error: null, pageError: null,
+            scrollRestore: request.kind === "refresh" ? {
+              top: indexedSearchAnchorScrollTop(addedIndexes, request.anchor),
+            } : previousPage?.scrollRestore,
           };
         } catch (error) {
-          result = previous
-            ? { ...previous, pageError: toMessage(error, "Couldn't load more results.") }
-            : {
+          if (request.kind === "refresh") {
+            result = { ...request.previous, refreshError: toMessage(error, "Couldn't refresh results.") };
+          } else if (previousPage) {
+            result = { ...previousPage, pageError: toMessage(error, "Couldn't load more results.") };
+          } else {
+            result = {
               query, catalogRevision, matches: EMPTY_RESULTS, nextCursor: null, paged: false,
               error: toMessage(error, "Search is currently unavailable."), pageError: null,
             };
+          }
         }
 
         // A new query or catalog revision can replace the pending request
@@ -107,6 +140,7 @@ export const useIndexedSearchResults = ({
           lastResultRef.current = result;
           setLastResult(result);
           setLoadingMore(false);
+          setRefreshing(false);
         }
       }
     } finally {
@@ -114,12 +148,22 @@ export const useIndexedSearchResults = ({
     }
   }, []);
 
+  useLayoutEffect(() => {
+    const pending = latestRequestRef.current;
+    if (pending && pending.kind !== "head" && (catalogPending || pending.catalogRevision !== catalogRevision)) {
+      // A known catalog change invalidates the cursor before the next page can be appended.
+      latestRequestRef.current = null;
+      setLoadingMore(false);
+      setRefreshing(false);
+    }
+  }, [catalogPending, catalogRevision]);
+
   useEffect(() => {
     if (catalogPending || !open || !debouncedQuery || trimmedQuery !== debouncedQuery) return;
     // Keep the established scroll range while the user is browsing later pages.
-    if (lastResultRef.current?.paged || latestRequestRef.current?.previous) return;
+    if (lastResultRef.current?.paged) return;
 
-    const request = { query: debouncedQuery, catalogRevision };
+    const request: SearchRequest = { kind: "head", query: debouncedQuery, catalogRevision };
     latestRequestRef.current = request;
     void runLatest();
 
@@ -129,14 +173,30 @@ export const useIndexedSearchResults = ({
   }, [catalogPending, catalogRevision, debouncedQuery, open, runLatest, trimmedQuery]);
 
   const loadMore = useCallback(() => {
-    const previous = lastResultRef.current;
-    if (!open || catalogPending || !previous?.nextCursor || previous.query !== trimmedQuery
-      || latestRequestRef.current) return;
+    const current = lastResultRef.current;
+    if (!open || catalogPending || !current?.nextCursor || current.query !== trimmedQuery
+      || current.catalogRevision !== catalogRevision || latestRequestRef.current) return;
 
+    // Protect the current viewport even if a revision arrives during the first page request.
+    const previous = current.paged ? current : { ...current, paged: true };
+    lastResultRef.current = previous;
+    if (previous !== current) setLastResult(previous);
     setLoadingMore(true);
-    latestRequestRef.current = { query: previous.query, catalogRevision: previous.catalogRevision, previous };
+    latestRequestRef.current = { kind: "next", query: previous.query, catalogRevision, previous };
     void runLatest();
-  }, [catalogPending, open, runLatest, trimmedQuery]);
+  }, [catalogPending, catalogRevision, open, runLatest, trimmedQuery]);
+
+  const refreshResults = useCallback((selectedIndex: number) => {
+    const previous = lastResultRef.current;
+    if (!open || catalogPending || !previous?.paged || previous.query !== trimmedQuery
+      || previous.catalogRevision === catalogRevision || latestRequestRef.current?.kind === "refresh") return;
+    const viewport = resultsViewportRef.current;
+    const anchor = viewport ? captureIndexedSearchAnchor(previous.matches, viewport, selectedIndex) : null;
+    setLoadingMore(false);
+    setRefreshing(true);
+    latestRequestRef.current = { kind: "refresh", query: previous.query, catalogRevision, previous, anchor };
+    void runLatest();
+  }, [catalogPending, catalogRevision, open, runLatest, trimmedQuery]);
 
   useEffect(() => {
     if (!open) return;
@@ -151,13 +211,18 @@ export const useIndexedSearchResults = ({
     results,
     resultsError: currentResult?.error ?? null,
     pageError: currentResult?.pageError ?? null,
+    refreshError: currentResult?.refreshError ?? null,
+    resultsUpdated: Boolean(currentResult?.paged && currentResult.catalogRevision !== catalogRevision),
+    refreshing,
+    refreshResults,
+    scrollRestore: currentResult?.scrollRestore,
     hasMore: Boolean(currentResult?.nextCursor),
     loadingMore,
     loadMore,
     resultsViewportRef,
     searching: trimmedQuery.length > 0 && (
       currentResult == null || (
-        results.length === 0 && currentResult.error == null &&
+        !currentResult.paged && results.length === 0 && currentResult.error == null &&
         currentResult.catalogRevision !== catalogRevision
       )
     ),

@@ -44,10 +44,18 @@ const readMoveHistory = (): MoveHistory => {
 
 const useRecentMoveStore = create<{ history: MoveHistory }>(() => ({ history: readMoveHistory() }));
 
+export const getRecentMoveHistory = (): ReadonlyMap<WorkspaceId, readonly string[]> =>
+  useRecentMoveStore.getState().history;
+
+export const serializeRecentMoveHistory = (history: MoveHistory) =>
+  [STORAGE_KEY, JSON.stringify([...history])] as const;
+
+export const publishRecentMoveHistory = (history: MoveHistory) => useRecentMoveStore.setState({ history });
+
 const saveHistory = (history: MoveHistory) => {
-  useRecentMoveStore.setState({ history });
+  publishRecentMoveHistory(history);
   try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify([...history]));
+    globalThis.localStorage?.setItem(...serializeRecentMoveHistory(history));
   } catch {
     // A storage failure should never change the outcome of a filesystem job.
   }

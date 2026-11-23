@@ -1,7 +1,7 @@
 // The store mirrors Windows for menu availability and Cut highlighting. Paste
 // always reads the system clipboard, including changes from other applications.
 import { createWithEqualityFn } from "zustand/traditional";
-import { getFileClipboard, setFileClipboard } from "@/api/clipboard";
+import { getFileClipboard, setFileClipboard, setTextClipboard } from "@/api/clipboard";
 import type { FileClipboard, FileClipboardMode } from "@/api/clipboard";
 import { toMessage } from "@/lib/fsUtils";
 import { usePromptStore } from "./promptStore";
@@ -27,20 +27,19 @@ export const refreshFileClipboard = async () => {
   return selection;
 };
 
-export const writeFileClipboard = async (paths: string[], mode: FileClipboardMode) => {
-  if (!paths.length) return;
+const writeClipboard = async (publish: () => Promise<void>, errorTitle: string) => {
   // A quick Copy followed by Cut must leave Cut as the final Windows operation.
   readGeneration++;
   const write = (pendingWrite ?? Promise.resolve())
     .catch(() => {})
-    .then(() => setFileClipboard(paths, mode));
+    .then(publish);
   pendingWrite = write;
   try {
     await write;
   } catch (error) {
     usePromptStore.getState().showPrompt({
-      title: mode === "move" ? "Couldn't cut items" : "Couldn't copy items",
-      content: toMessage(error, "Windows could not update the file clipboard."),
+      title: errorTitle,
+      content: toMessage(error, "Windows could not update the clipboard."),
       confirmLabel: "OK",
       cancelLabel: null,
     });
@@ -49,4 +48,17 @@ export const writeFileClipboard = async (paths: string[], mode: FileClipboardMod
     if (pendingWrite === write) pendingWrite = null;
   }
   if (!pendingWrite) await refreshFileClipboard().catch(() => {});
+};
+
+export const writeFileClipboard = async (paths: string[], mode: FileClipboardMode) => {
+  if (!paths.length) return;
+  await writeClipboard(
+    () => setFileClipboard(paths, mode),
+    mode === "move" ? "Couldn't cut items" : "Couldn't copy items",
+  );
+};
+
+export const writeTextClipboard = async (text: string) => {
+  if (!text) return;
+  await writeClipboard(() => setTextClipboard(text), "Couldn't copy text");
 };

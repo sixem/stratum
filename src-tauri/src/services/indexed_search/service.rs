@@ -115,6 +115,7 @@ impl IndexedSearchHandle {
                 let mut state = self.inner.state.lock().expect("indexed search state lock");
                 state.volumes.verified.clear();
                 state.volumes.journal_rebuilds.clear();
+                state.volumes.unavailable_journals.clear();
                 for status in state.drive_statuses.values_mut() {
                     if status.indexable && status.state == IndexedDriveState::Error {
                         status.state = IndexedDriveState::Queued;
@@ -163,7 +164,7 @@ impl IndexedSearchHandle {
         }
 
         let guard = self.inner.state.lock().expect("indexed search state lock");
-        guard.drive_statuses_snapshot()
+        guard.drive_statuses_snapshot(self.is_enabled())
     }
 
     pub(super) fn set_service_state(

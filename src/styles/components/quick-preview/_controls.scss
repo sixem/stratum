@@ -118,7 +118,7 @@
   top: 50%;
   width: var(--range-thumb-size);
   height: var(--range-thumb-size);
-  border-radius: var(--range-radius);
+  border-radius: 50%;
   border: var(--surface-border-width) solid rgba(255, 255, 255, 0.78);
   background: rgba(252, 254, 255, 0.96);
   box-shadow: var(--quick-preview-slider-thumb-shadow);

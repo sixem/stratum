@@ -35,6 +35,7 @@ import { PressButton } from "@/components/primitives/PressButton";
 import { alignFloatingAxis, clamp, getViewportSize } from "./overlayUtils";
 import { useOverlayDismiss } from "./useOverlayDismiss";
 import { focusFirstMenuItem, handleContextMenuKey } from "./contextMenuKeyboard";
+import { TooltipWrapper } from "./Tooltip";
 
 type ContextMenuProps = {
   open: boolean;
@@ -248,6 +249,7 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
               <div
                 ref={submenuRef}
                 className={`context-submenu${submenuSide === "left" ? " is-left" : " is-right"}`}
+                data-wide={item.wide || undefined}
                 role="menu"
                 style={{ top: submenuOffset }}
               >
@@ -260,7 +262,8 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
         );
       }
       const isRadio = typeof item.active === "boolean";
-      return (
+      const label = <span className="context-label">{item.label}</span>;
+      const button = (
         <PressButton
           key={item.id}
           type="button"
@@ -296,10 +299,17 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
               />
             ) : item.icon ? renderContextIcon(item.icon) : item.active ? "x" : ""}
           </span>
-          <span className="context-label" data-wrap={item.wrapLabel || undefined}>{item.label}</span>
+          {item.disabled && item.tooltip ? (
+            <TooltipWrapper text={item.tooltip} withinContextMenu>{label}</TooltipWrapper>
+          ) : label}
           {item.hint ? <span className="context-hint">{item.hint}</span> : null}
         </PressButton>
       );
+      return item.tooltip && !item.disabled ? (
+        <TooltipWrapper key={item.id} text={item.tooltip} withinContextMenu>
+          {button}
+        </TooltipWrapper>
+      ) : button;
     });
 
   return (

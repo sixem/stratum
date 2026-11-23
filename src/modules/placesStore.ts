@@ -171,15 +171,15 @@ const readStoredPlaces = (): PlacesState => {
   }
 };
 
+export const serializePlaces = ({ initialized, places }: PlacesState) => {
+  const payload: StoredPlacesState = { version: STORAGE_VERSION, initialized, places };
+  return [STORAGE_KEY, JSON.stringify(payload)] as const;
+};
+
 const writeStoredPlaces = (state: PlacesState) => {
   try {
     if (!("localStorage" in globalThis)) return;
-    const payload: StoredPlacesState = {
-      version: STORAGE_VERSION,
-      initialized: state.initialized,
-      places: state.places,
-    };
-    globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    globalThis.localStorage.setItem(...serializePlaces(state));
   } catch {
     // Ignore storage write failures (private mode, denied, etc.).
   }

@@ -2,7 +2,7 @@
 //
 // This component only renders the current query state. Fetching, debounce, and
 // keyboard movement live in hooks so the list stays predictable and reusable.
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { KeyboardEvent, RefObject } from "react";
 
 import loader from "@/assets/icons/loaders/ring.svg";
@@ -18,6 +18,7 @@ import {
   INDEXED_SEARCH_RESULT_HEIGHT, INDEXED_SEARCH_RESULT_INSET, INDEXED_SEARCH_RESULT_STRIDE,
 } from "./indexedSearchModalConfig";
 import { useIndexedSearchResultSizes } from "./useIndexedSearchResultSizes";
+import type { IndexedCopyModifiers } from "./indexedCopySelection";
 
 const OVERSCAN = 5;
 const NEXT_PAGE_THRESHOLD = 4;
@@ -32,13 +33,20 @@ type IndexedSearchResultsListProps = {
   onPreviewPress: (path: string) => boolean;
   onResultKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
   onSelectResult: (result: IndexedPathMatch) => void;
+  onSelectResultForCopy: (result: IndexedPathMatch, modifiers: IndexedCopyModifiers) => void;
   registerResultRow: (path: string, row: HTMLButtonElement | null) => void;
   results: IndexedPathMatch[];
   resultsError: string | null;
   pageError: string | null;
+  refreshError: string | null;
+  refreshing: boolean;
+  resultsUpdated: boolean;
+  refreshResults: () => void;
+  scrollRestore?: { top: number };
   resultsViewportRef: RefObject<HTMLDivElement | null>;
   searching: boolean;
   selectedResultIndex: number;
+  copyPaths: ReadonlySet<string> | null;
   trimmedQuery: string;
   visible: boolean;
 };
@@ -53,13 +61,20 @@ export const IndexedSearchResultsList = ({
   onPreviewPress,
   onResultKeyDown,
   onSelectResult,
+  onSelectResultForCopy,
   registerResultRow,
   results,
   resultsError,
   pageError,
+  refreshError,
+  refreshing,
+  resultsUpdated,
+  refreshResults,
+  scrollRestore,
   resultsViewportRef,
   searching,
   selectedResultIndex,
+  copyPaths,
   trimmedQuery,
   visible,
 }: IndexedSearchResultsListProps) => {
@@ -67,9 +82,16 @@ export const IndexedSearchResultsList = ({
   const resultCount = results.length;
   const loading = !resultsError && (catalogPending || searching);
   const resultsMetaLabel = `${formatCount(resultCount)}${hasMore ? "+" : ""} ${resultCount === 1 && !hasMore ? "match" : "matches"}`;
+  const appliedScroll = useRef<typeof scrollRestore>(undefined);
+  const restoreScroll = useCallback(() => {
+    const viewport = resultsViewportRef.current;
+    if (!viewport || !scrollRestore || appliedScroll.current === scrollRestore) return;
+    viewport.scrollTop = scrollRestore.top;
+    appliedScroll.current = scrollRestore;
+  }, [resultsViewportRef, scrollRestore]);
   const { startIndex, endIndex } = useVirtualRange(
     resultsViewportRef, resultCount, INDEXED_SEARCH_RESULT_STRIDE, OVERSCAN,
-    INDEXED_SEARCH_RESULT_INSET, INDEXED_SEARCH_RESULT_INSET,
+    INDEXED_SEARCH_RESULT_INSET, INDEXED_SEARCH_RESULT_INSET, { beforeLayoutMeasure: restoreScroll },
   );
   const visibleResults = useMemo(() => results.slice(startIndex, endIndex), [endIndex, results, startIndex]);
   const sizes = useIndexedSearchResultSizes(visible, visibleResults);
@@ -80,9 +102,14 @@ export const IndexedSearchResultsList = ({
   if (tabbableIndex >= endIndex && tabbableIndex < resultCount) renderedIndexes.push(tabbableIndex);
 
   useEffect(() => {
-    if (!visible || catalogPending || !hasMore || loadingMore || pageError || endIndex === 0) return;
-    if (endIndex >= results.length - NEXT_PAGE_THRESHOLD) loadMore();
-  }, [catalogPending, endIndex, hasMore, loadMore, loadingMore, pageError, results, visible]);
+    if (!visible || catalogPending || !hasMore || resultsUpdated || loadingMore || pageError || endIndex === 0) return;
+    const viewport = resultsViewportRef.current;
+    if (!viewport || endIndex < results.length - NEXT_PAGE_THRESHOLD) return;
+    // A fresh result set can commit before React restores the virtual range.
+    // Check the viewport itself before fetching beyond the refreshed pages.
+    const remaining = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    if (remaining <= (OVERSCAN + NEXT_PAGE_THRESHOLD + 1) * INDEXED_SEARCH_RESULT_STRIDE) loadMore();
+  }, [catalogPending, endIndex, hasMore, loadMore, loadingMore, pageError, results, resultsUpdated, resultsViewportRef, visible]);
   const emptyTitle = resultsError
     ? "Search unavailable"
     : catalogPending
@@ -93,8 +120,8 @@ export const IndexedSearchResultsList = ({
           ? "No matches"
           : "Find a file or folder";
   const emptyHint = resultsError ?? (hasQuery
-    ? "Try a shorter name or a wildcard pattern."
-    : "Enter part of a name or use a wildcard like *.pdf.");
+    ? "Try a shorter name or fewer filters."
+    : "Search by name, wildcard, size or type.");
 
   return (
     <section className="indexed-search-results" aria-label="Indexed results">
@@ -103,9 +130,23 @@ export const IndexedSearchResultsList = ({
         <div className="indexed-search-results-status">
           <span className="indexed-search-section-meta tnum" role="status">
             {hasQuery ? (resultCount === 0 && (loading || resultsError) ? emptyTitle : resultsMetaLabel) : null}
+            {copyPaths && copyPaths.size > 1 ? ` · ${formatCount(copyPaths.size)} selected` : null}
           </span>
           {loadingMore ? <img src={loader} alt="Loading more results" /> : null}
-          {pageError ? (
+          {resultsUpdated ? (
+            <TooltipWrapper text={refreshError ?? "Refresh results"}>
+              <PressButton
+                className="btn ghost indexed-search-results-refresh"
+                type="button"
+                aria-description={refreshError ?? "Refresh results"}
+                aria-disabled={refreshing || catalogPending}
+                pressOnPointerDown={false}
+                onClick={refreshResults}
+              >
+                {refreshing ? "Refreshing…" : refreshError ? "Retry refresh" : "Results updated"}
+              </PressButton>
+            </TooltipWrapper>
+          ) : pageError ? (
             <TooltipWrapper text={pageError}>
               <PressButton
                 className="btn ghost"
@@ -141,9 +182,10 @@ export const IndexedSearchResultsList = ({
           }}>
             {renderedIndexes.map((index) => {
               const result = results[index];
-              const isSelected = selectedResultIndex === index;
+              const isActive = selectedResultIndex === index;
+              const isSelected = copyPaths?.has(result.path) ?? isActive;
               const isDirectory = result.kind === "directory";
-              const size = sizes.get(result.path);
+              const size = result.sizeBytes ?? sizes.get(result.path);
 
               return (
                 <PressButton
@@ -156,11 +198,15 @@ export const IndexedSearchResultsList = ({
                     height: INDEXED_SEARCH_RESULT_HEIGHT,
                   }}
                   data-path={result.path}
+                  data-active={isActive || undefined}
                   aria-pressed={isSelected}
                   aria-haspopup="menu"
                   tabIndex={tabbableIndex === index ? 0 : -1}
                   pressOnPointerDown={false}
-                  onClick={() => onSelectResult(result)}
+                  onClick={(event) => {
+                    onSelectResultForCopy(result, { range: event.shiftKey, toggle: event.ctrlKey || event.metaKey });
+                    event.currentTarget.focus({ preventScroll: true });
+                  }}
                   onFocus={() => onSelectResult(result)}
                   onContextMenu={(event) => {
                     event.preventDefault();
@@ -181,13 +227,19 @@ export const IndexedSearchResultsList = ({
                     onOpenContextMenu(result, { x: bounds.left, y: bounds.bottom }, native);
                   }}
                   onMouseDown={(event) => {
+                    if (event.button === 0 && (event.ctrlKey || event.metaKey || event.shiftKey)) {
+                      // Keep the previous focused row as the range anchor until click updates it.
+                      event.preventDefault();
+                    }
                     if (event.button !== 1 || isDirectory) return;
                     event.currentTarget.focus({ preventScroll: true });
                     if (!onPreviewPress(result.path)) return;
                     event.preventDefault();
                     event.stopPropagation();
                   }}
-                  onDoubleClick={() => onOpenResult(result)}
+                  onDoubleClick={(event) => {
+                    if (!event.ctrlKey && !event.metaKey && !event.shiftKey) onOpenResult(result);
+                  }}
                 >
                   <span className="indexed-search-result-icon" data-kind={result.kind}>
                     <FileTypeIcon

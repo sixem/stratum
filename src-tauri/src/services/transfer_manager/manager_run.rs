@@ -5,7 +5,9 @@ use super::job_planning::plan_job;
 use super::job_state_updates::{
     mark_job_finished, mark_job_planning, mark_job_ready, mark_queued_job_finished,
 };
-use super::manager_state::{snapshot_from_state, TransferJobRequest, TransferManagerInner};
+use super::manager_state::{
+    snapshot_from_state, TransferJobRequest, TransferManagerInner, TransferOperationOutcome,
+};
 use crate::domain::filesystem::transfer::job_plan::PlannedTransferJob;
 use std::sync::Arc;
 use std::thread;
@@ -21,6 +23,10 @@ pub(super) fn start_workers(inner: Arc<TransferManagerInner>) {
                 return;
             };
             run_planning_job(&planner_inner, job);
+            if let Ok(mut guard) = planner_inner.state.lock() {
+                guard.planning_jobs -= 1;
+            }
+            planner_inner.queue_signal.notify_all();
         };
 
         let _ = thread::Builder::new()
@@ -56,17 +62,18 @@ fn wait_for_next_planning_job(inner: &Arc<TransferManagerInner>) -> Option<Trans
 fn run_planning_job(inner: &Arc<TransferManagerInner>, job: TransferJobRequest) {
     mark_job_planning(inner, &job.snapshot.id, &job.event_emitter);
 
-    let plan_result = {
+    let plan_result = job.control.checkpoint().and_then(|()| {
         let planning_control = job.control.clone();
         let mut on_control = move || planning_control.checkpoint();
-        plan_job(
+        let plan = plan_job(
             inner,
             &job.snapshot.id,
             &job.event_emitter,
             &job.operation,
             Some(&mut on_control),
-        )
-    };
+        )?;
+        job.control.checkpoint().map(|()| plan)
+    });
 
     match plan_result {
         Ok(plan) => {
@@ -84,7 +91,6 @@ fn run_planning_job(inner: &Arc<TransferManagerInner>, job: TransferJobRequest) 
             }
         }
     }
-    inner.queue_signal.notify_all();
 }
 
 fn wait_for_next_ready_job(
@@ -111,15 +117,24 @@ fn run_job(inner: &Arc<TransferManagerInner>, job: TransferJobRequest, plan: Pla
         control,
     } = job;
 
-    let outcome = run_operation(
-        inner,
-        &snapshot.id,
-        &plan,
-        &event_emitter,
-        control,
-        operation,
-    );
+    let outcome = match control.checkpoint() {
+        Ok(()) => run_operation(
+            inner,
+            &snapshot.id,
+            &plan,
+            &event_emitter,
+            control,
+            operation,
+        ),
+        Err(error) => {
+            drop(operation);
+            TransferOperationOutcome {
+                terminal_status: terminal_status_for_error(&error),
+                result: Err(error),
+            }
+        }
+    };
     mark_job_finished(inner, &snapshot.id, outcome.terminal_status, &event_emitter);
-    inner.queue_signal.notify_all();
     let _ = completion_tx.send(outcome.result);
+    inner.queue_signal.notify_all();
 }

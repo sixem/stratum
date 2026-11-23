@@ -41,7 +41,7 @@ pub(super) fn request_thumbnails(
             &options,
             &kind,
         );
-        if cache::has_cache_entry(state, &thumb_id) {
+        if cache::has_thumbnail(&thumb_path) {
             hits.push(ThumbHit {
                 path: trimmed.to_string(),
                 thumb_path: thumb_path.to_string_lossy().to_string(),

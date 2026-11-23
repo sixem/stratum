@@ -18,11 +18,13 @@ import {
   type IndexedSelection,
 } from "./indexedSearchModalTypes";
 import { useIndexedResultFocus } from "./useIndexedResultFocus";
+import { updateIndexedCopySelection, type IndexedCopyModifiers, type IndexedCopySelection } from "./indexedCopySelection";
 
 type UseIndexedSearchSelectionParams = {
   driveStatuses: IndexedDriveStatus[];
   open: boolean;
   results: IndexedPathMatch[];
+  query: string;
   hasMore: boolean;
   loadMore: () => void;
   resultsViewportRef: RefObject<HTMLDivElement | null>;
@@ -33,6 +35,7 @@ export const useIndexedSearchSelection = ({
   driveStatuses,
   open,
   results,
+  query,
   hasMore,
   loadMore,
   resultsViewportRef,
@@ -40,11 +43,19 @@ export const useIndexedSearchSelection = ({
 }: UseIndexedSearchSelectionParams) => {
   const { registerResultRow, revealResult } = useIndexedResultFocus(resultsViewportRef);
   const [selection, setSelection] = useState<IndexedSelection | null>(null);
+  const [copySelection, setCopySelection] = useState<IndexedCopySelection | null>(null);
   const [selectedResultMeta, setSelectedResultMeta] = useState<EntryMeta | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const resultIndexes = useMemo(() => new Map(results.map(({ path }, index) => [path, index])), [results]);
   const selectedResultIndex = selection?.kind === "result" ? resultIndexes.get(selection.path) ?? -1 : -1;
   const selectedResult = results[selectedResultIndex] ?? null;
+  const copyPaths = useMemo(() => copySelection && new Set(
+    [...copySelection.paths].filter((path) => resultIndexes.has(path)),
+  ), [copySelection, resultIndexes]);
+
+  useEffect(() => {
+    setCopySelection(null);
+  }, [open, query]);
 
   useEffect(() => {
     if (open) return;
@@ -137,12 +148,24 @@ export const useIndexedSearchSelection = ({
       ? current : { kind: "result", path: result.path });
   }, []);
 
+  const selectResultForCopy = useCallback((result: IndexedPathMatch, modifiers: IndexedCopyModifiers = {}) => {
+    if (modifiers.range || modifiers.toggle) {
+      setCopySelection((current) => updateIndexedCopySelection(
+        current, result.path, selectedResultPath, results, resultIndexes, modifiers,
+      ));
+    } else {
+      setCopySelection(null);
+    }
+    selectResult(result);
+  }, [resultIndexes, results, selectResult, selectedResultPath]);
+
   const selectDrive = useCallback((drivePath: string) => {
+    setCopySelection(null);
     setSelection({ kind: "drive", drivePath });
   }, []);
 
   const moveSelection = useCallback(
-    (direction: 1 | -1, focusRow: boolean) => {
+    (direction: 1 | -1, focusRow: boolean, range: boolean) => {
       if (results.length === 0) return;
 
       if (hasMore && direction > 0 && selectedResultIndex === results.length - 1) {
@@ -160,10 +183,10 @@ export const useIndexedSearchSelection = ({
       const nextResult = results[nextIndex];
       if (!nextResult) return;
 
-      selectResult(nextResult);
+      selectResultForCopy(nextResult, { range });
       revealResult(nextResult.path, nextIndex, focusRow);
     },
-    [hasMore, loadMore, results, revealResult, selectedResultIndex, selectResult],
+    [hasMore, loadMore, results, revealResult, selectedResultIndex, selectResultForCopy],
   );
 
   const focusSelectedResult = useCallback(() => {
@@ -172,13 +195,21 @@ export const useIndexedSearchSelection = ({
 
   const handleSearchKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLInputElement | HTMLButtonElement>) => {
-      if (event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.nativeEvent.isComposing || event.altKey) return;
+      const focusRow = event.currentTarget instanceof HTMLButtonElement;
+      if (focusRow && (event.ctrlKey || event.metaKey) && event.key === " " && selectedResult) {
+        event.preventDefault();
+        if (!event.repeat) selectResultForCopy(selectedResult, { toggle: true });
+        return;
+      }
+      if (event.ctrlKey || event.metaKey) return;
 
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
         moveSelection(
           event.key === "ArrowDown" ? 1 : -1,
-          event.currentTarget instanceof HTMLButtonElement,
+          focusRow,
+          focusRow && event.shiftKey,
         );
         return;
       }
@@ -191,7 +222,7 @@ export const useIndexedSearchSelection = ({
         void handleOpenSelectedResult(resultToOpen);
       }
     },
-    [handleOpenSelectedResult, moveSelection, results, selectedResult, selectResult],
+    [handleOpenSelectedResult, moveSelection, results, selectedResult, selectResult, selectResultForCopy],
   );
 
   const selectedDrive =
@@ -207,6 +238,7 @@ export const useIndexedSearchSelection = ({
     handleSearchKeyDown,
     registerResultRow,
     focusSelectedResult,
+    copyPaths,
     selectedDrive,
     selectedResult,
     selectedResultIndex,
@@ -214,5 +246,6 @@ export const useIndexedSearchSelection = ({
     selectionError,
     selectDrive,
     selectResult,
+    selectResultForCopy,
   };
 };

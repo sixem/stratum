@@ -2,20 +2,28 @@
 //
 // FTS supplies candidate row IDs. SQLite's LIKE still verifies wildcard
 // patterns on the original names before results are ranked.
-use std::collections::BTreeSet;
+use std::{borrow::Cow, collections::BTreeSet};
 
-use rusqlite::{params, params_from_iter, types::Value, Connection, OptionalExtension};
+use rusqlite::{
+    functions::FunctionFlags, params, params_from_iter, types::Value, Connection, OptionalExtension,
+};
 
-use crate::domain::indexed_search::{IndexedPathMatch, IndexedPathQuery};
+use crate::domain::{
+    file_search::{FileSearch, FileSearchFilters},
+    indexed_search::{IndexedEntryKind, IndexedFolderScope, IndexedPathMatch, IndexedPathQuery},
+};
 
 use super::{
-    ranking::rank_hits, schema, search_index, writer::int_to_kind, CatalogQueryHit,
-    DriveCatalogSnapshot, IndexedCatalogStore, JournalCheckpoint, QueryPlan,
+    ranking::rank_hits,
+    schema, search_index,
+    writer::{int_to_kind, kind_to_int},
+    CatalogQueryHit, DriveCatalogSnapshot, IndexedCatalogStore, JournalCheckpoint, QueryPlan,
 };
 
 const MAX_FETCH_LIMIT: usize = 300;
 const MAX_FTS_TERMS: usize = 64;
-const SELECT_HIT_COLUMNS: &str = "SELECT e.path, e.kind, e.normalized_name, e.entry_id";
+const SELECT_HIT_COLUMNS: &str =
+    "SELECT e.path, e.kind, e.normalized_name, e.entry_id, e.size_bytes";
 
 #[derive(Clone, Copy)]
 pub(super) struct PrefixFilter<'a> {
@@ -28,6 +36,130 @@ pub(super) enum NameSeek<'a> {
     EqualNameAfterId(&'a str, i64),
     AfterName(&'a str),
     AfterKey(&'a str, i64),
+}
+
+pub(super) struct FolderPathPlan {
+    pub(super) normalized_query: String,
+    drive: Option<char>,
+    anchored: bool,
+    parents: Vec<String>,
+    name_prefix: String,
+}
+
+impl FolderPathPlan {
+    pub(super) fn parse(search: &str) -> Option<Self> {
+        let search = search.trim();
+        if !search.contains(['\\', '/']) && drive_letter(search).is_none() {
+            return None;
+        }
+        let search = search.replace('/', "\\");
+        let search = if let Some(path) = search.strip_prefix(r"\\?\") {
+            drive_letter(path)?;
+            path
+        } else {
+            &search
+        };
+        if search.starts_with(r"\\") {
+            return None;
+        }
+        let drive = drive_letter(search);
+        let relative = if drive.is_some() {
+            &search[2..]
+        } else {
+            search
+        };
+        let anchored = drive.is_some() || relative.starts_with('\\');
+        let mut parents: Vec<_> = relative
+            .split('\\')
+            .filter(|part| !part.is_empty())
+            .map(str::to_lowercase)
+            .collect();
+        let name_prefix = if relative.ends_with('\\') {
+            String::new()
+        } else {
+            parents.pop().unwrap_or_default()
+        };
+        Some(Self {
+            normalized_query: search.to_lowercase(),
+            drive,
+            anchored,
+            parents,
+            name_prefix,
+        })
+    }
+
+    fn matches_parent(&self, path: &str) -> bool {
+        let Some(relative) = path.get(3..) else {
+            return false;
+        };
+        let mut components = relative.trim_end_matches('\\').rsplit('\\').skip(1);
+        self.parents.iter().rev().all(|expected| {
+            components.next().is_some_and(|actual| {
+                actual.eq_ignore_ascii_case(expected)
+                    || (!actual.is_ascii() && actual.to_lowercase() == *expected)
+            })
+        }) && (!self.anchored || components.next().is_none())
+    }
+}
+
+fn drive_letter(path: &str) -> Option<char> {
+    match path.as_bytes() {
+        [letter, b':', ..] if letter.is_ascii_alphabetic() => Some(*letter as char),
+        _ => None,
+    }
+}
+
+pub(super) fn build_folder_path_sql(
+    connection: &Connection,
+    plan: FolderPathPlan,
+    verified_volumes: &[(String, String)],
+    scope: &IndexedFolderScope,
+    after: Option<(&str, i64)>,
+) -> Result<(String, Vec<Value>), String> {
+    let mut sql = format!("{SELECT_HIT_COLUMNS} FROM indexed_entries e WHERE 1 = 1");
+    let mut params = Vec::new();
+    append_folder_filter(&mut sql, &mut params, Some(scope));
+    if let Some(letter) = plan.drive {
+        // The catalog's binary path index can seek into both possible letter spellings.
+        sql.push_str(" AND ((e.path >= ? AND e.path < ?) OR (e.path >= ? AND e.path < ?))");
+        for letter in [letter.to_ascii_uppercase(), letter.to_ascii_lowercase()] {
+            params.extend([format!("{letter}:\\").into(), format!("{letter}:]").into()]);
+        }
+    }
+    if let Some((name, id)) = after {
+        sql.push_str(" AND (e.normalized_name, e.entry_id) > (?, ?)");
+        params.extend([Value::from(name.to_owned()), Value::from(id)]);
+    }
+    if !plan.name_prefix.is_empty() {
+        let end = exclusive_prefix_end(&plan.name_prefix);
+        append_prefix_filter(
+            &mut sql,
+            &mut params,
+            "e.normalized_name",
+            Some(PrefixFilter {
+                start: &plan.name_prefix,
+                end: end.as_deref(),
+                include: true,
+            }),
+        );
+    }
+    append_verified_volumes_filter(&mut sql, &mut params, verified_volumes);
+
+    // SQLite's NOCASE handles ASCII only. Keep the existing Unicode basename
+    // range and compare the remaining complete path components in the same SQL read.
+    connection
+        .create_scalar_function(
+            "stratum_folder_parent_matches",
+            1,
+            FunctionFlags::SQLITE_DETERMINISTIC,
+            move |context| {
+                let path = context.get_raw(0).as_str()?;
+                Ok(plan.matches_parent(path))
+            },
+        )
+        .map_err(|error| format!("Failed to prepare folder-path matching: {error}"))?;
+    sql.push_str(" AND stratum_folder_parent_matches(e.path)");
+    Ok((sql, params))
 }
 
 impl IndexedCatalogStore {
@@ -46,16 +178,13 @@ impl IndexedCatalogStore {
             .transaction()
             .map_err(|error| format!("Failed to start indexed-search query: {error}"))?;
         let fts_ready = !search_index::needs_backfill(&transaction)?;
-        let Some(plan) = build_query_plan(query, fts_ready) else {
+        let Some(plan) = build_query_plan(query, fts_ready, true) else {
             return Ok(Vec::new());
         };
+        register_file_type_filter(&transaction, &plan)?;
 
-        let end = exclusive_prefix_end(&plan.normalized_query);
-        let prefix = (!plan.has_wildcards).then_some(PrefixFilter {
-            start: &plan.normalized_query,
-            end: end.as_deref(),
-            include: true,
-        });
+        let prefix_end = exclusive_prefix_end(&plan.normalized_query);
+        let prefix = plan.prefix_filter(prefix_end.as_deref());
         // Reserve candidate slots for exact and prefix matches before an
         // alphabetically earlier substring can consume the candidate budget.
         let mut hits = Vec::new();
@@ -225,7 +354,7 @@ fn fetch_hits(
     prefix: Option<PrefixFilter<'_>>,
     limit: usize,
 ) -> Result<Vec<CatalogQueryHit>, String> {
-    let (mut sql, mut params) = build_hits_sql(plan, verified_volumes, prefix, None);
+    let (mut sql, mut params) = build_hits_sql(plan, verified_volumes, prefix, None, None);
     sql.push_str(" ORDER BY e.normalized_name ASC, e.path ASC LIMIT ?");
     params.push(Value::from(limit as i64));
 
@@ -233,13 +362,7 @@ fn fetch_hits(
         .prepare(&sql)
         .map_err(|error| format!("Failed to prepare indexed-search query: {error}"))?;
     let rows = statement
-        .query_map(params_from_iter(params.iter()), |row| {
-            Ok(CatalogQueryHit {
-                path: row.get(0)?,
-                kind: int_to_kind(row.get(1)?),
-                normalized_name: row.get(2)?,
-            })
-        })
+        .query_map(params_from_iter(params.iter()), CatalogQueryHit::read)
         .map_err(|error| format!("Failed to run indexed-search query: {error}"))?;
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|error| format!("Failed to read indexed-search results: {error}"))
@@ -250,6 +373,7 @@ pub(super) fn build_hits_sql(
     verified_volumes: &[(String, String)],
     prefix: Option<PrefixFilter<'_>>,
     seek: Option<NameSeek<'_>>,
+    folder_scope: Option<&IndexedFolderScope>,
 ) -> (String, Vec<Value>) {
     // The prefix range can use the name index, including for one-character
     // searches and catalogs whose FTS backfill has not finished yet.
@@ -262,10 +386,10 @@ pub(super) fn build_hits_sql(
         // Start with the FTS row IDs before looking up the entries.
         sql.push_str(
             " FROM indexed_entry_fts CROSS JOIN indexed_entries e ON e.entry_id = indexed_entry_fts.rowid
-              WHERE indexed_entry_fts MATCH ? AND ",
+              WHERE indexed_entry_fts MATCH ?",
         );
     } else {
-        sql.push_str(" FROM indexed_entries e WHERE ");
+        sql.push_str(" FROM indexed_entries e WHERE 1");
     }
     let mut params = match_expression
         .into_iter()
@@ -297,6 +421,7 @@ pub(super) fn build_hits_sql(
         None => {}
     }
     append_prefix_filter(&mut sql, &mut params, "e.normalized_name", prefix);
+    append_folder_filter(&mut sql, &mut params, folder_scope);
     (sql, params)
 }
 
@@ -306,6 +431,7 @@ pub(super) fn build_ordered_substring_probe_sql(
     prefix: Option<PrefixFilter<'_>>,
     after: Option<(&str, i64)>,
     candidate_limit: usize,
+    folder_scope: Option<&IndexedFolderScope>,
 ) -> (String, Vec<Value>) {
     // Materialize the name window before applying LIKE. This bounds the
     // probe even if none of the candidates match or belong to a ready drive.
@@ -337,7 +463,7 @@ pub(super) fn build_ordered_substring_probe_sql(
     sql.push(' ');
     sql.push_str(SELECT_HIT_COLUMNS);
     sql.push_str(
-        " FROM ordered candidate CROSS JOIN indexed_entries e ON e.entry_id = candidate.entry_id WHERE ",
+        " FROM ordered candidate CROSS JOIN indexed_entries e ON e.entry_id = candidate.entry_id WHERE 1",
     );
     append_match_filters(
         &mut sql,
@@ -347,7 +473,28 @@ pub(super) fn build_ordered_substring_probe_sql(
         verified_volumes,
     );
     append_prefix_filter(&mut sql, &mut params, "candidate.normalized_name", prefix);
+    append_folder_filter(&mut sql, &mut params, folder_scope);
     (sql, params)
+}
+
+fn append_folder_filter(
+    sql: &mut String,
+    params: &mut Vec<Value>,
+    scope: Option<&IndexedFolderScope>,
+) {
+    let Some(scope) = scope else {
+        return;
+    };
+    sql.push_str(" AND e.kind = ? AND length(e.path) > 3");
+    params.push(Value::from(kind_to_int(IndexedEntryKind::Directory)));
+    // In a catalog path C:\\name, each separator marks a level below the root.
+    // Strip trailing separators first so an equivalent folder spelling has the same depth.
+    if let Some(depth) = scope.max_depth {
+        sql.push_str(
+            " AND length(rtrim(e.path, char(92))) - length(replace(rtrim(e.path, char(92)), char(92), '')) <= ?",
+        );
+        params.push(Value::from(i64::try_from(depth).unwrap_or(i64::MAX)));
+    }
 }
 
 fn append_prefix_filter(
@@ -392,9 +539,25 @@ pub(super) fn exclusive_prefix_end(prefix: &str) -> Option<String> {
     Some(format!("{}{next}", &prefix[..offset]))
 }
 
-pub(super) fn build_query_plan(query: IndexedPathQuery, fts_ready: bool) -> Option<QueryPlan> {
-    let trimmed = query.query.trim();
-    if trimmed.is_empty() {
+pub(super) fn build_query_plan(
+    query: IndexedPathQuery,
+    fts_ready: bool,
+    parse_file_filters: bool,
+) -> Option<QueryPlan> {
+    let FileSearch {
+        name_query,
+        filters,
+    } = if parse_file_filters {
+        FileSearch::parse(&query.query)
+    } else {
+        FileSearch {
+            name_query: Cow::Borrowed(&query.query),
+            filters: FileSearchFilters::default(),
+        }
+    };
+    let filters = filters.has_filters().then_some(filters);
+    let trimmed = name_query.trim();
+    if trimmed.is_empty() && filters.is_none() {
         return None;
     }
 
@@ -429,6 +592,7 @@ pub(super) fn build_query_plan(query: IndexedPathQuery, fts_ready: bool) -> Opti
 
     Some(QueryPlan {
         normalized_query,
+        filters,
         plain_terms,
         like_patterns,
         match_expression: build_match_expression(candidate_tokens),
@@ -436,6 +600,43 @@ pub(super) fn build_query_plan(query: IndexedPathQuery, fts_ready: bool) -> Opti
         fetch_limit,
         has_wildcards,
     })
+}
+
+impl QueryPlan {
+    pub(super) fn prefix_filter<'a>(&'a self, end: Option<&'a str>) -> Option<PrefixFilter<'a>> {
+        (!self.has_wildcards && !self.normalized_query.is_empty()).then_some(PrefixFilter {
+            start: &self.normalized_query,
+            end,
+            include: true,
+        })
+    }
+}
+
+pub(super) fn register_file_type_filter(
+    connection: &Connection,
+    plan: &QueryPlan,
+) -> Result<(), String> {
+    let Some(filters) = plan
+        .filters
+        .as_ref()
+        .filter(|filters| !filters.file_types.is_empty())
+    else {
+        return Ok(());
+    };
+    let filters = filters.clone();
+    connection
+        .create_scalar_function(
+            "stratum_matches_file_type",
+            2,
+            FunctionFlags::SQLITE_DETERMINISTIC,
+            move |context| {
+                let name = context.get_raw(0).as_str()?;
+                let is_dir =
+                    int_to_kind(context.get_raw(1).as_i64()?) == IndexedEntryKind::Directory;
+                Ok(filters.matches_type(name, is_dir))
+            },
+        )
+        .map_err(|error| format!("Failed to prepare indexed-search file type filter: {error}"))
 }
 
 fn build_like_pattern(token: &str) -> String {
@@ -503,14 +704,34 @@ fn append_match_filters(
     plan: &QueryPlan,
     verified_volumes: &[(String, String)],
 ) {
-    for (index, pattern) in plan.like_patterns.iter().enumerate() {
-        if index > 0 {
-            sql.push_str(" AND ");
-        }
+    for pattern in &plan.like_patterns {
+        sql.push_str(" AND ");
         sql.push_str(name_column);
         sql.push_str(" LIKE ? ESCAPE '\\'");
         params.push(Value::from(pattern.clone()));
     }
+    append_verified_volumes_filter(sql, params, verified_volumes);
+    if let Some(filters) = &plan.filters {
+        // NULL sizes naturally fail comparisons. The catalog leaves folder sizes unknown.
+        if let Some(min) = filters.min_size {
+            sql.push_str(" AND e.size_bytes >= ?");
+            params.push(Value::Integer(i64::try_from(min).unwrap_or(i64::MAX)));
+        }
+        if let Some(max) = filters.max_size {
+            sql.push_str(" AND e.size_bytes <= ?");
+            params.push(Value::Integer(i64::try_from(max).unwrap_or(i64::MAX)));
+        }
+        if !filters.file_types.is_empty() {
+            sql.push_str(" AND stratum_matches_file_type(e.normalized_name, e.kind)");
+        }
+    }
+}
+
+fn append_verified_volumes_filter(
+    sql: &mut String,
+    params: &mut Vec<Value>,
+    verified_volumes: &[(String, String)],
+) {
     // Apply the mount and ready-snapshot checks before LIMIT so stale rows
     // cannot occupy result slots, and verify each identity in this SQL read.
     sql.push_str(

@@ -67,39 +67,45 @@ const readRule = (value: unknown): BatchRenameRule | undefined => {
   }
 };
 
+export const readBatchRenamePresets = (entries: readonly unknown[]): BatchRenamePreset[] => {
+  const presets: BatchRenamePreset[] = [];
+  const ids = new Set<string>();
+  const names = new Set<string>();
+  for (const entry of entries) {
+    if (!isRecord(entry)) continue;
+    const { id, name, preserveExtensions } = entry;
+    if (typeof id !== "string" || !id.trim() || typeof name !== "string" || typeof preserveExtensions !== "boolean") continue;
+    const trimmedName = name.trim();
+    const key = trimmedName.toLowerCase();
+    if (!key || ids.has(id) || names.has(key)) continue;
+    const rule = readRule(entry.rule);
+    if (!rule || !isBatchRenameRuleConfigured(rule)) continue;
+
+    presets.push({ id, name: trimmedName, rule, preserveExtensions });
+    ids.add(id);
+    names.add(key);
+  }
+  return presets;
+};
+
 const readStoredPresets = (): BatchRenamePreset[] => {
   try {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
     if (!raw) return [];
     const payload: unknown = JSON.parse(raw);
     if (!isRecord(payload) || payload.version !== STORAGE_VERSION || !Array.isArray(payload.presets)) return [];
-
-    const presets: BatchRenamePreset[] = [];
-    const ids = new Set<string>();
-    const names = new Set<string>();
-    for (const entry of payload.presets) {
-      if (!isRecord(entry)) continue;
-      const { id, name, preserveExtensions } = entry;
-      if (typeof id !== "string" || !id.trim() || typeof name !== "string" || typeof preserveExtensions !== "boolean") continue;
-      const trimmedName = name.trim();
-      const key = trimmedName.toLowerCase();
-      if (!key || ids.has(id) || names.has(key)) continue;
-      const rule = readRule(entry.rule);
-      if (!rule || !isBatchRenameRuleConfigured(rule)) continue;
-
-      presets.push({ id, name: trimmedName, rule, preserveExtensions });
-      ids.add(id);
-      names.add(key);
-    }
-    return presets;
+    return readBatchRenamePresets(payload.presets);
   } catch {
     return [];
   }
 };
 
+export const serializeBatchRenamePresets = (presets: BatchRenamePreset[]) =>
+  [STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, presets })] as const;
+
 const writeStoredPresets = (presets: BatchRenamePreset[]) => {
   try {
-    globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, presets }));
+    globalThis.localStorage.setItem(...serializeBatchRenamePresets(presets));
     return true;
   } catch {
     return false;

@@ -5,6 +5,7 @@ export { finishFileCut, getFileClipboard, setFileClipboard } from "./clipboard";
 export {
   getIndexedSearchCatalogPath,
   getIndexedSearchSnapshot,
+  nudgeIndexedSearch,
   setIndexedSearchEnabled,
   queryIndexedPathPage,
   queryIndexedPaths,
@@ -20,6 +21,7 @@ export {
   copyEntries,
   createFile,
   createFolder,
+  createTrackedFolder,
   deleteEntries,
   ensureDir,
   cancelTransferJob,
@@ -34,6 +36,7 @@ export {
   parentDir,
   pauseTransferJob,
   planCopyEntries,
+  removeCreatedFolderIfEmpty,
   restoreRecycleItems,
   resumeTransferJob,
   transferEntries,

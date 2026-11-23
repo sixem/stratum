@@ -63,6 +63,7 @@ pub(super) struct VolumeTracking {
     // to establish that its drive letter still belongs to the same volume.
     pub(super) verified: BTreeSet<String>,
     pub(super) journal_rebuilds: BTreeSet<String>,
+    pub(super) unavailable_journals: BTreeSet<String>,
 }
 
 impl VolumeTracking {
@@ -131,6 +132,11 @@ impl IndexedSearchState {
                 .get(key)
                 .is_some_and(|mount| previous_mounts.get(key) == Some(mount))
         });
+        self.volumes.unavailable_journals.retain(|key| {
+            mounted
+                .get(key)
+                .is_some_and(|mount| previous_mounts.get(key) == Some(mount))
+        });
         let changed = self.volumes.mounted != mounted;
         self.volumes.mounted = mounted;
         self.drive_statuses = statuses;
@@ -163,14 +169,40 @@ impl IndexedSearchState {
     }
 
     pub(super) fn tracks_changes(&self, key: &str) -> bool {
+        self.drive_statuses
+            .get(key)
+            .is_some_and(|status| status.state == IndexedDriveState::Ready)
+            && self.has_verified_journal(key)
+    }
+
+    pub(super) fn has_verified_journal(&self, key: &str) -> bool {
         self.volumes.verified.contains(key)
-            && self.drive_statuses[key].state == IndexedDriveState::Ready
+            && !self.volumes.unavailable_journals.contains(key)
+            && self.drive_statuses.get(key).is_some_and(|status| {
+                matches!(
+                    status.state,
+                    IndexedDriveState::Ready | IndexedDriveState::Saved | IndexedDriveState::Stale
+                )
+            })
             && self
                 .volumes
                 .mounted
                 .get(key)
                 .and_then(|mount| self.volumes.matching_snapshot(mount))
-                .is_some_and(|snapshot| snapshot.journal_checkpoint.is_some())
+                .is_some_and(|snapshot| {
+                    snapshot.journal_checkpoint.is_some() && !snapshot.pending_renames
+                })
+    }
+
+    pub(super) fn uses_folder_reconciliation(&self, key: &str) -> bool {
+        self.volumes.verified.contains(key)
+            && self.volumes.unavailable_journals.contains(key)
+            && self.drive_statuses.get(key).is_some_and(|status| {
+                matches!(
+                    status.state,
+                    IndexedDriveState::Saved | IndexedDriveState::Stale
+                )
+            })
     }
 
     fn mark_verified_mount(

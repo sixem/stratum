@@ -4,6 +4,7 @@ export type KeybindAction =
   | "newTab"
   | "closeTab"
   | "openIndexedSearch"
+  | "quickMove"
   | "undo"
   | "deleteSelection"
   | "duplicateSelection"
@@ -74,6 +75,12 @@ export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
     label: "Next tab",
     description: "Switch to the tab on the right.",
     default: "Control+ArrowRight",
+  },
+  {
+    id: "quickMove",
+    label: "Quick Move",
+    description: "Find a destination for the selected items.",
+    default: "Control+Shift+m",
   },
 ];
 

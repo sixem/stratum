@@ -18,15 +18,18 @@ mod renames;
 mod schema;
 #[path = "catalog/search_index.rs"]
 mod search_index;
+#[cfg(windows)]
+#[path = "catalog/size_backfill.rs"]
+mod size_backfill;
 #[path = "catalog/writer.rs"]
 mod writer;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use rusqlite::Connection;
+use rusqlite::{Connection, Row};
 
-use crate::domain::indexed_search::IndexedEntryKind;
+use crate::domain::{file_search::FileSearchFilters, indexed_search::IndexedEntryKind};
 
 #[derive(Clone)]
 pub(super) struct IndexedCatalogStore {
@@ -54,6 +57,14 @@ pub(super) struct CatalogEntryRecord {
     pub(super) path: String,
     pub(super) normalized_name: String,
     pub(super) kind: IndexedEntryKind,
+    pub(super) size_bytes: Option<i64>,
+}
+
+#[cfg(windows)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct CatalogChild {
+    pub(super) kind: IndexedEntryKind,
+    pub(super) size_bytes: Option<i64>,
 }
 
 pub(super) struct IndexedCatalogWriter {
@@ -66,10 +77,25 @@ pub(super) struct CatalogQueryHit {
     path: String,
     normalized_name: String,
     kind: IndexedEntryKind,
+    size_bytes: Option<u64>,
+}
+
+impl CatalogQueryHit {
+    fn read(row: &Row<'_>) -> rusqlite::Result<Self> {
+        Ok(Self {
+            path: row.get(0)?,
+            kind: writer::int_to_kind(row.get(1)?),
+            normalized_name: row.get(2)?,
+            size_bytes: row
+                .get::<_, Option<i64>>(4)?
+                .and_then(|size| u64::try_from(size).ok()),
+        })
+    }
 }
 
 pub(super) struct QueryPlan {
     normalized_query: String,
+    filters: Option<FileSearchFilters>,
     plain_terms: Vec<String>,
     like_patterns: Vec<String>,
     match_expression: Option<String>,

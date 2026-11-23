@@ -40,6 +40,7 @@ type FileViewProps = {
   onOpenRecentNewTab?: (path: string) => void;
   drives: string[];
   drivesLoaded?: boolean;
+  driveInfoLoaded?: boolean;
   driveInfo: DriveInfo[];
   onOpenDrive: (path: string) => void;
   onOpenDriveNewTab?: (path: string) => void;
@@ -121,6 +122,7 @@ export const FileView = ({
   onOpenRecentNewTab,
   drives,
   drivesLoaded,
+  driveInfoLoaded,
   driveInfo,
   onOpenDrive,
   onOpenDriveNewTab,
@@ -187,6 +189,7 @@ export const FileView = ({
         onOpenRecentNewTab={onOpenRecentNewTab}
         drives={drives}
         drivesLoaded={drivesLoaded}
+        driveInfoLoaded={driveInfoLoaded}
         driveInfo={driveInfo}
         onOpenDrive={onOpenDrive}
         onOpenDriveNewTab={onOpenDriveNewTab}

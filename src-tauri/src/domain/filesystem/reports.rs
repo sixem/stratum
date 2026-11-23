@@ -38,6 +38,7 @@ pub struct CopyPlan {
 pub struct MovedTransferEntry {
     pub source_path: String,
     pub destination_path: String,
+    pub identity: Option<super::EntryIdentity>,
 }
 
 #[derive(Clone, Default, Serialize)]

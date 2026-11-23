@@ -1,6 +1,6 @@
 // System-level command handlers (clipboard, shell, drag, open).
 use crate::platform::drag;
-use crate::services::{clipboard, opener, shells};
+use crate::services::{clipboard, opener, shells, transfer_manager};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -19,6 +19,33 @@ pub struct IndexingLaunchPreferences {
 }
 
 #[tauri::command]
+pub fn begin_transfer_shutdown(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
+    mode: transfer_manager::TransferShutdownMode,
+) -> Result<Option<u64>, String> {
+    transfer_manager.begin_shutdown(mode)
+}
+
+#[tauri::command]
+pub async fn wait_for_transfer_shutdown(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
+    ticket: u64,
+) -> Result<bool, String> {
+    let manager = transfer_manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager.wait_for_shutdown(ticket))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn reopen_transfer_queue(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
+    ticket: u64,
+) -> Result<bool, String> {
+    transfer_manager.reopen_queue(ticket)
+}
+
+#[tauri::command]
 pub async fn set_clipboard_paths(
     window: tauri::Window,
     paths: Vec<String>,
@@ -26,6 +53,15 @@ pub async fn set_clipboard_paths(
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         clipboard::set_clipboard_paths(clipboard_owner(&window)?, paths, mode.unwrap_or_default())
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn set_clipboard_text(window: tauri::Window, text: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        clipboard::set_clipboard_text(clipboard_owner(&window)?, text)
     })
     .await
     .map_err(|err| err.to_string())?

@@ -9,6 +9,7 @@ import { bumpDirectoryChildVersions } from "@/modules";
 import { recordMoveDestination } from "@/modules/recentMoveStore";
 import type { PromptConfig } from "@/modules";
 import type { FileJobRegistration } from "@/modules/transferStore";
+import type { CreatedFolder } from "@/types/fs";
 import type { UndoMoveEntry } from "./fileManagerUndo";
 import {
   getTransferErrorMessage,
@@ -32,6 +33,7 @@ type TransferJobStoreLike = {
 type RunDropTransferOptions = {
   plan: ResolvedDropTransferPlan;
   dropStage?: number;
+  protectedFolder?: CreatedFolder;
   moveHistoryWorkspace?: string | null;
   promptStore: PromptStoreLike;
   currentPathKey: string;
@@ -75,6 +77,7 @@ const bumpTransferDirectoryChildren = (
 export const runDropTransfer = async ({
   plan,
   dropStage,
+  protectedFolder,
   moveHistoryWorkspace,
   promptStore,
   currentPathKey,
@@ -93,7 +96,7 @@ export const runDropTransfer = async ({
     const report = await transferEntries(
       plan.items.map((item) => item.candidate.path),
       plan.destination,
-      { mode: plan.mode, overwritePaths: plan.overwritePaths },
+      { mode: plan.mode, overwritePaths: plan.overwritePaths, protectedFolder },
       job.id,
       dropStage,
     );
@@ -114,10 +117,9 @@ export const runDropTransfer = async ({
     if (report.movedEntries.length > 0) {
       recordMoveDestination(moveHistoryWorkspace, plan.destination);
       onRecordMoveUndo?.(
-        report.movedEntries.map((entry) => ({
-          from: entry.sourcePath,
-          to: entry.destinationPath,
-        })),
+        report.movedEntries.flatMap((entry) => entry.identity ? [{
+          from: entry.sourcePath, to: entry.destinationPath, identity: entry.identity,
+        }] : []),
       );
     }
 

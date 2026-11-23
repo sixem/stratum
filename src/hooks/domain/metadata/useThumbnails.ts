@@ -21,6 +21,8 @@ const buildSignature = (request: ThumbnailRequest, optionsKey: string) => {
 
 // Batch thumbnail ready events to avoid re-rendering for every single image.
 const THUMB_EVENT_FLUSH_MS = 80;
+const RETRY_QUERY = "?retry=1";
+const MAX_THUMB_RETRIES = 256;
 const perf = makeDebug("perf:thumbs");
 
 const mergeThumbnailUpdates = (previous: Map<string, string>, updates: Map<string, string>) => {
@@ -43,6 +45,7 @@ const normalizeRequests = (requests: ThumbnailRequest[]) => {
       size: request.size ?? null,
       modified: request.modified ?? null,
       signature: request.signature,
+      failedUrl: request.failedUrl,
     };
     const existing = merged.get(trimmed);
     if (!existing) {
@@ -54,6 +57,7 @@ const normalizeRequests = (requests: ThumbnailRequest[]) => {
       size: next.size ?? existing.size ?? null,
       modified: next.modified ?? existing.modified ?? null,
       signature: next.signature ?? existing.signature,
+      failedUrl: next.failedUrl ?? existing.failedUrl,
     });
   });
   return merged;
@@ -69,6 +73,7 @@ export const useThumbnails = (
   const pending = useRef(new Set<string>());
   // Keep the last signature we rendered so edits invalidate cached thumbs.
   const signatureByPathRef = useRef<Map<string, string>>(new Map());
+  const retriedUrls = useRef(new Map<string, string>());
   const pendingUpdatesRef = useRef(new Map<string, string>());
   const flushTimerRef = useRef<number | null>(null);
   const thumbnailsRef = useRef(thumbnails);
@@ -81,6 +86,12 @@ export const useThumbnails = (
   const otherSvgThemeKeyRef = useRef(otherSvgThemeKey);
   const flushKeyRef = useRef(optionsKey);
   const resetKeyRef = useRef(resetKey);
+
+  const resolveThumbnailUrl = useCallback((path: string, thumbPath: string) => {
+    const url = toThumbnailUrl(thumbPath);
+    // Give WebView a fresh URL after a cache file was evicted or deleted.
+    return retriedUrls.current.get(path) === url ? `${url}${RETRY_QUERY}` : url;
+  }, []);
 
   const clearFlushTimer = useCallback(() => {
     if (flushTimerRef.current != null) {
@@ -121,6 +132,7 @@ export const useThumbnails = (
     otherSvgThemeKeyRef.current = otherSvgThemeKey;
     pending.current = new Set();
     signatureByPathRef.current.clear();
+    retriedUrls.current.clear();
     pendingUpdatesRef.current.clear();
     clearFlushTimer();
     setThumbnails(new Map());
@@ -132,6 +144,7 @@ export const useThumbnails = (
     resetKeyRef.current = resetKey;
     pending.current = new Set();
     signatureByPathRef.current.clear();
+    retriedUrls.current.clear();
     pendingUpdatesRef.current.clear();
     clearFlushTimer();
     setThumbnails(new Map());
@@ -158,7 +171,7 @@ export const useThumbnails = (
           payload.key !== otherSvgThemeKeyRef.current ||
           isSvgLikeExtension(getExtension(getPathName(payload.path)))
         )) return;
-        const url = toThumbnailUrl(payload.thumbPath);
+        const url = resolveThumbnailUrl(payload.path, payload.thumbPath);
         // The worker echoes the signature on ready events. Files it cannot
         // render have no event, so they must not hold a signature in memory.
         if (payload.signature) signatureByPathRef.current.set(payload.path, payload.signature);
@@ -178,7 +191,7 @@ export const useThumbnails = (
         unlisten();
       }
     };
-  }, []);
+  }, [resolveThumbnailUrl, scheduleFlush]);
 
   const request = useCallback(
     async (requests: ThumbnailRequest[]) => {
@@ -188,20 +201,33 @@ export const useThumbnails = (
       const requestSignatures = new Map<string, string>();
       const missing = Array.from(deduped.values()).filter(
         (request) => {
+          if (pendingPaths.has(request.path)) return false;
+          const previousSignature = signatureByPathRef.current.get(request.path);
           const signature =
-            request.signature ?? buildSignature(request, optionsKeyRef.current);
+            request.signature ?? (request.failedUrl ? previousSignature : undefined) ??
+            buildSignature(request, optionsKeyRef.current);
           requestSignatures.set(request.path, signature);
-          const currentSignature = signatureByPathRef.current.get(request.path);
-          const hasThumb = thumbnailsRef.current.has(request.path);
-          const isFresh = hasThumb && currentSignature === signature;
-          return !isFresh && !pendingPaths.has(request.path);
+          const cachedUrl = thumbnailsRef.current.get(request.path);
+          if (request.failedUrl) {
+            return request.failedUrl === cachedUrl && !cachedUrl.endsWith(RETRY_QUERY) &&
+              retriedUrls.current.get(request.path) !== cachedUrl;
+          }
+          return !cachedUrl || previousSignature !== signature;
         },
       );
       if (missing.length === 0) return;
-      const batch = missing.slice(0, 120).map((request) => ({
-        ...request,
-        signature: requestSignatures.get(request.path),
-      }));
+      const batch = missing.slice(0, 120).map(({ failedUrl, ...request }) => {
+        if (failedUrl) {
+          const retried = retriedUrls.current;
+          retried.delete(request.path);
+          retried.set(request.path, failedUrl);
+          if (retried.size > MAX_THUMB_RETRIES) {
+            const oldest = retried.keys().next().value;
+            if (oldest !== undefined) retried.delete(oldest);
+          }
+        }
+        return { ...request, signature: requestSignatures.get(request.path) };
+      });
       batch.forEach((request) => pendingPaths.add(request.path));
       const key = optionsKeyRef.current;
       try {
@@ -223,7 +249,7 @@ export const useThumbnails = (
           if (signature) {
             signatureByPathRef.current.set(hit.path, signature);
           }
-          updates.set(hit.path, toThumbnailUrl(hit.thumbPath));
+          updates.set(hit.path, resolveThumbnailUrl(hit.path, hit.thumbPath));
         }
         startTransition(() => {
           setThumbnails((prev) => mergeThumbnailUpdates(prev, updates));
@@ -234,7 +260,7 @@ export const useThumbnails = (
         batch.forEach((request) => pendingPaths.delete(request.path));
       }
     },
-    [enabled, options],
+    [enabled, options, resolveThumbnailUrl],
   );
 
   return { thumbnails, requestThumbnails: request, optionsKey };

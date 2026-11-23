@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS indexed_entries (
     entry_id INTEGER PRIMARY KEY,
     path TEXT NOT NULL UNIQUE,
     normalized_name TEXT NOT NULL,
-    kind INTEGER NOT NULL
+    kind INTEGER NOT NULL,
+    size_bytes INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS indexed_drive_catalog_state (
@@ -32,6 +33,11 @@ CREATE TABLE IF NOT EXISTS indexed_catalog_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS indexed_size_backfills (
+    drive_path TEXT PRIMARY KEY COLLATE NOCASE,
+    after_path TEXT NOT NULL
+) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS indexed_pending_renames (
     drive_path TEXT NOT NULL,
@@ -90,17 +96,46 @@ fn initialize_catalog_schema(connection: &mut Connection) -> Result<(), String> 
         .map_err(|error| format!("Failed to start indexed-search schema migration: {error}"))?;
 
     let entry_columns = load_table_columns(&transaction, "indexed_entries")?;
-    if !entry_columns.is_empty() && !entry_columns.iter().any(|column| column == "entry_id") {
+    let has_entry_id = entry_columns.iter().any(|column| column == "entry_id");
+    let has_file_sizes = entry_columns.iter().any(|column| column == "size_bytes");
+    if !entry_columns.is_empty() && !has_entry_id {
         migrate_indexed_entries_table(&transaction)?;
     }
     transaction
         .execute_batch(SCHEMA_SQL)
         .map_err(|error| format!("Failed to initialize indexed-search catalog: {error}"))?;
     migrate_drive_snapshot_columns(&transaction)?;
+    if !entry_columns.is_empty() && !has_file_sizes {
+        // A nullable, unconstrained column is added without rewriting this table.
+        // Entry IDs and the existing FTS index stay intact.
+        if has_entry_id {
+            transaction
+                .execute_batch("ALTER TABLE indexed_entries ADD COLUMN size_bytes INTEGER")
+                .map_err(|error| format!("Failed to add indexed-search file sizes: {error}"))?;
+        }
+        transaction
+            .execute_batch(
+                "INSERT OR IGNORE INTO indexed_size_backfills (drive_path, after_path)
+                 SELECT drive_path, '' FROM indexed_drive_catalog_state",
+            )
+            .map_err(|error| format!("Failed to schedule indexed-search size backfill: {error}"))?;
+    }
+    if entry_columns.is_empty() {
+        create_size_index(&transaction)?;
+    }
     search_index::initialize(&transaction)?;
     transaction
         .commit()
         .map_err(|error| format!("Failed to commit indexed-search schema migration: {error}"))
+}
+
+pub(super) fn create_size_index(connection: &Connection) -> Result<(), String> {
+    connection
+        .execute_batch(
+            "CREATE INDEX IF NOT EXISTS indexed_entries_size_bytes_idx
+         ON indexed_entries(size_bytes) WHERE size_bytes IS NOT NULL",
+        )
+        .map_err(|error| format!("Failed to build the indexed-search file size index: {error}"))
 }
 
 fn migrate_drive_snapshot_columns(connection: &Connection) -> Result<(), String> {
@@ -148,7 +183,8 @@ fn migrate_indexed_entries_table(connection: &Connection) -> Result<(), String> 
                  entry_id INTEGER PRIMARY KEY,
                  path TEXT NOT NULL UNIQUE,
                  normalized_name TEXT NOT NULL,
-                 kind INTEGER NOT NULL
+                 kind INTEGER NOT NULL,
+                 size_bytes INTEGER
              );
              INSERT INTO indexed_entries_next (path, normalized_name, kind)
              SELECT path, normalized_name, kind

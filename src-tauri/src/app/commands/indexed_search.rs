@@ -1,9 +1,11 @@
 // Indexed-search command handlers.
+use std::path::Path;
+
 use tauri::Manager;
 
 use crate::domain::indexed_search::{
-    IndexedDriveStatus, IndexedPathMatch, IndexedPathPage, IndexedPathPageQuery, IndexedPathQuery,
-    IndexedSearchServiceStatus,
+    IndexedDriveStatus, IndexedFolderPageQuery, IndexedPathMatch, IndexedPathPage,
+    IndexedPathPageQuery, IndexedPathQuery, IndexedSearchServiceStatus,
 };
 use crate::services::indexed_search;
 
@@ -43,6 +45,13 @@ pub fn set_indexed_search_enabled(
     enabled: bool,
 ) {
     indexed_search.set_enabled(enabled);
+}
+
+#[tauri::command]
+pub fn nudge_indexed_search(
+    indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
+) -> Result<(), String> {
+    indexed_search.nudge_indexed_search()
 }
 
 #[tauri::command]
@@ -86,6 +95,78 @@ pub async fn query_indexed_path_page(
     tauri::async_runtime::spawn_blocking(move || indexed_search.query_path_page(query))
         .await
         .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn query_indexed_folder_page(
+    app: tauri::AppHandle,
+    query: IndexedFolderPageQuery,
+) -> Result<IndexedPathPage, String> {
+    let indexed_search = app
+        .state::<indexed_search::IndexedSearchHandle>()
+        .inner()
+        .clone();
+    tauri::async_runtime::spawn_blocking(move || indexed_search.query_folder_page(query))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn quick_move_destination_exists(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<bool, String> {
+    let indexed_search = app
+        .state::<indexed_search::IndexedSearchHandle>()
+        .inner()
+        .clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = Path::new(&path);
+        absolute_drive_root(path)
+            .is_some_and(|drive| indexed_search.verify_searchable_drive(&drive) && path.is_dir())
+    })
+    .await
+    .map_err(|error| error.to_string())
+}
+
+fn absolute_drive_root(path: &Path) -> Option<String> {
+    #[cfg(windows)]
+    {
+        use std::path::{Component, Prefix};
+        if !path.is_absolute() {
+            return None;
+        }
+        let Some(Component::Prefix(prefix)) = path.components().next() else {
+            return None;
+        };
+        let (Prefix::Disk(letter) | Prefix::VerbatimDisk(letter)) = prefix.kind() else {
+            return None;
+        };
+        Some(format!("{}:\\", char::from(letter)))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        None
+    }
+}
+
+#[cfg(all(test, windows))]
+#[test]
+fn quick_move_accepts_absolute_drive_folders_only() {
+    assert_eq!(
+        absolute_drive_root(Path::new(r"E:\Photos")).as_deref(),
+        Some(r"E:\")
+    );
+    assert_eq!(
+        absolute_drive_root(Path::new(r"\\?\E:\Photos")).as_deref(),
+        Some(r"E:\")
+    );
+    assert_eq!(absolute_drive_root(Path::new(r"E:Photos")), None);
+    assert_eq!(
+        absolute_drive_root(Path::new(r"\\server\share\Photos")),
+        None
+    );
 }
 
 #[tauri::command]

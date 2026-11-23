@@ -11,6 +11,7 @@ type PendingNavigation = {
   path: string;
   revealPath?: string | null;
   resetFilter?: { tabId: string; previousSearch: string };
+  notifyLink?: () => void;
 };
 
 type UseTabPersistenceOptions = {
@@ -149,6 +150,7 @@ export const useTabPersistence = ({
       };
       return next;
     });
+    pending?.notifyLink?.();
   }, [activeTab, activeTabId, clearDir, currentPath, loadDir, restoreRevision, setTabs, shouldSyncEmptyTab]);
 
   useEffect(() => {

@@ -8,6 +8,9 @@ export type QueuedWatchChange = {
   watchedPath: string;
   entryPaths: string[];
   renamePaths: string[];
+  rescan?: boolean;
+  watchFailed?: boolean;
+  writing?: boolean;
 };
 
 type Normalizer<Payload> = (payload: Payload | null | undefined) => QueuedWatchChange | null;
@@ -47,6 +50,9 @@ export const normalizeDirChangedEvent = (
     watchedPath,
     entryPaths: collectEntryPaths(payload?.paths ?? []),
     renamePaths: [],
+    rescan: payload?.rescan === true,
+    watchFailed: payload?.watchFailed === true,
+    writing: payload?.writing === true,
   };
 };
 

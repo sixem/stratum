@@ -70,6 +70,10 @@ export function useBottomPaneActions({
   const undo = async () => {
     if (await actions.undo() && viewVisit.current) await dir.refreshAfterChange();
   };
+  const moveEntries = async (paths: string[], destination: string) => {
+    const report = await actions.moveEntries(paths, destination);
+    if (report?.moved && viewVisit.current) await dir.refreshAfterChange();
+  };
   const { queueCreateSelection } = usePendingCreateSelection({
     viewKey,
     viewPathKey: folderPathKey(dir.currentPath),
@@ -122,12 +126,17 @@ export function useBottomPaneActions({
     onClearSelection: clearSelectionForVisit,
     onRenameEntry: selectionHandlers.handleRenameStart,
     onPasteEntries: actions.pasteEntries,
-    onMoveEntries: async (paths, destination) => {
-      const report = await actions.moveEntries(paths, destination);
-      if (report?.moved && viewVisit.current) await dir.refreshAfterChange();
+    onMoveEntries: moveEntries,
+    onCreateFolderWithSelection: async (paths, parent, name, onCreated) => {
+      const created = await actions.createFolderWithSelection(paths, parent, name, onCreated);
+      if (created && viewVisit.current) {
+        tabs.setSearch("");
+        queueCreateSelection(created, parent);
+        await dir.refreshAfterChange();
+      }
     },
     onRemoveRecentJump: tabs.removeRecentJump,
   });
 
-  return { ...rename, ...selectionHandlers, ...context, createFile, createFolder, createFolderAndGo, changeSort, clearSelectionForVisit, undo };
+  return { ...rename, ...selectionHandlers, ...context, createFile, createFolder, createFolderAndGo, changeSort, clearSelectionForVisit, undo, moveEntries };
 }

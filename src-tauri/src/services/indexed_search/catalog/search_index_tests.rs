@@ -11,7 +11,8 @@ use std::{
 };
 
 use crate::domain::indexed_search::{
-    IndexedEntryKind, IndexedPathPage, IndexedPathPageQuery, IndexedPathQuery,
+    IndexedEntryKind, IndexedFolderPageQuery, IndexedFolderScope, IndexedPathPage,
+    IndexedPathPageQuery, IndexedPathQuery,
 };
 
 use super::super::{pagination::read_page, recursive_build::RecursiveBuild, CatalogEntryRecord};
@@ -146,7 +147,8 @@ fn interrupted_migration_resumes_and_keeps_changes_to_catalog_entries() {
     connection
         .execute_batch(
             r"DELETE FROM indexed_entries WHERE entry_id IN (10, 50);
-             INSERT INTO indexed_entries VALUES (10, 'C:\lower', 'lower', 0);
+             INSERT INTO indexed_entries (entry_id, path, normalized_name, kind)
+                 VALUES (10, 'C:\lower', 'lower', 0);
              UPDATE indexed_entries SET normalized_name = 'updated', entry_id = 11
                  WHERE entry_id = 200;",
         )
@@ -425,6 +427,210 @@ fn indexed_file(folder: &str, name: &str) -> CatalogEntryRecord {
     )
 }
 
+#[test]
+fn folder_pages_filter_drive_kind_and_depth_before_pagination() {
+    let directory = TestDirectory::new();
+    let store = IndexedCatalogStore::open(directory.0.join("catalog.db")).unwrap();
+    store.connect().unwrap().execute_batch(
+        r"INSERT INTO indexed_drive_catalog_state (drive_path, lifecycle_state, volume_id) VALUES
+            ('C:\', 'ready', 'first-volume'),
+            ('D:\', 'ready', 'second-volume'),
+            ('E:\', 'ready', 'previous-volume');",
+    ).unwrap();
+    let folder = |path: &str, name: &str| {
+        CatalogEntryRecord::new(
+            path.into(),
+            name.to_lowercase(),
+            IndexedEntryKind::Directory,
+        )
+    };
+    let mut entries = vec![
+        folder(r"C:\needle", "needle"),
+        folder(r"C:\z-NEEDLE", "z-NEEDLE"),
+        folder(r"D:\z-needle", "z-needle"),
+        folder(r"E:\0-needle", "0-needle"),
+    ];
+    for index in 0..300 {
+        let name = format!("0-needle-{index:03}");
+        entries.push(indexed_file("C:", &name));
+        entries.push(folder(&format!(r"C:\archive\{name}"), &name));
+    }
+    let mut writer = store.begin_write().unwrap();
+    writer.insert_batch(&entries).unwrap();
+    writer.finish().unwrap();
+    assert!(!store.search_index_needs_backfill().unwrap());
+
+    let volumes = [
+        ("C:\\".into(), "first-volume".into()),
+        ("D:\\".into(), "second-volume".into()),
+        ("E:\\".into(), "current-volume".into()),
+    ];
+    let page = |search: &str, roots: Option<&[&str]>, max_depth, cursor| {
+        store.query_folder_page(
+            IndexedFolderPageQuery {
+                search: search.into(),
+                limit: Some(1),
+                cursor,
+                scope: IndexedFolderScope {
+                    scope_roots: roots
+                        .map(|roots| roots.iter().map(|root| (*root).into()).collect()),
+                    max_depth,
+                },
+            },
+            &volumes,
+        )
+    };
+    let first = page("needle", Some(&["e:/", "d:/", "c:\\"]), Some(1), None).unwrap();
+    assert_eq!(first.matches[0].path, r"C:\needle");
+    let cursor = first.next_cursor.unwrap();
+    assert!(page("needle", Some(&["C:"]), Some(1), Some(cursor.clone())).is_err());
+    assert!(page(
+        "needle",
+        Some(&["C:", "D:", "E:"]),
+        Some(2),
+        Some(cursor.clone())
+    )
+    .is_err());
+    assert!(store
+        .query_page(page_query("needle", Some(cursor.clone()), 1), &volumes)
+        .is_err());
+
+    let second = page(
+        "needle",
+        Some(&["C:", "C:\\", "D:", "E:"]),
+        Some(1),
+        Some(cursor),
+    )
+    .unwrap();
+    assert_eq!(second.matches[0].path, r"C:\z-NEEDLE");
+    let last = page(
+        "needle",
+        Some(&["C:", "D:", "E:"]),
+        Some(1),
+        second.next_cursor,
+    )
+    .unwrap();
+    assert_eq!(last.matches[0].path, r"D:\z-needle");
+    assert!(last.next_cursor.is_none());
+
+    let deep = page("*needle*", Some(&["C:"]), Some(2), None).unwrap();
+    assert_eq!(deep.matches[0].path, r"C:\archive\0-needle-000");
+    let unbounded = page("*needle*", None, None, None).unwrap();
+    assert_eq!(unbounded.matches[0].path, deep.matches[0].path);
+    for (search, roots, depth) in [
+        ("needle", Some(&[][..]), None),
+        ("needle", None, Some(0)),
+        ("  ", None, None),
+    ] {
+        let empty = page(search, roots, depth, None).unwrap();
+        assert!(empty.matches.is_empty());
+        assert!(empty.next_cursor.is_none());
+    }
+    assert!(page("needle", Some(&[r"C:\archive"]), None, None).is_err());
+}
+
+#[test]
+fn folder_path_pages_match_whole_parents_and_a_partial_leaf() {
+    let directory = TestDirectory::new();
+    let store = IndexedCatalogStore::open(directory.0.join("catalog.db")).unwrap();
+    store.connect().unwrap().execute_batch(
+        r"INSERT INTO indexed_drive_catalog_state (drive_path, lifecycle_state, volume_id) VALUES
+            ('C:\', 'ready', 'first-volume'),
+            ('D:\', 'ready', 'second-volume');",
+    ).unwrap();
+    let mut entries: Vec<_> = [
+        r"C:\Álpha\Work\Résumé",
+        r"d:\ÁLPHA\Work\Résumé copy",
+        r"C:\Outer\Álpha\Work\Résumé extra",
+        r"C:\NotÁlpha\Work\Résumé outside",
+        r"C:\Álpha\Workshop\Résumé outside",
+        r"C:\Álpha\Work\some-résumé",
+        r"C:\Álpha\Work\Nested\Résumé deeper",
+        r"C:\Álpha\Work",
+        r"C:\Álpha",
+    ]
+    .iter()
+    .map(|&path| {
+        let (_, name) = path.rsplit_once('\\').unwrap();
+        CatalogEntryRecord::new(
+            path.into(),
+            name.to_lowercase(),
+            IndexedEntryKind::Directory,
+        )
+    })
+    .collect();
+    entries.push(indexed_file(r"C:\Álpha\Work", "résa.txt"));
+    let mut writer = store.begin_write().unwrap();
+    writer.insert_batch(&entries).unwrap();
+    writer.finish().unwrap();
+    let volumes = [
+        ("C:\\".into(), "first-volume".into()),
+        ("D:\\".into(), "second-volume".into()),
+    ];
+    let page = |search: &str, roots: Option<Vec<String>>, max_depth, limit, cursor| {
+        store.query_folder_page(
+            IndexedFolderPageQuery {
+                search: search.into(),
+                limit: Some(limit),
+                cursor,
+                scope: IndexedFolderScope {
+                    scope_roots: roots,
+                    max_depth,
+                },
+            },
+            &volumes,
+        )
+    };
+    let first = page("álpha/work/rés", None, None, 1, None).unwrap();
+    assert_eq!(first.matches[0].path, r"C:\Álpha\Work\Résumé");
+    let cursor = first.next_cursor.unwrap();
+    assert!(page("rés", None, None, 1, Some(cursor.clone())).is_err());
+    let second = page(r"ÁLPHA\WORK\RÉS", None, None, 10, Some(cursor)).unwrap();
+    assert_eq!(
+        second
+            .matches
+            .iter()
+            .map(|item| item.path.as_str())
+            .collect::<Vec<_>>(),
+        [
+            r"d:\ÁLPHA\Work\Résumé copy",
+            r"C:\Outer\Álpha\Work\Résumé extra",
+        ]
+    );
+    assert!(second.next_cursor.is_none());
+
+    let explicit = page(r"\\?\D:\álpha\work\rés", None, Some(3), 10, None).unwrap();
+    assert_eq!(explicit.matches[0].path, r"d:\ÁLPHA\Work\Résumé copy");
+    assert_eq!(explicit.matches.len(), 1);
+    assert!(
+        page("D:/álpha/work/rés", Some(vec!["C:".into()]), None, 10, None)
+            .unwrap()
+            .matches
+            .is_empty()
+    );
+    assert!(page("D:/álpha/work/rés", None, Some(2), 10, None)
+        .unwrap()
+        .matches
+        .is_empty());
+    assert!(page(r"\\álpha\work\rés", None, None, 10, None)
+        .unwrap()
+        .matches
+        .is_empty());
+    assert_eq!(
+        page("c:", None, None, 10, None).unwrap().matches[0].path,
+        r"C:\Álpha"
+    );
+    let children = page("C:/álpha/work/", None, None, 10, None).unwrap();
+    assert_eq!(
+        children
+            .matches
+            .iter()
+            .map(|item| item.path.as_str())
+            .collect::<Vec<_>>(),
+        [r"C:\Álpha\Work\Résumé", r"C:\Álpha\Work\some-résumé",]
+    );
+}
+
 fn page_query(term: &str, cursor: Option<String>, limit: usize) -> IndexedPathPageQuery {
     IndexedPathPageQuery {
         search: IndexedPathQuery {
@@ -441,6 +647,162 @@ fn assert_page_parity(term: &str, probe: &IndexedPathPage, fts: &IndexedPathPage
         serde_json::to_value(fts).unwrap(),
         "different result or continuation for {term:?}",
     );
+}
+
+#[test]
+fn typed_search_filters_the_disk_catalog_before_paging_and_ranking() {
+    const GIB: i64 = 1_073_741_824;
+    let directory = TestDirectory::new();
+    let store = IndexedCatalogStore::open(directory.0.join("catalog.db")).unwrap();
+    verify_test_volume(&store);
+    let volumes = [(r"C:\".into(), "test-volume".into())];
+    let sized_files = [
+        ("concert-prefix.MP4", GIB + 1),
+        ("b-concert.mkv", GIB + 2),
+        ("c-concert.webm", GIB + 3),
+        ("concert-at-boundary.mp4", GIB),
+        ("concert-below-boundary.mp4", GIB - 1),
+        ("!show-1.mp4", GIB + 1),
+        ("!show-2.mkv", GIB + 2),
+        ("!show-3.webm", GIB + 3),
+        ("concert-discussion.txt", GIB + 1),
+    ];
+    let mut entries: Vec<_> = sized_files
+        .iter()
+        .map(|(name, _)| indexed_file("C:", name))
+        .collect();
+    for number in 0..300 {
+        entries.push(indexed_file("C:", &format!("a{number:03}-concert.mp4")));
+        entries.push(indexed_file("C:", &format!("concert-{number:03}.mp4")));
+    }
+    entries.push(CatalogEntryRecord::new(
+        r"C:\concert-folder.mp4".into(),
+        "concert-folder.mp4".into(),
+        IndexedEntryKind::Directory,
+    ));
+    let mut writer = store.begin_write().unwrap();
+    writer.insert_batch(&entries).unwrap();
+    writer.finish().unwrap();
+    assert!(!store.search_index_needs_backfill().unwrap());
+
+    let mut connection = store.connect().unwrap();
+    let sizes = connection.transaction().unwrap();
+    for (name, size) in sized_files {
+        sizes
+            .execute(
+                "UPDATE indexed_entries SET size_bytes = ?1 WHERE normalized_name = ?2",
+                params![size, name.to_lowercase()],
+            )
+            .unwrap();
+    }
+    sizes.commit().unwrap();
+
+    let expression = ">1GB type:video concert";
+    let expected = [
+        r"C:\concert-prefix.MP4",
+        r"C:\b-concert.mkv",
+        r"C:\c-concert.webm",
+    ];
+    let snapshot = connection.transaction().unwrap();
+    let mut cursor = None;
+    for (path, size) in expected.into_iter().zip(GIB + 1..=GIB + 3) {
+        let request = || page_query(expression, cursor.clone(), 1);
+        let page = read_page(&snapshot, request(), &volumes, true).unwrap();
+        let fts = read_page(&snapshot, request(), &volumes, false).unwrap();
+        assert_page_parity(expression, &page, &fts);
+        assert_eq!(page.matches.len(), 1);
+        assert_eq!(page.matches[0].path, path);
+        assert_eq!(page.matches[0].size_bytes, Some(size as u64));
+        cursor = page.next_cursor;
+    }
+    assert!(cursor.is_none());
+    let ordered_expression = ">1GB type:video show";
+    let ordered = read_page(
+        &snapshot,
+        page_query(ordered_expression, None, 2),
+        &volumes,
+        true,
+    )
+    .unwrap();
+    let fts = read_page(
+        &snapshot,
+        page_query(ordered_expression, None, 2),
+        &volumes,
+        false,
+    )
+    .unwrap();
+    assert_page_parity(ordered_expression, &ordered, &fts);
+    assert_eq!(ordered.matches.len(), 2);
+    assert!(ordered.next_cursor.is_some());
+    drop(snapshot);
+
+    let page = store
+        .query_page(page_query(expression, None, 1), &volumes)
+        .unwrap();
+    let cursor = page.next_cursor.unwrap();
+    for changed in [
+        "concert",
+        ">=1GB type:video concert",
+        ">1GB type:audio concert",
+    ] {
+        assert!(store
+            .query_page(page_query(changed, Some(cursor.clone()), 1), &volumes)
+            .is_err());
+    }
+    let legacy = store
+        .query(page_query(expression, None, 3).search, &volumes)
+        .unwrap();
+    assert_eq!(
+        legacy
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect::<Vec<_>>(),
+        expected
+    );
+
+    let paths = |search| {
+        store
+            .query_page(page_query(search, None, 10), &volumes)
+            .unwrap()
+            .matches
+            .into_iter()
+            .map(|entry| entry.path)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(paths("=1GB"), [r"C:\concert-at-boundary.mp4"]);
+    assert_eq!(paths("<1GB type:video"), [r"C:\concert-below-boundary.mp4"]);
+    assert_eq!(paths("type:folder"), [r"C:\concert-folder.mp4"]);
+    let folder_page = store
+        .query_folder_page(
+            IndexedFolderPageQuery {
+                search: "type:folder".into(),
+                limit: None,
+                cursor: None,
+                scope: IndexedFolderScope {
+                    scope_roots: None,
+                    max_depth: None,
+                },
+            },
+            &volumes,
+        )
+        .unwrap();
+    assert!(folder_page.matches.is_empty());
+    assert!(paths("type:video")
+        .iter()
+        .any(|path| path == r"C:\a000-concert.mp4"));
+    assert!(paths(">1GB <1GB").is_empty());
+
+    // A pending row remains available to name search and qualifies as soon as
+    // an independent write publishes its known size.
+    assert_eq!(paths("a000-concert"), [r"C:\a000-concert.mp4"]);
+    assert!(paths(">1GB a000-concert").is_empty());
+    connection
+        .execute(
+            "UPDATE indexed_entries SET size_bytes = ?1 WHERE normalized_name = 'a000-concert.mp4'",
+            [GIB + 1],
+        )
+        .unwrap();
+    assert_eq!(paths(">1GB a000-concert"), [r"C:\a000-concert.mp4"]);
 }
 
 #[test]

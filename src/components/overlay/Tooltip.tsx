@@ -7,8 +7,7 @@ import { TOOLTIP_EDGE_PADDING, TOOLTIP_GAP } from "@/constants";
 import { alignFloatingAxis, getViewportSize } from "./overlayUtils";
 import { useOverlayDismiss } from "./useOverlayDismiss";
 
-const isContextMenuOpen = () =>
-  Boolean(document.querySelector(".context-menu[data-open=\"true\"]"));
+const OPEN_CONTEXT_MENU = '.context-menu[data-open="true"]';
 
 export const TooltipDisplay = () => {
   const tooltipState = useTooltipStore(
@@ -17,6 +16,7 @@ export const TooltipDisplay = () => {
       text: state.text,
       x: state.x,
       y: state.y,
+      inContextMenu: Boolean(state.anchor?.closest(OPEN_CONTEXT_MENU)),
     }),
     shallow,
   );
@@ -82,6 +82,7 @@ export const TooltipDisplay = () => {
     <div
       ref={tooltipRef}
       className={`tooltip${tooltipState.visible ? " is-visible" : ""}`}
+      data-context-menu={tooltipState.inContextMenu || undefined}
       style={{ transform: `translate3d(${tooltipState.x}px, ${tooltipState.y}px, 0)` }}
     >
       {tooltipText}
@@ -93,6 +94,7 @@ type TooltipWrapperProps = {
   text: string;
   disabled?: boolean;
   delayMs?: number;
+  withinContextMenu?: boolean;
   children: ReactElement;
 };
 
@@ -100,6 +102,7 @@ export const TooltipWrapper = ({
   text,
   disabled = false,
   delayMs,
+  withinContextMenu = false,
   children,
 }: TooltipWrapperProps) => {
   const child = Children.only(children) as ReactElement<HTMLAttributes<Element>>;
@@ -141,8 +144,8 @@ export const TooltipWrapper = ({
     hoverSessionRef.current = useTooltipStore.getState().hoverSession;
   };
 
-  const canRenderTooltip = () => {
-    if (isContextMenuOpen()) return false;
+  const canRenderTooltip = (anchor: Element) => {
+    if (withinContextMenu ? !anchor.closest(OPEN_CONTEXT_MENU) : document.querySelector(OPEN_CONTEXT_MENU)) return false;
     if (document.visibilityState !== "visible") return false;
     return document.hasFocus();
   };
@@ -155,7 +158,7 @@ export const TooltipWrapper = ({
     trigger: "mouse" | "focus",
   ) => {
     if (disabled || !text) return;
-    if (!canRenderTooltip()) return;
+    if (!canRenderTooltip(anchor)) return;
 
     const tooltipApi = useTooltipStore.getState();
     if (tooltipApi.nonce !== requestId) return;
@@ -171,7 +174,7 @@ export const TooltipWrapper = ({
       const latest = useTooltipStore.getState();
       if (latest.nonce !== requestId || !anchor.isConnected) return;
       if (trigger === "mouse" && latest.blockUntilPointerMove) return;
-      if (!canRenderTooltip()) return;
+      if (!canRenderTooltip(anchor)) return;
       const tooltipEl = tooltipApi.tooltipElement;
       const tooltipRect = tooltipEl
         ? tooltipEl.getBoundingClientRect()
@@ -244,7 +247,7 @@ export const TooltipWrapper = ({
       const latest = useTooltipStore.getState();
       if (latest.nonce !== requestId) return;
       if (trigger === "mouse" && latest.blockUntilPointerMove) return;
-      if (!canRenderTooltip()) return;
+      if (!canRenderTooltip(anchor)) return;
       const nextAnchor = resolveAnchor();
       if (trigger === "mouse" && !isPointerStillInsideHovered(nextAnchor.x, nextAnchor.y)) {
         return;
@@ -279,7 +282,7 @@ export const TooltipWrapper = ({
     },
     onMouseMove: (event: MouseEvent) => {
       child.props.onMouseMove?.(event);
-      if (isContextMenuOpen()) return;
+      if (!canRenderTooltip(event.currentTarget)) return;
       const store = useTooltipStore.getState();
       if (hoverSessionRef.current !== store.hoverSession) {
         resetHoverState();

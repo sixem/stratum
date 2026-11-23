@@ -16,3 +16,5 @@ export const GRID_GAP_DEFAULT = 8;
 
 export const SETTINGS_STORAGE_KEY = "stratum.settings";
 export const SETTINGS_STORAGE_VERSION = 19;
+export const PREVIEW_STRIP_OPEN_KEY = "stratum.preview.strip-open";
+export const PREVIEW_VOLUME_KEY = "stratum.preview.volume";

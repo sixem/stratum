@@ -32,8 +32,14 @@ impl IndexedSearchState {
         }
     }
 
-    pub(super) fn drive_statuses_snapshot(&self) -> Vec<IndexedDriveStatus> {
-        self.drive_statuses.values().cloned().collect()
+    pub(super) fn drive_statuses_snapshot(&self, enabled: bool) -> Vec<IndexedDriveStatus> {
+        self.drive_statuses
+            .iter()
+            .map(|(key, status)| IndexedDriveStatus {
+                searchable: enabled && self.volumes.verified.contains(key),
+                ..status.clone()
+            })
+            .collect()
     }
 
     pub(super) fn update_service_status(

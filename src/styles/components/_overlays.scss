@@ -36,6 +36,10 @@
   visibility: visible;
 }
 
+.tooltip[data-context-menu="true"] {
+  z-index: 2702;
+}
+
 .context-menu,
 .context-submenu {
   --context-corner-radius: 0px;
@@ -48,6 +52,10 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s ease;
+}
+
+.context-submenu[data-wide="true"] {
+  width: min(256px, calc(100vw - 24px));
 }
 
 .context-menu {
@@ -252,11 +260,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .context-label[data-wrap="true"] {
-    white-space: normal;
-    overflow-wrap: anywhere;
   }
 
   .context-hint {

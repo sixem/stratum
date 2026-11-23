@@ -4,6 +4,7 @@ use std::mem;
 use windows_sys::Win32::{
     Storage::FileSystem::FILE_ATTRIBUTE_DIRECTORY,
     System::Ioctl::{
+        USN_REASON_DATA_EXTEND, USN_REASON_DATA_OVERWRITE, USN_REASON_DATA_TRUNCATION,
         USN_REASON_FILE_CREATE, USN_REASON_FILE_DELETE, USN_REASON_HARD_LINK_CHANGE,
         USN_REASON_RENAME_NEW_NAME, USN_REASON_RENAME_OLD_NAME, USN_REASON_REPARSE_POINT_CHANGE,
         USN_REASON_SECURITY_CHANGE, USN_RECORD_V2,
@@ -14,13 +15,17 @@ use super::UserJournalChange;
 
 pub(super) const RECORD_VERSION: u16 = 2;
 pub(super) const MAX_CHANGE_RECORDS: usize = 512;
-pub(super) const RELEVANT_REASONS: u32 = USN_REASON_FILE_CREATE
+pub(super) const NAMESPACE_REASONS: u32 = USN_REASON_FILE_CREATE
     | USN_REASON_FILE_DELETE
     | USN_REASON_RENAME_OLD_NAME
     | USN_REASON_RENAME_NEW_NAME
     | USN_REASON_HARD_LINK_CHANGE
     | USN_REASON_REPARSE_POINT_CHANGE
     | USN_REASON_SECURITY_CHANGE;
+pub(super) const RELEVANT_REASONS: u32 = NAMESPACE_REASONS
+    | USN_REASON_DATA_EXTEND
+    | USN_REASON_DATA_TRUNCATION
+    | USN_REASON_DATA_OVERWRITE;
 
 const RECORD_HEADER_SIZE: usize = mem::offset_of!(USN_RECORD_V2, FileName);
 const FILE_ID_OFFSET: usize = mem::offset_of!(USN_RECORD_V2, FileReferenceNumber);
@@ -95,7 +100,6 @@ fn read_field<const N: usize>(record: &[u8], offset: usize) -> Result<[u8; N], (
 #[cfg(test)]
 mod tests {
     use super::*;
-    use windows_sys::Win32::System::Ioctl::USN_REASON_DATA_OVERWRITE;
 
     fn redacted_record(
         file_id: u64,
@@ -136,6 +140,12 @@ mod tests {
         assert_eq!(
             changes,
             [
+                UserJournalChange {
+                    file_id: 1,
+                    parent_file_id: 2,
+                    reason: USN_REASON_DATA_OVERWRITE,
+                    is_dir: false,
+                },
                 UserJournalChange {
                     file_id: 3,
                     parent_file_id: 4,

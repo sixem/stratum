@@ -1,10 +1,13 @@
 // Orchestrates tab state, view settings, and navigation flows.
-import { useCallback, useMemo } from "react";
+import { useCallback, useLayoutEffect, useMemo } from "react";
 import { shallow } from "zustand/shallow";
 import type { ListDirOptions, SortState, Tab, ViewMode } from "@/types";
 import { DEFAULT_TAB_STATE, makeDebug, folderPathKey, getNextTrailPath } from "@/lib";
 import { useSessionStore } from "@/modules";
-import { createSessionTab } from "@/modules/sessionStore";
+import { createSessionTab, useBottomSessionStore } from "@/modules/sessionStore";
+import { beginLinkedNavigation, closeLinkedTab, registerPaneLinkReceiver } from "@/modules/paneLinkNavigation";
+import type { LinkedNavigation } from "@/modules/paneLinkNavigation";
+import type { LoadDirOptions } from "@/hooks/domain/filesystem/fileManager.types";
 import { useTabHistory } from "./tabHistory";
 import { usePendingJump } from "./tabNavigation";
 import { useTabPersistence } from "./useTabPersistence";
@@ -13,7 +16,7 @@ type TabSessionOptions = {
   useStore?: typeof useSessionStore;
   currentPath: string;
   loadingPath: string | null;
-  loadDir: (path: string, options?: ListDirOptions) => Promise<void>;
+  loadDir: (path: string, options?: LoadDirOptions) => Promise<void>;
   clearDir: (options?: { silent?: boolean }) => void;
   defaultViewMode: ViewMode;
   newTabViewMode?: ViewMode;
@@ -35,6 +38,7 @@ export const useTabSession = ({
   keepFilterOnNavigation,
   recentJumpsLimit,
 }: TabSessionOptions) => {
+  const pane = useStore === useBottomSessionStore ? "bottom" : "main";
   const {
     tabs,
     activeTabId,
@@ -155,15 +159,13 @@ export const useTabSession = ({
       options: ListDirOptions | undefined,
       source: "navigate" | "switch",
       tabId: string | null,
+      linked?: LinkedNavigation,
     ) => {
       const target = path.trim();
       if (!target) {
         pendingNavigationRef.current = null;
         clearDir();
         return;
-      }
-      if (source === "navigate" && tabId) {
-        emptyTabIdsRef.current.delete(tabId);
       }
       const tab = useStore.getState().tabs.find(({ id }) => id === tabId);
       const resetFilter = source === "navigate" && !keepFilterOnNavigation
@@ -176,17 +178,36 @@ export const useTabSession = ({
       const revealPath = source === "navigate" && tabId === activeTabId
         ? getNextTrailPath(target, currentPath)
         : null;
-      pendingNavigationRef.current = { path: target, resetFilter, revealPath };
-      queuePendingJump(target, source, tabId);
+      const notifyLink = !linked && source === "navigate" ? beginLinkedNavigation(pane, tabId, target) : undefined;
+      const prepare = () => {
+        if (source === "navigate" && tabId) {
+          emptyTabIdsRef.current.delete(tabId);
+          if (linked) recordHistory(tabId, currentPath, target);
+        }
+        pendingNavigationRef.current = { path: target, resetFilter, revealPath, notifyLink };
+        queuePendingJump(target, source, tabId);
+      };
       const nextSort = options?.sort ?? tab?.sort ?? sortState;
       const nextSearch = resetFilter ? "" : options?.search ?? tab?.search ?? searchValue;
-      void loadDir(target, { ...options, sort: nextSort, search: nextSearch });
+      if (!linked) prepare();
+      void loadDir(target, {
+        ...options, sort: nextSort, search: nextSearch,
+        linked: linked ? { ...linked, onCommit: prepare } : undefined,
+      });
     },
     [
-      activeTabId, clearDir, currentPath, emptyTabIdsRef, keepFilterOnNavigation, loadDir, pendingNavigationRef,
-      queuePendingJump, searchValue, sortState, useStore,
+      activeTabId, clearDir, currentPath, emptyTabIdsRef, keepFilterOnNavigation, loadDir, pane, pendingNavigationRef,
+      queuePendingJump, recordHistory, searchValue, sortState, useStore,
     ],
   );
+
+  useLayoutEffect(() => registerPaneLinkReceiver(pane, (target, linked) => {
+    const session = useStore.getState();
+    const tab = session.tabs.find(({ id }) => id === session.activeTabId);
+    if (tab && folderPathKey(tab.path) === folderPathKey(currentPath)) {
+      performNavigation(target, undefined, "navigate", tab.id, linked);
+    }
+  }), [currentPath, pane, performNavigation, useStore]);
 
   const jumpTo = useCallback(
     (path: string, options?: ListDirOptions) => {
@@ -330,6 +351,7 @@ export const useTabSession = ({
       const session = useStore.getState();
       const index = session.tabs.findIndex((tab) => tab.id === id);
       if (index === -1) return;
+      closeLinkedTab(pane, id);
 
       log("close tab -> %s", id);
       const tab = session.tabs[index];
@@ -357,7 +379,7 @@ export const useTabSession = ({
         performNavigation(fallback.path, { sort: fallback.sort, search: fallback.search }, "switch", fallback.id);
       }
     },
-    [clearDir, emptyTabIdsRef, pendingNavigationRef, performNavigation, takeHistory, useStore],
+    [clearDir, emptyTabIdsRef, pane, pendingNavigationRef, performNavigation, takeHistory, useStore],
   );
 
   const reopenClosedTab = useCallback(() => {

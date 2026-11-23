@@ -15,7 +15,9 @@ use windows::Win32::Storage::FileSystem::{
 };
 
 mod budget;
+mod pinned;
 pub(super) use budget::{copy_stream, StagingBudget, MAX_DEPTH, MAX_ITEMS};
+pub(super) use pinned::{prepare_hdrop_paths, PinnedDrop, PreparedHdrop};
 
 const DROP_ROOT_DIR: &str = "stratum-drop";
 static DROP_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -203,42 +205,14 @@ fn in_temp(path: &Path, temp: &Path) -> bool {
         })
 }
 
-pub(super) fn stage_temp_hdrop_paths(
-    paths: &[String],
-    slots: &StageSlots,
-) -> Result<ReceivedFiles, DropDataError> {
-    stage_from(
-        paths,
-        &std::env::temp_dir(),
-        slots,
-        StagingBudget::for_directory,
-    )
-}
-
+#[cfg(test)]
 fn stage_from(
     paths: &[String],
     temp: &Path,
     slots: &StageSlots,
     budget_for: impl FnOnce(&Path) -> Result<StagingBudget, DropDataError>,
 ) -> Result<ReceivedFiles, DropDataError> {
-    let Some(first_temporary) = paths.iter().position(|path| in_temp(Path::new(path), temp)) else {
-        return Ok(ReceivedFiles::direct(paths.to_vec()));
-    };
-
-    let stage = DropStage::in_root(&temp.join(DROP_ROOT_DIR), slots)?;
-    let mut budget = budget_for(stage.path())?;
-    let mut received = Vec::with_capacity(paths.len());
-    received.extend_from_slice(&paths[..first_temporary]);
-    for path in &paths[first_temporary..] {
-        let source = Path::new(path);
-        if !in_temp(source, temp) {
-            received.push(path.clone());
-            continue;
-        }
-        let dest = stage_filesystem_item(source, stage.path(), stage.path(), 1, &mut budget)?;
-        received.push(dest.to_string_lossy().into_owned());
-    }
-    Ok(ReceivedFiles::staged(received, stage))
+    pinned::prepare_from(paths.to_vec(), temp, slots, budget_for)?.materialize()
 }
 
 pub(super) fn stage_filesystem_item(
@@ -250,22 +224,33 @@ pub(super) fn stage_filesystem_item(
 ) -> Result<PathBuf, DropDataError> {
     let (handle, metadata) = open_stage_source(source)?;
     if metadata.is_dir() {
-        // A provider can offer the temp root or an alias of the staging folder.
-        let source_dir = fs::canonicalize(source).map_err(|_| DropDataError::InvalidSource)?;
-        let stage_dir = fs::canonicalize(stage_root).map_err(|_| DropDataError::StagingFailed)?;
-        if in_temp(&stage_dir, &source_dir) {
-            return Err(DropDataError::InvalidSource);
-        }
+        check_stage_directory(source, stage_root)?;
     }
     copy_stage_source(source, handle, metadata, parent, depth, budget)
 }
 
+fn check_stage_directory(source: &Path, stage: &Path) -> Result<(), DropDataError> {
+    // A provider can offer the temp root or an alias of the staging folder.
+    let source = fs::canonicalize(source).map_err(|_| DropDataError::InvalidSource)?;
+    let stage = fs::canonicalize(stage).map_err(|_| DropDataError::StagingFailed)?;
+    if in_temp(&stage, &source) {
+        return Err(DropDataError::InvalidSource);
+    }
+    Ok(())
+}
+
 fn open_stage_source(path: &Path) -> Result<(File, fs::Metadata), DropDataError> {
-    // Hold the source open without write or delete sharing. A reparse-point
-    // replacement can never supply the bytes for a file we already checked.
+    open_stage_source_with_sharing(path, FILE_SHARE_READ.0)
+}
+
+fn open_stage_source_with_sharing(
+    path: &Path,
+    share: u32,
+) -> Result<(File, fs::Metadata), DropDataError> {
+    // Open the path itself and check its attributes on the same handle.
     let file = File::options()
         .read(true)
-        .share_mode(FILE_SHARE_READ.0)
+        .share_mode(share)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS.0 | FILE_FLAG_OPEN_REPARSE_POINT.0)
         .open(path)
         .map_err(|_| DropDataError::InvalidSource)?;
@@ -336,7 +321,7 @@ fn try_create_stage_entry<T>(
 
 fn copy_stage_source(
     source: &Path,
-    mut handle: File,
+    handle: File,
     metadata: fs::Metadata,
     parent: &Path,
     depth: usize,
@@ -363,6 +348,16 @@ fn copy_stage_source(
         return Ok(destination);
     }
 
+    copy_stage_file(name, handle, metadata, parent, budget)
+}
+
+fn copy_stage_file(
+    name: &OsStr,
+    mut handle: File,
+    metadata: fs::Metadata,
+    parent: &Path,
+    budget: &mut StagingBudget,
+) -> Result<PathBuf, DropDataError> {
     if metadata.len() > budget.remaining_bytes() {
         return Err(DropDataError::InsufficientSpace);
     }

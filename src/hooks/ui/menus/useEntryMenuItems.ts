@@ -18,6 +18,8 @@ import { buildEntryConvertItems } from "./entryMenu/buildEntryConvertItems";
 import { buildEntryCopyItems } from "./entryMenu/buildEntryCopyItems";
 import { buildEntryDeleteItems } from "./entryMenu/buildEntryDeleteItems";
 import { buildEntryMoveItems } from "./entryMenu/buildEntryMoveItems";
+import { showFolderWithSelectionPrompt, type CreateFolderWithSelection } from "./entryMenu/showFolderWithSelectionPrompt";
+import { folderPathKey, getParentPath } from "@/lib/paths";
 import { buildEntryOpenItems } from "./entryMenu/buildEntryOpenItems";
 import { buildEntryOpenWithItems } from "./entryMenu/buildEntryOpenWithItems";
 import { buildEntryPasteItems } from "./entryMenu/buildEntryPasteItems";
@@ -41,12 +43,15 @@ type UseEntryMenuItemsOptions = {
   otherPane?: Parameters<typeof buildEntryOpenItems>[0]["otherPane"];
   extraOpenItems?: ContextMenuItem[];
   showClipboardShortcuts?: boolean;
+  textCopyTargets?: Parameters<typeof buildEntryCopyItems>[0]["textCopyTargets"];
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   confirmDelete: boolean;
   onClearSelection?: () => void;
   onRenameEntry?: (target: EntryContextTarget) => void;
   onPasteEntries?: (destination: string) => Promise<unknown> | void;
   onMoveEntries?: (paths: string[], destination: string) => void;
+  onQuickMove?: (paths: string[]) => void;
+  onCreateFolderWithSelection?: CreateFolderWithSelection;
   onOpenConvertModal: (request: ConversionModalRequest) => void;
   onQuickConvertImages: (request: ConversionModalRequest, targetFormat: string) => void;
   menuShowConvert: boolean;
@@ -68,12 +73,15 @@ export const useEntryMenuItems = ({
   otherPane,
   extraOpenItems,
   showClipboardShortcuts = true,
+  textCopyTargets,
   onDeleteEntries,
   confirmDelete,
   onClearSelection,
   onRenameEntry,
   onPasteEntries,
   onMoveEntries,
+  onQuickMove,
+  onCreateFolderWithSelection,
   onOpenConvertModal,
   onQuickConvertImages,
   menuShowConvert,
@@ -89,6 +97,9 @@ export const useEntryMenuItems = ({
     const actionTargets = resolveContextTargets(target, selected, parentPath);
     const selectionSummary = summarizeEntrySelection(actionTargets, target, entryByPath);
     const hasTargets = actionTargets.length > 0;
+    const currentFolderKey = folderPathKey(currentPath);
+    const canGroupSelection = hasTargets && currentFolderKey && actionTargets.every((path) =>
+      folderPathKey(getParentPath(path) ?? "") === currentFolderKey);
     const pasteTarget = (target.isDir ? target.path : currentPath).trim();
     const canPaste = Boolean(clipboard?.paths.length && pasteTarget);
 
@@ -167,13 +178,23 @@ export const useEntryMenuItems = ({
         actionTargets,
         hasTargets,
         showShortcuts: showClipboardShortcuts,
+        target,
+        entryByPath,
+        textCopyTargets,
       }),
       ...(onMoveEntries ? buildEntryMoveItems({
         destinations,
         actionTargets,
         onMoveEntries,
+        onQuickMove,
         onClear: () => clearMoveDestinations(workspaceId),
       }) : []),
+      ...(onCreateFolderWithSelection && canGroupSelection ? [{
+        id: "entry-new-folder-with-selection",
+        label: "New folder with selection…",
+        icon: "new-folder" as const,
+        onSelect: () => showFolderWithSelectionPrompt(actionTargets, currentPath, onCreateFolderWithSelection),
+      }] : []),
       ...(onRenameEntry ? buildEntryRenameItems({
         target,
         hasTargets,
@@ -217,6 +238,8 @@ export const useEntryMenuItems = ({
     onOpenEntry,
     onOpenGallery,
     onMoveEntries,
+    onQuickMove,
+    onCreateFolderWithSelection,
     onPasteEntries,
     onQuickConvertImages,
     onRenameEntry,
@@ -225,6 +248,7 @@ export const useEntryMenuItems = ({
     selected,
     showClipboardShortcuts,
     target,
+    textCopyTargets,
     workspaceId,
   ]);
 };

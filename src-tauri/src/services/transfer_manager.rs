@@ -16,6 +16,8 @@ mod manager_events;
 mod manager_queue;
 #[path = "transfer_manager/manager_run.rs"]
 mod manager_run;
+#[path = "transfer_manager/manager_shutdown.rs"]
+mod manager_shutdown;
 #[path = "transfer_manager/manager_state.rs"]
 mod manager_state;
 #[path = "transfer_manager/progress_dispatch.rs"]
@@ -23,6 +25,7 @@ mod progress_dispatch;
 
 use std::sync::Arc;
 
+pub use self::manager_shutdown::TransferShutdownMode;
 use self::manager_state::TransferManagerInner;
 
 #[derive(Clone)]

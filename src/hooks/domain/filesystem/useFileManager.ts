@@ -33,6 +33,7 @@ export function useFileManager() {
   const directoryLoader = useDirectoryLoader({
     loadIdRef,
     primeEntryMeta: metaCache.primeEntryMeta,
+    setMetaListingPending: metaCache.setMetaListingPending,
     reportError,
     getRestoreRevision,
     log,
@@ -113,6 +114,7 @@ export function useFileManager() {
     placesLoaded: fsBootstrap.placesLoaded,
     drives: fsBootstrap.drives,
     drivesLoaded: fsBootstrap.drivesLoaded,
+    driveInfoLoaded: fsBootstrap.driveInfoLoaded,
     driveInfo: fsBootstrap.driveInfo,
     indexedSearchStatus: fsBootstrap.indexedSearchStatus,
     entryMeta: metaCache.entryMeta,
@@ -134,6 +136,7 @@ export function useFileManager() {
     deleteEntries: fileMutations.deleteEntriesInView,
     duplicateEntries: fileMutations.duplicateEntriesInView,
     moveEntries: fileMutations.moveEntriesInView,
+    createFolderWithSelection: fileMutations.createFolderWithSelection,
     pasteEntries: fileMutations.pasteEntriesInView,
     createFolder: fileMutations.createFolderInView,
     createFile: fileMutations.createFileInView,

@@ -2,10 +2,10 @@
 // tracking. Native watcher payloads are normalized before they enter the
 // debounce queue so the refresh path only deals with one change shape.
 import { useCallback, useEffect, useRef } from "react";
-import { startDirWatch, stopDirWatch } from "@/api";
-import { makeDebug, normalizePath } from "@/lib";
+import { folderPathKey, makeDebug } from "@/lib";
 import { bumpDirectoryChildVersions } from "@/modules";
-import type { ListDirOptions, SortState, Tab } from "@/types";
+import type { SortState, Tab } from "@/types";
+import type { LoadDirOptions, MetaRequestOptions } from "./fileManager.types";
 import {
   consumePendingChanges,
   consumeQueuedRefreshWhenIdle,
@@ -22,11 +22,7 @@ import {
   subscribeToWatchEvent,
   type QueuedWatchChange,
 } from "./watchEventSubscriptions";
-
-type MetaRequestOptions = {
-  force?: boolean;
-  defer?: boolean;
-};
+import { markDirectoryWatchFailed, useDirectoryWatchRecovery } from "./useDirectoryWatchRecovery";
 
 type UseDirWatchOptions = {
   pane?: "main" | "bottom";
@@ -38,15 +34,10 @@ type UseDirWatchOptions = {
   tabs: Tab[];
   sortState: SortState;
   searchQuery: string;
-  loadDir: (path: string, options?: DirLoadOptions) => Promise<void>;
+  loadDir: (path: string, options?: LoadDirOptions) => Promise<void>;
   requestEntryMeta?: (paths: string[], options?: MetaRequestOptions) => Promise<unknown>;
   loading: boolean;
   onPresenceToggle?: (suppress: boolean) => void;
-};
-
-type DirLoadOptions = ListDirOptions & {
-  force?: boolean;
-  silent?: boolean;
 };
 
 const DIR_CHANGE_DEBOUNCE_MS = 260;
@@ -86,16 +77,19 @@ export const useDirWatch = ({
   const loadingRef = useRef(loading);
   const schedulerRef = useRef(createWatchRefreshSchedulerState());
   const pendingRenamePathsRef = useRef<Set<string>>(new Set());
+  const pendingRescansRef = useRef(new Set<string>());
+  const pendingWritesRef = useRef(new Set<string>());
+  const recoveryPathRef = useRef("");
   const refreshActiveRef = useRef<(reason: string) => void>(() => {});
   const presenceToggleRef = useRef<((suppress: boolean) => void) | null>(null);
   const externalSuppressedRef = useRef(false);
   const pendingPathsRef = useRef<Set<string>>(new Set());
   const pendingEntryPathsRef = useRef<Set<string>>(new Set());
   const flushTimerRef = useRef<number | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
   const lastTabIdRef = useRef<string | null>(null);
   const tabCheckTimerRef = useRef<number | null>(null);
   const refreshBackoffTimerRef = useRef<number | null>(null);
-  const refreshBackoffStepRef = useRef(0);
   const refreshBackoffKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -130,6 +124,11 @@ export const useDirWatch = ({
     presenceToggleRef.current?.(next);
   }, []);
 
+  const clearDeferredRefresh = useCallback(() => {
+    if (refreshTimerRef.current != null) window.clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = null;
+  }, []);
+
   const refreshActive = useCallback((reason: string) => {
     const decision = evaluateActiveRefresh(schedulerRef.current, {
       enabled: enabledRef.current,
@@ -140,16 +139,33 @@ export const useDirWatch = ({
       now: Date.now(),
       refreshCooldownMs: REFRESH_COOLDOWN_MS,
     });
+    if (decision.kind === "defer") {
+      if (refreshTimerRef.current != null) return;
+      const tab = activeTabIdRef.current;
+      const path = folderPathKey(activeTabPathRef.current);
+      refreshTimerRef.current = window.setTimeout(() => {
+        refreshTimerRef.current = null;
+        if (tab === activeTabIdRef.current && path === folderPathKey(activeTabPathRef.current)) {
+          refreshActiveRef.current("coalesced");
+        }
+      }, decision.delayMs);
+      return;
+    }
     if (decision.kind !== "start") return;
+    clearDeferredRefresh();
+    const recovery = recoveryPathRef.current === folderPathKey(decision.viewPath);
+    if (recovery) recoveryPathRef.current = "";
     if (decision.suppressPresence) {
       setExternalSuppressed(true);
     }
 
-    const options: DirLoadOptions = {
+    const options: LoadDirOptions = {
       sort: sortRef.current,
       search: searchRef.current,
       force: true,
       silent: true,
+      includeMeta: recovery || undefined,
+      suppressError: recovery || undefined,
       // Avoid fast + full double refreshes when sorting by size/modified.
       // A single full refresh keeps ordering stable and prevents flicker.
       fast: sortRef.current.key === "name",
@@ -164,7 +180,7 @@ export const useDirWatch = ({
         refreshActiveRef.current("queued");
       }
     });
-  }, [setExternalSuppressed]);
+  }, [clearDeferredRefresh, setExternalSuppressed]);
 
   useEffect(() => {
     refreshActiveRef.current = refreshActive;
@@ -175,17 +191,15 @@ export const useDirWatch = ({
       window.clearTimeout(refreshBackoffTimerRef.current);
       refreshBackoffTimerRef.current = null;
     }
-    refreshBackoffStepRef.current = 0;
     refreshBackoffKeyRef.current = null;
   }, []);
 
   const scheduleRefreshBackoff = useCallback(
     (path: string) => {
-      const key = normalizePath(path);
+      const key = folderPathKey(path);
       if (!key) return;
 
       refreshBackoffKeyRef.current = key;
-      refreshBackoffStepRef.current = 0;
       if (refreshBackoffTimerRef.current != null) {
         window.clearTimeout(refreshBackoffTimerRef.current);
         refreshBackoffTimerRef.current = null;
@@ -197,7 +211,7 @@ export const useDirWatch = ({
         refreshBackoffTimerRef.current = window.setTimeout(() => {
           refreshBackoffTimerRef.current = null;
           if (!enabledRef.current) return;
-          const activeKey = normalizePath(activeTabPathRef.current);
+          const activeKey = folderPathKey(activeTabPathRef.current);
           if (!activeKey || activeKey !== refreshBackoffKeyRef.current) return;
           refreshActiveRef.current("fs-backoff");
           const nextIndex = stepIndex + 1;
@@ -212,6 +226,14 @@ export const useDirWatch = ({
     [],
   );
 
+  const recoverVisibleFolder = useCallback((path: string) => {
+    const key = folderPathKey(path);
+    if (!key || key !== folderPathKey(activeTabPathRef.current)) return;
+    recoveryPathRef.current = key;
+    clearRefreshBackoff();
+    refreshActiveRef.current("watch-recovery");
+  }, [clearRefreshBackoff]);
+
   const flushPendingChanges = useCallback(() => {
     if (
       pendingPathsRef.current.size === 0 &&
@@ -221,6 +243,11 @@ export const useDirWatch = ({
     }
     const pending = Array.from(pendingPathsRef.current);
     pendingPathsRef.current.clear();
+    const activeKey = folderPathKey(activeTabPathRef.current);
+    const recover = pendingRescansRef.current.has(activeKey);
+    const writing = pendingWritesRef.current.has(activeKey);
+    pendingRescansRef.current.clear();
+    pendingWritesRef.current.clear();
     // The main subscriber observes events from both native watches. Publish each
     // shared folder revision once, while both panes update their own tab state.
     if (pane === "main" && pending.length > 0) {
@@ -241,16 +268,20 @@ export const useDirWatch = ({
     });
 
     if (changeResult.shouldRefreshActive) {
-      refreshActiveRef.current("fs-event");
-      // Re-check after a short backoff in case a large write finishes later.
-      scheduleRefreshBackoff(activeTabPathRef.current);
+      if (recover) recoverVisibleFolder(activeTabPathRef.current);
+      else {
+        refreshActiveRef.current("fs-event");
+        // In-progress writes can publish metadata later. Creates and renames
+        // only need the normal coalesced refresh.
+        if (writing) scheduleRefreshBackoff(activeTabPathRef.current);
+      }
     }
 
     if (metaPaths.length > 0) {
-      // Force metadata refresh for changed entries so thumbnail signatures update.
+      // Retain changed entries while the listing refresh and bounded stats settle.
       void requestEntryMetaRef.current?.(metaPaths, { force: true }).catch(() => {});
     }
-  }, [pane]);
+  }, [pane, recoverVisibleFolder, scheduleRefreshBackoff]);
 
   const scheduleFlush = useCallback(() => {
     if (flushTimerRef.current != null) return;
@@ -262,18 +293,22 @@ export const useDirWatch = ({
 
   const queueWatchChange = useCallback(
     (change: QueuedWatchChange) => {
+      const key = folderPathKey(change.watchedPath);
+      if (change.watchFailed) markDirectoryWatchFailed(pane, change.watchedPath);
+      if (change.rescan || change.watchFailed) pendingRescansRef.current.add(key);
+      if (change.writing) pendingWritesRef.current.add(key);
       pendingPathsRef.current.add(change.watchedPath);
       change.renamePaths.forEach((path) => {
         pendingRenamePathsRef.current.add(path);
       });
-      if (normalizePath(change.watchedPath) === normalizePath(currentPathRef.current)) {
+      if (key === folderPathKey(currentPathRef.current)) {
         change.entryPaths.forEach((path) => {
           pendingEntryPathsRef.current.add(path);
         });
       }
       scheduleFlush();
     },
-    [scheduleFlush],
+    [pane, scheduleFlush],
   );
 
   useEffect(() => {
@@ -300,20 +335,12 @@ export const useDirWatch = ({
     });
   }, [enabled, queueWatchChange]);
 
+  useDirectoryWatchRecovery({ enabled, pane, sharesWatch, path: activeTabPath, refreshFolder: recoverVisibleFolder });
+
   useEffect(() => {
-    if (!enabled || sharesWatch) return;
-    const target = activeTabPath.trim();
-    if (!target) {
-      void stopDirWatch(pane);
-      return;
-    }
-    void startDirWatch(target, pane).catch((error) => {
-      log("start watch failed: %o", error);
-    });
-    return () => {
-      void stopDirWatch(pane);
-    };
-  }, [activeTabPath, enabled, pane, sharesWatch]);
+    if (recoveryPathRef.current !== folderPathKey(activeTabPath)) recoveryPathRef.current = "";
+    clearDeferredRefresh();
+  }, [activeTabId, activeTabPath, clearDeferredRefresh, enabled]);
 
   useEffect(() => {
     // Drop stale IDs when tabs close so dirty/refresh maps stay bounded.
@@ -378,6 +405,7 @@ export const useDirWatch = ({
         tabCheckTimerRef.current = null;
       }
       clearRefreshBackoff();
+      clearDeferredRefresh();
     };
-  }, [clearRefreshBackoff]);
+  }, [clearDeferredRefresh, clearRefreshBackoff]);
 };

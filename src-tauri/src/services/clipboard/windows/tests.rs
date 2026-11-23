@@ -24,6 +24,19 @@ fn snapshot(formats: &FileFormats, seq: u32) -> FileClipboard {
 }
 
 #[test]
+fn text_clipboard_encodes_unicode_lines_and_the_windows_terminator() {
+    let input = "一.txt\r\n📁 Folder";
+    let memory = Memory::from_text(input).unwrap();
+    let expected: Vec<_> = input.encode_utf16().chain(Some(0)).collect();
+    unsafe {
+        let ptr = GlobalLock(memory.0).cast::<u16>();
+        assert!(!ptr.is_null());
+        assert_eq!(std::slice::from_raw_parts(ptr, expected.len()), expected);
+        let _ = GlobalUnlock(memory.0);
+    }
+}
+
+#[test]
 fn reads_shell_formats_from_independent_handles() {
     let names = vec![r"C:\source\一.txt".into(), r"\\server\share\two".into()];
     let copy = FileFormats::prepare(&names, ClipboardMode::Copy).unwrap();

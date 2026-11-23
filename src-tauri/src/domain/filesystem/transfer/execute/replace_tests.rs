@@ -398,11 +398,69 @@ fn fast_move_refuses_a_destination_claimed_after_classification() {
     assert!(super::transfer::execute_fast_move_root(
         &f.source,
         &f.destination,
+        None,
         &mut Some(&mut control)
     )
     .is_err());
     assert_eq!(fs::read(&f.source).unwrap(), b"source");
     assert_eq!(fs::read(&f.destination).unwrap(), b"late arrival");
+}
+
+#[test]
+fn move_undo_leaves_a_replacement_and_restores_unchanged_batch_items() {
+    let fixture = Fixture::new();
+    let other_source = fixture.root.join("other");
+    fs::write(&fixture.source, b"original").unwrap();
+    fs::create_dir(&other_source).unwrap();
+    fs::write(other_source.join("child"), b"unchanged").unwrap();
+    let move_options = TransferOptions {
+        mode: Some(TransferMode::Move),
+        ..Default::default()
+    };
+    let moved = transfer_entries(
+        vec![
+            fixture.source.to_string_lossy().into_owned(),
+            other_source.to_string_lossy().into_owned(),
+        ],
+        fixture.target.to_string_lossy().into_owned(),
+        Some(move_options.clone()),
+        None,
+        None,
+    )
+    .unwrap();
+    assert_eq!(moved.moved, 2, "{:?}", moved.failures);
+    let kept = fixture.target.join("kept");
+    fs::rename(&fixture.destination, &kept).unwrap();
+    fs::write(&fixture.destination, b"replacement").unwrap();
+
+    let paths = moved
+        .moved_entries
+        .iter()
+        .map(|entry| entry.destination_path.clone())
+        .collect();
+    let expected_sources = moved
+        .moved_entries
+        .into_iter()
+        .map(|entry| (entry.destination_path, entry.identity.unwrap()))
+        .collect();
+    let restored = transfer_entries(
+        paths,
+        fixture.root.to_string_lossy().into_owned(),
+        Some(TransferOptions {
+            expected_sources: Some(expected_sources),
+            ..move_options
+        }),
+        None,
+        None,
+    )
+    .unwrap();
+    assert_eq!(restored.moved, 1, "{:?}", restored.failures);
+    assert_eq!(restored.failures.len(), 1);
+    assert!(restored.failures[0].contains("original item has been replaced"));
+    assert!(!fixture.source.exists());
+    assert_eq!(fs::read(&fixture.destination).unwrap(), b"replacement");
+    assert_eq!(fs::read(&kept).unwrap(), b"original");
+    assert_eq!(fs::read(other_source.join("child")).unwrap(), b"unchanged");
 }
 
 #[test]

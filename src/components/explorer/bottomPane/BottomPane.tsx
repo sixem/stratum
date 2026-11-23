@@ -1,5 +1,5 @@
 // Secondary workspace with its own tabs, navigation, and file selection.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 import { createPortal } from "react-dom";
 import { useDriveInfo } from "@/hooks/domain/filesystem/useDriveInfo";
@@ -11,6 +11,7 @@ import { PathCrumbsBar } from "../PathCrumbsBar";
 import { TabsBar } from "@/components/navigation/TabsBar";
 import { ChevronDownIcon, ChevronUpIcon, FilterIcon, GridIcon, ListIcon, NavArrowIcon, TabCloseIcon } from "@/components/icons";
 import { ContextMenu } from "@/components/overlay/ContextMenu";
+import { FileFilterHint } from "@/components/primitives/FileFilterHint";
 import { ToolbarIconButton } from "@/components/primitives/ToolbarIconButton";
 import { useDragOutHandler } from "@/hooks/ui/inputs/useDragOutHandler";
 import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
@@ -26,6 +27,7 @@ import type { useFileDrop } from "@/hooks/domain/filesystem/useFileDrop";
 import { bottomPaneKeys } from "./bottomPaneKeys";
 import { useBottomFolder } from "./useBottomFolder";
 import { useBottomPaneActions } from "./useBottomPaneActions";
+import { PaneLinkControls } from "./PaneLinkControls";
 
 export type PaneActions = ReturnType<typeof useFileManager>;
 export type PaneDrop = ReturnType<typeof useFileDrop>;
@@ -46,12 +48,13 @@ type Props = {
 };
 
 export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, menu, commandsBlocked }: Props) {
-  const folder = useBottomFolder(upper.currentPath);
+  const folder = useBottomFolder();
   const { dir, meta, tabs, model, selection, viewKey, busy } = folder;
   const root = useRef<HTMLElement>(null);
   const files = useRef<HTMLDivElement>(null);
   const address = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
+  const filterHintId = useId();
   const [draft, setDraft] = useState(tabs.displayPath);
   const gridColumns = useRef(1);
   const updateGridColumns = useCallback((columns: number) => { gridColumns.current = columns; }, []);
@@ -173,7 +176,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     folder, actions, address, files, paths, ready, closeTab, commandsBlocked, gridColumns,
     openContextMenu: paneActions.openKeyboardContextMenu,
     startRename: paneActions.handleRenameStart, clearSelection: paneActions.clearSelectionForVisit,
-    undo: paneActions.undo,
+    undo: paneActions.undo, moveEntries: paneActions.moveEntries,
     scrollTo: (index) => { focusFiles(); scrollTo(index); },
     handleTypeahead, handleTabJump, searchInput, clearSearchAndFocusFiles, browseFromView,
   });
@@ -232,10 +235,11 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         <input ref={address} aria-label="Bottom pane folder" value={draft} placeholder="Folder path" onChange={event => setDraft(event.target.value)} />
       </form>
       <label className="bottom-search">
-        <FilterIcon aria-hidden="true" />
+        <FileFilterHint id={filterHintId}><FilterIcon /></FileFilterHint>
         <input
           ref={searchInput}
           aria-label="Search bottom folder"
+          aria-describedby={filterHintId}
           value={tabs.searchValue}
           onChange={event => tabs.setSearch(event.currentTarget.value)}
           onKeyDown={event => { if (event.key === "Enter") event.preventDefault(); }}
@@ -256,6 +260,8 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       >
         {nextView === "thumbs" ? <GridIcon /> : <ListIcon />}
       </ToolbarIconButton>
+      <PaneLinkControls mainPath={upper.loading ? "" : upper.currentPath}
+        bottomPath={ready ? path : ""} bottomTabId={activeTabId} />
       <ToolbarIconButton
         label={showBreadcrumbs ? "Hide path bar" : "Show path bar"}
         ariaLabel="Bottom pane path bar"

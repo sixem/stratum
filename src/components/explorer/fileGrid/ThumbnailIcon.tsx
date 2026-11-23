@@ -57,6 +57,7 @@ export const ThumbnailIcon = ({
   fileKind,
   extension,
   thumbUrl,
+  onThumbError,
   appIconUrl,
   executableIconUrl,
   appIconsEnabled = false,
@@ -102,7 +103,7 @@ export const ThumbnailIcon = ({
         <NativeIcon key={embeddedUrl} url={embeddedUrl} ready={embeddedState === "ready"} onDecode={setEmbeddedDecode} />
       ) : null}
       {thumbUrl ? (
-        <ThumbnailPreview src={thumbUrl} onReadyChange={setThumbReady} />
+        <ThumbnailPreview src={thumbUrl} onReadyChange={setThumbReady} onLoadError={onThumbError} />
       ) : null}
     </>
   );

@@ -7,6 +7,8 @@ export type ThumbnailRequest = {
   modified: number | null;
   // Optional UI-computed signature echoed back by the backend.
   signature?: string;
+  // A displayed cache URL that could not be loaded. This is consumed by the UI.
+  failedUrl?: string;
 };
 
 export type ThumbnailRequestOptions = {

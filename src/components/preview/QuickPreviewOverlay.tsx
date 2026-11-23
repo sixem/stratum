@@ -1,5 +1,6 @@
 // Full-screen media preview overlay composed from focused hooks and view blocks.
 import { useCallback, useId, useMemo, useRef, useState } from "react";
+import { PREVIEW_STRIP_OPEN_KEY } from "@/constants/settings";
 import { getFileKind, getPathName, isPreviewableEntry, normalizePath } from "@/lib";
 import type { EntryMeta, FileEntry, ThumbnailRequest } from "@/types";
 import { LoadingIndicator } from "@/components/primitives/LoadingIndicator";
@@ -11,8 +12,6 @@ import { PreviewError } from "./PreviewError";
 import { PreviewStage } from "./PreviewStage";
 import { useQuickPreviewInput } from "./useQuickPreviewInput";
 import { useQuickPreviewMedia } from "./useQuickPreviewMedia";
-
-const PREVIEW_STRIP_OPEN_KEY = "stratum.preview.strip-open";
 
 const readPreviewStripOpen = () => {
   try {

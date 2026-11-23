@@ -256,8 +256,19 @@
     box-shadow: var(--navigation-item-shadow);
   }
 
-  :is(.drop-submenu-item, .tab, .place)[data-drop-target="true"] {
+  :is(.drop-submenu-item, .place)[data-drop-target="true"] {
     background: var(--dark-selection);
+  }
+
+  :is(.tab[data-drop-target="true"], .tabsbar[data-location-drop-hover="true"]) {
+    background-color: rgba(var(--accent-rgb), 0.18);
+    // Inset the outline so clipped tab strips retain the complete drop marker.
+    outline: 2px dashed color-mix(in srgb, var(--accent) 76%, white);
+    outline-offset: -2px;
+  }
+
+  .tabsbar[data-location-drop-hover="true"] {
+    box-shadow: none;
   }
 
   .sidebar .place:not(.is-active):not(.is-empty):not([data-drop-target="true"]):hover {

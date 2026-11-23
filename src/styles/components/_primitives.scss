@@ -1,6 +1,17 @@
 // Shared primitive controls used across overlays and settings.
 @use "./control-recipes" as control;
 
+.file-filter-hint {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--muted);
+  cursor: help;
+
+  &:hover {
+    color: var(--text);
+  }
+}
+
 // Tauri's drag-region listener is most reliable when the pointer lands on the
 // marked drag host itself. Decorative descendants pass through to the host,
 // while actual controls keep their own input handling.
@@ -189,7 +200,7 @@
   box-sizing: border-box;
   width: var(--range-thumb-size);
   height: var(--range-thumb-size);
-  border-radius: var(--range-radius);
+  border-radius: 50%;
   border: var(--surface-border-width) solid rgba(255, 255, 255, 0.24);
   background: var(--range-thumb-background, rgba(232, 237, 246, 0.94));
   box-shadow: 0 0 0 2px rgba(8, 11, 18, 0.68);

@@ -13,6 +13,7 @@ export type ListDirOptions = {
   sort?: SortState;
   search?: string;
   fast?: boolean;
+  includeMeta?: boolean;
   // Optional request generation so the backend can cancel stale scans.
   generation?: number;
   pane?: "main" | "bottom";
@@ -93,7 +94,10 @@ export type TransferMode = "copy" | "move" | "auto";
 export type MovedTransferEntry = {
   sourcePath: string;
   destinationPath: string;
+  identity: string | null;
 };
+
+export type CreatedFolder = { path: string; identity: string };
 
 export type TransferReport = {
   copied: number;
@@ -196,6 +200,9 @@ export type DirChangedEvent = {
   path: string;
   // Paths reported by the native watcher (when available).
   paths?: string[];
+  rescan?: boolean;
+  watchFailed?: boolean;
+  writing?: boolean;
 };
 
 // Emitted when the native watcher detects a rename in a watched directory.

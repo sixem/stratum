@@ -29,9 +29,11 @@ type UseGridFolderSamplesOptions = {
   directoryChildRevision: number;
 };
 
+export type FolderThumbnail = { path: string; url: string };
+
 type GridFolderSamplesState = {
   folderThumbRequestCount: number;
-  folderThumbSource: Map<string, string>;
+  folderThumbSource: Map<string, FolderThumbnail>;
 };
 
 const FOLDER_SAMPLE_CACHE_LIMIT = 3000;
@@ -181,8 +183,8 @@ export const useGridFolderSamples = ({
   }, [folderThumbRequests, onRequestThumbs]);
 
   const folderThumbSource = useMemo(() => {
-    if (!thumbnailsEnabled || !thumbnailFolders) return new Map<string, string>();
-    const next = new Map<string, string>();
+    const next = new Map<string, FolderThumbnail>();
+    if (!thumbnailsEnabled || !thumbnailFolders) return next;
     folderPaths.forEach((folderPath) => {
       const folderKey = normalizePath(folderPath);
       if (!folderKey) return;
@@ -193,7 +195,7 @@ export const useGridFolderSamples = ({
       if (!samplePath) return;
       const sampleThumb = thumbSource.get(samplePath);
       if (!sampleThumb) return;
-      next.set(folderPath, sampleThumb);
+      next.set(folderPath, { path: samplePath, url: sampleThumb });
     });
     return next;
   }, [folderPaths, folderSampleByPath, thumbnailFolders, thumbSource, thumbnailsEnabled]);

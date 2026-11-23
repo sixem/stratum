@@ -7,6 +7,7 @@ import type { BeginFileActivity } from "@/hooks/domain/filesystem/useFileActivit
 import { getSelectionTargets, isEditableElement, toMessage } from "@/lib";
 import { usePromptStore, useSettingsStore } from "@/modules";
 import { showBottomPane } from "@/modules/bottomPaneStore";
+import { openQuickMove } from "@/modules/quickMoveSession";
 import { getPaneSessionStore } from "@/modules/sessionStore";
 import { getDefaultTabGridSize } from "@/modules/tabGridSize";
 import type {
@@ -24,6 +25,7 @@ import { useEntryMenuItems } from "../menus/useEntryMenuItems";
 import { appendWindowsMenuItem } from "../menus/appendWindowsMenuItem";
 import { useLayoutMenuItems } from "../menus/useLayoutMenuItems";
 import { resolveContextTargets } from "../menus/entryMenu/shared";
+import type { CreateFolderWithSelection } from "../menus/entryMenu/showFolderWithSelectionPrompt";
 import { getKeyboardMenuRequest } from "../menus/keyboardContextMenu";
 import { useWindowsContextMenu } from "../menus/useWindowsContextMenu";
 import { buildPlaceTargetMenuItems } from "../menus/placeTargetMenuItems";
@@ -71,6 +73,7 @@ type UseAppContextMenusOptions = {
   onRenameEntry: (target: EntryContextTarget) => void;
   onPasteEntries: (destination?: string) => void;
   onMoveEntries: (paths: string[], destination: string) => void;
+  onCreateFolderWithSelection?: CreateFolderWithSelection;
   onOpenConvertModal: (request: ConversionModalRequest) => void;
   onQuickConvertImages: (request: ConversionModalRequest, targetFormat: string) => void;
   places: Place[];
@@ -129,6 +132,7 @@ export const useAppContextMenus = ({
   onRenameEntry,
   onPasteEntries,
   onMoveEntries,
+  onCreateFolderWithSelection,
   onOpenConvertModal,
   onQuickConvertImages,
   places,
@@ -139,6 +143,8 @@ export const useAppContextMenus = ({
   onRemoveRecentJump,
 }: UseAppContextMenusOptions) => {
   const defaultTabGridSize = useSettingsStore(getDefaultTabGridSize);
+  const quickMoveEnabled = useSettingsStore((state) => state.indexedSearchEnabled);
+  const handleQuickMove = useCallback((paths: string[]) => openQuickMove(paths, onMoveEntries), [onMoveEntries]);
   const usePaneSession = getPaneSessionStore(pane);
   const tabId = contextMenu?.kind === "place-target" && contextMenu.target.source === "tab"
     ? contextMenu.target.tabId : undefined;
@@ -304,6 +310,8 @@ export const useAppContextMenus = ({
     onRenameEntry,
     onPasteEntries,
     onMoveEntries,
+    onQuickMove: quickMoveEnabled ? handleQuickMove : undefined,
+    onCreateFolderWithSelection,
     onOpenConvertModal,
     onQuickConvertImages,
     menuShowConvert,

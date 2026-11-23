@@ -1,10 +1,10 @@
 // Owns the preview volume flyout, timers, and sticky volume persistence.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent as ReactChangeEvent } from "react";
+import { PREVIEW_VOLUME_KEY } from "@/constants/settings";
 
 const VOLUME_AUTO_CLOSE_DELAY_MS = 2000;
 const VOLUME_HOVER_OPEN_DELAY_MS = 250;
-const PREVIEW_VOLUME_KEY = "stratum.preview.volume";
 
 const clampVolume = (value: number) => {
   if (value < 0) return 0;

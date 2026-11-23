@@ -10,7 +10,8 @@ import { useFileManagerCreate } from "./fileManagerCreate";
 import { useFileManagerDelete } from "./fileManagerDelete";
 import { useFileManagerUndo } from "./fileManagerUndo";
 import type { BeginFileActivity } from "./useFileActivity";
-import type { UndoAction, UndoMoveEntry } from "./fileManagerUndo";
+import type { UndoAction, UndoMoveEntry, UndoRenameEntry } from "./fileManagerUndo";
+import type { CreatedFolder } from "@/types/fs";
 import type {
   FileManagerDebug,
   RenameBatchResult,
@@ -53,10 +54,10 @@ export const useFileMutations = ({
   }, []);
 
   const canUndo = useCallback(() => undoStackRef.current.length > 0, []);
-  const recordMoveUndo = useCallback((entries: UndoMoveEntry[]) => {
+  const recordMoveUndo = useCallback((entries: UndoMoveEntry[], createdFolder?: CreatedFolder) => {
     const filtered = entries.filter((entry) => entry.from.trim() && entry.to.trim());
     if (filtered.length === 0) return;
-    pushUndo({ type: "move", entries: filtered });
+    pushUndo({ type: "move", entries: filtered, createdFolder });
   }, [pushUndo]);
   const setTransferInFlight = useCallback((active: boolean) => {
     transferInFlightRef.current = active;
@@ -73,7 +74,7 @@ export const useFileMutations = ({
     onDirectoryChildrenChanged: notifyDirectoryChildrenChanged,
   });
 
-  const { duplicateEntriesInView, moveEntriesInView, pasteEntriesInView } = useFileManagerCopy({
+  const { duplicateEntriesInView, moveEntriesInView, createFolderWithSelection, pasteEntriesInView } = useFileManagerCopy({
     beginFileActivity,
     currentPathRef,
     copyInFlightRef,
@@ -108,7 +109,7 @@ export const useFileMutations = ({
         if (!path.trim() || !nextName.trim()) return;
         if (seen.has(path)) return;
         seen.add(path);
-        nextRenames.push({ path, nextName });
+        nextRenames.push(item);
       });
       if (nextRenames.length === 0) return null;
       renameInFlightRef.current = true;
@@ -117,12 +118,16 @@ export const useFileMutations = ({
         : `Renaming ${nextRenames.length} items`);
       const failures: RenameFailure[] = [];
       const renamed = new Map<string, string>();
+      const undoEntries: UndoRenameEntry[] = [];
       try {
         for (const item of nextRenames) {
           try {
-            const nextPath = await renameEntry(item.path, item.nextName);
-            if (nextPath) {
-              renamed.set(item.path, nextPath);
+            const result = await renameEntry(item.path, item.nextName, item.expectedIdentity);
+            if (result.path) {
+              renamed.set(item.path, result.path);
+              if (options?.recordUndo !== false && result.identity) {
+                undoEntries.push({ from: item.path, to: result.path, identity: result.identity });
+              }
             }
           } catch (error) {
             failures.push({
@@ -157,11 +162,7 @@ export const useFileMutations = ({
               getParentPath(to) ?? "",
             ]),
           );
-          if (options?.recordUndo !== false) {
-            const undoEntries = Array.from(renamed).map(([from, to]) => ({
-              from,
-              to,
-            }));
+          if (undoEntries.length > 0) {
             pushUndo({ type: "rename", entries: undoEntries });
           }
         }
@@ -207,6 +208,7 @@ export const useFileMutations = ({
     deleteEntriesInView,
     duplicateEntriesInView,
     moveEntriesInView,
+    createFolderWithSelection,
     pasteEntriesInView,
     createFolderInView,
     createFileInView,

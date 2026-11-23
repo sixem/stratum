@@ -95,6 +95,7 @@ export const AppContent = ({
         ) : null}
         <div className="pane-stack" data-split={split}>
         <main className="main upper-files" data-file-pane="main" data-pane-path={upperPath}
+          data-start-view={fileViewProps.showLander || undefined}
           data-drop-background={fileDrop.backgroundHovered && fileDrop.hoveredPane === "main" || undefined}
           onPointerDownCapture={event => {
             setBottomPaneActive(false);

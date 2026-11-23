@@ -1,3 +1,4 @@
+use super::super::TransferShutdownMode;
 use super::*;
 use crate::domain::filesystem::transfer::job_plan::plan_copy_job;
 use crate::services::transfer_manager::manager_events::TransferEventEmitter;
@@ -62,29 +63,16 @@ impl Drop for HeldCopy {
     }
 }
 
-#[test]
-fn paused_copy_allows_a_small_move_past_an_overlapping_queued_job() {
-    let temp = TestDirectory::new();
-    let source = temp.0.join("source");
-    let target = temp.0.join("target");
-    disk::create_dir(&source).unwrap();
-    disk::create_dir(&target).unwrap();
-    let copy_source = source.join("large.bin");
-    let move_source = source.join("small.txt");
-    disk::write(&copy_source, b"copy payload").unwrap();
-    disk::write(&move_source, b"move payload").unwrap();
-
-    let manager = TransferManagerHandle::init();
-    let copy_paths = vec![copy_source.to_string_lossy().into_owned()];
-    let destination = target.to_string_lossy().into_owned();
+fn hold_copy(manager: &TransferManagerHandle, copy_path: String, destination: String) -> HeldCopy {
+    let copy_paths = vec![copy_path];
     let plan = plan_copy_job(&copy_paths, &destination, None, None).unwrap();
     let (copy, completion) = request(
-        &manager,
+        manager,
         "copy",
         describe_copy_job(),
         TransferOperation::Copy {
-            paths: copy_paths.clone(),
-            destination: destination.clone(),
+            paths: copy_paths,
+            destination,
             options: None,
         },
     );
@@ -118,12 +106,33 @@ fn paused_copy_allows_a_small_move_past_an_overlapping_queued_job() {
         );
         thread::sleep(Duration::from_millis(5));
     }
+    held_copy
+}
+
+#[test]
+fn paused_copy_allows_a_small_move_past_an_overlapping_queued_job() {
+    let temp = TestDirectory::new();
+    let source = temp.0.join("source");
+    let target = temp.0.join("target");
+    disk::create_dir(&source).unwrap();
+    disk::create_dir(&target).unwrap();
+    let copy_source = source.join("large.bin");
+    let move_source = source.join("small.txt");
+    disk::write(&copy_source, b"copy payload").unwrap();
+    disk::write(&move_source, b"move payload").unwrap();
+
+    let manager = TransferManagerHandle::init();
+    let copy_path = copy_source.to_string_lossy().into_owned();
+    let destination = target.to_string_lossy().into_owned();
+    let held_copy = hold_copy(&manager, copy_path.clone(), destination.clone());
 
     let (overlap, overlap_result) = request(
         &manager,
         "delete-copy-source",
         describe_delete_job(),
-        TransferOperation::Delete { paths: copy_paths },
+        TransferOperation::Delete {
+            paths: vec![copy_path],
+        },
     );
     manager.enqueue(overlap).unwrap();
 
@@ -174,4 +183,106 @@ fn paused_copy_allows_a_small_move_past_an_overlapping_queued_job() {
         disk::read(target.join("large.bin")).unwrap(),
         b"copy payload"
     );
+}
+
+fn held_shutdown_copy() -> (TestDirectory, TransferManagerHandle, String, HeldCopy) {
+    let temp = TestDirectory::new();
+    let source = temp.0.join("source.bin");
+    let target = temp.0.join("target");
+    disk::write(&source, b"copy payload").unwrap();
+    disk::create_dir(&target).unwrap();
+    let copy_path = source.to_string_lossy().into_owned();
+    let manager = TransferManagerHandle::init();
+    let held = hold_copy(
+        &manager,
+        copy_path.clone(),
+        target.to_string_lossy().into_owned(),
+    );
+    (temp, manager, copy_path, held)
+}
+
+fn await_shutdown(
+    manager: &TransferManagerHandle,
+    ticket: u64,
+) -> mpsc::Receiver<Result<bool, String>> {
+    let (tx, rx) = mpsc::channel();
+    let manager = manager.clone();
+    thread::spawn(move || {
+        let _ = tx.send(manager.wait_for_shutdown(ticket));
+    });
+    rx
+}
+
+#[test]
+fn waiting_to_close_resumes_paused_jobs_and_stops_admission() {
+    let (temp, manager, copy_path, held_copy) = held_shutdown_copy();
+    assert!(manager
+        .begin_shutdown(TransferShutdownMode::IdleOnly)
+        .unwrap()
+        .is_none());
+    let ticket = manager
+        .begin_shutdown(TransferShutdownMode::Wait)
+        .unwrap()
+        .unwrap();
+
+    let (job, _) = request(
+        &manager,
+        "late-delete",
+        describe_delete_job(),
+        TransferOperation::Delete {
+            paths: vec![copy_path],
+        },
+    );
+    assert!(manager.enqueue(job).unwrap_err().contains("closing"));
+    assert!(await_shutdown(&manager, ticket)
+        .recv_timeout(TIMEOUT)
+        .unwrap()
+        .unwrap());
+    let result = held_copy.completion.recv_timeout(TIMEOUT).unwrap().unwrap();
+    assert!(matches!(result, TransferOperationResult::Copy(report) if report.copied == 1));
+    assert_eq!(
+        disk::read(temp.0.join("target/source.bin")).unwrap(),
+        b"copy payload"
+    );
+
+    assert!(manager.reopen_queue(ticket).unwrap());
+    let next = manager
+        .begin_shutdown(TransferShutdownMode::IdleOnly)
+        .unwrap()
+        .unwrap();
+    assert!(!manager.reopen_queue(ticket).unwrap());
+    assert!(!manager.wait_for_shutdown(ticket).unwrap());
+    assert!(manager.reopen_queue(next).unwrap());
+}
+
+#[test]
+fn cancelling_to_close_drains_active_and_queued_jobs() {
+    let (temp, manager, copy_path, held_copy) = held_shutdown_copy();
+    let (job, queued_completion) = request(
+        &manager,
+        "queued-delete",
+        describe_delete_job(),
+        TransferOperation::Delete {
+            paths: vec![copy_path],
+        },
+    );
+    manager.enqueue(job).unwrap();
+
+    let ticket = manager
+        .begin_shutdown(TransferShutdownMode::Cancel)
+        .unwrap()
+        .unwrap();
+    assert!(await_shutdown(&manager, ticket)
+        .recv_timeout(TIMEOUT)
+        .unwrap()
+        .unwrap());
+    for completion in [&held_copy.completion, &queued_completion] {
+        assert!(matches!(
+            completion.recv_timeout(TIMEOUT).unwrap(),
+            Err(error) if error == TRANSFER_CANCELLED_MESSAGE
+        ));
+    }
+    assert!(temp.0.join("source.bin").is_file());
+    assert!(!temp.0.join("target/source.bin").exists());
+    assert!(manager.reopen_queue(ticket).unwrap());
 }

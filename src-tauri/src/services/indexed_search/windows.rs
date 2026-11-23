@@ -59,6 +59,7 @@ fn classify_drive(drive_path: &str, now: u64) -> DiscoveredDrive {
             filesystem: None,
             state: IndexedDriveState::Unavailable,
             indexable: false,
+            searchable: false,
             started_at: Some(now),
             last_updated_at: now,
             entry_count: None,

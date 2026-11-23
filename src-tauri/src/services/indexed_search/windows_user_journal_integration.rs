@@ -13,8 +13,8 @@ use windows_sys::Win32::{
         FILE_READ_ATTRIBUTES,
     },
     System::Ioctl::{
-        USN_REASON_FILE_CREATE, USN_REASON_FILE_DELETE, USN_REASON_RENAME_NEW_NAME,
-        USN_REASON_RENAME_OLD_NAME,
+        USN_REASON_DATA_EXTEND, USN_REASON_DATA_TRUNCATION, USN_REASON_FILE_CREATE,
+        USN_REASON_FILE_DELETE, USN_REASON_RENAME_NEW_NAME, USN_REASON_RENAME_OLD_NAME,
     },
 };
 
@@ -113,6 +113,12 @@ fn apply_offline_changes(root: &Path) {
     fs::remove_file(root.join(r"left\deleted.txt")).unwrap();
     fs::write(root.join(r"right\created.txt"), b"new file").unwrap();
     fs::write(root.join(r"right\created-too.txt"), b"second new file").unwrap();
+    fs::write(
+        root.join(r"right\growing.txt"),
+        b"grows after closing Stratum",
+    )
+    .unwrap();
+    fs::write(root.join(r"left\shrinking.txt"), b"").unwrap();
     fs::rename(root.join(r"left\folder"), root.join(r"right\moved-folder")).unwrap();
     fs::remove_file(root.join(r"right\discarded\child.txt")).unwrap();
     fs::remove_dir(root.join(r"right\discarded")).unwrap();
@@ -174,6 +180,12 @@ fn user_journal_replays_offline_changes_and_persists_its_checkpoint() {
     fs::write(left.join("deleted.txt"), b"delete").unwrap();
     fs::write(left.join(r"folder\original.txt"), b"move with folder").unwrap();
     fs::write(right.join("unchanged.txt"), b"keep").unwrap();
+    fs::write(right.join("growing.txt"), b"a").unwrap();
+    fs::write(
+        left.join("shrinking.txt"),
+        b"truncate after closing Stratum",
+    )
+    .unwrap();
     fs::write(discarded.join("child.txt"), b"discard with folder").unwrap();
     let discarded_id = file_reference(&discarded);
 
@@ -216,6 +228,8 @@ fn user_journal_replays_offline_changes_and_persists_its_checkpoint() {
         .iter()
         .fold(0, |bits, record| bits | record.reason);
     for reason in [
+        USN_REASON_DATA_EXTEND,
+        USN_REASON_DATA_TRUNCATION,
         USN_REASON_FILE_CREATE,
         USN_REASON_FILE_DELETE,
         USN_REASON_RENAME_OLD_NAME,
@@ -273,4 +287,59 @@ fn user_journal_replays_offline_changes_and_persists_its_checkpoint() {
         Some(expected.len())
     );
     assert_eq!(indexed_paths(&reopened), expected);
+    let connection = reopened.connect().unwrap();
+    for (relative, size) in [
+        (r"right\growing.txt", Some(27)),
+        (r"left\shrinking.txt", Some(0)),
+        (r"right\unchanged.txt", Some(4)),
+        (r"right\moved-folder", None),
+    ] {
+        let indexed_size = connection
+            .query_row(
+                "SELECT size_bytes FROM indexed_entries WHERE path = ?1",
+                [format!(r"{logical_root}\{relative}")],
+                |row| row.get::<_, Option<i64>>(0),
+            )
+            .unwrap();
+        assert_eq!(indexed_size, size, "{relative}");
+    }
+
+    let test_path = format!(r"{logical_root}\right\unchanged.txt");
+    let original_id: i64 = connection
+        .query_row(
+            "SELECT entry_id FROM indexed_entries WHERE path = ?1",
+            [&test_path],
+            |row| row.get(0),
+        )
+        .unwrap();
+    fs::OpenOptions::new()
+        .write(true)
+        .open(root.join(r"right\unchanged.txt"))
+        .unwrap()
+        .set_len(0)
+        .unwrap();
+    let resize = read_fixture_changes(
+        &mount,
+        next,
+        checkpoint(&mount),
+        &[file_reference(&root.join("right"))],
+    );
+    assert!(
+        !resize.changes.is_empty() && resize.changes.iter().all(|change| change.is_size_only())
+    );
+    assert!(matches!(
+        reconcile_user_journal_batch(&reopened, &mount, resize, &|| false).unwrap(),
+        UserReconcileOutcome::Committed {
+            changed_paths: true,
+            entry_count: None
+        }
+    ));
+    let resized: (i64, Option<i64>) = connection
+        .query_row(
+            "SELECT entry_id, size_bytes FROM indexed_entries WHERE path = ?1",
+            [&test_path],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(resized, (original_id, Some(0)));
 }

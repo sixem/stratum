@@ -73,14 +73,45 @@ fn reruns_destination_check_and_leaves_a_late_file_intact() {
 
     let destination = fixture.write("destination.txt", b"late file");
     let source_path = source.to_string_lossy().into_owned();
-    let error = rename_entry(source_path.clone(), "destination.txt".into()).unwrap_err();
+    let error = rename_entry(source_path.clone(), "destination.txt".into(), None).unwrap_err();
     assert_eq!(error, OCCUPIED_NAME);
     assert_eq!(fs::read(&source).unwrap(), b"source");
     assert_eq!(fs::read(&destination).unwrap(), b"late file");
 
-    let renamed = rename_entry(source_path, " new.txt".into()).unwrap();
-    assert_eq!(Path::new(&renamed), fixture.0.join(" new.txt"));
-    assert_eq!(fs::read(renamed).unwrap(), b"source");
+    let renamed = rename_entry(source_path, " new.txt".into(), None).unwrap();
+    assert_eq!(Path::new(&renamed.path), fixture.0.join(" new.txt"));
+    assert_eq!(fs::read(renamed.path).unwrap(), b"source");
+}
+
+#[test]
+fn rename_undo_leaves_a_replacement_and_can_restore_the_original() {
+    let fixture = Fixture::new();
+    let source = fixture.write("source.txt", b"original");
+    let renamed = rename_entry(
+        source.to_string_lossy().into_owned(),
+        "moved.txt".into(),
+        None,
+    )
+    .unwrap();
+    let expected = renamed.identity.unwrap();
+    let kept = fixture.0.join("kept.txt");
+    fs::rename(&renamed.path, &kept).unwrap();
+    fs::write(&renamed.path, b"other item").unwrap();
+
+    let error = rename_entry(
+        renamed.path.clone(),
+        "source.txt".into(),
+        Some(expected.clone()),
+    )
+    .unwrap_err();
+    assert!(error.contains("original item has been replaced"), "{error}");
+    assert!(!source.exists());
+    assert_eq!(fs::read(&renamed.path).unwrap(), b"other item");
+
+    fs::remove_file(&renamed.path).unwrap();
+    fs::rename(&kept, &renamed.path).unwrap();
+    rename_entry(renamed.path, "source.txt".into(), Some(expected)).unwrap();
+    assert_eq!(fs::read(source).unwrap(), b"original");
 }
 
 #[cfg(windows)]
@@ -132,15 +163,19 @@ fn renames_three_files_when_a_read_handle_only_briefly_blocks_the_second() {
     assert_eq!(error.raw_os_error(), Some(ERROR_SHARING_VIOLATION as i32));
 
     let (first, second, third) = (&files[0], &files[1], &files[2]);
-    rename_entry(first.0.to_string_lossy().into_owned(), first.1.into()).unwrap();
+    rename_entry(first.0.to_string_lossy().into_owned(), first.1.into(), None).unwrap();
     let release = std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(120));
         drop(blocker);
     });
-    let renamed = rename_entry(second.0.to_string_lossy().into_owned(), second.1.into());
+    let renamed = rename_entry(
+        second.0.to_string_lossy().into_owned(),
+        second.1.into(),
+        None,
+    );
     release.join().unwrap();
     renamed.unwrap();
-    rename_entry(third.0.to_string_lossy().into_owned(), third.1.into()).unwrap();
+    rename_entry(third.0.to_string_lossy().into_owned(), third.1.into(), None).unwrap();
 
     for (source, destination, bytes) in files {
         assert!(!source.exists());
@@ -155,14 +190,24 @@ fn leaves_the_original_intact_when_the_file_stays_in_use() {
     let source = fixture.write("locked.webp", b"original");
     let lock = open_read_without_delete_share(&source);
 
-    let error = rename_entry(source.to_string_lossy().into_owned(), "new.webp".into()).unwrap_err();
+    let error = rename_entry(
+        source.to_string_lossy().into_owned(),
+        "new.webp".into(),
+        None,
+    )
+    .unwrap_err();
     assert!(error.contains("the item is still in use"), "{error}");
     assert_eq!(fs::read(&source).unwrap(), b"original");
     assert!(!fixture.0.join("new.webp").exists());
 
     drop(lock);
-    let renamed = rename_entry(source.to_string_lossy().into_owned(), "new.webp".into()).unwrap();
-    assert_eq!(fs::read(renamed).unwrap(), b"original");
+    let renamed = rename_entry(
+        source.to_string_lossy().into_owned(),
+        "new.webp".into(),
+        None,
+    )
+    .unwrap();
+    assert_eq!(fs::read(renamed.path).unwrap(), b"original");
 }
 
 #[cfg(windows)]
@@ -200,6 +245,11 @@ fn checks_windows_names_and_distinguishes_case_only_changes() {
             "Batch rename cannot change only the letter case.".into()
         )],
     );
-    let single = rename_entry(source.to_string_lossy().into_owned(), "First.txt".into()).unwrap();
-    assert_eq!(Path::new(&single), source);
+    let single = rename_entry(
+        source.to_string_lossy().into_owned(),
+        "First.txt".into(),
+        None,
+    )
+    .unwrap();
+    assert_eq!(Path::new(&single.path), source);
 }

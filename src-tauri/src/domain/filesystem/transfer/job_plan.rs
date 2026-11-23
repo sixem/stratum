@@ -87,6 +87,11 @@ pub(crate) fn plan_transfer_job(
     mut on_control: Option<&mut TransferControlCallback>,
 ) -> Result<PlannedTransferJob, String> {
     let target_path = validate_destination(destination)?;
+    // Undo validates each item just before the move. An item that went away
+    // must fail its own receipt without blocking the rest of the batch.
+    if options.is_some_and(|options| options.expected_sources.is_some()) {
+        return Ok(plan_root_only_job(paths));
+    }
     let roots_total = requested_roots(paths);
     let mut files_total = 0usize;
     let mut bytes_total = 0u64;

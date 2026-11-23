@@ -266,6 +266,10 @@ export const DropdownSelect = ({
 
   const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (disabled) return;
+    if (event.key === "Tab" && open) {
+      closeMenu();
+      return;
+    }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       if (!open) {

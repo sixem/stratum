@@ -1,14 +1,13 @@
 // Restore the verified item by handle so a path swap cannot change the source.
+use super::super::file_identity::rename_pinned_file;
 use super::super::fs_recycle_windows::{pin_plain_directory, RecycleEntry};
-use super::super::transfer::windows_extended_path;
 use std::fs::{self, File};
 use std::io;
-use std::mem::{offset_of, size_of};
+use std::mem::size_of;
 use std::os::windows::io::AsRawHandle;
 use std::path::Path;
 use windows_sys::Win32::Storage::FileSystem::{
-    FileDispositionInfo, FileRenameInfo, SetFileInformationByHandle, FILE_DISPOSITION_INFO,
-    FILE_RENAME_INFO,
+    FileDispositionInfo, SetFileInformationByHandle, FILE_DISPOSITION_INFO,
 };
 
 fn prepare_restore_parent(path: &Path) -> io::Result<Vec<File>> {
@@ -32,40 +31,6 @@ fn prepare_restore_parent(path: &Path) -> io::Result<Vec<File>> {
         pinned.push(handle);
     }
     Ok(pinned)
-}
-
-fn rename_pinned_file(source: &File, destination: &Path) -> io::Result<()> {
-    let name = windows_extended_path(destination).map_err(io::Error::other)?;
-    let name_bytes = (name.len() - 1) * size_of::<u16>();
-    let file_name_offset = offset_of!(FILE_RENAME_INFO, FileName);
-    let size =
-        (file_name_offset + name_bytes + size_of::<u16>()).max(size_of::<FILE_RENAME_INFO>());
-    // Allocate an aligned, zeroed variable-length FILE_RENAME_INFO. A zero
-    // ReplaceIfExists protects an unrelated existing destination atomically.
-    let mut buffer = vec![0usize; size.div_ceil(size_of::<usize>())];
-    let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFO>();
-    let result = unsafe {
-        (*info).FileNameLength = name_bytes as u32;
-        std::ptr::copy_nonoverlapping(
-            name.as_ptr(),
-            buffer
-                .as_mut_ptr()
-                .cast::<u8>()
-                .add(file_name_offset)
-                .cast::<u16>(),
-            name.len(),
-        );
-        SetFileInformationByHandle(
-            source.as_raw_handle() as isize,
-            FileRenameInfo,
-            info.cast(),
-            size as u32,
-        )
-    };
-    if result == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
 }
 
 pub(super) fn restore_entry(entry: &RecycleEntry) -> io::Result<()> {

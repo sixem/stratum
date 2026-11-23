@@ -32,6 +32,8 @@ type Options = {
   openResult: (result: IndexedPathMatch) => void;
   openGallery: (path: string) => void;
   selectResult: (result: IndexedPathMatch) => void;
+  selectResultForCopy: (result: IndexedPathMatch) => void;
+  copyPaths: ReadonlySet<string> | null;
 };
 
 const toTarget = (result: IndexedPathMatch): EntryContextTarget => ({
@@ -41,11 +43,15 @@ const toTarget = (result: IndexedPathMatch): EntryContextTarget => ({
 });
 
 export const useIndexedSearchResultMenu = ({
-  visible, results, actions, closeSearch, openResult, openGallery, selectResult,
+  visible, results, actions, closeSearch, openResult, openGallery, selectResult, selectResultForCopy, copyPaths,
 }: Options) => {
   const [request, setRequest] = useState<MenuRequest | null>(null);
   const result = visible && request ? results.find(({ path }) => path === request.path) : undefined;
   const target = useMemo(() => result ? toTarget(result) : null, [result]);
+  const textCopyTargets = useMemo(
+    () => result && copyPaths?.has(result.path) ? results.filter(({ path }) => copyPaths.has(path)) : undefined,
+    [copyPaths, result, results],
+  );
   const close = useCallback(() => setRequest(null), []);
   const openWindowsMenu = useWindowsContextMenu({
     enabled: actions.windowsMenuEnabled,
@@ -63,7 +69,8 @@ export const useIndexedSearchResultMenu = ({
       isPreviewableEntry(entry) ? () => openGallery(entry.path) : undefined);
 
   const openAt = (match: IndexedPathMatch, point: MenuPoint, native: boolean) => {
-    selectResult(match);
+    if (copyPaths?.has(match.path)) selectResult(match);
+    else selectResultForCopy(match);
     if (native && openNativeMenu(toTarget(match), point, true)) return;
     setRequest({ path: match.path, ...point });
   };
@@ -98,6 +105,7 @@ export const useIndexedSearchResultMenu = ({
     onRenameEntry: (entry) => showEntryRenamePrompt(entry, actions.onRename),
     otherPane: { label: "Open in bottom pane", open: (path) => { closeSearch(); showBottomPane(path); } },
     showClipboardShortcuts: false,
+    textCopyTargets,
   });
 
   const onOpenNative = () => Boolean(target && request && openNativeMenu(target, request, false));

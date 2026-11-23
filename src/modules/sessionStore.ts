@@ -60,6 +60,14 @@ export const createSessionTab = (...args: Parameters<typeof createTab>): Tab => 
   gridSize: getDefaultTabGridSize(useSettingsStore.getState()),
 });
 
+// A restore is a new visit, even if it opens the same saved tab.
+export const prepareSessionRestore = (layout: SessionState, gridSize: FixedGridSize | undefined): SessionState => {
+  const activeIndex = layout.tabs.findIndex((tab) => tab.id === layout.activeTabId);
+  const tabs = fillTabGridSizes(layout.tabs, gridSize)
+    .map((tab) => ({ ...tab, id: createTab(tab.path).id, sort: { ...tab.sort } }));
+  return { tabs, activeTabId: (tabs[activeIndex] ?? tabs[0])?.id ?? null, recentJumps: [...layout.recentJumps] };
+};
+
 const coerceViewMode = (value: unknown): ViewMode => {
   return value === "list" ? "list" : "thumbs";
 };
@@ -182,11 +190,19 @@ const readStoredSession = (key: string) => {
   }
 };
 
+const serializeSession = (key: string, session: SessionState) => {
+  const { tabs, activeTabId, recentJumps } = session;
+  const payload: StoredSession = { version: STORAGE_VERSION, session: { tabs, activeTabId, recentJumps } };
+  return [key, JSON.stringify(payload)] as const;
+};
+
+export const serializePaneSession = (pane: "main" | "bottom", session: SessionState) =>
+  serializeSession(pane === "main" ? STORAGE_KEY : `${STORAGE_KEY}.bottom`, session);
+
 const writeStoredSession = (key: string, session: SessionState) => {
   try {
     if (!("localStorage" in globalThis)) return;
-    const payload: StoredSession = { version: STORAGE_VERSION, session };
-    globalThis.localStorage.setItem(key, JSON.stringify(payload));
+    globalThis.localStorage.setItem(...serializeSession(key, session));
   } catch {
     // Ignore storage errors.
   }
@@ -228,19 +244,11 @@ const createSessionStore = (key: string) => {
         recentJumps: applyUpdater(state.recentJumps, updater),
       })),
     updateSession: (patch) => set((state) => ({ ...state, ...patch })),
-    restoreSession: (layout) => {
-      const activeIndex = layout.tabs.findIndex((tab) => tab.id === layout.activeTabId);
-      // Each restore is a new visit, even if it reopens the same saved tab.
-      const tabs = fillTabGridSizes(layout.tabs, getDefaultTabGridSize(useSettingsStore.getState()))
-        .map((tab) => ({ ...tab, id: createTab(tab.path).id, sort: { ...tab.sort } }));
-      set((state) => ({
-        tabs,
-        activeTabId: (tabs[activeIndex] ?? tabs[0])?.id ?? null,
-        recentJumps: [...layout.recentJumps],
-        closedTabs: [],
-        restoreRevision: state.restoreRevision + 1,
-      }));
-    },
+    restoreSession: (prepared) => set((state) => ({
+      ...prepared,
+      closedTabs: [],
+      restoreRevision: state.restoreRevision + 1,
+    })),
     resetSession: () => set({ ...DEFAULT_SESSION, closedTabs: [] }),
   }));
 

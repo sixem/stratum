@@ -7,6 +7,7 @@ import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { getFileCommandFocus } from "../menus/keyboardContextMenu";
 import { useKeybinds } from "../inputs/useKeybinds";
 import { useIndexedSearchUiStore, usePromptStore, writeFileClipboard } from "@/modules";
+import { openQuickMove } from "@/modules/quickMoveSession";
 import type { KeybindMap } from "@/modules/keybinds";
 import type { Tab } from "@/types";
 
@@ -20,6 +21,7 @@ type UseAppKeybindsOptions = {
   contextMenuOpen: boolean;
   promptOpen: boolean;
   previewOpen: boolean;
+  quickMoveOpen: boolean;
   blockReveal: boolean;
   activeTabId: string | null;
   tabs: Tab[];
@@ -31,6 +33,7 @@ type UseAppKeybindsOptions = {
   undo: () => Promise<unknown>;
   deleteEntries: (paths: string[]) => Promise<{ deleted: number } | null | undefined>;
   duplicateEntries: (paths: string[]) => Promise<unknown>;
+  moveEntries: (paths: string[], destination: string) => void;
   pasteEntries: (destination?: string) => Promise<unknown>;
   onContextMenu: (native: boolean) => boolean;
   onNewTab: () => void;
@@ -55,6 +58,7 @@ export const useAppKeybinds = ({
   contextMenuOpen,
   promptOpen,
   previewOpen,
+  quickMoveOpen,
   blockReveal,
   activeTabId,
   tabs,
@@ -66,6 +70,7 @@ export const useAppKeybinds = ({
   undo,
   deleteEntries,
   duplicateEntries,
+  moveEntries,
   pasteEntries,
   onContextMenu,
   onNewTab,
@@ -87,7 +92,7 @@ export const useAppKeybinds = ({
 
   // Keybind gating helpers: protect interactions during modal states.
   const modalOpen = settingsOpen || aboutOpen || conversionModalOpen ||
-    promptOpen || previewOpen || indexedSearchOpen;
+    promptOpen || previewOpen || indexedSearchOpen || quickMoveOpen;
   const canHandleGlobalKeybind = useCallback(
     () => !modalOpen && !contextMenuOpen,
     [modalOpen, contextMenuOpen],
@@ -218,6 +223,11 @@ export const useAppKeybinds = ({
     return true;
   }, [canHandleViewKeybind, duplicateEntries, selectionTargets]);
 
+  const handleQuickMoveKeybind = useCallback((event: KeyboardEvent) => {
+    if (event.isComposing || !canHandleViewKeybind()) return false;
+    return openQuickMove(selectionTargets, moveEntries);
+  }, [canHandleViewKeybind, moveEntries, selectionTargets]);
+
   const handlePreviewItemKeybind = useCallback((_event: KeyboardEvent) => {
     return false;
   }, []);
@@ -283,6 +293,7 @@ export const useAppKeybinds = ({
       newTab: handleNewTabKeybind,
       closeTab: handleCloseTabKeybind,
       openIndexedSearch: handleOpenIndexedSearchKeybind,
+      quickMove: handleQuickMoveKeybind,
       deleteSelection: handleDeleteSelectionKeybind,
       duplicateSelection: handleDuplicateSelectionKeybind,
       previewItem: handlePreviewItemKeybind,
@@ -297,6 +308,7 @@ export const useAppKeybinds = ({
       handleNewTabKeybind,
       handleOpenIndexedSearchKeybind,
       handlePreviewItemKeybind,
+      handleQuickMoveKeybind,
       handleUndoKeybind,
     ],
   );

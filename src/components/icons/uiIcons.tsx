@@ -1,6 +1,15 @@
 // UI SVG icons used across navigation, controls, and toolbars.
 import type { IconProps } from "./types";
 
+export const LinkPanesIcon = ({ className, paused = false }: IconProps & { paused?: boolean }) => (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
+    <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13l4-4m-8 2-1 1a4.2 4.2 0 0 0 6 6l2-2m-2-8 2-2a4.2 4.2 0 0 1 6 6l-1 1" />
+      {paused && <path d="M18 16v4m3-4v4" />}
+    </g>
+  </svg>
+);
+
 export const DocumentIcon = ({ className }: IconProps) => {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>

@@ -1,5 +1,7 @@
 // Directory watch state and event emission for lightweight refresh signals.
+use std::io;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use notify::{
@@ -21,12 +23,24 @@ struct DirWatchState {
     generation: u64,
     path: Option<String>,
     watcher: Option<RecommendedWatcher>,
+    active: Option<Arc<AtomicBool>>,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DirChangedPayload {
     path: String,
     paths: Vec<String>,
+    #[serde(skip_serializing_if = "is_false")]
+    rescan: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    watch_failed: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    writing: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 #[derive(Clone, Serialize)]
@@ -43,62 +57,177 @@ impl DirWatchHandle {
     pub fn set_target(
         &self,
         pane: crate::domain::filesystem::FilePane,
-        path: Option<String>,
+        path: Option<&str>,
         generation: Option<u64>,
-        open: impl FnOnce(&str) -> Result<RecommendedWatcher, String>,
-    ) -> Result<(), String> {
-        let (generation, previous) = {
+        restart: bool,
+        open: impl FnOnce(&str, Arc<AtomicBool>) -> Result<RecommendedWatcher, String>,
+    ) -> Result<bool, String> {
+        let (previous, active) = {
             let mut state = self.state[pane as usize]
                 .lock()
                 .map_err(|_| "dir watch state unavailable")?;
             let generation = generation.unwrap_or_else(|| state.generation.saturating_add(1));
             if generation < state.generation {
-                return Ok(());
+                return Ok(false);
             }
             state.generation = generation;
-            if state.path == path {
-                return Ok(());
+            let changed = state.path.as_deref() != path;
+            if !changed
+                && !restart
+                && state
+                    .active
+                    .as_ref()
+                    .is_some_and(|active| active.load(Ordering::Acquire))
+            {
+                return Ok(false);
+            }
+            if let Some(previous) = state.active.take() {
+                previous.store(false, Ordering::Release);
             }
             state.path = None;
-            (generation, state.watcher.take())
+            let active = path.map(|_| Arc::new(AtomicBool::new(true)));
+            state.active = active.clone();
+            (state.watcher.take(), active)
         };
         // Dropping a watcher releases its watches on the blocking worker.
         drop(previous);
-        if let Some(path) = path {
-            let watcher = open(&path);
-            let mut state = self.state[pane as usize]
-                .lock()
-                .map_err(|_| "dir watch state unavailable")?;
-            if state.generation == generation {
-                let watcher = watcher?;
-                state.path = Some(path);
-                state.watcher = Some(watcher);
-            }
+        let Some((path, active)) = path.zip(active) else {
+            return Ok(false);
+        };
+        let opened = open(path, active.clone());
+        let mut state = self.state[pane as usize]
+            .lock()
+            .map_err(|_| "dir watch state unavailable")?;
+        if !state
+            .active
+            .as_ref()
+            .is_some_and(|current| Arc::ptr_eq(current, &active))
+        {
+            return Ok(false);
         }
-        Ok(())
+        let watcher = match opened {
+            Ok(watcher) => watcher,
+            Err(error) => {
+                active.store(false, Ordering::Release);
+                state.active = None;
+                return Err(error);
+            }
+        };
+        if !active.load(Ordering::Acquire) {
+            // A fatal native notification can arrive immediately after watch().
+            state.active = None;
+            drop(state);
+            return Err("Directory watch stopped during registration.".into());
+        }
+        state.path = Some(path.to_owned());
+        state.watcher = Some(watcher);
+        Ok(true)
     }
 }
 
-pub fn open_dir_watch(app_handle: AppHandle, path: &str) -> Result<RecommendedWatcher, String> {
+#[derive(Debug, PartialEq, Eq)]
+enum WatchIssue {
+    Rescan,
+    Stopped,
+}
+
+fn watch_issue(target: &Path, result: &notify::Result<Event>) -> Option<WatchIssue> {
+    match result {
+        Ok(event) if event.need_rescan() => Some(WatchIssue::Rescan),
+        Ok(event)
+            if matches!(event.kind, EventKind::Remove(_))
+                && event.paths.iter().any(|path| path == target) =>
+        {
+            // Notify reports a removed Windows watch root before retiring the watch.
+            Some(WatchIssue::Stopped)
+        }
+        // Notify rearms before decoding and reports malformed data with a rescan.
+        Err(error)
+            if matches!(&error.kind, notify::ErrorKind::Io(source)
+            if source.kind() == io::ErrorKind::InvalidData && source.raw_os_error().is_none()) =>
+        {
+            Some(WatchIssue::Rescan)
+        }
+        Err(_) => Some(WatchIssue::Stopped),
+        Ok(_) => None,
+    }
+}
+
+fn recover_watch(
+    path: &str,
+    issue: WatchIssue,
+    pending_rename: &mut Option<String>,
+    active: &AtomicBool,
+) -> Option<DirChangedPayload> {
+    let watch_failed = issue == WatchIssue::Stopped;
+    let was_active = if watch_failed {
+        active.swap(false, Ordering::AcqRel)
+    } else {
+        active.load(Ordering::Acquire)
+    };
+    if !was_active {
+        return None;
+    }
+    // Old-name and new-name events cannot be paired across lost data.
+    *pending_rename = None;
+    Some(DirChangedPayload {
+        path: path.to_owned(),
+        rescan: true,
+        watch_failed,
+        ..DirChangedPayload::default()
+    })
+}
+
+pub fn open_dir_watch(
+    app_handle: AppHandle,
+    path: &str,
+    active: Arc<AtomicBool>,
+) -> Result<RecommendedWatcher, String> {
     let target_path = path.to_string();
     let indexed_search = app_handle
         .try_state::<IndexedSearchHandle>()
         .map(|state| state.inner().clone());
-    let rename_buffer = Mutex::new(None::<String>);
+    let mut pending_rename: Option<String> = None;
     let mut watcher = RecommendedWatcher::new(
         move |result: Result<Event, notify::Error>| {
-            let event: Event = match result {
-                Ok(value) => value,
-                Err(_) => return,
+            if !active.load(Ordering::Acquire) {
+                return;
+            }
+            let target = Path::new(&target_path);
+            if let Some(issue) = watch_issue(target, &result) {
+                let Some(payload) =
+                    recover_watch(&target_path, issue, &mut pending_rename, &active)
+                else {
+                    return;
+                };
+                let watch_failed = payload.watch_failed;
+                let _ = app_handle.emit("dir_changed", payload);
+                if !watch_failed {
+                    if let Some(index) = indexed_search.as_ref() {
+                        if let Err(error) = index.queue_visited_folder(&target_path) {
+                            eprintln!("[indexed-search] Could not queue a watcher rescan: {error}");
+                        }
+                    }
+                } else {
+                    if let Err(error) = &result {
+                        eprintln!("[watch] Directory watch stopped: {error}");
+                    }
+                }
+                return;
+            }
+            let Ok(event) = result else {
+                return;
             };
             // Ignore access-only events to reduce noisy refreshes.
             if matches!(event.kind, EventKind::Access(_)) {
                 return;
             }
             if let Some(index) = indexed_search.as_ref().filter(|index| index.is_enabled()) {
-                let paths = indexed_watch_paths(Path::new(&target_path), &event);
+                let paths = indexed_watch_paths(target, &event);
                 if !paths.is_empty() {
-                    if let Err(error) = index.queue_watched_paths(&paths) {
+                    if let Err(error) =
+                        index.queue_watched_paths(&paths, indexed_size_change(&event))
+                    {
                         eprintln!(
                             "[indexed-search] Could not queue a folder notification: {error}"
                         );
@@ -113,31 +242,24 @@ pub fn open_dir_watch(app_handle: AppHandle, path: &str) -> Result<RecommendedWa
             if let EventKind::Modify(ModifyKind::Name(mode)) = event.kind {
                 match mode {
                     RenameMode::From => {
-                        if let Some(path) = event.paths.get(0) {
-                            if let Ok(mut guard) = rename_buffer.lock() {
-                                *guard = Some(path.to_string_lossy().to_string());
-                            }
-                        }
-                        return;
+                        pending_rename = event_paths.first().cloned();
+                        // A move out of the folder can arrive without a To event.
                     }
                     RenameMode::To => {
-                        if let Some(to_path) = event.paths.get(0) {
-                            let to = to_path.to_string_lossy().to_string();
-                            if let Ok(mut guard) = rename_buffer.lock() {
-                                if let Some(from) = guard.take() {
-                                    let payload = DirRenamePayload {
-                                        path: target_path.clone(),
-                                        from: from.clone(),
-                                        to: to.clone(),
-                                        paths: vec![from, to],
-                                    };
-                                    let _ = app_handle.emit("dir_rename", payload);
-                                    return;
-                                }
-                            }
+                        if let (Some(from), Some(to)) = (pending_rename.take(), event_paths.first())
+                        {
+                            let payload = DirRenamePayload {
+                                path: target_path.clone(),
+                                from: from.clone(),
+                                to: to.clone(),
+                                paths: vec![from, to.clone()],
+                            };
+                            let _ = app_handle.emit("dir_rename", payload);
+                            return;
                         }
                     }
                     RenameMode::Both => {
+                        pending_rename = None;
                         if event.paths.len() >= 2 {
                             let payload = DirRenamePayload {
                                 path: target_path.clone(),
@@ -155,6 +277,8 @@ pub fn open_dir_watch(app_handle: AppHandle, path: &str) -> Result<RecommendedWa
             let payload = DirChangedPayload {
                 path: target_path.clone(),
                 paths: event_paths,
+                writing: indexed_size_change(&event),
+                ..DirChangedPayload::default()
             };
             let _ = app_handle.emit("dir_changed", payload);
         },
@@ -170,13 +294,12 @@ pub fn open_dir_watch(app_handle: AppHandle, path: &str) -> Result<RecommendedWa
 }
 
 fn indexed_watch_paths<'a>(target: &Path, event: &'a Event) -> Vec<&'a str> {
-    // Index rows only track path and kind. Ignore content and attribute writes,
-    // which can generate many notifications during one save.
+    // The backend checks only the file size for generic and data modifications.
     if event.need_rescan()
         || !matches!(
             event.kind,
             EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(ModifyKind::Name(_))
-        )
+        ) && !indexed_size_change(event)
     {
         return Vec::new();
     }
@@ -196,6 +319,14 @@ fn indexed_watch_paths<'a>(target: &Path, event: &'a Event) -> Vec<&'a str> {
             path.to_str()
         })
         .collect()
+}
+
+fn indexed_size_change(event: &Event) -> bool {
+    // notify's Windows backend emits Modify(Any) for FILE_ACTION_MODIFIED.
+    matches!(
+        event.kind,
+        EventKind::Modify(ModifyKind::Any | ModifyKind::Data(_))
+    )
 }
 
 #[cfg(test)]
@@ -224,8 +355,17 @@ mod tests {
                 [child.to_str().unwrap()]
             );
         }
-        let write = Event::new(EventKind::Modify(ModifyKind::Any)).add_path(child);
-        assert!(indexed_watch_paths(parent, &write).is_empty());
+        let write = Event::new(EventKind::Modify(ModifyKind::Any)).add_path(child.clone());
+        assert!(indexed_size_change(&write));
+        assert_eq!(
+            indexed_watch_paths(parent, &write),
+            [child.to_str().unwrap()]
+        );
+        let metadata = Event::new(EventKind::Modify(ModifyKind::Metadata(
+            notify::event::MetadataKind::Any,
+        )))
+        .add_path(child);
+        assert!(indexed_watch_paths(parent, &metadata).is_empty());
     }
 
     #[test]
@@ -233,14 +373,14 @@ mod tests {
         use crate::domain::filesystem::FilePane::{Bottom, Main};
         let handle = DirWatchHandle::default();
         for (pane, path) in [(Main, "upper"), (Bottom, "lower")] {
-            handle
-                .set_target(pane, Some(path.into()), Some(1), |_| {
+            assert!(handle
+                .set_target(pane, Some(path), Some(1), false, |_, _| {
                     notify::recommended_watcher(|_| {}).map_err(|err| err.to_string())
                 })
-                .unwrap();
+                .unwrap());
         }
         handle
-            .set_target(Bottom, None, Some(2), |_| unreachable!())
+            .set_target(Bottom, None, Some(2), false, |_, _| unreachable!())
             .unwrap();
         assert_eq!(
             handle.state[Main as usize].lock().unwrap().path.as_deref(),
@@ -260,24 +400,41 @@ mod tests {
         let (release, wait_for_release) = mpsc::channel();
         let older = handle.clone();
         let slow = thread::spawn(move || {
-            older.set_target(Default::default(), Some("slow".into()), Some(1), |_| {
-                opened.send(()).unwrap();
-                wait_for_release
-                    .recv_timeout(Duration::from_secs(5))
-                    .unwrap();
-                notify::recommended_watcher(|_| {}).map_err(|err| err.to_string())
-            })
+            older.set_target(
+                Default::default(),
+                Some("slow"),
+                Some(1),
+                false,
+                |_, active| {
+                    opened.send(()).unwrap();
+                    wait_for_release
+                        .recv_timeout(Duration::from_secs(5))
+                        .unwrap();
+                    assert!(!active.load(Ordering::Acquire));
+                    notify::recommended_watcher(|_| {}).map_err(|err| err.to_string())
+                },
+            )
         });
         wait_for_open.recv_timeout(Duration::from_secs(5)).unwrap();
         handle
-            .set_target(Default::default(), Some("latest".into()), Some(3), |_| {
-                notify::recommended_watcher(|_| {}).map_err(|err| err.to_string())
-            })
+            .set_target(
+                Default::default(),
+                Some("latest"),
+                Some(3),
+                false,
+                |_, _| notify::recommended_watcher(|_| {}).map_err(|err| err.to_string()),
+            )
             .unwrap();
         release.send(()).unwrap();
-        slow.join().unwrap().unwrap();
+        assert!(!slow.join().unwrap().unwrap());
         handle
-            .set_target(Default::default(), None, Some(2), |_| unreachable!())
+            .set_target(
+                Default::default(),
+                None,
+                Some(2),
+                false,
+                |_, _| unreachable!(),
+            )
             .unwrap();
         assert_eq!(
             handle.state[0].lock().unwrap().path.as_deref(),
@@ -285,16 +442,143 @@ mod tests {
         );
 
         handle
-            .set_target(Default::default(), None, Some(5), |_| unreachable!())
+            .set_target(
+                Default::default(),
+                None,
+                Some(5),
+                false,
+                |_, _| unreachable!(),
+            )
             .unwrap();
         handle
             .set_target(
                 Default::default(),
-                Some("late start".into()),
+                Some("late start"),
                 Some(4),
-                |_| panic!("stale request opened a watcher"),
+                false,
+                |_, _| panic!("stale request opened a watcher"),
             )
             .unwrap();
         assert!(handle.state[0].lock().unwrap().watcher.is_none());
+    }
+
+    #[test]
+    fn rescan_drops_pending_rename_without_stopping_the_watch() {
+        let target = Path::new(r"C:\folder");
+        let overflow = Ok(Event::new(EventKind::Other).set_flag(notify::event::Flag::Rescan));
+        let active = AtomicBool::new(true);
+        let mut pending = Some(r"C:\folder\old.txt".into());
+        let issue = watch_issue(target, &overflow).unwrap();
+        let payload =
+            recover_watch(target.to_str().unwrap(), issue, &mut pending, &active).unwrap();
+        assert!(pending.is_none());
+        assert!(active.load(Ordering::Acquire));
+        assert_eq!(
+            serde_json::to_value(payload).unwrap(),
+            serde_json::json!({"path": target.to_str().unwrap(), "paths": [], "rescan": true}),
+        );
+        let malformed = Err(notify::Error::io(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "record",
+        )));
+        assert_eq!(watch_issue(target, &malformed), Some(WatchIssue::Rescan));
+    }
+
+    #[test]
+    fn fatal_errors_and_root_removal_stop_only_the_supplied_watch() {
+        use notify::event::RemoveKind;
+        let target = Path::new(r"C:\folder");
+        let kind = EventKind::Remove(RemoveKind::Folder);
+        let child_removed = Ok(Event::new(kind).add_path(target.join("child")));
+        let root_removed = Ok(Event::new(kind).add_path(target.into()));
+        let failure = Err(notify::Error::io(io::Error::from(
+            io::ErrorKind::PermissionDenied,
+        )));
+        assert_eq!(watch_issue(target, &child_removed), None);
+        for result in [root_removed, failure] {
+            let active = AtomicBool::new(true);
+            let mut pending = Some(r"C:\folder\old.txt".into());
+            let issue = watch_issue(target, &result).unwrap();
+            let payload =
+                recover_watch(target.to_str().unwrap(), issue, &mut pending, &active).unwrap();
+            assert!(pending.is_none());
+            assert!(!active.load(Ordering::Acquire));
+            assert_eq!(
+                serde_json::to_value(payload).unwrap(),
+                serde_json::json!({
+                    "path": target.to_str().unwrap(), "paths": [], "rescan": true, "watchFailed": true
+                }),
+            );
+            assert!(recover_watch(
+                target.to_str().unwrap(),
+                WatchIssue::Stopped,
+                &mut pending,
+                &active
+            )
+            .is_none());
+        }
+    }
+
+    #[test]
+    fn explicit_retry_rearms_the_same_path_and_retires_its_old_callback() {
+        let handle = DirWatchHandle::default();
+        let pane = crate::domain::filesystem::FilePane::Main;
+        let open = |_: &str, _: Arc<AtomicBool>| {
+            notify::recommended_watcher(|_| {}).map_err(|err| err.to_string())
+        };
+        assert!(handle
+            .set_target(pane, Some("folder"), Some(1), false, open)
+            .unwrap());
+        let previous = handle.state[pane as usize]
+            .lock()
+            .unwrap()
+            .active
+            .clone()
+            .unwrap();
+        assert!(!handle
+            .set_target(pane, Some("folder"), Some(2), false, |_, _| unreachable!())
+            .unwrap());
+        assert!(previous.load(Ordering::Acquire));
+        assert!(handle
+            .set_target(pane, Some("folder"), Some(3), true, open)
+            .unwrap());
+        assert!(!previous.load(Ordering::Acquire));
+        let state = handle.state[pane as usize].lock().unwrap();
+        assert!(state.active.as_ref().unwrap().load(Ordering::Acquire));
+        assert_eq!(state.path.as_deref(), Some("folder"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn removing_a_real_watched_directory_reports_stopped() {
+        let path = std::env::temp_dir().join(format!(
+            "stratum-watch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        ));
+        std::fs::create_dir(&path).unwrap();
+        let (send, receive) = mpsc::channel();
+        let mut watcher = notify::recommended_watcher(move |event| {
+            let _ = send.send(event);
+        })
+        .unwrap();
+        watcher.watch(&path, RecursiveMode::NonRecursive).unwrap();
+        let removed = std::fs::remove_dir(&path);
+        let reported = removed
+            .as_ref()
+            .ok()
+            .and_then(|()| receive.recv_timeout(Duration::from_secs(5)).ok());
+        drop(watcher);
+        if removed.is_err() {
+            let _ = std::fs::remove_dir(&path);
+        }
+        removed.unwrap();
+        assert_eq!(
+            watch_issue(&path, &reported.expect("watch root removal")),
+            Some(WatchIssue::Stopped)
+        );
     }
 }

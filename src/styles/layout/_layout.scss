@@ -80,14 +80,14 @@
   overflow: hidden;
 }
 
-:root[data-ambient="true"] .upper-files {
+:root[data-ambient="true"] .upper-files:where(:not([data-start-view])) {
   isolation: isolate;
   background:
     radial-gradient(58% 46% at 58% 72%, rgba(var(--accent-rgb), 0.055), transparent),
     radial-gradient(36% 40% at 75% 52%, rgba(121, 119, 211, 0.035), transparent);
 
-  // The folder list and landing page share the backdrop with the thumbnail grid.
-  :is(.file-list, .view-lander) {
+  // The folder list shares the backdrop with the thumbnail grid.
+  .file-list {
     background: transparent;
   }
 
@@ -108,15 +108,15 @@
     mask: url("../../assets/ambient-wave.svg") center / 100% 100% no-repeat;
     mask-mode: alpha;
     transform-origin: 55% 72%;
+
+    @media (prefers-reduced-motion: no-preference) {
+      animation: ambient-wave-expand 44s ease-in-out -10s infinite alternate;
+      will-change: transform;
+    }
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  :root[data-ambient="true"] .upper-files::before {
-    animation: ambient-wave-expand 44s ease-in-out -10s infinite alternate;
-    will-change: transform;
-  }
-
   :root[data-ambient="true"][data-window-focus="false"] .upper-files::before,
   :root[data-ambient="true"] .app-shell[data-preview="true"] .upper-files::before {
     animation-play-state: paused;

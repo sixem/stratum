@@ -4,6 +4,7 @@
 import { APP_NAME, APP_VERSION } from "@/constants";
 import { useSelectionShortcuts } from "@/hooks/ui/selection";
 import { useIndexedSearchUiStore } from "@/modules";
+import { useQuickMoveSession } from "@/modules/quickMoveSession";
 import { useAppEffects } from "../useAppEffects";
 import { useAppKeybinds } from "../useAppKeybinds";
 import type { UseShellViewModelOptions } from "./shellViewModel.types";
@@ -50,6 +51,7 @@ export const useShellViewBindings = ({
   interactionModel,
 }: UseShellViewBindingsOptions) => {
   const indexedSearchOpen = useIndexedSearchUiStore((state) => state.open);
+  const quickMoveOpen = useQuickMoveSession((state) => state.request !== null);
 
   useAppEffects({
     isTauriEnv: tauriEnv,
@@ -106,7 +108,7 @@ export const useShellViewBindings = ({
     contextMenuOpen: dataPipeline.contextMenuActive,
     loading: resolvedView.viewLoading,
     settingsOpen: menuState.settingsOpen,
-    indexedSearchOpen,
+    searchOverlayOpen: indexedSearchOpen || quickMoveOpen,
     smartTabBlocked: dataPipeline.smartTabBlocked,
     viewMode: resolvedView.viewMode,
     smartTabJump: settings.smartTabJump,
@@ -131,6 +133,7 @@ export const useShellViewBindings = ({
     contextMenuOpen: dataPipeline.contextMenuActive,
     promptOpen,
     previewOpen: interactionModel.previewOpen,
+    quickMoveOpen,
     blockReveal: dataPipeline.blockReveal,
     activeTabId: resolvedView.activeTabId,
     tabs: resolvedView.tabs,
@@ -142,6 +145,7 @@ export const useShellViewBindings = ({
     undo: fileManager.undo,
     deleteEntries: fileManager.deleteEntries,
     duplicateEntries: fileManager.duplicateEntries,
+    moveEntries: fileManager.moveEntries,
     pasteEntries: fileManager.pasteEntries,
     onContextMenu: interactionModel.openKeyboardContextMenu,
     onNewTab: navigationController.handleNewTab,

@@ -1,5 +1,5 @@
 // Virtualized grid view for file entries.
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { shallow } from "zustand/shallow";
 import { useEntryPresence, useScrollToIndex } from "@/hooks";
 import { useSettingsStore } from "@/modules";
@@ -172,6 +172,9 @@ const FileGrid = ({
     thumbnailSvgs: thumbs.thumbnailSvgs,
     loading: view.loading,
   });
+  const handleThumbError = useCallback((path: string, failedUrl: string) => {
+    thumbs.onRequestThumbs([{ path, size: null, modified: null, failedUrl }]);
+  }, [thumbs.onRequestThumbs]);
   useGridTooltip({
     viewportRef,
     entryByPath: view.entryByPath,
@@ -248,9 +251,10 @@ const FileGrid = ({
             const isDropTarget = dragDrop.dropTargetPath === item.entry.path;
             const itemMeta = gridMetaByPath.get(item.entry.path);
             const baseIndex = resolvedIndexMap.get(item.entry.path) ?? index;
+            const folderThumb = item.entry.isDir ? folderThumbSource.get(item.entry.path) : undefined;
             const thumbUrl = thumbs.thumbnailsEnabled
               ? item.entry.isDir
-                ? folderThumbSource.get(item.entry.path)
+                ? folderThumb?.url
                 : thumbSource.get(item.entry.path)
               : undefined;
             const appIconUrl =
@@ -267,6 +271,8 @@ const FileGrid = ({
                 extension={itemMeta?.extension ?? null}
                 sizeLabel={itemMeta ? itemMeta.sizeLabel : ""}
                 thumbUrl={thumbUrl}
+                thumbPath={item.entry.isDir ? folderThumb?.path : item.entry.path}
+                onThumbError={handleThumbError}
                 appIconUrl={appIconUrl}
                 executableIconUrl={executableIcons.get(item.entry.path)}
                 appIconsEnabled={thumbs.thumbnailAppIcons}

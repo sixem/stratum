@@ -1,11 +1,12 @@
 // Handles copy, move, duplicate, and clipboard paste for the file manager.
 import { useCallback, useRef } from "react";
 import type { RefObject } from "react";
-import { copyEntries, finishFileCut, planCopyEntries } from "@/api";
-import { formatFailures, normalizeDropPath } from "@/lib";
+import { copyEntries, createTrackedFolder, finishFileCut, planCopyEntries, removeCreatedFolderIfEmpty } from "@/api";
+import { folderPathKey, formatFailures, getParentPath, normalizeDropPath, toMessage } from "@/lib";
 import { refreshFileClipboard, usePromptStore, useTransferStore } from "@/modules";
 import { captureMoveHistoryWorkspace } from "@/modules/recentMoveStore";
 import type { UndoMoveEntry } from "./fileManagerUndo";
+import type { CreatedFolder } from "@/types/fs";
 import type { BeginFileActivity } from "./useFileActivity";
 import { planDropTransfer, resolveDropTransferConflicts } from "./dropTransferPlanning";
 import { runDropTransfer } from "./runDropTransfer";
@@ -20,7 +21,7 @@ type UseFileManagerCopyOptions = {
   currentPathRef: RefObject<string>;
   copyInFlightRef: RefObject<boolean>;
   refreshAfterChange: () => Promise<void>;
-  onRecordMoveUndo: (entries: UndoMoveEntry[]) => void;
+  onRecordMoveUndo: (entries: UndoMoveEntry[], createdFolder?: CreatedFolder) => void;
   onDirectoryChildrenChanged?: (paths: string[]) => void;
   log?: (...args: unknown[]) => void;
 };
@@ -156,20 +157,26 @@ export const useFileManagerCopy = ({
     destination: string,
     moveHistoryWorkspace: string | null | undefined,
     finishPreparing: () => void,
+    createdFolder?: CreatedFolder,
   ) => {
     const plan = planDropTransfer(paths, destination, "move");
     if (!plan) return;
     const prompts = usePromptStore.getState();
-    const resolved = await resolveDropTransferConflicts(plan, prompts);
+    // A new selection folder has no approved replacements, even if another
+    // process writes into it before the queued move runs.
+    const resolved = createdFolder
+      ? { ...plan, overwritePaths: [], skippedByPrompt: 0 }
+      : await resolveDropTransferConflicts(plan, prompts);
     if (!resolved) return;
     finishPreparing();
     return runDropTransfer({
       plan: resolved,
+      protectedFolder: createdFolder,
       moveHistoryWorkspace,
       promptStore: prompts,
       currentPathKey: normalizeDropPath(currentPathRef.current),
       onRefresh: refreshAfterChange,
-      onRecordMoveUndo,
+      onRecordMoveUndo: (entries) => onRecordMoveUndo(entries, createdFolder),
       transferStore: {
         registerTransferJob,
         recordTransferJobOutcome,
@@ -196,6 +203,43 @@ export const useFileManagerCopy = ({
       finishRequest();
     }
   }, [beginFileActivity, runMoveOperation, trackRequest]);
+
+  const createFolderWithSelection = useCallback(async (
+    paths: string[], parent: string, name: string, onCreated: () => void,
+  ) => {
+    const parentKey = folderPathKey(parent);
+    if (!parentKey || !paths.length || paths.some((path) =>
+      path !== path.trim() || folderPathKey(getParentPath(path) ?? "") !== parentKey)) {
+      throw new Error("Choose items in the same folder with paths that Stratum can move.");
+    }
+    const finishRequest = trackRequest();
+    const finishPreparing = beginFileActivity(`Creating ${name}`);
+    const workspace = captureMoveHistoryWorkspace();
+    try {
+      const folder = await createTrackedFolder(parent, name);
+      onCreated();
+      const report = await runMoveOperation(paths, folder.path, workspace, finishPreparing, folder);
+      if (report?.moved || report?.copied) return folder.path;
+      try {
+        await removeCreatedFolderIfEmpty(folder);
+      } catch (error) {
+        const prompts = usePromptStore.getState();
+        if (!prompts.prompt) {
+          prompts.showPrompt({
+            title: "Couldn't remove the empty folder",
+            content: toMessage(error, "The folder was left in place."),
+            confirmLabel: "OK", cancelLabel: null,
+          });
+        }
+      }
+      onDirectoryChildrenChanged?.([parent]);
+      if (folderPathKey(currentPathRef.current) === parentKey) void refreshAfterChange();
+      return null;
+    } finally {
+      finishPreparing();
+      finishRequest();
+    }
+  }, [beginFileActivity, currentPathRef, onDirectoryChildrenChanged, refreshAfterChange, runMoveOperation, trackRequest]);
 
   const pasteEntriesInView = useCallback(
     async (destination?: string) => {
@@ -241,6 +285,7 @@ export const useFileManagerCopy = ({
   return {
     duplicateEntriesInView,
     moveEntriesInView,
+    createFolderWithSelection,
     pasteEntriesInView,
   };
 };

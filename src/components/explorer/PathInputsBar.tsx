@@ -1,5 +1,7 @@
 // Dedicated bar for the path and search inputs.
+import { useId } from "react";
 import type { FormEvent, KeyboardEvent, RefObject } from "react";
+import { FileFilterHint } from "@/components/primitives/FileFilterHint";
 import { PressButton } from "@/components/primitives/PressButton";
 import { FilterIcon, LibraryIcon, RefreshIcon } from "@/components/icons";
 import { useIndexedSearchUiStore } from "@/modules";
@@ -28,6 +30,7 @@ export const PathInputsBar = ({
   searchInputRef,
 }: PathInputsBarProps) => {
   const openIndexedSearch = useIndexedSearchUiStore((state) => state.openModal);
+  const filterHintId = useId();
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -63,7 +66,7 @@ export const PathInputsBar = ({
         <RefreshIcon className="btn-icon" />
       </PressButton>
       <div className="search-field">
-        <FilterIcon className="search-icon" />
+        <FileFilterHint id={filterHintId}><FilterIcon className="search-icon" /></FileFilterHint>
         <input
           className="search-input"
           ref={searchInputRef}
@@ -76,6 +79,7 @@ export const PathInputsBar = ({
           }}
           placeholder="Search"
           aria-label="Search current folder"
+          aria-describedby={filterHintId}
           spellCheck={false}
           autoComplete="off"
         />
