@@ -6,6 +6,7 @@ import { META_CACHE_LIMIT, META_FLUSH_INTERVAL_MS } from "@/constants";
 import { folderPathKey, getParentPath } from "@/lib/paths";
 import type { EntryMeta, FileEntry } from "@/types";
 import { EntryMetaRefreshQueue } from "./entryMetaRefreshQueue";
+import { EntryMetaSnapshot } from "./entryMetaSnapshot";
 import { getInlineEntryMeta } from "./fileManager.query";
 import type { FileManagerDebug, MetaRequestOptions } from "./fileManager.types";
 
@@ -19,7 +20,7 @@ type UseEntryMetaCacheOptions = {
 };
 
 export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions) => {
-  const [entryMeta, setEntryMeta] = useState(() => new Map<string, EntryMeta>());
+  const [entryMeta, setEntryMeta] = useState(() => new EntryMetaSnapshot());
   const entryMetaRef = useRef(entryMeta);
   const pendingMetaRef = useRef(new Map<string, symbol>());
   const metaCacheRef = useRef<Map<string, EntryMeta>>(new Map());
@@ -51,8 +52,7 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
     const updates = metaUpdatesRef.current;
     if (updates.size === 0) return;
     // Publish one immutable directory snapshot for all completed stat batches.
-    const next = new Map(entryMetaRef.current);
-    for (const [path, meta] of updates) next.set(path, meta);
+    const next = entryMetaRef.current.withUpdates(updates);
     updates.clear();
     entryMetaRef.current = next;
     startTransition(() => {
@@ -144,10 +144,11 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
         for (const meta of next.values()) storeEntryMeta(meta, false);
         trimMetaCache(cache);
       }
-      entryMetaRef.current = next;
+      const snapshot = new EntryMetaSnapshot(next);
+      entryMetaRef.current = snapshot;
       // Treat large metadata refreshes as non-urgent UI work.
       startTransition(() => {
-        setEntryMeta(next);
+        setEntryMeta(snapshot);
       });
     },
     [clearMetaFlushTimer, storeEntryMeta, trimMetaCache, watchQueue],

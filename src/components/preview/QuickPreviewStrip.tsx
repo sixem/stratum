@@ -6,7 +6,7 @@ import type {
   WheelEvent as ReactWheelEvent,
 } from "react";
 import { FILE_TOOLTIP_DELAY_MS } from "@/constants";
-import type { EntryMeta, FileEntry, RequestScopedThumbnails, ThumbnailRequest } from "@/types";
+import type { EntryMeta, EntryMetaLookup, FileEntry, RequestScopedThumbnails, ThumbnailRequest } from "@/types";
 import { formatBytes, formatDate, getFileKind, normalizePath, splitNameExtension } from "@/lib";
 import { useEntryMetaRequest, useThumbnailRequest, useVirtualRange } from "@/hooks";
 import { useThumbnailScope } from "@/hooks/domain/metadata/useThumbnailScope";
@@ -16,7 +16,7 @@ type QuickPreviewStripProps = {
   open: boolean;
   items: FileEntry[];
   activePath: string | null;
-  entryMeta: Map<string, EntryMeta>;
+  entryMeta: EntryMetaLookup;
   thumbnails: Map<string, string>;
   thumbnailsEnabled: boolean;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;

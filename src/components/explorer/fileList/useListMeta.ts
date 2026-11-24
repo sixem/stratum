@@ -4,7 +4,7 @@ import { useMemo, useRef } from "react";
 import { useEntryMetaRequest, useScrollSettled } from "@/hooks";
 import { buildEntryTooltip, formatBytes, formatDate, getFileKind } from "@/lib";
 import type { EntryItem, FileKind } from "@/lib";
-import type { EntryMeta } from "@/types";
+import type { EntryMeta, EntryMetaLookup } from "@/types";
 
 type RowDisplayMeta = {
   tooltipText: string;
@@ -21,7 +21,7 @@ type UseListMetaOptions = {
   listRef: RefObject<HTMLDivElement | null>;
   viewKey: string;
   visibleRows: EntryItem[];
-  entryMeta: Map<string, EntryMeta>;
+  entryMeta: EntryMetaLookup;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   loading: boolean;
 };

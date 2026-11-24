@@ -72,6 +72,7 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
   const catalogPending = !indexUnavailable && !hasSearchableDrive && (checkingIndex || buildingIndex);
   const {
     results,
+    resultIndexes,
     resultsError,
     pageError,
     refreshError,
@@ -109,6 +110,7 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
     driveStatuses,
     open,
     results,
+    resultIndexes,
     refreshedAnchorPath: scrollRestore?.path,
     query: trimmedQuery,
     hasMore,

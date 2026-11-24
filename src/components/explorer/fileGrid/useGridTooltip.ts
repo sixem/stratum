@@ -4,12 +4,12 @@ import type { RefObject } from "react";
 import { FILE_TOOLTIP_DELAY_MS, TOOLTIP_EDGE_PADDING, TOOLTIP_GAP } from "@/constants";
 import { buildEntryTooltip } from "@/lib";
 import { useTooltipStore } from "@/modules";
-import type { EntryMeta, FileEntry } from "@/types";
+import type { EntryMeta, EntryMetaLookup, FileEntry } from "@/types";
 
 type UseGridTooltipOptions = {
   viewportRef: RefObject<HTMLDivElement | null>;
   entryByPath: Map<string, FileEntry>;
-  entryMeta: Map<string, EntryMeta>;
+  entryMeta: EntryMetaLookup;
   disabled: boolean;
   delayMs?: number;
 };

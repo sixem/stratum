@@ -6,7 +6,7 @@ import { useMemo, useRef } from "react";
 
 import { formatBytes, getExtension, getFileKind } from "@/lib";
 import type { EntryItem, FileKind } from "@/lib";
-import type { EntryMeta } from "@/types";
+import type { EntryMeta, EntryMetaLookup } from "@/types";
 
 export type GridDisplayMeta = {
   fileKind: FileKind;
@@ -21,7 +21,7 @@ type CachedGridDisplayMeta = GridDisplayMeta & {
 type UseGridDisplayMetaOptions = {
   viewKey: string;
   visibleItems: EntryItem[];
-  entryMeta: Map<string, EntryMeta>;
+  entryMeta: EntryMetaLookup;
 };
 
 const GRID_META_CACHE_LIMIT = 5000;

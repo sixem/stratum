@@ -1,7 +1,7 @@
 // Formats status bar labels from current counts and selection metadata.
 import { useMemo } from "react";
 import { formatBytes, formatCount, formatPercent } from "@/lib";
-import type { DriveInfo, EntryMeta } from "@/types";
+import type { DriveInfo, EntryMetaLookup } from "@/types";
 
 type UseStatusLabelsOptions = {
   isFiltered: boolean;
@@ -9,7 +9,7 @@ type UseStatusLabelsOptions = {
   totalCount: number;
   currentDriveInfo?: DriveInfo;
   selected: Set<string>;
-  entryMeta: Map<string, EntryMeta>;
+  entryMeta: EntryMetaLookup;
 };
 
 export const useStatusLabels = ({

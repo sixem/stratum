@@ -2,6 +2,7 @@
 // file operations still follow the focused result.
 
 import type { IndexedPathMatch } from "@/types";
+import type { IndexedResultLookup } from "./indexedResultLookup";
 
 export type IndexedCopySelection = {
   anchor: string;
@@ -18,7 +19,7 @@ export const updateIndexedCopySelection = (
   path: string,
   focusedPath: string | undefined,
   results: readonly IndexedPathMatch[],
-  indexes: ReadonlyMap<string, number>,
+  indexes: IndexedResultLookup,
   { range, toggle }: IndexedCopyModifiers,
 ): IndexedCopySelection => {
   const base = current?.paths ?? (focusedPath ? [focusedPath] : []);

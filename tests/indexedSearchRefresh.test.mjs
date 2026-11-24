@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { indexedResultLookup } from "../src/components/overlay/indexedSearchModal/indexedResultLookup.ts";
 import {
   canFinishIndexedSearchRefresh,
   captureIndexedSearchAnchor,
@@ -17,6 +18,16 @@ const entries = (count, prefix = "entry") => Array.from({ length: count }, (_, i
 });
 const indexes = (results) => new Map(results.map(({ path }, index) => [path, index]));
 const viewportAt = (index) => ({ scrollTop: inset + index * stride - 20, clientHeight: 250 });
+
+test("appending a page preserves the index visible to the previous render", () => {
+  const indexes = new Map([["a", 0]]);
+  const first = indexedResultLookup(indexes, 1);
+  indexes.set("b", 1);
+  const second = indexedResultLookup(indexes, 2);
+  assert.equal(first.get("a"), 0);
+  assert.equal(first.has("b"), false);
+  assert.equal(second.get("b"), 1);
+});
 
 test("refresh reads far enough to restore a selected row beyond four pages", () => {
   const previous = entries(8 * pageSize);

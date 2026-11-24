@@ -1,6 +1,6 @@
 // Fill gaps in a metadata-sorted directory listing after the view has painted.
 import { useEffect, useRef } from "react";
-import type { EntryMeta, FileEntry } from "@/types";
+import type { EntryMeta, EntryMetaLookup, FileEntry } from "@/types";
 import { nextMetadataBatch } from "./metadataBatch";
 
 const PREFETCH_BATCH_SIZE = 120;
@@ -11,7 +11,7 @@ type MetaPrefetchOptions = {
   loading: boolean;
   resetKey: string;
   entries: FileEntry[];
-  entryMeta: Map<string, EntryMeta>;
+  entryMeta: EntryMetaLookup;
   requestMeta: (paths: string[], options?: { defer?: boolean }) => Promise<EntryMeta[]>;
   deferUpdates?: boolean;
   flushMeta?: () => void;

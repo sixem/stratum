@@ -18,12 +18,14 @@ import {
   type IndexedSelection,
 } from "./indexedSearchModalTypes";
 import { useIndexedResultFocus } from "./useIndexedResultFocus";
+import type { IndexedResultLookup } from "./indexedResultLookup";
 import { updateIndexedCopySelection, type IndexedCopyModifiers, type IndexedCopySelection } from "./indexedCopySelection";
 
 type UseIndexedSearchSelectionParams = {
   driveStatuses: IndexedDriveStatus[];
   open: boolean;
   results: IndexedPathMatch[];
+  resultIndexes: IndexedResultLookup;
   refreshedAnchorPath?: string;
   query: string;
   hasMore: boolean;
@@ -36,6 +38,7 @@ export const useIndexedSearchSelection = ({
   driveStatuses,
   open,
   results,
+  resultIndexes,
   refreshedAnchorPath,
   query,
   hasMore,
@@ -48,7 +51,6 @@ export const useIndexedSearchSelection = ({
   const [copySelection, setCopySelection] = useState<IndexedCopySelection | null>(null);
   const [selectedResultMeta, setSelectedResultMeta] = useState<EntryMeta | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
-  const resultIndexes = useMemo(() => new Map(results.map(({ path }, index) => [path, index])), [results]);
   const selectedResultIndex = selection?.kind === "result" ? resultIndexes.get(selection.path) ?? -1 : -1;
   const selectedResult = results[selectedResultIndex] ?? null;
   const copyPaths = useMemo(() => copySelection && new Set(

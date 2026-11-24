@@ -9,6 +9,7 @@ import type { EntryItem } from "@/lib";
 import type { ScrollRequest } from "@/hooks";
 import type {
   EntryMeta,
+  EntryMetaLookup,
   FileEntry,
   DriveInfo,
   RenameCommitReason,
@@ -74,7 +75,7 @@ type FileViewProps = {
   onRenameChange: (value: string) => void;
   onRenameCommit: (reason: RenameCommitReason) => void;
   onRenameCancel: () => void;
-  entryMeta: Map<string, EntryMeta>;
+  entryMeta: EntryMetaLookup;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
   thumbnails: Map<string, string>;

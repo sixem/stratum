@@ -43,6 +43,8 @@ export type EntryMeta = {
   modified: number | null;
 };
 
+export type EntryMetaLookup = Pick<ReadonlyMap<string, EntryMeta>, "get" | "has">;
+
 export type FolderThumbSampleBatchOptions = {
   allowVideos: boolean;
   allowSvgs: boolean;

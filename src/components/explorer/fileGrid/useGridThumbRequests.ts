@@ -13,7 +13,7 @@ import { getExtension, makeDebug } from "@/lib";
 import type { EntryItem } from "@/lib";
 import { THUMB_INTERACTION_COOLDOWN_MS, THUMB_TYPING_PAUSE_MS } from "@/constants";
 import { useDirectoryChildStateRevision } from "@/modules";
-import type { EntryMeta, ThumbnailRequest } from "@/types";
+import type { EntryMeta, EntryMetaLookup, ThumbnailRequest } from "@/types";
 import { useGridDisplayMeta } from "./useGridDisplayMeta";
 import type { GridDisplayMeta } from "./useGridDisplayMeta";
 import { useGridFolderSamples } from "./useGridFolderSamples";
@@ -24,7 +24,7 @@ type UseGridThumbRequestsOptions = {
   viewKey: string;
   visibleItems: EntryItem[];
   isResizing: boolean;
-  entryMeta: Map<string, EntryMeta>;
+  entryMeta: EntryMetaLookup;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
   thumbnails: Map<string, string>;

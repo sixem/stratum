@@ -20,6 +20,7 @@ export type {
   MovedTransferEntry,
   DriveInfo,
   EntryMeta,
+  EntryMetaLookup,
   FileEntry,
   FolderThumbSampleBatchOptions,
   FolderThumbSampleBatchResult,

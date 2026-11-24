@@ -1,5 +1,5 @@
 // Debounce typing and keep one running search plus the latest queued refresh.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { queryIndexedPathPage } from "@/api";
 import { toMessage } from "@/lib";
@@ -14,6 +14,7 @@ import {
   restoreIndexedSearchAnchor,
 } from "./indexedSearchRefresh";
 import type { IndexedSearchRefreshAnchor, IndexedSearchScrollRestore } from "./indexedSearchRefresh";
+import { indexedResultLookup } from "./indexedResultLookup";
 
 type UseIndexedSearchResultsParams = {
   catalogPending: boolean;
@@ -25,6 +26,7 @@ type UseIndexedSearchResultsParams = {
 type SearchScope = { query: string; catalogRevision: number | undefined };
 type SearchResult = SearchScope & {
   matches: IndexedPathMatch[];
+  indexes: Map<string, number>;
   nextCursor: string | null;
   paged: boolean;
   error: string | null;
@@ -39,6 +41,7 @@ type SearchRequest = SearchScope & (
 );
 
 const EMPTY_RESULTS: IndexedPathMatch[] = [];
+const EMPTY_INDEXES = new Map<string, number>();
 
 export const useIndexedSearchResults = ({
   catalogPending,
@@ -89,7 +92,6 @@ export const useIndexedSearchResults = ({
         try {
           let cursor = previousPage?.nextCursor ?? null;
           const added: IndexedPathMatch[] = [];
-          const previousPaths = previousPage && new Set(previousPage.matches.map(({ path }) => path));
           const addedIndexes = new Map<string, number>();
           const visitedCursors = new Set<string>();
           let anchor = request.kind === "refresh" ? request.anchor : null;
@@ -98,7 +100,7 @@ export const useIndexedSearchResults = ({
             const page = await queryIndexedPathPage({ query, limit: INDEXED_SEARCH_PAGE_SIZE, cursor });
             if (latestRequestRef.current !== request) break;
             for (const match of page.matches) {
-              if (previousPaths?.has(match.path) || addedIndexes.has(match.path)) continue;
+              if (previousPage?.indexes.has(match.path) || addedIndexes.has(match.path)) continue;
               addedIndexes.set(match.path, added.length);
               added.push(match);
             }
@@ -117,8 +119,14 @@ export const useIndexedSearchResults = ({
           } while (cursor !== null);
 
           if (latestRequestRef.current !== request) continue;
+          // Stage additions until the request succeeds. Cancelled pages and
+          // retries must never reserve a path in the published result set.
+          const indexes = previousPage?.indexes ?? addedIndexes;
+          if (previousPage) {
+            for (const [path, offset] of addedIndexes) indexes.set(path, previousPage.matches.length + offset);
+          }
           result = {
-            query, catalogRevision, matches: previousPage ? previousPage.matches.concat(added) : added,
+            query, catalogRevision, indexes, matches: previousPage ? previousPage.matches.concat(added) : added,
             nextCursor: cursor, paged: request.kind !== "head",
             error: null, pageError: null,
             scrollRestore: request.kind === "refresh"
@@ -132,7 +140,7 @@ export const useIndexedSearchResults = ({
             result = { ...previousPage, pageError: toMessage(error, "Couldn't load more results.") };
           } else {
             result = {
-              query, catalogRevision, matches: EMPTY_RESULTS, nextCursor: null, paged: false,
+              query, catalogRevision, matches: EMPTY_RESULTS, indexes: EMPTY_INDEXES, nextCursor: null, paged: false,
               error: toMessage(error, "Search is currently unavailable."), pageError: null,
             };
           }
@@ -211,10 +219,13 @@ export const useIndexedSearchResults = ({
 
   const currentResult = lastResult?.query === trimmedQuery ? lastResult : null;
   const results = currentResult?.matches ?? EMPTY_RESULTS;
+  const indexes = currentResult?.indexes ?? EMPTY_INDEXES;
+  const resultIndexes = useMemo(() => indexedResultLookup(indexes, results.length), [indexes, results.length]);
 
   return {
     trimmedQuery,
     results,
+    resultIndexes,
     resultsError: currentResult?.error ?? null,
     pageError: currentResult?.pageError ?? null,
     refreshError: currentResult?.refreshError ?? null,
