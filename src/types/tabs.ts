@@ -18,3 +18,5 @@ export type TabHistory = {
   back: string[];
   forward: string[];
 };
+
+export type TabHistoryDirection = keyof TabHistory;

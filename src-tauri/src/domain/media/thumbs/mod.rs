@@ -2,13 +2,13 @@
 // and cache management. The public API stays small so the rest of the app can
 // treat thumbnails as one service while the internals stay split by concern.
 mod cache;
+mod queue;
 mod render;
 mod request;
 mod types;
 #[cfg(target_os = "windows")]
 mod windows;
 
-use std::collections::{HashSet, VecDeque};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
@@ -19,7 +19,10 @@ use tauri::{AppHandle, Emitter};
 #[cfg(target_os = "windows")]
 use crate::platform::windows::com::StaComGuard;
 
-pub use types::{ThumbFormat, ThumbHit, ThumbOptions, ThumbReady, ThumbRequest};
+use queue::ThumbQueue;
+pub use types::{
+    ThumbFormat, ThumbHit, ThumbOptions, ThumbReady, ThumbRequest, ThumbScope, ThumbView,
+};
 
 #[derive(Clone, Copy)]
 enum ThumbKind {
@@ -41,12 +44,6 @@ struct ThumbJob {
 struct ThumbMeta {
     size: u64,
     modified: Option<u64>,
-}
-
-struct ThumbQueue {
-    items: VecDeque<ThumbJob>,
-    in_flight: HashSet<String>,
-    paused: bool,
 }
 
 struct CacheTrimState {
@@ -87,11 +84,7 @@ pub fn init(app_handle: AppHandle) -> ThumbnailHandle {
     let state = Arc::new(ThumbnailState {
         app_handle,
         cache_dir,
-        queue: Mutex::new(ThumbQueue {
-            items: VecDeque::new(),
-            in_flight: HashSet::new(),
-            paused: false,
-        }),
+        queue: Mutex::new(ThumbQueue::default()),
         condvar: Condvar::new(),
         trim_state: Mutex::new(CacheTrimState {
             last_trim: None,
@@ -121,8 +114,25 @@ pub fn request_thumbnails(
     requests: Vec<ThumbRequest>,
     options: ThumbOptions,
     key: String,
+    scope: ThumbScope,
 ) -> Vec<ThumbHit> {
-    request::request_thumbnails(state, requests, options, key)
+    request::request_thumbnails(state, requests, options, key, scope)
+}
+
+pub fn open_scope(state: &ThumbnailState, view: ThumbView) -> ThumbScope {
+    state
+        .queue
+        .lock()
+        .expect("thumb queue lock")
+        .open_scope(view)
+}
+
+pub fn close_scope(state: &ThumbnailState, scope: ThumbScope) {
+    state
+        .queue
+        .lock()
+        .expect("thumb queue lock")
+        .close_scope(scope);
 }
 
 pub fn set_paused(state: &ThumbnailState, paused: bool) {
@@ -173,7 +183,7 @@ fn worker_loop(state: ThumbnailHandle) {
 
         {
             let mut queue = state.queue.lock().expect("thumb queue lock");
-            queue.in_flight.remove(&job.id);
+            queue.finish(&job);
         }
 
         if let Ok(output) = result {

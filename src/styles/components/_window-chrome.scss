@@ -5,7 +5,9 @@
   width: 100%;
   min-width: 0;
   min-height: var(--window-chrome-bar-height);
-  padding: 4px 4px 2px 2px;
+  // Reserve the top edge's space while Windows draws the frame.
+  padding: var(--surface-border-width) 4px 2px 2px;
+  border-block-end: var(--surface-border-width) solid #1b213061;
 }
 
 .window-chrome-bar-drag {
@@ -22,6 +24,7 @@
   align-items: stretch;
   flex: 0 0 auto;
   align-self: stretch;
+  min-height: var(--window-chrome-bar-height);
 }
 
 .window-controls {

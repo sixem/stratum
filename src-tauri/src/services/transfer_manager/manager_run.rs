@@ -134,7 +134,7 @@ fn run_job(inner: &Arc<TransferManagerInner>, job: TransferJobRequest, plan: Pla
             }
         }
     };
-    mark_job_finished(inner, &snapshot.id, outcome.terminal_status, &event_emitter);
+    mark_job_finished(inner, &snapshot.id, &outcome, &event_emitter);
     let _ = completion_tx.send(outcome.result);
     inner.queue_signal.notify_all();
 }

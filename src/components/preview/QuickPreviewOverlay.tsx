@@ -2,7 +2,7 @@
 import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { PREVIEW_STRIP_OPEN_KEY } from "@/constants/settings";
 import { getFileKind, getPathName, isPreviewableEntry, normalizePath } from "@/lib";
-import type { EntryMeta, FileEntry, ThumbnailRequest } from "@/types";
+import type { EntryMeta, FileEntry, RequestScopedThumbnails } from "@/types";
 import { LoadingIndicator } from "@/components/primitives/LoadingIndicator";
 import { QuickPreviewFooter } from "./QuickPreviewFooter";
 import { QuickPreviewStrip } from "./QuickPreviewStrip";
@@ -30,7 +30,7 @@ export type QuickPreviewOverlayProps = {
   thumbnails: Map<string, string>;
   thumbnailsEnabled: boolean;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
-  onRequestThumbs: (requests: ThumbnailRequest[]) => void;
+  onRequestThumbs: RequestScopedThumbnails;
   thumbResetKey?: string;
   onSelectPreview: (path: string) => void;
   smartTabJump: boolean;

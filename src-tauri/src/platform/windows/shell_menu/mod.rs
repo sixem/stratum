@@ -191,6 +191,11 @@ fn position_owner(owner: HWND, point: POINT) -> Result<(), String> {
     .map_err(|e| format!("Windows could not position the menu: {e}"))
 }
 
+// Build and drop the menu without showing the owner window or invoking a verb.
+pub(super) fn warm_folder(owner: HWND, folder: String) -> Result<(), String> {
+    ShellMenu::build(owner, &[folder], None, false, false).map(drop)
+}
+
 pub(crate) fn show(
     owner: HWND,
     source: HWND,

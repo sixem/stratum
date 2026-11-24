@@ -1,10 +1,11 @@
 // Centralizes context menu items and pointer handlers for layout + entries.
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 import { flushSync } from "react-dom";
 import { openPathProperties, type ShellMenuTarget } from "@/api";
 import type { BeginFileActivity } from "@/hooks/domain/filesystem/useFileActivity";
 import { getSelectionTargets, isEditableElement, toMessage } from "@/lib";
+import { applyContextMenuVisibility } from "@/lib/contextMenuVisibility";
 import { usePromptStore, useSettingsStore } from "@/modules";
 import { showBottomPane } from "@/modules/bottomPaneStore";
 import { openQuickMove } from "@/modules/quickMoveSession";
@@ -25,6 +26,10 @@ import { useEntryMenuItems } from "../menus/useEntryMenuItems";
 import { appendWindowsMenuItem } from "../menus/appendWindowsMenuItem";
 import { useLayoutMenuItems } from "../menus/useLayoutMenuItems";
 import { useListColumnMenu } from "../menus/useListColumnMenu";
+import { usePaneTransferTarget } from "../menus/usePaneTransferTarget";
+import { buildFolderSelectionItems, invertFolderSelection, selectFolderExtension } from "../menus/entryMenu/buildFolderSelectionItems";
+import { canTransferToPane, type PaneTransfer } from "../menus/entryMenu/buildPaneTransferItems";
+import { withContextMenuShortcuts } from "../menus/contextMenuShortcuts";
 import { resolveContextTargets } from "../menus/entryMenu/shared";
 import type { CreateFolderWithSelection } from "../menus/entryMenu/showFolderWithSelectionPrompt";
 import { getKeyboardMenuRequest } from "../menus/keyboardContextMenu";
@@ -67,13 +72,16 @@ type UseAppContextMenusOptions = {
   onOpenGallery: (path: string) => void;
   onOpenDir: (path: string) => void;
   onOpenDirNewTab: (path: string) => void;
+  onOpenDirInBackgroundTab: (path: string) => void;
   onOpenDirInMainPane?: (path: string) => void;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   confirmDelete: boolean;
   onClearSelection: () => void;
   onRenameEntry: (target: EntryContextTarget) => void;
   onPasteEntries: (destination?: string) => void;
-  onMoveEntries: (paths: string[], destination: string) => void;
+  onCopyEntries: (paths: string[], destination: string) => Promise<unknown>;
+  onMoveEntries: (paths: string[], destination: string) => Promise<unknown>;
+  onRefreshTransferDestination?: () => Promise<void>;
   onCreateFolderWithSelection?: CreateFolderWithSelection;
   onOpenConvertModal: (request: ConversionModalRequest) => void;
   onQuickConvertImages: (request: ConversionModalRequest, targetFormat: string) => void;
@@ -93,6 +101,12 @@ export type ContextMenuServices = Pick<UseAppContextMenusOptions,
 
 export type BottomMenuBindings = ContextMenuServices & ReturnType<typeof useAppMenuState>["bottomMenu"] & {
   onOpenDirInMainPane: (path: string) => void;
+};
+
+export type PaneFileCommands = {
+  transfer: (mode: "copy" | "move", paths: string[]) => boolean;
+  selectSameExtension: (path?: string) => boolean;
+  invertSelection: () => boolean;
 };
 
 export const useAppContextMenus = ({
@@ -126,13 +140,16 @@ export const useAppContextMenus = ({
   onOpenGallery,
   onOpenDir,
   onOpenDirNewTab,
+  onOpenDirInBackgroundTab,
   onOpenDirInMainPane,
   onDeleteEntries,
   confirmDelete,
   onClearSelection,
   onRenameEntry,
   onPasteEntries,
+  onCopyEntries,
   onMoveEntries,
+  onRefreshTransferDestination,
   onCreateFolderWithSelection,
   onOpenConvertModal,
   onQuickConvertImages,
@@ -145,6 +162,33 @@ export const useAppContextMenus = ({
 }: UseAppContextMenusOptions) => {
   const defaultTabGridSize = useSettingsStore(getDefaultTabGridSize);
   const quickMoveEnabled = useSettingsStore((state) => state.indexedSearchEnabled);
+  const menuUseWindowsForItems = useSettingsStore((state) => state.menuUseWindowsForItems);
+  const menuPaneTransfers = useSettingsStore((state) => state.menuPaneTransfers);
+  const menuSelectionActions = useSettingsStore((state) => state.menuSelectionActions);
+  const menuOpenBackgroundTab = useSettingsStore((state) => state.menuOpenBackgroundTab);
+  const hiddenMenuActions = useSettingsStore((state) => state.hiddenContextMenuActions);
+  const keybinds = useSettingsStore((state) => state.keybinds);
+  // A shortcut remains usable when its menu entry is hidden.
+  const transfersEnabled = menuPaneTransfers || Boolean(keybinds.copyToOtherPane || keybinds.moveToOtherPane);
+  const transferTarget = usePaneTransferTarget(pane, transfersEnabled ? currentPath : "", onRefreshTransferDestination);
+  const transfer = useCallback<PaneFileCommands["transfer"]>((mode, paths) => {
+    if (!transferTarget) return false;
+    const visiblePaths = paths.filter((path) => entryByPath.has(path));
+    if (!canTransferToPane(visiblePaths, transferTarget.path)) return false;
+    void transferTarget.run((destination) => mode === "copy"
+      ? onCopyEntries(visiblePaths, destination)
+      : onMoveEntries(visiblePaths, destination));
+    return true;
+  }, [entryByPath, onCopyEntries, onMoveEntries, transferTarget]);
+  const paneTransfer = useMemo<PaneTransfer | undefined>(() => transferTarget && ({
+    destination: transferTarget.path,
+    run: transfer,
+  }), [transfer, transferTarget]);
+  const paneFileCommands = useMemo<PaneFileCommands>(() => ({
+    transfer,
+    selectSameExtension: (path) => Boolean(currentPath) && selectFolderExtension(entryByPath, onSelectionChange, path),
+    invertSelection: () => Boolean(currentPath) && invertFolderSelection(entryByPath, selected, onSelectionChange),
+  }), [currentPath, entryByPath, onSelectionChange, selected, transfer]);
   const handleQuickMove = useCallback((paths: string[]) => openQuickMove(paths, onMoveEntries), [onMoveEntries]);
   const usePaneSession = getPaneSessionStore(pane);
   const tabId = contextMenu?.kind === "place-target" && contextMenu.target.source === "tab"
@@ -167,6 +211,8 @@ export const useAppContextMenus = ({
         return contextMenu.target.path ? { paths: [contextMenu.target.path] } : null;
       case "sort":
         return currentPath ? { backgroundPath: currentPath } : null;
+      case "history":
+        return null;
     }
   }, [contextMenu, currentPath, selected, viewParentPath, windowsMenuEnabled]);
 
@@ -193,13 +239,14 @@ export const useAppContextMenus = ({
       const entry = entryByPath.get(target.paths[0]);
       if (!entry) return false;
       if (!selected.has(entry.path)) onSelectionChange([entry.path], entry.path);
+      if (menuUseWindowsForItems && openWindowsMenu(target, point, false, galleryAction(entry, target))) return true;
       openContextMenuAt({ kind: "entry", entry, ...point });
     } else {
       openContextMenuAt({ kind: "sort", listHeader, ...point });
     }
     return true;
-  }, [contextMenu, currentPath, defaultTabGridSize, entryByPath, galleryAction, mainRef, menuTarget, onSelectionChange,
-    openContextMenuAt, openWindowsMenu, selected, viewParentPath]);
+  }, [contextMenu, currentPath, defaultTabGridSize, entryByPath, galleryAction, mainRef, menuTarget, menuUseWindowsForItems,
+    onSelectionChange, openContextMenuAt, openWindowsMenu, selected, viewParentPath]);
 
   const handlePlaceTargetContextMenuDown = useCallback(
     (event: ReactPointerEvent, _target: PlaceContextTarget) => {
@@ -268,13 +315,13 @@ export const useAppContextMenus = ({
       if (!selected.has(target.path)) {
         onSelectionChange([target.path], target.path);
       }
-      if (event.shiftKey) {
+      if (event.shiftKey || menuUseWindowsForItems) {
         const shellTarget = { paths: resolveContextTargets(target, selected, viewParentPath) };
-        if (openWindowsMenu(shellTarget, eventPoint(event), true, galleryAction(target, shellTarget))) return;
+        if (openWindowsMenu(shellTarget, eventPoint(event), event.shiftKey, galleryAction(target, shellTarget))) return;
       }
       openEntryMenu(event, target);
     },
-    [galleryAction, onSelectionChange, openEntryMenu, openWindowsMenu, selected, viewParentPath],
+    [galleryAction, menuUseWindowsForItems, onSelectionChange, openEntryMenu, openWindowsMenu, selected, viewParentPath],
   );
 
   // Context menu content is derived from the current target + sort state.
@@ -304,6 +351,7 @@ export const useAppContextMenus = ({
     onOpenGallery,
     onOpenDir,
     onOpenDirNewTab,
+    onOpenDirInBackgroundTab: menuOpenBackgroundTab ? onOpenDirInBackgroundTab : undefined,
     otherPane,
     onDeleteEntries,
     confirmDelete,
@@ -311,6 +359,7 @@ export const useAppContextMenus = ({
     onRenameEntry,
     onPasteEntries,
     onMoveEntries,
+    paneTransfer: menuPaneTransfers ? paneTransfer : undefined,
     onQuickMove: quickMoveEnabled ? handleQuickMove : undefined,
     onCreateFolderWithSelection,
     onOpenConvertModal,
@@ -328,6 +377,7 @@ export const useAppContextMenus = ({
     } : undefined,
     onOpenPath: onOpenDir,
     onOpenPathNewTab: onOpenDirNewTab,
+    onOpenPathInBackgroundTab: menuOpenBackgroundTab ? onOpenDirInBackgroundTab : undefined,
     onAddPlace,
     onPinPlace,
     onUnpinPlace,
@@ -351,17 +401,31 @@ export const useAppContextMenus = ({
         ? placeTargetMenuItems
         : layoutMenuItems;
   const columnMenu = useListColumnMenu(contextMenu?.kind === "sort" && contextMenu.listHeader === true);
+  const selectionItems = useMemo(() => {
+    if (!currentPath || !menuSelectionActions || !contextMenu ||
+        contextMenu.kind === "place-target" || contextMenu.kind === "history") return [];
+    const target = contextMenu.kind === "entry" ? contextMenu.entry : undefined;
+    return buildFolderSelectionItems(entryByPath, selected, onSelectionChange, target);
+  }, [contextMenu, currentPath, entryByPath, menuSelectionActions, onSelectionChange, selected]);
   const contextMenuItems = useMemo<ContextMenuItem[]>(() => {
+    if (contextMenu?.kind === "history") return contextMenu.items;
     const items = columnMenu ? [columnMenu, ...baseItems] : baseItems;
-    if (!contextMenu || !menuTarget) return items;
-    const entry = contextMenu.kind === "entry" ? contextMenu.entry : undefined;
-    return appendWindowsMenuItem(items, () => {
+    const withSelection = selectionItems.length && items.length
+      ? [...items, { kind: "divider" as const, id: "selection-menu-divider" }, ...selectionItems]
+      : [...items, ...selectionItems];
+    const entry = contextMenu?.kind === "entry" ? contextMenu.entry : undefined;
+    const withNativeMenu = contextMenu && menuTarget ? appendWindowsMenuItem(withSelection, () => {
       openWindowsMenu(menuTarget, contextMenu, false, galleryAction(entry, menuTarget));
-    });
-  }, [baseItems, columnMenu, contextMenu, galleryAction, menuTarget, openWindowsMenu]);
+    }) : withSelection;
+    return withContextMenuShortcuts(applyContextMenuVisibility(withNativeMenu, hiddenMenuActions), keybinds);
+  }, [baseItems, columnMenu, contextMenu, galleryAction, hiddenMenuActions, keybinds, menuTarget, openWindowsMenu, selectionItems]);
   const contextMenuOpen = Boolean(contextMenu && contextMenuItems.length > 0);
+  useEffect(() => {
+    if (contextMenu && !contextMenuOpen) closeContextMenu();
+  }, [closeContextMenu, contextMenu, contextMenuOpen]);
 
   return {
+    paneFileCommands,
     openKeyboardContextMenu,
     contextMenuItems,
     contextMenuOpen,

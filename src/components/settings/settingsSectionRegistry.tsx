@@ -13,6 +13,7 @@ import type { SettingsItemText } from "./SettingsItem";
 import { KEYBINDS_SETTINGS_ITEMS, SettingsKeybindsSection } from "./SettingsKeybindsSection";
 import { MEDIA_SETTINGS_ITEMS, SettingsMediaSection } from "./SettingsMediaSection";
 import { MENUS_SETTINGS_ITEMS, SettingsMenusSection } from "./SettingsMenusSection";
+import { MENU_VISIBILITY_SETTINGS_ITEMS } from "./SettingsMenuVisibility";
 import { THUMBS_SETTINGS_ITEMS, SettingsThumbsSection } from "./SettingsThumbsSection";
 
 export type SettingsSectionId =
@@ -51,16 +52,8 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
     render: ({ open }) => <SettingsGeneralSection sectionId="settings-general" open={open} />,
   },
   {
-    id: "settings-indexing",
-    label: "Indexing",
-    items: Object.values(INDEXING_SETTINGS_ITEMS),
-    render: ({ open }) => (
-      <SettingsIndexingSection sectionId="settings-indexing" open={open} />
-    ),
-  },
-  {
     id: "settings-bars",
-    label: "Bars",
+    label: "Tabs & bars",
     items: [...Object.values(BARS_SETTINGS_ITEMS), ...TOPBAR_SETTINGS_OPTIONS],
     render: () => <SettingsBarsSection sectionId="settings-bars" />,
   },
@@ -78,9 +71,17 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
   },
   {
     id: "settings-menus",
-    label: "Menus",
-    items: Object.values(MENUS_SETTINGS_ITEMS),
+    label: "Context menus",
+    items: [...Object.values(MENUS_SETTINGS_ITEMS), ...MENU_VISIBILITY_SETTINGS_ITEMS],
     render: () => <SettingsMenusSection sectionId="settings-menus" />,
+  },
+  {
+    id: "settings-indexing",
+    label: "Indexing",
+    items: Object.values(INDEXING_SETTINGS_ITEMS),
+    render: ({ open }) => (
+      <SettingsIndexingSection sectionId="settings-indexing" open={open} />
+    ),
   },
   {
     id: "settings-flair",
@@ -93,6 +94,19 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
     label: "Thumbnails",
     items: Object.values(THUMBS_SETTINGS_ITEMS),
     render: () => <SettingsThumbsSection sectionId="settings-thumbnails" />,
+  },
+  {
+    id: "settings-cache",
+    label: "Thumbnail cache",
+    items: Object.values(CACHE_SETTINGS_ITEMS),
+    render: ({ open, onOpenCacheLocation, onClearCache }) => (
+      <SettingsCacheSection
+        sectionId="settings-cache"
+        open={open}
+        onOpenCacheLocation={onOpenCacheLocation}
+        onClearCache={onClearCache}
+      />
+    ),
   },
   {
     id: "settings-media",
@@ -109,19 +123,6 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
         sectionId="settings-keybinds"
         open={open}
         onCaptureChange={onCaptureChange}
-      />
-    ),
-  },
-  {
-    id: "settings-cache",
-    label: "Cache",
-    items: Object.values(CACHE_SETTINGS_ITEMS),
-    render: ({ open, onOpenCacheLocation, onClearCache }) => (
-      <SettingsCacheSection
-        sectionId="settings-cache"
-        open={open}
-        onOpenCacheLocation={onOpenCacheLocation}
-        onClearCache={onClearCache}
       />
     ),
   },

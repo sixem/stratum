@@ -3,7 +3,9 @@ import { listen } from "@tauri-apps/api/event";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { requestThumbnails, toThumbnailUrl } from "@/api";
 import { getExtension, getPathName, isSvgLikeExtension, makeDebug } from "@/lib";
-import type { ThumbnailEvent, ThumbnailRequest, ThumbnailRequestOptions } from "@/types";
+import type {
+  ThumbnailEvent, ThumbnailRequest, ThumbnailRequestOptions, ThumbnailScope,
+} from "@/types";
 
 const buildOptionsKey = (options: ThumbnailRequestOptions, dark = options.darkSvgPreviews) => {
   const quality = options.format === "jpeg" ? options.quality : "lossless";
@@ -70,7 +72,9 @@ export const useThumbnails = (
   resetKey?: string,
 ) => {
   const [thumbnails, setThumbnails] = useState(() => new Map<string, string>());
-  const pending = useRef(new Set<string>());
+  // Both panes may need the same queued render. Deduplicate only within a visit
+  // so each view can register its interest with the backend.
+  const pending = useRef(new WeakMap<ThumbnailScope, Set<string>>());
   // Keep the last signature we rendered so edits invalidate cached thumbs.
   const signatureByPathRef = useRef<Map<string, string>>(new Map());
   const retriedUrls = useRef(new Map<string, string>());
@@ -130,7 +134,7 @@ export const useThumbnails = (
     if (optionsKeyRef.current === optionsKey) return;
     optionsKeyRef.current = optionsKey;
     otherSvgThemeKeyRef.current = otherSvgThemeKey;
-    pending.current = new Set();
+    pending.current = new WeakMap();
     signatureByPathRef.current.clear();
     retriedUrls.current.clear();
     pendingUpdatesRef.current.clear();
@@ -142,7 +146,7 @@ export const useThumbnails = (
     if (resetKey === undefined) return;
     if (resetKeyRef.current === resetKey) return;
     resetKeyRef.current = resetKey;
-    pending.current = new Set();
+    pending.current = new WeakMap();
     signatureByPathRef.current.clear();
     retriedUrls.current.clear();
     pendingUpdatesRef.current.clear();
@@ -152,7 +156,7 @@ export const useThumbnails = (
 
   useEffect(() => {
     return () => {
-      pending.current = new Set();
+      pending.current = new WeakMap();
       pendingUpdatesRef.current.clear();
       clearFlushTimer();
     };
@@ -194,9 +198,11 @@ export const useThumbnails = (
   }, [resolveThumbnailUrl, scheduleFlush]);
 
   const request = useCallback(
-    async (requests: ThumbnailRequest[]) => {
+    async (requests: ThumbnailRequest[], scope: ThumbnailScope) => {
       if (!enabled) return;
-      const pendingPaths = pending.current;
+      const pendingBatches = pending.current;
+      const pendingPaths = pendingBatches.get(scope) ?? new Set<string>();
+      pendingBatches.set(scope, pendingPaths);
       const deduped = normalizeRequests(requests);
       const requestSignatures = new Map<string, string>();
       const missing = Array.from(deduped.values()).filter(
@@ -232,8 +238,8 @@ export const useThumbnails = (
       const key = optionsKeyRef.current;
       try {
         const start = perf.enabled ? performance.now() : 0;
-        const hits = await requestThumbnails(batch, options, key);
-        if (pending.current !== pendingPaths) return;
+        const hits = await requestThumbnails(batch, options, key, scope);
+        if (pending.current !== pendingBatches) return;
         if (hits.length === 0) return;
         if (perf.enabled) {
           perf(

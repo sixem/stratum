@@ -1,5 +1,6 @@
 // Scroll persistence and restore invalidation effects for tab/view changes.
 import { useEffect } from "react";
+import { flushPendingSessionWrites } from "@/modules/sessionStore";
 import type { AppEffectActions, AppEffectRefs } from "./appEffectTypes";
 
 type UseAppScrollEffectsOptions = Pick<AppEffectRefs, "lastViewRef"> &
@@ -31,6 +32,7 @@ export const useAppScrollEffects = ({
   useEffect(() => {
     const handleBeforeUnload = () => {
       stashActiveScroll();
+      flushPendingSessionWrites();
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);

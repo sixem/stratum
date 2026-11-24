@@ -1,6 +1,8 @@
 use tauri::Manager;
 
 mod app;
+#[cfg(all(windows, debug_assertions))]
+mod dev_profile;
 mod domain;
 mod platform;
 mod services;
@@ -42,6 +44,9 @@ pub fn run() {
         });
 
     let builder = services::preview_protocol::register_preview_protocol(builder);
+    let context = tauri::generate_context!();
+    #[cfg(all(windows, debug_assertions))]
+    let context = dev_profile::configure(context);
 
     builder
         .plugin(tauri_plugin_dialog::init())
@@ -112,9 +117,12 @@ pub fn run() {
             app::commands::file_drop_listener_ready,
             app::commands::cancel_drag_start,
             app::commands::request_thumbnails,
+            app::commands::open_thumbnail_scope,
+            app::commands::close_thumbnail_scope,
             app::commands::set_thumb_paused,
             app::commands::open_path,
             app::commands::show_shell_context_menu,
+            app::commands::warm_shell_context_menu,
             app::commands::open_path_properties,
             app::commands::list_open_with_handlers,
             app::commands::open_path_with_handler,
@@ -145,7 +153,7 @@ pub fn run() {
             app::commands::create_preview_grant,
             app::commands::release_preview_grant,
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { code, ref api, .. } = event {

@@ -1,4 +1,6 @@
 // Settings defaults and bounds shared by modules/UI.
+import type { AccentTheme } from "@/modules/settings.types";
+
 export const SIDEBAR_RECENT_LIMIT_MIN = 1;
 export const SIDEBAR_RECENT_LIMIT_MAX = 20;
 export const RECENT_MOVE_LIMIT_MIN = 1;
@@ -18,6 +20,16 @@ export const LIST_COLUMN_OPTIONS = [
   { key: "listShowSize", label: "Size" },
   { key: "listShowModified", label: "Modified" },
 ] as const;
+
+export const ACCENT_THEMES = [
+  { id: "red", label: "Red" },
+  { id: "purple", label: "Purple" },
+  { id: "green", label: "Green" },
+  { id: "yellow", label: "Yellow" },
+  { id: "orange", label: "Orange" },
+  { id: "teal", label: "Teal" },
+  { id: "white", label: "White" },
+] as const satisfies readonly { id: AccentTheme; label: string }[];
 
 export const SETTINGS_STORAGE_KEY = "stratum.settings";
 export const SETTINGS_STORAGE_VERSION = 19;

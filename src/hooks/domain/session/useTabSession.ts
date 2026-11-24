@@ -2,6 +2,7 @@
 import { useCallback, useLayoutEffect, useMemo } from "react";
 import { shallow } from "zustand/shallow";
 import type { ListDirOptions, SortState, Tab, ViewMode } from "@/types";
+import type { TabHistoryDirection } from "@/types/tabs";
 import { DEFAULT_TAB_STATE, makeDebug, folderPathKey, getNextTrailPath } from "@/lib";
 import { useSessionStore } from "@/modules";
 import { createSessionTab, useBottomSessionStore } from "@/modules/sessionStore";
@@ -29,6 +30,11 @@ const log = makeDebug("tabs");
 const CLOSED_TAB_LIMIT = 20;
 const NO_RECENT_LOCATIONS: string[] = [];
 
+export type OpenNewTabOptions = {
+  background?: boolean;
+  revealPath?: string;
+};
+
 export const useTabSession = ({
   useStore = useSessionStore,
   currentPath,
@@ -49,6 +55,7 @@ export const useTabSession = ({
     recentJumps,
     restoreRevision,
     setTabs,
+    setTabSearch,
     setActiveTabId,
     setRecentJumps,
     setTabScrollTop,
@@ -59,6 +66,7 @@ export const useTabSession = ({
       recentJumps: state.recentJumps,
       restoreRevision: state.restoreRevision,
       setTabs: state.setTabs,
+      setTabSearch: state.setTabSearch,
       setActiveTabId: state.setActiveTabId,
       setRecentJumps: state.setRecentJumps,
       setTabScrollTop: state.setTabScrollTop,
@@ -97,7 +105,7 @@ export const useTabSession = ({
 
   const pathForHistory = loadingPath ?? (activeTab?.path || currentPath);
   // History and pending-jump tracking live in focused hooks to keep this file readable.
-  const { canGoBack, canGoForward, recordHistory, popBack, popForward, takeHistory, restoreHistory } =
+  const { canGoBack, canGoForward, recordHistory, getHistoryPaths, jumpHistory, takeHistory, restoreHistory } =
     useTabHistory({ tabs, activeTabId });
   const { queuePendingJump, shouldSyncEmptyTab } = usePendingJump({
     activeTabId,
@@ -110,6 +118,7 @@ export const useTabSession = ({
     activeTabId,
     activeTab,
     currentPath,
+    loadingPath,
     sortState,
     searchValue,
     loadDir,
@@ -135,6 +144,7 @@ export const useTabSession = ({
     ? ""
     : searchValue;
   const navigationRevealPath = pendingNavigation?.revealPath &&
+    !(pendingNavigation.waitForListing && loadingPath) &&
     folderPathKey(pendingNavigation.path) === folderPathKey(displayPath)
     ? pendingNavigation.revealPath
     : null;
@@ -163,11 +173,12 @@ export const useTabSession = ({
   const performNavigation = useCallback(
     (
       path: string,
-      options: ListDirOptions | undefined,
+      options: LoadDirOptions | undefined,
       source: "navigate" | "switch",
       tabId: string | null,
-      linked?: LinkedNavigation,
+      details?: { linked?: LinkedNavigation; revealPath?: string },
     ) => {
+      const { linked, revealPath: entryToReveal } = details ?? {};
       const target = path.trim();
       if (!target) {
         pendingNavigationRef.current = null;
@@ -182,16 +193,18 @@ export const useTabSession = ({
         : undefined;
       // On an upward navigation, reveal the first folder on the way back to
       // the listing we are leaving, including when skipping several ancestors.
-      const revealPath = source === "navigate" && tabId === activeTabId
+      const revealPath = entryToReveal ?? (source === "navigate" && tabId === activeTabId
         ? getNextTrailPath(target, currentPath)
-        : null;
+        : null);
       const notifyLink = !linked && source === "navigate" ? beginLinkedNavigation(pane, tabId, target) : undefined;
       const prepare = () => {
         if (source === "navigate" && tabId) {
           emptyTabIdsRef.current.delete(tabId);
           if (linked) recordHistory(tabId, currentPath, target);
         }
-        pendingNavigationRef.current = { path: target, resetFilter, revealPath, notifyLink };
+        pendingNavigationRef.current = {
+          path: target, resetFilter, revealPath, waitForListing: Boolean(entryToReveal), notifyLink,
+        };
         queuePendingJump(target, source, tabId);
       };
       const nextSort = options?.sort ?? tab?.sort ?? sortState;
@@ -199,6 +212,7 @@ export const useTabSession = ({
       if (!linked) prepare();
       void loadDir(target, {
         ...options, sort: nextSort, search: nextSearch,
+        force: entryToReveal ? true : options?.force,
         linked: linked ? { ...linked, onCommit: prepare } : undefined,
       });
     },
@@ -212,7 +226,7 @@ export const useTabSession = ({
     const session = useStore.getState();
     const tab = session.tabs.find(({ id }) => id === session.activeTabId);
     if (tab && folderPathKey(tab.path) === folderPathKey(currentPath)) {
-      performNavigation(target, undefined, "navigate", tab.id, linked);
+      performNavigation(target, undefined, "navigate", tab.id, { linked });
     }
   }), [currentPath, pane, performNavigation, useStore]);
 
@@ -257,9 +271,9 @@ export const useTabSession = ({
   const setSearch = useCallback(
     (search: string) => {
       log("search -> %s", search);
-      updateActiveTab({ search });
+      if (activeTabId) setTabSearch(activeTabId, search);
     },
-    [updateActiveTab],
+    [activeTabId, setTabSearch],
   );
 
   const newTab = useCallback(() => {
@@ -273,7 +287,7 @@ export const useTabSession = ({
   }, [clearDir, defaultTabState, setActiveTabId, setTabs, sortState, nextViewMode]);
 
   const openInNewTab = useCallback(
-    (path: string) => {
+    (path: string, options?: OpenNewTabOptions) => {
       const target = path.trim();
       if (!target) return;
       log("open in new tab -> %s", target);
@@ -287,35 +301,38 @@ export const useTabSession = ({
         next.splice(insertIndex, 0, nextTab);
         return next;
       });
+      // Selecting the tab later uses the regular navigation path.
+      if (options?.background) return;
       setActiveTabId(nextTab.id);
-      performNavigation(target, { sort: nextTab.sort, search: nextTab.search }, "navigate", nextTab.id);
+      performNavigation(target, { sort: nextTab.sort, search: nextTab.search }, "navigate", nextTab.id, {
+        revealPath: options?.revealPath,
+      });
     },
     [activeTabId, defaultTabState, performNavigation, setActiveTabId, setTabs, sortState, nextViewMode],
   );
 
-  const goBack = useCallback(() => {
-    if (!activeTabId) return;
-    const next = popBack(activeTabId, pathForHistory);
-    if (!next) return;
-    performNavigation(next, undefined, "navigate", activeTabId);
-  }, [
-    activeTabId,
-    pathForHistory,
-    popBack,
-    performNavigation,
-  ]);
+  const openInBackgroundTab = useCallback(
+    (path: string) => openInNewTab(path, { background: true }),
+    [openInNewTab],
+  );
 
-  const goForward = useCallback(() => {
-    if (!activeTabId) return;
-    const next = popForward(activeTabId, pathForHistory);
-    if (!next) return;
-    performNavigation(next, undefined, "navigate", activeTabId);
-  }, [
-    activeTabId,
-    pathForHistory,
-    popForward,
-    performNavigation,
-  ]);
+  const getActiveHistoryPaths = useCallback((direction: TabHistoryDirection) => (
+    activeTabId ? getHistoryPaths(activeTabId, direction) : []
+  ), [activeTabId, getHistoryPaths]);
+
+  const navigateHistory = useCallback((
+    direction: TabHistoryDirection,
+    offset = 0,
+    expectedPath?: string,
+  ) => {
+    // An open menu belongs to the tab that supplied its history entries.
+    if (!activeTabId || useStore.getState().activeTabId !== activeTabId) return;
+    const next = jumpHistory(activeTabId, direction, pathForHistory, offset, expectedPath);
+    if (next) performNavigation(next, undefined, "navigate", activeTabId);
+  }, [activeTabId, jumpHistory, pathForHistory, performNavigation, useStore]);
+
+  const goBack = useCallback(() => navigateHistory("back"), [navigateHistory]);
+  const goForward = useCallback(() => navigateHistory("forward"), [navigateHistory]);
 
   const selectTab = useCallback(
     (id: string) => {
@@ -452,6 +469,8 @@ export const useTabSession = ({
     searchValue,
     canGoBack,
     canGoForward,
+    getActiveHistoryPaths,
+    navigateHistory,
     jumpTo,
     browseTo,
     setViewMode,
@@ -461,6 +480,7 @@ export const useTabSession = ({
     goForward,
     newTab,
     openInNewTab,
+    openInBackgroundTab,
     selectTab,
     closeTab,
     reopenClosedTab,

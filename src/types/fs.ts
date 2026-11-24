@@ -140,6 +140,11 @@ export type TransferWorkEstimate = {
   bytesCompleted: number;
 };
 
+export type TransferDestination = {
+  folderPath: string;
+  entryPath?: string;
+};
+
 export type TransferJobSnapshot = {
   id: string;
   kind: TransferJobKind;
@@ -147,6 +152,7 @@ export type TransferJobSnapshot = {
   phase: TransferJobPhase;
   capabilities: TransferJobCapabilities;
   currentPath?: string | null;
+  destination?: TransferDestination;
   work: TransferWorkEstimate;
 };
 

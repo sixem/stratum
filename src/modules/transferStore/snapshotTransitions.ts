@@ -153,6 +153,7 @@ const buildTransferJobFromSnapshot = (
     startedAt,
     activityAt,
     finishedAt,
+    destination: snapshotJob.destination,
     items: metadata?.items ?? previousJob?.items,
     currentPath:
       snapshotJob.currentPath !== undefined

@@ -35,13 +35,14 @@ const getTransferJobRecentAt = (job: TransferJob) => {
   return job.activityAt ?? job.finishedAt ?? job.startedAt;
 };
 
-export const sortTransferJobsByRecent = (jobs: TransferJob[]) => {
-  return [...jobs].sort((left, right) => {
-    const recentDelta = getTransferJobRecentAt(right) - getTransferJobRecentAt(left);
-    if (recentDelta !== 0) return recentDelta;
-    return right.startedAt - left.startedAt;
-  });
+const compareTransferJobsByRecent = (left: TransferJob, right: TransferJob): number => {
+  const recentDelta = getTransferJobRecentAt(right) - getTransferJobRecentAt(left);
+  if (recentDelta !== 0) return recentDelta;
+  return right.startedAt - left.startedAt;
 };
+
+export const sortTransferJobsByRecent = (jobs: TransferJob[]): TransferJob[] =>
+  [...jobs].sort(compareTransferJobsByRecent);
 
 const formatDuration = (elapsedMs: number) => {
   if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return "0s";
@@ -103,23 +104,32 @@ const buildRecentThroughputLabel = (job: TransferJob, now: number) => {
 };
 
 export const buildTransferSummary = (jobs: TransferJob[]): TransferSummary => {
-  const recentJobs = sortTransferJobsByRecent(jobs);
-  const active = jobs.filter(
-    (job) => job.status === "running" || job.status === "paused",
-  );
-  const queued = jobs.filter((job) => job.status === "queued");
-  const finished = jobs.filter(
-    (job) =>
-      job.status === "completed" ||
-      job.status === "failed" ||
-      job.status === "cancelled",
-  );
-  const activeCount = active.length;
-  const queuedCount = queued.length;
-  const finishedCount = finished.length;
+  let activeCount = 0;
+  let queuedCount = 0;
+  let finishedCount = 0;
+  let latestJob: TransferJob | null = null;
+  // The pill needs the leading job and counts. Only the visible log needs the full ordering.
+  for (const job of jobs) {
+    switch (job.status) {
+      case "running":
+      case "paused":
+        activeCount += 1;
+        break;
+      case "queued":
+        queuedCount += 1;
+        break;
+      case "completed":
+      case "failed":
+      case "cancelled":
+        finishedCount += 1;
+        break;
+    }
+    if (!latestJob || compareTransferJobsByRecent(job, latestJob) < 0) {
+      latestJob = job;
+    }
+  }
   const hasActive = activeCount > 0 || queuedCount > 0;
   const hasFinished = finishedCount > 0;
-  const latestJob = recentJobs[0] ?? null;
   const countLabel = hasActive
     ? activeCount > 0 && queuedCount > 0
       ? `${activeCount} active, ${queuedCount} queued`

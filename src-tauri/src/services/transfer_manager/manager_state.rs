@@ -3,6 +3,7 @@ use super::control::TransferJobControlHandle;
 use super::job_paths::TransferJobPaths;
 use super::manager_events::TransferEventEmitter;
 use crate::domain::filesystem as fs;
+use crate::domain::filesystem::transfer::destination::TransferDestination;
 use crate::domain::filesystem::transfer::job_plan::{PlannedTransferJob, TransferProgressKind};
 use crate::domain::filesystem::transfer::types::{
     TransferJobCapabilities, TransferJobKind, TransferJobPhase, TransferJobSnapshot,
@@ -108,6 +109,20 @@ pub(super) enum TransferOperationResult {
 pub(super) struct TransferOperationOutcome {
     pub(super) result: Result<TransferOperationResult, String>,
     pub(super) terminal_status: TransferJobStatus,
+}
+
+impl TransferOperationOutcome {
+    pub(super) fn destination(&self) -> Option<TransferDestination> {
+        if self.terminal_status != TransferJobStatus::Completed {
+            return None;
+        }
+        match self.result.as_ref().ok()? {
+            TransferOperationResult::Copy(report) => report.destination.target(),
+            TransferOperationResult::Transfer(report) => report.destination.target(),
+            TransferOperationResult::Conversion(report) => report.destination.target(),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -326,6 +341,7 @@ pub(super) fn build_initial_snapshot(
         phase: TransferJobPhase::Planning,
         capabilities: descriptor.capabilities,
         current_path: None,
+        destination: None,
         work: TransferWorkEstimate {
             roots_total,
             roots_completed: 0,

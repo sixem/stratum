@@ -1,13 +1,35 @@
 // Context menu customization settings.
+import { useId } from "react";
 import { shallow } from "zustand/shallow";
 import { RECENT_MOVE_LIMIT_MAX, RECENT_MOVE_LIMIT_MIN } from "@/constants";
 import { useSettingsStore } from "@/modules";
 
 import { SettingsItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
+import { SettingsMenuVisibility } from "./SettingsMenuVisibility";
 import { useDeferredRange } from "./useDeferredRange";
 
 export const MENUS_SETTINGS_ITEMS = {
+  windowsItemMenu: {
+    label: "Use Windows context menu for items",
+    description: "Open the menu from Show more options directly for files and folders.",
+    keywords: "native shell right click disable built-in custom context menu",
+  },
+  paneTransfers: {
+    label: "Transfers between panes",
+    description: "Show Copy and Move to the folder open in the other pane.",
+    keywords: "split dual pane copy move destination",
+  },
+  openBackgroundTab: {
+    label: "Open in background tab",
+    description: "Show a folder menu action that opens a new tab without switching to it.",
+    keywords: "open folder unfocused inactive tab",
+  },
+  selectionActions: {
+    label: "Selection actions",
+    description: "Show Select by extension and Invert selection for the visible files and folders.",
+    keywords: "select same type file extension invert filter",
+  },
   conversionActions: {
     label: "Conversion actions",
     description: "Show convert and quick-convert actions in file context menus.",
@@ -35,11 +57,20 @@ type SettingsMenusSectionProps = {
 };
 
 export const SettingsMenusSection = ({ sectionId }: SettingsMenusSectionProps) => {
-  const { menuOpenPwsh, menuOpenWsl, menuShowConvert, rememberMoveDestinations, recentMoveLimit, updateSettings } = useSettingsStore(
+  const windowsMenuDescriptionId = useId();
+  const {
+    menuUseWindowsForItems, menuOpenPwsh, menuOpenWsl, menuShowConvert, menuPaneTransfers,
+    menuSelectionActions, menuOpenBackgroundTab,
+    rememberMoveDestinations, recentMoveLimit, updateSettings,
+  } = useSettingsStore(
     (state) => ({
+      menuUseWindowsForItems: state.menuUseWindowsForItems,
       menuOpenPwsh: state.menuOpenPwsh,
       menuOpenWsl: state.menuOpenWsl,
       menuShowConvert: state.menuShowConvert,
+      menuPaneTransfers: state.menuPaneTransfers,
+      menuSelectionActions: state.menuSelectionActions,
+      menuOpenBackgroundTab: state.menuOpenBackgroundTab,
       rememberMoveDestinations: state.rememberMoveDestinations,
       recentMoveLimit: state.recentMoveLimit,
       updateSettings: state.updateSettings,
@@ -53,7 +84,52 @@ export const SettingsMenusSection = ({ sectionId }: SettingsMenusSectionProps) =
 
   return (
     <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Menus</div>
+      <div className="settings-section-title">Context menus</div>
+      <SettingsItem item={MENUS_SETTINGS_ITEMS.windowsItemMenu} descriptionId={windowsMenuDescriptionId}>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            aria-label={MENUS_SETTINGS_ITEMS.windowsItemMenu.label}
+            aria-describedby={windowsMenuDescriptionId}
+            checked={menuUseWindowsForItems}
+            onChange={(event) => updateSettings({ menuUseWindowsForItems: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
+      </SettingsItem>
+      <SettingsItem item={MENUS_SETTINGS_ITEMS.openBackgroundTab}>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            aria-label={MENUS_SETTINGS_ITEMS.openBackgroundTab.label}
+            checked={menuOpenBackgroundTab}
+            onChange={(event) => updateSettings({ menuOpenBackgroundTab: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
+      </SettingsItem>
+      <SettingsItem item={MENUS_SETTINGS_ITEMS.paneTransfers}>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            aria-label={MENUS_SETTINGS_ITEMS.paneTransfers.label}
+            checked={menuPaneTransfers}
+            onChange={(event) => updateSettings({ menuPaneTransfers: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
+      </SettingsItem>
+      <SettingsItem item={MENUS_SETTINGS_ITEMS.selectionActions}>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            aria-label={MENUS_SETTINGS_ITEMS.selectionActions.label}
+            checked={menuSelectionActions}
+            onChange={(event) => updateSettings({ menuSelectionActions: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
+      </SettingsItem>
       <SettingsItem item={MENUS_SETTINGS_ITEMS.conversionActions}>
         <label className="settings-toggle">
           <input
@@ -125,6 +201,7 @@ export const SettingsMenusSection = ({ sectionId }: SettingsMenusSectionProps) =
           </label>
         </div>
       </SettingsItem>
+      <SettingsMenuVisibility />
     </section>
   );
 };

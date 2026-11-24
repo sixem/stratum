@@ -10,6 +10,7 @@ type SetRecentJumps = (next: string[] | ((prev: string[]) => string[])) => void;
 type PendingNavigation = {
   path: string;
   revealPath?: string | null;
+  waitForListing?: boolean;
   resetFilter?: { tabId: string; previousSearch: string };
   notifyLink?: () => void;
 };
@@ -19,6 +20,7 @@ type UseTabPersistenceOptions = {
   activeTabId: string | null;
   activeTab: Tab | null;
   currentPath: string;
+  loadingPath: string | null;
   sortState: SortState;
   searchValue: string;
   loadDir: (path: string, options?: ListDirOptions) => Promise<void>;
@@ -66,6 +68,7 @@ export const useTabPersistence = ({
   activeTabId,
   activeTab,
   currentPath,
+  loadingPath,
   sortState,
   searchValue,
   loadDir,
@@ -115,6 +118,9 @@ export const useTabPersistence = ({
     }
     const pending = pendingNavigationRef.current;
     if (pending) {
+      // An explicit output reveal can target the current folder, whose
+      // displayed listing may still be missing the newly written entry.
+      if (pending.waitForListing && loadingPath) return;
       const pendingKey = folderPathKey(pending.path);
       const currentKey = folderPathKey(currentPath);
       if (pendingKey && currentKey && pendingKey !== currentKey) {
@@ -151,7 +157,7 @@ export const useTabPersistence = ({
       return next;
     });
     pending?.notifyLink?.();
-  }, [activeTab, activeTabId, clearDir, currentPath, loadDir, restoreRevision, setTabs, shouldSyncEmptyTab]);
+  }, [activeTab, activeTabId, clearDir, currentPath, loadDir, loadingPath, restoreRevision, setTabs, shouldSyncEmptyTab]);
 
   useEffect(() => {
     // Restore the last active tab path once on startup.

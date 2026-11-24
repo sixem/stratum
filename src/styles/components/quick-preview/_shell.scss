@@ -49,16 +49,11 @@
   grid-column: 1 / -1;
   grid-row: 1;
   background: linear-gradient(180deg, rgba(8, 10, 16, 0.82), rgba(8, 10, 16, 0.58));
-  border-bottom: var(--quick-preview-divider);
   @include shell.frosted-backdrop(var(--frosted-surface-blur), var(--frosted-surface-saturate));
 }
 
 :root[data-window-focus="false"] .quick-preview-topbar-shell {
   background: linear-gradient(180deg, rgba(12, 15, 22, 0.83), rgba(12, 15, 22, 0.6));
-}
-
-.quick-preview-topbar-window-controls {
-  min-height: var(--window-chrome-bar-height);
 }
 
 .quick-preview-topbar {

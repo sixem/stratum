@@ -175,7 +175,13 @@ const sanitizeKeybinds = (bindings: KeybindMap) => {
   };
 
   KEYBIND_DEFINITIONS.forEach((definition) => {
-    const candidate = normalizeKeybind(bindings[definition.id] ?? "");
+    const binding = bindings[definition.id];
+    // An explicit empty string is an unassigned shortcut, even with a default.
+    if (binding === "") {
+      next[definition.id] = "";
+      return;
+    }
+    const candidate = normalizeKeybind(binding);
     const fallback = normalizeKeybind(definition.default);
     if (isAllowed(candidate, definition.id)) {
       next[definition.id] = candidate;
@@ -199,7 +205,7 @@ export const coerceKeybinds = (value: unknown) => {
   if (record) {
     KEYBIND_DEFINITIONS.forEach((definition) => {
       const candidate = record[definition.id];
-      if (typeof candidate === "string" && candidate.trim().length > 0) {
+      if (typeof candidate === "string") {
         merged[definition.id] = candidate.trim();
       }
     });

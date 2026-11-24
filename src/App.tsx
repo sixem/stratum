@@ -1,11 +1,20 @@
 // App shell wiring: renders the grouped shell model into the top-level layout.
+import { useState } from "react";
 import { AppOverlays, AppShellLayout, AppWindowFrame } from "@/components";
+import { WelcomeSetup } from "@/components/overlay/welcome/WelcomeSetup";
 import { useAppShellModel } from "@/hooks";
 import { releaseInputFocusOnEscape } from "@/hooks/ui/inputs/inputFocus";
+import { finishWelcome, type WelcomeSettings } from "@/modules/welcome";
 import "@/styles/app.scss";
 
-const App = () => {
-  const { navigation, view, selection, preview, overlays, paneActions, fileDrop } = useAppShellModel();
+const App = ({ showWelcome }: { showWelcome: boolean }) => {
+  const [welcomeOpen, setWelcomeOpen] = useState(showWelcome);
+  const { navigation, view, selection, preview, overlays, paneActions, fileDrop } =
+    useAppShellModel(welcomeOpen);
+  const closeWelcome = (settings?: WelcomeSettings) => {
+    finishWelcome(settings);
+    setWelcomeOpen(false);
+  };
 
   return (
     <div className="app-shell" data-preview={preview.open ? "true" : "false"}
@@ -33,6 +42,7 @@ const App = () => {
           statusBar: selection.statusBar,
         }}
       />
+      {welcomeOpen ? <WelcomeSetup onFinish={closeWelcome} /> : null}
       <AppOverlays {...overlays} />
       <AppWindowFrame />
     </div>

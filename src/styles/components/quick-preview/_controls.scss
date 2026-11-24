@@ -3,18 +3,8 @@
 @use "../modals/shared" as shell;
 
 .quick-preview-info {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px 4px 16px;
   grid-column: 1 / -1;
   grid-row: 4;
-  border-top: var(--quick-preview-divider);
-  background: rgba(8, 10, 16, 0.6);
-  @include shell.frosted-backdrop(var(--frosted-surface-blur), var(--frosted-surface-saturate));
-  color: var(--text);
 }
 
 .quick-preview-controls {
@@ -212,14 +202,12 @@
   color: rgba(229, 235, 245, 0.72);
 }
 
-.quick-preview-info-copy {
-  display: grid;
-  gap: 4px;
-}
-
 .quick-preview-strip-toggle {
   @include control.icon-button-shell(26px);
   border: 0;
+  flex: 0 0 auto;
+  // Let the toggle reach into the footer padding without making the bar taller.
+  margin-block: calc(-1 * var(--statusbar-padding-block));
 
   &:hover,
   &:focus-visible {
@@ -241,14 +229,13 @@
   transform: rotate(180deg);
 }
 
-.quick-preview-info-error {
-  @include control.eyebrow-label(var(--font-size-xs), 0.08em, 500);
-}
-
 .quick-preview-info-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
+  gap: 0.875rem;
+  min-width: 0;
+  overflow: auto hidden;
+  scrollbar-width: none;
+  white-space: nowrap;
 }
 
 .quick-preview-info-item {
@@ -256,7 +243,6 @@
   align-items: baseline;
   gap: 4px;
   @include control.eyebrow-label(var(--font-size-xs), 0.06em, 500);
-  line-height: var(--font-size-sm);
 }
 
 .quick-preview-info-value {

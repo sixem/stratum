@@ -5,11 +5,13 @@ import { REOPEN_CLOSED_TAB_KEYBIND } from "@/constants";
 import { formatDeleteLabel, getDriveKey, getSelectionTargets, isEditableElement, normalizeDropPath } from "@/lib";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { getFileCommandFocus } from "../menus/keyboardContextMenu";
+import { focusOtherFilePane } from "../inputs/focusOtherFilePane";
 import { useKeybinds } from "../inputs/useKeybinds";
 import { useIndexedSearchUiStore, usePromptStore, writeFileClipboard } from "@/modules";
 import { openQuickMove } from "@/modules/quickMoveSession";
 import type { KeybindMap } from "@/modules/keybinds";
 import type { Tab } from "@/types";
+import type { PaneFileCommands } from "./useAppContextMenus";
 
 type UseAppKeybindsOptions = {
   keybinds: KeybindMap;
@@ -46,6 +48,8 @@ type UseAppKeybindsOptions = {
   onCancelTransientUi?: () => void;
   onSelectAll: () => void;
   onRenameSelection: (paths: string[]) => boolean;
+  paneFileCommands: PaneFileCommands;
+  getSelectionTarget: () => { path: string } | null;
 };
 
 export const useAppKeybinds = ({
@@ -83,6 +87,8 @@ export const useAppKeybinds = ({
   onCancelTransientUi,
   onSelectAll,
   onRenameSelection,
+  paneFileCommands,
+  getSelectionTarget,
 }: UseAppKeybindsOptions) => {
   const indexedSearchOpen = useIndexedSearchUiStore((state) => state.open);
   const selectionTargets = useMemo(
@@ -216,6 +222,10 @@ export const useAppKeybinds = ({
     return onRenameSelection(selectionTargets);
   }, [canHandleViewKeybind, mainRef, onRenameSelection, selectionTargets]);
 
+  const canHandlePaneCommand = useCallback((event: KeyboardEvent) =>
+    !event.isComposing && canHandleViewKeybind() && getFileCommandFocus(mainRef.current) === "view",
+  [canHandleViewKeybind, mainRef]);
+
   const handleDuplicateSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
     if (selectionTargets.length === 0) return false;
@@ -295,12 +305,21 @@ export const useAppKeybinds = ({
       openIndexedSearch: handleOpenIndexedSearchKeybind,
       quickMove: handleQuickMoveKeybind,
       deleteSelection: handleDeleteSelectionKeybind,
+      renameSelection: handleRenameSelectionKeybind,
       duplicateSelection: handleDuplicateSelectionKeybind,
+      copyToOtherPane: (event: KeyboardEvent) => canHandlePaneCommand(event) && paneFileCommands.transfer("copy", selectionTargets),
+      moveToOtherPane: (event: KeyboardEvent) => canHandlePaneCommand(event) && paneFileCommands.transfer("move", selectionTargets),
+      selectSameExtension: (event: KeyboardEvent) => canHandlePaneCommand(event) && paneFileCommands.selectSameExtension(getSelectionTarget()?.path),
+      invertSelection: (event: KeyboardEvent) => canHandlePaneCommand(event) && paneFileCommands.invertSelection(),
+      focusOtherPane: (event: KeyboardEvent) => !event.isComposing && canHandleViewKeybind() && focusOtherFilePane("main"),
       previewItem: handlePreviewItemKeybind,
       prevTab: (event: KeyboardEvent) => handleAdjacentTab(event, -1),
       nextTab: (event: KeyboardEvent) => handleAdjacentTab(event, 1),
     }),
     [
+      canHandlePaneCommand,
+      canHandleViewKeybind,
+      getSelectionTarget,
       handleAdjacentTab,
       handleCloseTabKeybind,
       handleDeleteSelectionKeybind,
@@ -309,7 +328,10 @@ export const useAppKeybinds = ({
       handleOpenIndexedSearchKeybind,
       handlePreviewItemKeybind,
       handleQuickMoveKeybind,
+      handleRenameSelectionKeybind,
       handleUndoKeybind,
+      paneFileCommands,
+      selectionTargets,
     ],
   );
 
@@ -317,7 +339,6 @@ export const useAppKeybinds = ({
     () => {
       const map: Record<string, (event: KeyboardEvent) => boolean> = {
         Escape: handleClearSelectionKeybind,
-        F2: handleRenameSelectionKeybind,
         F5: handleRefreshKeybind,
         "Control+a": handleSelectAllKeybind,
         "Control+c": () => handleClipboardSelection("copy"),
@@ -340,7 +361,6 @@ export const useAppKeybinds = ({
       handlePasteSelectionKeybind,
       handleReopenClosedTabKeybind,
       handleRefreshKeybind,
-      handleRenameSelectionKeybind,
       handleSelectAllKeybind,
       handleSelectTabIndex,
     ],

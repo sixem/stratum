@@ -5,7 +5,6 @@ import { TooltipWrapper } from "@/components/overlay/Tooltip";
 
 type QuickPreviewFooterProps = {
   preview: {
-    hasError: boolean;
     typeLabel: string;
     dimensionLabel: string;
     sizeLabel: string;
@@ -28,34 +27,27 @@ export const QuickPreviewFooter = ({
   const toggleLabel = stripOpen ? "Hide preview list" : "Show preview list";
 
   return (
-    <div className="quick-preview-info">
-      <div className="quick-preview-info-copy" aria-live="polite">
-        {preview.hasError ? (
-          <div className="quick-preview-info-error" role="status">
-            Preview unavailable. Try opening the file externally.
-          </div>
-        ) : null}
-        <div className="quick-preview-info-row">
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Type</span>
-            <span className="quick-preview-info-value">{preview.typeLabel}</span>
-          </div>
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Dimensions</span>
-            <span className="quick-preview-info-value tnum">{preview.dimensionLabel}</span>
-          </div>
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Size</span>
-            <span className="quick-preview-info-value tnum">{preview.sizeLabel}</span>
-          </div>
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Modified</span>
-            <span className="quick-preview-info-value tnum">{preview.modifiedLabel}</span>
-          </div>
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Zoom</span>
-            <span className="quick-preview-info-value tnum">{preview.zoomLabel}</span>
-          </div>
+    <footer className="statusbar quick-preview-info">
+      <div className="quick-preview-info-row" aria-live="polite">
+        <div className="quick-preview-info-item">
+          <span className="quick-preview-info-label">Type</span>
+          <span className="quick-preview-info-value">{preview.typeLabel}</span>
+        </div>
+        <div className="quick-preview-info-item">
+          <span className="quick-preview-info-label">Dimensions</span>
+          <span className="quick-preview-info-value tnum">{preview.dimensionLabel}</span>
+        </div>
+        <div className="quick-preview-info-item">
+          <span className="quick-preview-info-label">Size</span>
+          <span className="quick-preview-info-value tnum">{preview.sizeLabel}</span>
+        </div>
+        <div className="quick-preview-info-item">
+          <span className="quick-preview-info-label">Modified</span>
+          <span className="quick-preview-info-value tnum">{preview.modifiedLabel}</span>
+        </div>
+        <div className="quick-preview-info-item">
+          <span className="quick-preview-info-label">Zoom</span>
+          <span className="quick-preview-info-value tnum">{preview.zoomLabel}</span>
         </div>
       </div>
       <TooltipWrapper text="Toggle preview list">
@@ -75,6 +67,6 @@ export const QuickPreviewFooter = ({
           <ContextChevronRightIcon className="quick-preview-strip-chevron" />
         </button>
       </TooltipWrapper>
-    </div>
+    </footer>
   );
 };

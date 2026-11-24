@@ -45,6 +45,7 @@ type ContextMenuProps = {
   onClose: () => void;
   onOpenNative?: () => boolean;
   scrollContainer?: RefObject<HTMLElement | null>;
+  scrollable?: boolean;
 };
 
 const MENU_EDGE = CONTEXT_MENU_EDGE;
@@ -82,14 +83,15 @@ const renderContextIcon = (icon: ContextMenuIcon) => {
   return <Icon className="context-check-icon" />;
 };
 
-export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollContainer }: ContextMenuProps) => {
+export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollContainer, scrollable = false }: ContextMenuProps) => {
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
   const submenuRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState({ x, y });
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null);
   const [submenuSide, setSubmenuSide] = useState<"left" | "right">("right");
   const [submenuOffset, setSubmenuOffset] = useState(0);
-  const lastOpenItemsRef = useRef<ContextMenuItem[]>(items);
+  const lastOpenMenuRef = useRef({ items, scrollable });
   const scrollPositionRef = useRef<{ element: HTMLElement; top: number; left: number } | null>(null);
 
   useLayoutEffect(() => {
@@ -98,6 +100,7 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
     const element = scrollContainer?.current;
     scrollPositionRef.current = element ? { element, top: element.scrollTop, left: element.scrollLeft } : null;
     const previous = document.activeElement;
+    if (scrollable && listRef.current) listRef.current.scrollTop = 0;
     focusFirstMenuItem(menu);
     return () => {
       const active = document.activeElement;
@@ -106,7 +109,7 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
         previous.focus({ preventScroll: true });
       }
     };
-  }, [open, scrollContainer]);
+  }, [open, scrollContainer, scrollable]);
 
   const handleScroll = useCallback((event: Event) => {
     if (event.target instanceof Node && menuRef.current?.contains(event.target)) return;
@@ -141,9 +144,9 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
   // Freeze the last visible items so close animations don't flash new content.
   useLayoutEffect(() => {
     if (!open) return;
-    lastOpenItemsRef.current = items;
-  }, [items, open]);
-  const renderedItems = open ? items : lastOpenItemsRef.current;
+    lastOpenMenuRef.current = { items, scrollable };
+  }, [items, open, scrollable]);
+  const renderedMenu = open ? { items, scrollable } : lastOpenMenuRef.current;
 
   useEffect(() => {
     if (open) return;
@@ -168,7 +171,7 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
     const nextX = alignFloatingAxis(x, rect.width, viewport.width, MENU_EDGE, MENU_GAP);
     const nextY = alignFloatingAxis(y, rect.height, viewport.height, MENU_EDGE, MENU_GAP);
     setPosition({ x: nextX, y: nextY });
-  }, [items, open, x, y]);
+  }, [items, open, scrollable, x, y]);
 
   useLayoutEffect(() => {
     if (!open || !openSubmenuId) return;
@@ -318,6 +321,7 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
       ref={menuRef}
       className="context-menu"
       data-open={open ? "true" : "false"}
+      data-scrollable={renderedMenu.scrollable || undefined}
       style={menuStyle}
       role="menu"
       aria-hidden={!open}
@@ -337,7 +341,7 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
       }}
       onContextMenu={(event) => event.preventDefault()}
     >
-      <div className="context-menu-list">{renderMenuItems(renderedItems)}</div>
+      <div className="context-menu-list" ref={listRef}>{renderMenuItems(renderedMenu.items)}</div>
     </div>
   );
 };

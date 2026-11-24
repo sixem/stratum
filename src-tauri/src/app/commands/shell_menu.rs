@@ -2,6 +2,18 @@
 use crate::platform::ShellMenuOutcome;
 
 #[tauri::command]
+pub async fn warm_shell_context_menu(app: tauri::AppHandle) {
+    #[cfg(target_os = "windows")]
+    {
+        use crate::platform::windows::menu_host::MenuHost;
+        use tauri::Manager;
+        let _ = tauri::async_runtime::spawn_blocking(move || app.state::<MenuHost>().warm()).await;
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = app;
+}
+
+#[tauri::command]
 pub async fn show_shell_context_menu(
     window: tauri::Window,
     paths: Vec<String>,

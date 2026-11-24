@@ -6,9 +6,10 @@ import type {
   WheelEvent as ReactWheelEvent,
 } from "react";
 import { FILE_TOOLTIP_DELAY_MS } from "@/constants";
-import type { EntryMeta, FileEntry, ThumbnailRequest } from "@/types";
+import type { EntryMeta, FileEntry, RequestScopedThumbnails, ThumbnailRequest } from "@/types";
 import { formatBytes, formatDate, getFileKind, normalizePath, splitNameExtension } from "@/lib";
 import { useEntryMetaRequest, useThumbnailRequest, useVirtualRange } from "@/hooks";
+import { useThumbnailScope } from "@/hooks/domain/metadata/useThumbnailScope";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 
 type QuickPreviewStripProps = {
@@ -19,7 +20,7 @@ type QuickPreviewStripProps = {
   thumbnails: Map<string, string>;
   thumbnailsEnabled: boolean;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
-  onRequestThumbs: (requests: ThumbnailRequest[]) => void;
+  onRequestThumbs: RequestScopedThumbnails;
   thumbResetKey?: string;
   onSelect: (path: string) => void;
   stripRef?: MutableRefObject<HTMLDivElement | null>;
@@ -208,7 +209,11 @@ export const QuickPreviewStrip = ({
   const requestLoading = !open;
   useEntryMetaRequest(requestLoading, metaPaths, onRequestMeta);
   const canRequestThumbs = thumbnailsEnabled && open;
-  useThumbnailRequest(requestLoading, canRequestThumbs, thumbRequests, onRequestThumbs, thumbResetKey);
+  const requestThumbs = useThumbnailScope("gallery", "strip", canRequestThumbs, onRequestThumbs);
+  useThumbnailRequest(
+    requestLoading, canRequestThumbs, thumbRequests, requestThumbs,
+    `${thumbResetKey ?? ""}:${canRequestThumbs}`,
+  );
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;

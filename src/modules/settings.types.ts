@@ -1,5 +1,6 @@
 // Shared settings types and enums used across the settings store and UI.
 import type { SortState, ViewMode } from "@/types";
+import type { ContextMenuAction } from "@/lib/contextMenuVisibility";
 import type { KeybindMap } from "./keybinds";
 
 export type ThumbnailFormat = "webp" | "jpeg";
@@ -37,6 +38,7 @@ export type Settings = {
   showDriveToggle: boolean;
   collapseDrivePickerOnBlur: boolean;
   showTopbarFolderChevrons: boolean;
+  showWorkProgressFill: boolean;
   smoothScroll: boolean;
   smartTabJump: boolean;
   accentTheme: AccentTheme;
@@ -63,9 +65,14 @@ export type Settings = {
   listDensity: ListDensity;
   listShowSize: boolean;
   listShowModified: boolean;
+  menuUseWindowsForItems: boolean;
   menuOpenPwsh: boolean;
   menuOpenWsl: boolean;
   menuShowConvert: boolean;
+  menuPaneTransfers: boolean;
+  menuSelectionActions: boolean;
+  menuOpenBackgroundTab: boolean;
+  hiddenContextMenuActions: ContextMenuAction[];
   rememberMoveDestinations: boolean;
   recentMoveLimit: number;
   indexedSearchEnabled: boolean;

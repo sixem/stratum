@@ -6,7 +6,7 @@ import {
   openPathWithDialog,
   openPathWithHandler,
 } from "@/api";
-import { useClipboardStore, usePromptStore } from "@/modules";
+import { useClipboardStore, usePromptStore, useSettingsStore } from "@/modules";
 import { clearMoveDestinations, useRecentMoveDestinations } from "@/modules/recentMoveStore";
 import type {
   ContextMenuItem,
@@ -25,6 +25,7 @@ import { buildEntryOpenWithItems } from "./entryMenu/buildEntryOpenWithItems";
 import { buildEntryPasteItems } from "./entryMenu/buildEntryPasteItems";
 import { buildEntryPropertiesItems } from "./entryMenu/buildEntryPropertiesItems";
 import { buildEntryRenameItems } from "./entryMenu/buildEntryRenameItems";
+import { buildPaneTransferItems, type PaneTransfer } from "./entryMenu/buildPaneTransferItems";
 import { resolveGalleryStartPath } from "../view/previewGallerySource";
 import { resolveActionError, resolveContextTargets } from "./entryMenu/shared";
 import { summarizeEntrySelection } from "./entryMenu/summarizeEntrySelection";
@@ -40,6 +41,7 @@ type UseEntryMenuItemsOptions = {
   onOpenGallery?: (path: string) => void;
   onOpenDir: (path: string) => void;
   onOpenDirNewTab?: (path: string) => void;
+  onOpenDirInBackgroundTab?: (path: string) => void;
   otherPane?: Parameters<typeof buildEntryOpenItems>[0]["otherPane"];
   extraOpenItems?: ContextMenuItem[];
   showClipboardShortcuts?: boolean;
@@ -50,6 +52,7 @@ type UseEntryMenuItemsOptions = {
   onRenameEntry?: (target: EntryContextTarget) => void;
   onPasteEntries?: (destination: string) => Promise<unknown> | void;
   onMoveEntries?: (paths: string[], destination: string) => void;
+  paneTransfer?: PaneTransfer;
   onQuickMove?: (paths: string[]) => void;
   onCreateFolderWithSelection?: CreateFolderWithSelection;
   onOpenConvertModal: (request: ConversionModalRequest) => void;
@@ -70,6 +73,7 @@ export const useEntryMenuItems = ({
   onOpenGallery,
   onOpenDir,
   onOpenDirNewTab,
+  onOpenDirInBackgroundTab,
   otherPane,
   extraOpenItems,
   showClipboardShortcuts = true,
@@ -80,6 +84,7 @@ export const useEntryMenuItems = ({
   onRenameEntry,
   onPasteEntries,
   onMoveEntries,
+  paneTransfer,
   onQuickMove,
   onCreateFolderWithSelection,
   onOpenConvertModal,
@@ -88,7 +93,8 @@ export const useEntryMenuItems = ({
 }: UseEntryMenuItemsOptions) => {
   const clipboard = useClipboardStore((state) => state.clipboard);
   const { workspaceId, destinations } = useRecentMoveDestinations();
-  const openWithMenuState = useOpenWithMenuState(target);
+  const showOpenWith = useSettingsStore((state) => !state.hiddenContextMenuActions.includes("open-with"));
+  const openWithMenuState = useOpenWithMenuState(showOpenWith ? target : null);
 
   return useMemo<ContextMenuItem[]>(() => {
     if (!target) return [];
@@ -159,6 +165,7 @@ export const useEntryMenuItems = ({
         galleryPath: onOpenGallery && resolveGalleryStartPath(target, actionTargets, entryByPath),
         onOpenDir,
         onOpenDirNewTab,
+        onOpenDirInBackgroundTab,
         otherPane,
       }),
       ...(extraOpenItems ?? []),
@@ -182,6 +189,9 @@ export const useEntryMenuItems = ({
         entryByPath,
         textCopyTargets,
       }),
+      ...(paneTransfer && entryByPath.has(target.path)
+        ? buildPaneTransferItems(actionTargets.filter((path) => entryByPath.has(path)), paneTransfer)
+        : []),
       ...(onMoveEntries ? buildEntryMoveItems({
         destinations,
         actionTargets,
@@ -235,6 +245,7 @@ export const useEntryMenuItems = ({
     onOpenDir,
     otherPane,
     onOpenDirNewTab,
+    onOpenDirInBackgroundTab,
     onOpenEntry,
     onOpenGallery,
     onMoveEntries,
@@ -245,6 +256,7 @@ export const useEntryMenuItems = ({
     onRenameEntry,
     openWithMenuState,
     parentPath,
+    paneTransfer,
     selected,
     showClipboardShortcuts,
     target,

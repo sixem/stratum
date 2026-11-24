@@ -158,5 +158,7 @@ export const useShellViewBindings = ({
     onCancelTransientUi: interactionModel.handleCancelTransientUi,
     onSelectAll: interactionModel.handleSelectAll,
     onRenameSelection: interactionModel.handleRenameSelection,
+    paneFileCommands: interactionModel.paneFileCommands,
+    getSelectionTarget: interactionModel.getSelectionTarget,
   });
 };

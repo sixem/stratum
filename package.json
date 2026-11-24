@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:fresh": "node scripts/dev-fresh.mjs",
     "build": "tsc && vite build",
     "build:exe": "tauri build --no-bundle",
     "preview": "vite preview",

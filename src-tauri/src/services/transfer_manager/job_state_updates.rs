@@ -3,6 +3,7 @@
 use super::manager_events::TransferEventEmitter;
 use super::manager_state::{
     snapshot_from_state, QueuedTransferPlanningState, TransferJobRequest, TransferManagerInner,
+    TransferOperationOutcome,
 };
 use crate::domain::filesystem as fs;
 use crate::domain::filesystem::transfer::delete_discovery::DeleteDiscoveryProgress;
@@ -155,9 +156,11 @@ pub(super) fn mark_queued_job_finished(
 pub(super) fn mark_job_finished(
     inner: &Arc<TransferManagerInner>,
     job_id: &str,
-    status: TransferJobStatus,
+    outcome: &TransferOperationOutcome,
     event_emitter: &TransferEventEmitter,
 ) {
+    let status = outcome.terminal_status;
+    let destination = outcome.destination();
     let snapshot = {
         let mut guard = match inner.state.lock() {
             Ok(guard) => guard,
@@ -176,6 +179,7 @@ pub(super) fn mark_job_finished(
 
         active.snapshot.status = status;
         active.snapshot.phase = TransferJobPhase::Finalizing;
+        active.snapshot.destination = destination;
         guard.push_completed_job(active.snapshot);
         snapshot_from_state(&mut guard)
     };

@@ -170,6 +170,14 @@ fn paused_copy_allows_a_small_move_past_an_overlapping_queued_job() {
     assert_eq!(snapshot.queued_jobs.len(), 1);
     assert_eq!(snapshot.queued_jobs[0].id, "delete-copy-source");
     assert!(snapshot.queued_jobs[0].status == TransferJobStatus::Queued);
+    let moved = snapshot
+        .completed_jobs
+        .iter()
+        .find(|job| job.id == "move")
+        .and_then(|job| job.destination.as_ref())
+        .unwrap();
+    assert_eq!(moved.folder_path, target);
+    assert_eq!(moved.entry_path, Some(target.join("small.txt")));
 
     assert!(manager.cancel_job("delete-copy-source").unwrap());
     assert!(matches!(
@@ -183,6 +191,19 @@ fn paused_copy_allows_a_small_move_past_an_overlapping_queued_job() {
         disk::read(target.join("large.bin")).unwrap(),
         b"copy payload"
     );
+    let snapshot = manager.snapshot();
+    let copied = snapshot
+        .completed_jobs
+        .iter()
+        .find(|job| job.id == "copy")
+        .and_then(|job| job.destination.as_ref())
+        .unwrap();
+    assert_eq!(copied.folder_path, target);
+    assert_eq!(copied.entry_path, Some(target.join("large.bin")));
+    assert!(!snapshot
+        .completed_jobs
+        .iter()
+        .any(|job| job.id == "delete-copy-source" && job.destination.is_some()));
 }
 
 fn held_shutdown_copy() -> (TestDirectory, TransferManagerHandle, String, HeldCopy) {

@@ -1,4 +1,4 @@
-// Cache format and lifecycle controls.
+// Thumbnail cache limits and lifecycle controls.
 import { useCallback, useContext, useEffect, useState } from "react";
 import { shallow } from "zustand/shallow";
 import { getThumbCacheSize } from "@/api";
@@ -11,11 +11,6 @@ import { SettingsItem, SettingsSearchMatches } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
 
 export const CACHE_SETTINGS_ITEMS = {
-  imageFormat: {
-    label: "Image format",
-    description: "Pick the saved thumbnail format.",
-    keywords: "WebP JPEG",
-  },
   sizeLimit: {
     label: "Cache size limit",
     description: "Approximate max size for disk cache.",
@@ -44,11 +39,10 @@ export const SettingsCacheSection = ({
   onOpenCacheLocation,
   onClearCache,
 }: SettingsCacheSectionProps) => {
-  const { thumbnailsEnabled, thumbnailFormat, thumbnailCacheMb, updateSettings } =
+  const { thumbnailsEnabled, thumbnailCacheMb, updateSettings } =
     useSettingsStore(
       (state) => ({
         thumbnailsEnabled: state.thumbnailsEnabled,
-        thumbnailFormat: state.thumbnailFormat,
         thumbnailCacheMb: state.thumbnailCacheMb,
         updateSettings: state.updateSettings,
       }),
@@ -110,30 +104,7 @@ export const SettingsCacheSection = ({
 
   return (
     <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Cache</div>
-      <SettingsItem
-        item={CACHE_SETTINGS_ITEMS.imageFormat}
-        className={isThumbsDisabled ? "is-disabled" : undefined}
-      >
-        <div className="settings-pills" role="group" aria-label="Thumbnail format">
-          <PressButton
-            type="button"
-            className={`settings-pill${thumbnailFormat === "webp" ? " is-active" : ""}`}
-            disabled={isThumbsDisabled}
-            onClick={() => updateSettings({ thumbnailFormat: "webp" })}
-          >
-            WebP
-          </PressButton>
-          <PressButton
-            type="button"
-            className={`settings-pill${thumbnailFormat === "jpeg" ? " is-active" : ""}`}
-            disabled={isThumbsDisabled}
-            onClick={() => updateSettings({ thumbnailFormat: "jpeg" })}
-          >
-            JPEG
-          </PressButton>
-        </div>
-      </SettingsItem>
+      <div className="settings-section-title">Thumbnail cache</div>
       <SettingsItem
         item={CACHE_SETTINGS_ITEMS.sizeLimit}
         className={isThumbsDisabled ? "is-disabled" : undefined}

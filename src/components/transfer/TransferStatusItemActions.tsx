@@ -2,6 +2,8 @@
 // These stay separate from the main row layout so the item component remains readable.
 import { useMemo, useState } from "react";
 import { cancelTransferJob, pauseTransferJob, resumeTransferJob } from "@/api";
+import { ContextOpenFolderIcon } from "@/components/icons/contextMenuIcons";
+import type { TransferDestination } from "@/types";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PressButton } from "@/components/primitives/PressButton";
 import { usePromptStore } from "@/modules";
@@ -9,6 +11,7 @@ import type { TransferJob } from "@/modules/transferStore";
 
 type TransferStatusItemActionsProps = {
   job: TransferJob;
+  onOpenDestination: (destination: TransferDestination) => void;
 };
 
 type PendingOperationAction = "pause" | "resume" | "cancel" | null;
@@ -45,9 +48,28 @@ const CancelIcon = () => (
 
 export const TransferStatusItemActions = ({
   job,
+  onOpenDestination,
 }: TransferStatusItemActionsProps) => {
   const promptStore = useMemo(() => usePromptStore.getState(), []);
   const [pendingAction, setPendingAction] = useState<PendingOperationAction>(null);
+
+  const destination = job.status === "completed" ? job.destination : undefined;
+  if (destination) {
+    return (
+      <TooltipWrapper text="Open destination">
+        <span className="transfer-item-action-shell">
+          <PressButton
+            type="button"
+            className="transfer-item-action transfer-item-action-open"
+            onClick={() => onOpenDestination(destination)}
+            aria-label="Open destination"
+          >
+            <ContextOpenFolderIcon />
+          </PressButton>
+        </span>
+      </TooltipWrapper>
+    );
+  }
 
   if (!job.backendManaged) {
     return null;

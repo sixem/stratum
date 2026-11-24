@@ -4,9 +4,10 @@
 import { useCallback } from "react";
 import { APP_NAME } from "@/constants";
 import { setBottomPaneActive } from "@/modules/bottomPaneStore";
-import type { Place } from "@/types";
+import type { Place, TransferDestination } from "@/types";
 import type { useFileDrop, useFileManager } from "@/hooks/domain/filesystem";
 import type { useSettings, useTabSession } from "@/hooks/domain/session";
+import { useTabHistoryMenu } from "../../menus/useTabHistoryMenu";
 import type { useAppMenuState } from "../useAppMenuState";
 import type { useAppNavigationController } from "../useAppNavigationController";
 import type { useAppViewState } from "../useAppViewState";
@@ -55,12 +56,19 @@ export const useShellNavigationModel = ({
     // The promise tracks the shell request. Explorer loads the view separately.
     return fileManager.openEntry("shell:RecycleBinFolder");
   }, [fileManager.openEntry]);
+  const handleOpenJobDestination = ({ folderPath, entryPath }: TransferDestination) => {
+    setBottomPaneActive(false);
+    viewState.mainRef.current?.focus({ preventScroll: true });
+    navigationController.handleOpenInNewTab(folderPath, { revealPath: entryPath });
+  };
+  const handleHistoryMenu = useTabHistoryMenu(tabSession, menuState.openContextMenuAt);
 
   const topstackProps = useAppTopstackProps({
     appName: APP_NAME,
     pathBar: {
       onBack: navigationController.handleBack,
       onForward: navigationController.handleForward,
+      onHistoryMenu: handleHistoryMenu,
       onUp: viewState.handleUp,
       onDown: navigationController.handleDown,
       canGoBack: resolvedView.canGoBack,
@@ -132,6 +140,7 @@ export const useShellNavigationModel = ({
       onViewChange: tabSession.setViewMode,
       onToggleSettings: menuState.toggleSettings,
       onOpenRecycleBin: handleOpenRecycleBin,
+      onOpenJobDestination: handleOpenJobDestination,
     },
   });
 

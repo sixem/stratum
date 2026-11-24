@@ -4,10 +4,27 @@ import { folderPathKey } from "../src/lib/paths.ts";
 import { DirectoryCache } from "../src/hooks/domain/filesystem/directoryCache.ts";
 import { buildQueryKey, DirectoryRequests } from "../src/hooks/domain/filesystem/directoryRequests.ts";
 import { nextMetadataBatch } from "../src/hooks/domain/metadata/metadataBatch.ts";
+import { jumpThroughTabHistory } from "../src/hooks/domain/session/tabHistoryStacks.ts";
 
 const byName = { sort: { key: "name", dir: "asc" }, search: "" };
 const open = (requests, path, cached = false, options) =>
   requests.start(path, buildQueryKey(path, byName), byName, cached, options);
+
+test("a history jump preserves the folders it passes in the opposite stack", () => {
+  const history = { back: ["A", "B", "C"], forward: ["F", "E"] };
+  assert.equal(jumpThroughTabHistory(history, "back", "D", 1, 40, "B"), "B");
+  assert.deepEqual(history, { back: ["A"], forward: ["F", "E", "D", "C"] });
+  assert.equal(jumpThroughTabHistory(history, "forward", "B", 2, 40, "E"), "E");
+  assert.deepEqual(history, { back: ["A", "B", "C", "D"], forward: ["F"] });
+});
+
+test("history rejects stale menu entries and bounds the opposite stack", () => {
+  const history = { back: ["A", "B", "C"], forward: ["F", "E"] };
+  assert.equal(jumpThroughTabHistory(history, "back", "D", 2, 3, "other"), null);
+  assert.deepEqual(history, { back: ["A", "B", "C"], forward: ["F", "E"] });
+  assert.equal(jumpThroughTabHistory(history, "back", "D", 2, 3, "A"), "A");
+  assert.deepEqual(history, { back: [], forward: ["D", "C", "B"] });
+});
 
 test("navigating back supersedes a slow listing and its cleanup", () => {
   const requests = new DirectoryRequests();

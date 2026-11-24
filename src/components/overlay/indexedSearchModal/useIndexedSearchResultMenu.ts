@@ -6,6 +6,8 @@ import { showEntryRenamePrompt } from "@/hooks/ui/menus/showEntryRenamePrompt";
 import { useEntryMenuItems } from "@/hooks/ui/menus/useEntryMenuItems";
 import { useWindowsContextMenu } from "@/hooks/ui/menus/useWindowsContextMenu";
 import { getParentPath, isPreviewableEntry } from "@/lib";
+import { applyContextMenuVisibility } from "@/lib/contextMenuVisibility";
+import { useSettingsStore } from "@/modules";
 import { showBottomPane } from "@/modules/bottomPaneStore";
 import type { ContextMenuItem, EntryContextTarget, IndexedPathMatch } from "@/types";
 
@@ -45,6 +47,8 @@ const toTarget = (result: IndexedPathMatch): EntryContextTarget => ({
 export const useIndexedSearchResultMenu = ({
   visible, results, actions, closeSearch, openResult, openGallery, selectResult, selectResultForCopy, copyPaths,
 }: Options) => {
+  const menuUseWindowsForItems = useSettingsStore((state) => state.menuUseWindowsForItems);
+  const hiddenMenuActions = useSettingsStore((state) => state.hiddenContextMenuActions);
   const [request, setRequest] = useState<MenuRequest | null>(null);
   const result = visible && request ? results.find(({ path }) => path === request.path) : undefined;
   const target = useMemo(() => result ? toTarget(result) : null, [result]);
@@ -68,10 +72,10 @@ export const useIndexedSearchResultMenu = ({
     openWindowsMenu({ paths: [entry.path] }, point, extended,
       isPreviewableEntry(entry) ? () => openGallery(entry.path) : undefined);
 
-  const openAt = (match: IndexedPathMatch, point: MenuPoint, native: boolean) => {
+  const openAt = (match: IndexedPathMatch, point: MenuPoint, extended: boolean) => {
     if (copyPaths?.has(match.path)) selectResult(match);
     else selectResultForCopy(match);
-    if (native && openNativeMenu(toTarget(match), point, true)) return;
+    if ((extended || menuUseWindowsForItems) && openNativeMenu(toTarget(match), point, extended)) return;
     setRequest({ path: match.path, ...point });
   };
 
@@ -109,9 +113,10 @@ export const useIndexedSearchResultMenu = ({
   });
 
   const onOpenNative = () => Boolean(target && request && openNativeMenu(target, request, false));
-  const menuItems = target && actions.windowsMenuEnabled
+  const withNativeMenu = target && actions.windowsMenuEnabled
     ? appendWindowsMenuItem(items, onOpenNative)
     : items;
+  const menuItems = applyContextMenuVisibility(withNativeMenu, hiddenMenuActions);
 
   return {
     openAt,

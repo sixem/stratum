@@ -11,6 +11,18 @@ export type ThumbnailRequest = {
   failedUrl?: string;
 };
 
+export type ThumbnailView = "main" | "bottom" | "gallery";
+
+export type ThumbnailScope = {
+  view: ThumbnailView;
+  generation: number;
+};
+
+export type RequestScopedThumbnails = (
+  requests: ThumbnailRequest[],
+  scope: ThumbnailScope,
+) => void;
+
 export type ThumbnailRequestOptions = {
   size: number;
   quality: number;

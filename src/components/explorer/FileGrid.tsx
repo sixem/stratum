@@ -2,6 +2,7 @@
 import { useCallback, useMemo } from "react";
 import { shallow } from "zustand/shallow";
 import { useEntryPresence, useScrollToIndex } from "@/hooks";
+import { useThumbnailScope } from "@/hooks/domain/metadata/useThumbnailScope";
 import { useSettingsStore } from "@/modules";
 import { getPaneSessionStore } from "@/modules/sessionStore";
 import { getDefaultTabGridSize } from "@/modules/tabGridSize";
@@ -148,6 +149,9 @@ const FileGrid = ({
     applyScrollRequest,
   });
 
+  const requestThumbs = useThumbnailScope(
+    grid.pane, view.viewKey, thumbs.thumbnailsEnabled, thumbs.onRequestThumbs,
+  );
   const {
     gridMetaByPath,
     thumbSource,
@@ -164,7 +168,7 @@ const FileGrid = ({
     onRequestMeta: metadata.onRequestMeta,
     thumbnailsEnabled: thumbs.thumbnailsEnabled,
     thumbnails: thumbs.thumbnails,
-    onRequestThumbs: thumbs.onRequestThumbs,
+    onRequestThumbs: requestThumbs,
     thumbResetKey: thumbs.thumbResetKey,
     thumbnailAppIcons: thumbs.thumbnailAppIcons,
     thumbnailFolders: thumbs.thumbnailFolders,
@@ -173,8 +177,8 @@ const FileGrid = ({
     loading: view.loading,
   });
   const handleThumbError = useCallback((path: string, failedUrl: string) => {
-    thumbs.onRequestThumbs([{ path, size: null, modified: null, failedUrl }]);
-  }, [thumbs.onRequestThumbs]);
+    if (!view.loading) requestThumbs([{ path, size: null, modified: null, failedUrl }]);
+  }, [requestThumbs, view.loading]);
   useGridTooltip({
     viewportRef,
     entryByPath: view.entryByPath,

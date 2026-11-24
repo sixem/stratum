@@ -1,11 +1,13 @@
 // Keep one Shell STA pumping messages between requests. This lets modeless
 // extension dialogs and delayed clipboard rendering continue after a menu closes.
-use super::{Reply, Request};
+use super::{Message, Reply, Request};
 use crate::platform::windows::shell_menu;
+use crate::platform::ShellMenuOutcome;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
 use std::os::windows::io::{AsHandle, AsRawHandle};
 use std::sync::mpsc;
+use std::time::Duration;
 use windows::core::w;
 use windows::Win32::Foundation::{
     SetHandleInformation, HANDLE, HANDLE_FLAGS, HANDLE_FLAG_INHERIT, HWND, LPARAM, POINT, WPARAM,
@@ -131,7 +133,10 @@ fn pump(proxy: HWND, receive: &mpsc::Receiver<String>, mut output: File) -> Resu
             Ok(line) => {
                 let reply = serde_json::from_str(&line)
                     .map_err(|e| e.to_string())
-                    .and_then(|request| show(proxy, request));
+                    .and_then(|request| match request {
+                        Message::Show(request) => show(proxy, request),
+                        Message::Warm { warm_folder } => warm(proxy, warm_folder),
+                    });
                 serde_json::to_writer(&mut output, &reply).map_err(|e| e.to_string())?;
                 output
                     .write_all(b"\n")
@@ -156,6 +161,21 @@ fn pump(proxy: HWND, receive: &mpsc::Receiver<String>, mut output: File) -> Resu
             }
         }
     }
+}
+
+fn warm(proxy: HWND, folder: String) -> Reply {
+    // A slow extension must not leave a speculative helper running indefinitely.
+    // The parent can only adopt this helper after the warm request succeeds.
+    let (done, completion) = mpsc::channel::<()>();
+    let watchdog = std::thread::spawn(move || {
+        if completion.recv_timeout(Duration::from_secs(2)) == Err(mpsc::RecvTimeoutError::Timeout) {
+            std::process::exit(0);
+        }
+    });
+    let result = shell_menu::warm_folder(proxy, folder);
+    let _ = done.send(());
+    let _ = watchdog.join();
+    result.map(|()| ShellMenuOutcome::Dismissed)
 }
 
 fn show(proxy: HWND, request: Request) -> Reply {

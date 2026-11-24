@@ -13,6 +13,7 @@ import { makeDebug, toMessage } from "@/lib";
 import { captureWorkspaceLayout } from "@/lib/captureWorkspaceLayout";
 import { usePromptStore, useSettingsStore } from "@/modules";
 import type { PromptConfig } from "@/modules";
+import { flushPendingSessionWrites } from "@/modules/sessionStore";
 import { getWorkspaceChanges, useWorkspaceStore } from "@/modules/workspaceStore";
 
 const log = makeDebug("window");
@@ -142,6 +143,7 @@ export const useCloseConfirm = ({
         if (mode !== "idleOnly" && !(await waitForJobs(ticket, mode))) return;
         if (disposed) return;
         onBeforeCloseRef.current?.();
+        flushPendingSessionWrites();
         // Keep admission closed from the drain through native window destruction.
         await appWindow.destroy();
         destroyed = true;

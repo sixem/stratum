@@ -16,6 +16,7 @@ type CachedFolderSample = {
 };
 
 type UseGridFolderSamplesOptions = {
+  viewKey: string;
   folderPaths: string[];
   interactionActive: boolean;
   loading: boolean;
@@ -55,6 +56,7 @@ const upsertFolderSample = (
 };
 
 export const useGridFolderSamples = ({
+  viewKey,
   folderPaths,
   interactionActive,
   loading,
@@ -82,9 +84,9 @@ export const useGridFolderSamples = ({
   }, [thumbResetKey, thumbnailFolders, thumbnailSvgs, thumbnailVideos]);
 
   useEffect(() => {
-    // Directory-child revisions mean a folder may now choose a different sample path.
+    // A new visit must re-request any samples whose queued renders were retired.
     requestedFolderSampleThumbsRef.current.clear();
-  }, [directoryChildRevision]);
+  }, [directoryChildRevision, thumbnailsEnabled, viewKey]);
 
   useEffect(() => {
     if (!thumbnailsEnabled || !thumbnailFolders || loading || interactionActive) return;
@@ -156,19 +158,20 @@ export const useGridFolderSamples = ({
   const folderThumbRequests = useMemo(() => {
     if (!thumbnailsEnabled || !thumbnailFolders || loading || interactionActive) return [];
     const requests: ThumbnailRequest[] = [];
-    folderSampleByPath.forEach((sample, folderKey) => {
-      if (sample.version !== getDirectoryChildVersion(folderKey)) return;
+    for (const folderPath of folderPaths) {
+      const folderKey = normalizePath(folderPath);
+      const sample = folderSampleByPath.get(folderKey);
+      if (!sample || sample.version !== getDirectoryChildVersion(folderKey)) continue;
       const samplePath = sample.samplePath;
-      if (!samplePath) return;
+      if (!samplePath) continue;
       // Sample paths are requested verbatim, so direct map lookup avoids
       // rebuilding a normalized index of the full thumbnail cache.
-      if (thumbSource.has(samplePath)) return;
-      if (requestedFolderSampleThumbsRef.current.has(samplePath)) return;
-      requestedFolderSampleThumbsRef.current.add(samplePath);
+      if (thumbSource.has(samplePath)) continue;
       requests.push({ path: samplePath, size: null, modified: null });
-    });
+    }
     return requests;
   }, [
+    folderPaths,
     folderSampleByPath,
     interactionActive,
     loading,
@@ -178,9 +181,14 @@ export const useGridFolderSamples = ({
   ]);
 
   useEffect(() => {
-    if (folderThumbRequests.length === 0) return;
-    onRequestThumbs(folderThumbRequests);
-  }, [folderThumbRequests, onRequestThumbs]);
+    const requested = requestedFolderSampleThumbsRef.current;
+    const missing = folderThumbRequests.filter(({ path }) => {
+      if (requested.has(path)) return false;
+      requested.add(path);
+      return true;
+    });
+    if (missing.length > 0) onRequestThumbs(missing);
+  }, [directoryChildRevision, folderThumbRequests, onRequestThumbs, viewKey]);
 
   const folderThumbSource = useMemo(() => {
     const next = new Map<string, FolderThumbnail>();

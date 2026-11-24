@@ -14,6 +14,7 @@ import { ContextMenu } from "@/components/overlay/ContextMenu";
 import { FileFilterHint } from "@/components/primitives/FileFilterHint";
 import { ToolbarIconButton } from "@/components/primitives/ToolbarIconButton";
 import { useDragOutHandler } from "@/hooks/ui/inputs/useDragOutHandler";
+import { useTabHistoryMenu } from "@/hooks/ui/menus/useTabHistoryMenu";
 import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
 import { useSmartTabJump } from "@/hooks/ui/selection/useSmartTabJump";
 import { useTypeaheadSelection } from "@/hooks/ui/selection/useTypeaheadSelection";
@@ -50,6 +51,7 @@ type Props = {
 export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, menu, commandsBlocked }: Props) {
   const folder = useBottomFolder();
   const { dir, meta, tabs, model, selection, viewKey, busy } = folder;
+  const handleHistoryMenu = useTabHistoryMenu(tabs, menu.openContextMenuAt);
   const root = useRef<HTMLElement>(null);
   const files = useRef<HTMLDivElement>(null);
   const address = useRef<HTMLInputElement>(null);
@@ -177,6 +179,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     openContextMenu: paneActions.openKeyboardContextMenu,
     startRename: paneActions.handleRenameStart, clearSelection: paneActions.clearSelectionForVisit,
     undo: paneActions.undo, moveEntries: paneActions.moveEntries,
+    paneFileCommands: paneActions.paneFileCommands,
     scrollTo: (index) => { focusFiles(); scrollTo(index); },
     handleTypeahead, handleTabJump, searchInput, clearSearchAndFocusFiles, browseFromView,
   });
@@ -200,6 +203,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         ariaLabel="Bottom pane back"
         disabled={!tabs.canGoBack}
         onClick={tabs.goBack}
+        onContextMenu={(event) => handleHistoryMenu(event, "back")}
         pressOnPointerDown={false}
       >
         <NavArrowIcon className="nav-arrow is-back" />
@@ -209,6 +213,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         ariaLabel="Bottom pane forward"
         disabled={!tabs.canGoForward}
         onClick={tabs.goForward}
+        onContextMenu={(event) => handleHistoryMenu(event, "forward")}
         pressOnPointerDown={false}
       >
         <NavArrowIcon />
@@ -325,6 +330,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       x={menu.contextMenu?.x ?? 0}
       y={menu.contextMenu?.y ?? 0}
       items={paneActions.contextMenuItems}
+      scrollable={menu.contextMenu?.kind === "history"}
       onClose={menu.closeContextMenu}
       onOpenNative={() => paneActions.openKeyboardContextMenu(true)}
     />, document.body)}

@@ -49,7 +49,7 @@ export const useFileManagerCopy = ({
     };
   }, [copyInFlightRef]);
 
-  // Shared copy pipeline for duplicate/paste actions.
+  // Shared copy pipeline for duplicate, paste and pane transfers.
   const runCopyOperation = useCallback(
     async (paths: string[], destination: string, operationLabel: string) => {
       const target = destination.trim();
@@ -148,6 +148,11 @@ export const useFileManagerCopy = ({
     async (paths: string[], destination = currentPathRef.current) =>
       runCopyOperation(paths, destination, "Duplicate"),
     [currentPathRef, runCopyOperation],
+  );
+
+  const copyEntriesToFolder = useCallback(
+    (paths: string[], destination: string) => runCopyOperation(paths, destination, "Copy"),
+    [runCopyOperation],
   );
 
   // Clipboard moves and direct context-menu moves share conflict prompts, the
@@ -254,7 +259,7 @@ export const useFileManagerCopy = ({
       try {
         const clipboard = await refreshFileClipboard();
         if (!clipboard.paths.length) return;
-        if (clipboard.mode === "copy") return runCopyOperation(clipboard.paths, target, "Copy");
+        if (clipboard.mode === "copy") return copyEntriesToFolder(clipboard.paths, target);
         if (activeCuts.current.has(clipboard.sequence)) return;
         cutSequence = clipboard.sequence;
         activeCuts.current.add(cutSequence);
@@ -279,10 +284,11 @@ export const useFileManagerCopy = ({
         finishRequest?.();
       }
     },
-    [beginFileActivity, currentPathRef, runCopyOperation, runMoveOperation, trackRequest],
+    [beginFileActivity, copyEntriesToFolder, currentPathRef, runMoveOperation, trackRequest],
   );
 
   return {
+    copyEntriesToFolder,
     duplicateEntriesInView,
     moveEntriesInView,
     createFolderWithSelection,

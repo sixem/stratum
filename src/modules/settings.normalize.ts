@@ -1,5 +1,6 @@
 // Normalizes persisted settings payloads into safe, typed values.
 import type { ViewMode } from "@/types";
+import { coerceHiddenContextMenuActions } from "@/lib/contextMenuVisibility";
 import {
   GRID_AUTO_COLUMNS_MAX,
   GRID_AUTO_COLUMNS_MIN,
@@ -192,6 +193,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.showTopbarFolderChevrons === "boolean"
         ? value.showTopbarFolderChevrons
         : DEFAULT_SETTINGS.showTopbarFolderChevrons,
+    showWorkProgressFill: value?.showWorkProgressFill !== false,
     smoothScroll:
       typeof value?.smoothScroll === "boolean"
         ? value.smoothScroll
@@ -264,6 +266,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
     listDensity: value?.listDensity === "compact" ? "compact" : DEFAULT_SETTINGS.listDensity,
     listShowSize: value?.listShowSize !== false,
     listShowModified: value?.listShowModified !== false,
+    menuUseWindowsForItems: value?.menuUseWindowsForItems === true,
     menuOpenPwsh:
       typeof value?.menuOpenPwsh === "boolean"
         ? value.menuOpenPwsh
@@ -276,6 +279,10 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.menuShowConvert === "boolean"
         ? value.menuShowConvert
         : DEFAULT_SETTINGS.menuShowConvert,
+    menuPaneTransfers: value?.menuPaneTransfers === true,
+    menuSelectionActions: value?.menuSelectionActions === true,
+    menuOpenBackgroundTab: value?.menuOpenBackgroundTab === true,
+    hiddenContextMenuActions: coerceHiddenContextMenuActions(value?.hiddenContextMenuActions),
     rememberMoveDestinations: value?.rememberMoveDestinations === true,
     recentMoveLimit: clampNumber(
       value?.recentMoveLimit, DEFAULT_SETTINGS.recentMoveLimit, RECENT_MOVE_LIMIT_MIN, RECENT_MOVE_LIMIT_MAX,

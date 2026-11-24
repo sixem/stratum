@@ -2,6 +2,8 @@
 // These are grouped together so command handlers can import one contract surface.
 use serde::Serialize;
 
+use super::transfer::destination::DestinationSummary;
+
 // Transfer/reporting types for copy, move, and queue updates.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -9,6 +11,8 @@ pub struct CopyReport {
     pub copied: usize,
     pub skipped: usize,
     pub failures: Vec<String>,
+    #[serde(skip)]
+    pub(crate) destination: DestinationSummary,
 }
 
 #[derive(Clone, Serialize)]
@@ -50,6 +54,8 @@ pub struct TransferReport {
     pub cancelled: bool,
     pub failures: Vec<String>,
     pub moved_entries: Vec<MovedTransferEntry>,
+    #[serde(skip)]
+    pub(crate) destination: DestinationSummary,
 }
 
 #[derive(Clone, Serialize)]

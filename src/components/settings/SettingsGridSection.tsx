@@ -39,6 +39,11 @@ export const GRID_SETTINGS_ITEMS = {
     label: "Grid corners",
     description: "Rounded cards or straight edges.",
   },
+  centerGridItems: {
+    label: "Center grid items",
+    description: "Center cards within the pane when using a fixed grid size.",
+    keywords: "alignment",
+  },
   details: {
     label: "Grid details",
     description: "Name is always shown in grid cards.",
@@ -75,6 +80,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
     rememberTabGridSize,
     gridAutoColumns,
     gridGap,
+    gridCentered,
     gridRounded,
     gridShowSize,
     gridShowExtension,
@@ -87,6 +93,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
       rememberTabGridSize: state.rememberTabGridSize,
       gridAutoColumns: state.gridAutoColumns,
       gridGap: state.gridGap,
+      gridCentered: state.gridCentered,
       gridRounded: state.gridRounded,
       gridShowSize: state.gridShowSize,
       gridShowExtension: state.gridShowExtension,
@@ -162,6 +169,17 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
           />
           <span className="settings-value">{gridGapRange.draft}px</span>
         </div>
+      </SettingsItem>
+      <SettingsItem item={GRID_SETTINGS_ITEMS.centerGridItems}>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            aria-label={GRID_SETTINGS_ITEMS.centerGridItems.label}
+            checked={gridCentered}
+            onChange={(event) => updateSettings({ gridCentered: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
       </SettingsItem>
       <SettingsItem item={GRID_SETTINGS_ITEMS.corners}>
         <div className="settings-pills" role="group" aria-label="Grid corners">

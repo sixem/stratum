@@ -20,8 +20,8 @@ import type { SettingsItemText } from "./SettingsItem";
 export const KEYBINDS_SETTINGS_ITEMS = {
   customShortcuts: {
     label: "Custom shortcuts",
-    description: "Click a shortcut to rebind it. Press Escape to cancel.",
-    keywords: "reset keybindings",
+    description: "Click a shortcut to assign it. Press Escape to cancel.",
+    keywords: "clear unassigned reset keybindings",
   },
   smartTabJump: {
     label: "Smart Tab jump",
@@ -207,7 +207,19 @@ export const SettingsKeybindsSection = ({
               <PressButton
                 type="button"
                 className="btn ghost"
-                disabled={normalizedCurrent === normalizedDefault}
+                aria-label={`Clear ${definition.label} shortcut`}
+                disabled={!normalizedCurrent}
+                onClick={() => updateSettings({ keybinds: { ...keybinds, [definition.id]: "" } })}
+              >
+                Clear
+              </PressButton>
+              <PressButton
+                type="button"
+                className="btn ghost"
+                aria-label={`Reset ${definition.label} shortcut`}
+                disabled={normalizedCurrent === normalizedDefault || Boolean(normalizedDefault && KEYBIND_DEFINITIONS.some(
+                  ({ id }) => id !== definition.id && normalizeKeybind(keybinds[id]) === normalizedDefault,
+                ))}
                 onClick={() => handleResetKeybind(definition.id)}
               >
                 Reset

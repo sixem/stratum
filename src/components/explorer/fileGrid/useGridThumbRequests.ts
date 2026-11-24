@@ -152,10 +152,11 @@ export const useGridThumbRequests = ({
     canRequestThumbs,
     thumbRequests,
     onRequestThumbs,
-    thumbResetKey,
+    `${viewKey}:${thumbResetKey ?? ""}:${thumbnailsEnabled}`,
   );
 
   const { folderThumbRequestCount, folderThumbSource } = useGridFolderSamples({
+    viewKey,
     directoryChildRevision,
     folderPaths,
     interactionActive,

@@ -46,6 +46,8 @@ pub struct ConversionReport {
     pub failures: Vec<String>,
     pub failed_sources: Vec<String>,
     pub warnings: Vec<String>,
+    #[serde(skip)]
+    pub(crate) destination: fs::transfer::destination::DestinationSummary,
 }
 
 pub(crate) type ConversionProgressCallback = dyn FnMut(fs::TransferProgressUpdate);
@@ -113,6 +115,7 @@ pub fn convert_items(
         failures: Vec::new(),
         failed_sources: Vec::new(),
         warnings: Vec::new(),
+        destination: Default::default(),
     };
 
     // A batch may contain several configured installations. Check each once,
@@ -151,6 +154,9 @@ pub fn convert_items(
                     report.warnings.push(warning);
                 }
                 report.converted += 1;
+                report
+                    .destination
+                    .record_output(Path::new(item.destination_path().trim()));
                 let processed = report.converted + report.failed;
                 emit_progress(
                     &mut on_progress,

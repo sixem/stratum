@@ -158,6 +158,13 @@
   }
 }
 
+.context-menu[data-scrollable="true"] > .context-menu-list {
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+}
+
 :where(.context-submenu) {
   .context-submenu-list {
     display: grid;

@@ -5,7 +5,6 @@ import { WindowDragRegion } from "./WindowDragRegion";
 type WindowChromeBarProps = {
   shellClassName: string;
   dragRegionClassName: string;
-  windowControlsClassName: string;
   leftSlot?: ReactNode;
   centerSlot?: ReactNode;
   rightSlot?: ReactNode;
@@ -19,7 +18,6 @@ const joinClasses = (...classNames: Array<string | undefined>) => {
 export const WindowChromeBar = ({
   shellClassName,
   dragRegionClassName,
-  windowControlsClassName,
   leftSlot,
   centerSlot,
   rightSlot,
@@ -33,7 +31,7 @@ export const WindowChromeBar = ({
         {rightSlot}
       </WindowDragRegion>
       {windowControlsSlot ? (
-        <div className={joinClasses("window-chrome-bar-controls", windowControlsClassName)}>
+        <div className="window-chrome-bar-controls">
           {windowControlsSlot}
         </div>
       ) : null}

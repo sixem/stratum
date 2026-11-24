@@ -1,0 +1,306 @@
+// First-launch appearance and file-view setup.
+@use "sass:map";
+@use "../../tokens/theme" as theme;
+@use "./shared" as modal;
+
+.welcome-modal {
+  @include modal.overlay-shell(2380, 1rem);
+  @include modal.overlay-open();
+}
+
+.welcome-panel {
+  @include modal.panel-shell(
+    min(37rem, 100%), calc(100dvh - 2rem), 1.25rem, 1.05rem, 0.65rem, var(--panel),
+    $overflow: auto
+  );
+  @include modal.panel-open();
+
+  --welcome-preview-canvas: #090b10;
+  --welcome-preview-sidebar: #11141b;
+  --welcome-preview-toolbar: #151923;
+  --welcome-preview-line: #2a303c;
+  --welcome-preview-muted: #666d7c;
+  --welcome-preview-highlight: color-mix(in srgb, var(--accent) 18%, var(--welcome-preview-canvas));
+  --welcome-on-accent: #121316;
+  border-color: color-mix(in srgb, var(--stroke), var(--text) 12%);
+
+  &[data-darker="true"] {
+    --welcome-preview-canvas: #030303;
+    --welcome-preview-sidebar: #0b0b0b;
+    --welcome-preview-toolbar: #101011;
+    --welcome-preview-line: #242427;
+    --welcome-preview-muted: #696970;
+  }
+
+  p {
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  button:focus-visible,
+  .welcome-choice:has(input:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@each $name, $values in theme.$accent-themes {
+  .welcome-panel[data-accent="#{$name}"] {
+    --accent: #{map.get($values, color)};
+  }
+
+  .welcome-swatch[data-color="#{$name}"] {
+    --welcome-swatch: #{map.get($values, color)};
+  }
+}
+
+.welcome-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.6rem;
+
+  h2 {
+    margin: 0 0 0.15rem;
+    color: var(--text);
+    font-size: var(--font-size-2xl);
+    font-weight: 650;
+    line-height: 1.2;
+  }
+
+  .dialog-close {
+    margin: -0.55rem -0.55rem 0 0;
+  }
+}
+
+.welcome-logo {
+  width: 2rem;
+  height: 2rem;
+  color: var(--accent);
+}
+
+.welcome-appearance {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: var(--surface-border-width) solid var(--stroke);
+}
+
+.welcome-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  legend {
+    padding: 0;
+    margin-bottom: 0.35rem;
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    color: var(--text);
+  }
+}
+
+.welcome-themes,
+.welcome-view-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.welcome-choice {
+  position: relative;
+  cursor: pointer;
+
+  input {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: inherit;
+  }
+}
+
+.welcome-theme,
+.welcome-skip,
+.welcome-start {
+  border: var(--surface-border-width) solid var(--stroke);
+  border-radius: 0.4rem;
+  background: var(--surface-control);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--muted);
+  min-height: 2.15rem;
+}
+
+.welcome-theme {
+  display: grid;
+  place-items: center;
+}
+
+.welcome-color-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.welcome-swatch {
+  display: grid;
+  width: 1.85rem;
+  height: 2.15rem;
+  place-items: center;
+  border-radius: 50%;
+
+  > span {
+    display: grid;
+    width: 1.125rem;
+    height: 1.125rem;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--welcome-swatch);
+    color: var(--welcome-on-accent);
+  }
+
+  svg {
+    width: 0.8rem;
+    visibility: hidden;
+  }
+
+  &:hover > span {
+    filter: brightness(1.15);
+  }
+
+  &:has(input:checked) > span {
+    outline: 1.5px solid var(--welcome-swatch);
+    outline-offset: 3px;
+  }
+
+  &:has(input:checked) svg {
+    visibility: visible;
+  }
+}
+
+.welcome-view-options {
+  margin-top: 0.55rem;
+}
+
+.welcome-view {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.5rem;
+  border: var(--surface-border-width) solid var(--stroke);
+  border-radius: 0.5rem;
+  background: var(--panel-2);
+
+  &:has(input:checked) {
+    border-color: var(--accent);
+  }
+}
+
+.welcome-view-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--welcome-preview-line);
+  border-radius: 0.3rem;
+}
+
+.welcome-view-caption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.05rem 0.45rem;
+  align-items: center;
+}
+
+.welcome-view-label {
+  color: var(--text);
+  font-size: var(--font-size-md);
+  font-weight: 650;
+}
+
+.welcome-view-description {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.welcome-view-check {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+  color: var(--welcome-on-accent);
+
+  svg {
+    width: 0.65rem;
+    visibility: hidden;
+  }
+
+  .welcome-view:has(input:checked) & {
+    border-color: var(--accent);
+    background: var(--accent);
+
+    svg {
+      visibility: visible;
+    }
+  }
+}
+
+.welcome-footer {
+  display: grid;
+  gap: 0.85rem;
+  border-top: var(--surface-border-width) solid var(--stroke);
+  padding-top: 0.8rem;
+}
+
+.welcome-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+
+  button {
+    padding: 0.45rem 1rem;
+    cursor: pointer;
+  }
+}
+
+.welcome-start {
+  min-width: 9rem;
+
+  &:hover {
+    filter: brightness(1.08);
+  }
+}
+
+.welcome-theme:has(input:checked),
+.welcome-start {
+  color: var(--welcome-on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.welcome-skip:hover,
+:is(.welcome-theme, .welcome-view):hover:not(:has(input:checked)) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--stroke), var(--text) 22%);
+}
+
+@media (max-width: 34rem) {
+  .welcome-appearance {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+}

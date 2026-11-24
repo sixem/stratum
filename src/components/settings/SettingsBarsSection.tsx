@@ -68,6 +68,12 @@ export const TOPBAR_SETTINGS_OPTIONS = [
     label: "Topbar up/down chevrons",
     description: "Show the folder-level navigation buttons next to Back and Forward.",
   },
+  {
+    key: "showWorkProgressFill",
+    label: "Work button progress",
+    description: "Show job progress as a background fill on the Work button.",
+    keywords: "topbar transfer copy move conversion animation",
+  },
 ] as const;
 
 export const SettingsBarsSection = ({
@@ -82,6 +88,7 @@ export const SettingsBarsSection = ({
       showDriveToggle: state.showDriveToggle,
       collapseDrivePickerOnBlur: state.collapseDrivePickerOnBlur,
       showTopbarFolderChevrons: state.showTopbarFolderChevrons,
+      showWorkProgressFill: state.showWorkProgressFill,
       sidebarRecentLimit: state.sidebarRecentLimit,
       sidebarSectionOrder: state.sidebarSectionOrder,
       sidebarHiddenSections: state.sidebarHiddenSections,
@@ -127,7 +134,7 @@ export const SettingsBarsSection = ({
 
   return (
     <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Bars</div>
+      <div className="settings-section-title">Tabs &amp; bars</div>
       <SettingsItem item={BARS_SETTINGS_ITEMS.tabNumbers}>
         <label className="settings-toggle">
           <input

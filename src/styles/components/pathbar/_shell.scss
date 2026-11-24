@@ -3,9 +3,6 @@
 .pathbar-shell {
   --pathbar-hover-surface: rgba(255, 255, 255, 0.06);
   background: var(--panel-2);
-  // Keep the toolbar height while letting Windows draw the top edge.
-  padding-block-start: var(--surface-border-width);
-  border-block-end: var(--surface-border-width) solid #1b213061;
 }
 
 :root[data-window-focus="false"] .pathbar-shell {
@@ -82,10 +79,6 @@
     background: var(--pathbar-hover-surface);
     border-radius: 5px;
   }
-}
-
-.pathbar-window-controls {
-  min-height: var(--window-chrome-bar-height);
 }
 
 .path-tabs {

@@ -25,7 +25,7 @@ const isTauriEnv = () => {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 };
 
-export const useAppShellModel = () => {
+export const useAppShellModel = (welcomeOpen = false) => {
   // Core filesystem state is shared across every shell slice.
   const fileManager = useFileManager();
   const settings = useSettings();
@@ -185,7 +185,7 @@ export const useAppShellModel = () => {
 
   const shellView = useShellViewModel({
     tauriEnv,
-    promptOpen: promptOpen || batchRenameOpen,
+    promptOpen: promptOpen || batchRenameOpen || welcomeOpen,
     aboutOpen,
     menuState,
     fileManager,

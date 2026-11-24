@@ -13,7 +13,7 @@ import type {
   DriveInfo,
   RenameCommitReason,
   SortState,
-  ThumbnailRequest,
+  RequestScopedThumbnails,
   ViewMode,
   Place,
 } from "@/types";
@@ -78,7 +78,7 @@ type FileViewProps = {
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
   thumbnails: Map<string, string>;
-  onRequestThumbs: (requests: ThumbnailRequest[]) => void;
+  onRequestThumbs: RequestScopedThumbnails;
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;
   thumbnailFolders: boolean;

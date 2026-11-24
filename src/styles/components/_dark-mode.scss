@@ -7,7 +7,7 @@
     background: var(--bg);
   }
 
-  :is(.sidebar, .pathbar-shell, .path-tabs, .statusbar) {
+  :is(.sidebar, .window-chrome-bar, .path-tabs, .statusbar) {
     border-color: var(--stroke);
   }
 
@@ -41,7 +41,7 @@
     --quick-preview-divider: var(--surface-border-width) solid var(--stroke);
   }
 
-  :is(.quick-preview-info, .quick-preview-controls, .quick-preview-strip,
+  :is(.quick-preview-controls, .quick-preview-strip,
       .quick-preview-error-card) {
     background: var(--panel-deep);
     border-color: var(--stroke);

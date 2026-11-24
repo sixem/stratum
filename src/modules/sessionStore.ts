@@ -31,6 +31,7 @@ type SessionRuntimeState = SessionState & { closedTabs: ClosedTab[]; restoreRevi
 
 type SessionStore = SessionRuntimeState & {
   setTabs: (updater: Tab[] | ((prev: Tab[]) => Tab[])) => void;
+  setTabSearch: (id: string, search: string) => void;
   setTabGridSize: (id: string, gridSize: FixedGridSize) => void;
   setTabScrollTop: (id: string, scrollTop: number) => void;
   setActiveTabId: (id: string | null) => void;
@@ -38,6 +39,7 @@ type SessionStore = SessionRuntimeState & {
   updateSession: (patch: Partial<SessionRuntimeState>) => void;
   restoreSession: (layout: SessionState) => void;
   resetSession: () => void;
+  flushPendingWrite: () => void;
 };
 
 type StoredSession = {
@@ -48,6 +50,7 @@ type StoredSession = {
 const STORAGE_KEY = SESSION_STORAGE_KEY;
 const LEGACY_STORAGE_KEY = SESSION_LEGACY_STORAGE_KEY;
 const STORAGE_VERSION = SESSION_STORAGE_VERSION;
+const FILTER_SAVE_DELAY_MS = 250;
 
 const DEFAULT_SESSION: SessionState = {
   tabs: [],
@@ -216,15 +219,40 @@ const applyUpdater = <T,>(value: T, updater: T | ((prev: T) => T)) => {
 };
 
 const createSessionStore = (key: string) => {
+  let filterEditTabs: Tab[] | undefined;
+  let filterSaveTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const cancelFilterSave = () => {
+    if (filterSaveTimer === undefined) return;
+    clearTimeout(filterSaveTimer);
+    filterSaveTimer = undefined;
+  };
+
+  const flushPendingWrite = () => {
+    if (filterSaveTimer === undefined) return;
+    cancelFilterSave();
+    writeStoredSession(key, store.getState());
+  };
+
   const store = createWithEqualityFn<SessionStore>((set) => ({
     ...readStoredSession(key),
     // Keep undo history for this pane even if its view unmounts.
     closedTabs: [],
     restoreRevision: 0,
     setTabs: (updater) =>
-      set((state) => ({
-        tabs: applyUpdater(state.tabs, updater),
-      })),
+      set((state) => {
+        const tabs = applyUpdater(state.tabs, updater);
+        return tabs === state.tabs ? state : { tabs };
+      }),
+    setTabSearch: (id, search) => set((state) => {
+      const index = state.tabs.findIndex((tab) => tab.id === id);
+      if (index < 0 || state.tabs[index].search === search) return state;
+      const tabs = state.tabs.slice();
+      tabs[index] = { ...tabs[index], search };
+      // Mark this update for the synchronous persistence subscriber.
+      filterEditTabs = tabs;
+      return { tabs };
+    }),
     setTabGridSize: (id, gridSize) => set((state) => {
       const index = state.tabs.findIndex(tab => tab.id === id);
       if (index < 0 || state.tabs[index].gridSize === gridSize) return state;
@@ -253,14 +281,22 @@ const createSessionStore = (key: string) => {
       restoreRevision: state.restoreRevision + 1,
     })),
     resetSession: () => set({ ...DEFAULT_SESSION, closedTabs: [] }),
+    flushPendingWrite,
   }));
 
-  store.subscribe((state) => {
-    writeStoredSession(key, {
-      tabs: state.tabs,
-      activeTabId: state.activeTabId,
-      recentJumps: state.recentJumps,
-    });
+  store.subscribe((state, previous) => {
+    if (state.tabs === previous.tabs && state.activeTabId === previous.activeTabId &&
+        state.recentJumps === previous.recentJumps) return;
+
+    cancelFilterSave();
+    if (state.tabs === filterEditTabs) {
+      filterEditTabs = undefined;
+      filterSaveTimer = setTimeout(flushPendingWrite, FILTER_SAVE_DELAY_MS);
+      return;
+    }
+
+    // Navigation and workspace restores write the latest session immediately.
+    writeStoredSession(key, state);
   });
   const fillGridSizes = (gridSize: FixedGridSize | undefined) => {
     if (!gridSize) return;
@@ -279,6 +315,11 @@ const createSessionStore = (key: string) => {
 
 export const useSessionStore = createSessionStore(STORAGE_KEY);
 export const useBottomSessionStore = createSessionStore(STORAGE_KEY + ".bottom");
+
+export const flushPendingSessionWrites = () => {
+  useSessionStore.getState().flushPendingWrite();
+  useBottomSessionStore.getState().flushPendingWrite();
+};
 
 export const getPaneSessionStore = (pane: "main" | "bottom") =>
   pane === "bottom" ? useBottomSessionStore : useSessionStore;

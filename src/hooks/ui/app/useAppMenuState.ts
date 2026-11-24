@@ -6,7 +6,7 @@ import type {
   PointerEvent as ReactPointerEvent,
   SetStateAction,
 } from "react";
-import type { EntryContextTarget, PlaceContextTarget } from "@/types";
+import type { ContextMenuItem, EntryContextTarget, PlaceContextTarget } from "@/types";
 
 type ContextMenuPoint = { x: number; y: number };
 type ContextMenuEvent = ReactMouseEvent | ReactPointerEvent;
@@ -15,6 +15,7 @@ type ContextMenuState =
   | ({ kind: "sort"; listHeader?: boolean } & ContextMenuPoint)
   | ({ kind: "entry"; entry: EntryContextTarget } & ContextMenuPoint)
   | ({ kind: "place-target"; target: PlaceContextTarget } & ContextMenuPoint)
+  | ({ kind: "history"; items: ContextMenuItem[] } & ContextMenuPoint)
   | null;
 
 type MenuPane = "main" | "bottom";

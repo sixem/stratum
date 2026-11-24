@@ -1,8 +1,9 @@
 // History store for per-tab navigation stacks.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Tab } from "@/types";
-import type { TabHistory } from "@/types/tabs";
+import type { TabHistory, TabHistoryDirection } from "@/types/tabs";
 import { folderPathKey } from "@/lib";
+import { jumpThroughTabHistory } from "./tabHistoryStacks";
 
 type UseTabHistoryOptions = {
   tabs: Tab[];
@@ -59,39 +60,23 @@ export const useTabHistory = ({
     [bump, getHistory, limit],
   );
 
-  const popBack = useCallback(
-    (tabId: string, currentPath: string) => {
-      const history = getHistory(tabId);
-      if (history.back.length === 0) return null;
-      const next = history.back.pop() ?? null;
-      if (!next) return null;
-      const trimmedCurrent = currentPath.trim();
-      if (trimmedCurrent) {
-        history.forward.push(trimmedCurrent);
-      }
-      trimHistory(history, limit);
-      bump();
-      return next;
-    },
-    [bump, getHistory, limit],
-  );
+  const getHistoryPaths = useCallback((tabId: string, direction: TabHistoryDirection) => (
+    historyRef.current.get(tabId)?.[direction].slice().reverse() ?? []
+  ), []);
 
-  const popForward = useCallback(
-    (tabId: string, currentPath: string) => {
-      const history = getHistory(tabId);
-      if (history.forward.length === 0) return null;
-      const next = history.forward.pop() ?? null;
-      if (!next) return null;
-      const trimmedCurrent = currentPath.trim();
-      if (trimmedCurrent) {
-        history.back.push(trimmedCurrent);
-      }
-      trimHistory(history, limit);
-      bump();
-      return next;
-    },
-    [bump, getHistory, limit],
-  );
+  const jumpHistory = useCallback((
+    tabId: string,
+    direction: TabHistoryDirection,
+    currentPath: string,
+    offset: number,
+    expectedPath?: string,
+  ) => {
+    const history = historyRef.current.get(tabId);
+    if (!history) return null;
+    const next = jumpThroughTabHistory(history, direction, currentPath, offset, limit, expectedPath);
+    if (next) bump();
+    return next;
+  }, [bump, limit]);
 
   const takeHistory = useCallback((tabId: string) => {
     const history = historyRef.current.get(tabId);
@@ -133,8 +118,8 @@ export const useTabHistory = ({
     canGoBack,
     canGoForward,
     recordHistory,
-    popBack,
-    popForward,
+    getHistoryPaths,
+    jumpHistory,
     takeHistory,
     restoreHistory,
   };

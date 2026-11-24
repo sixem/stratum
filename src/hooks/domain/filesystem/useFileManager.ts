@@ -134,6 +134,7 @@ export function useFileManager() {
     requestEntryMeta: metaCache.requestEntryMeta,
     flushEntryMeta: metaCache.flushEntryMeta,
     deleteEntries: fileMutations.deleteEntriesInView,
+    copyEntries: fileMutations.copyEntriesToFolder,
     duplicateEntries: fileMutations.duplicateEntriesInView,
     moveEntries: fileMutations.moveEntriesInView,
     createFolderWithSelection: fileMutations.createFolderWithSelection,

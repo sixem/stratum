@@ -7,15 +7,24 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use super::cache;
-use super::{ThumbFormat, ThumbHit, ThumbOptions, ThumbRequest};
-use super::{ThumbJob, ThumbKind, ThumbMeta, ThumbQueue, ThumbnailState};
+use super::{ThumbFormat, ThumbHit, ThumbOptions, ThumbRequest, ThumbScope};
+use super::{ThumbJob, ThumbKind, ThumbMeta, ThumbnailState};
 
 pub(super) fn request_thumbnails(
     state: &ThumbnailState,
     requests: Vec<ThumbRequest>,
     options: ThumbOptions,
     key: String,
+    scope: ThumbScope,
 ) -> Vec<ThumbHit> {
+    if !state
+        .queue
+        .lock()
+        .expect("thumb queue lock")
+        .is_current(scope)
+    {
+        return Vec::new();
+    }
     let mut hits = Vec::with_capacity(requests.len());
     let cache_key = build_render_cache_key(&options);
 
@@ -53,6 +62,7 @@ pub(super) fn request_thumbnails(
 
         enqueue_thumbnail_job(
             state,
+            scope,
             ThumbJob {
                 id: thumb_id,
                 path: input_path,
@@ -68,19 +78,11 @@ pub(super) fn request_thumbnails(
     hits
 }
 
-fn enqueue_thumbnail_job(state: &ThumbnailState, job: ThumbJob) {
+fn enqueue_thumbnail_job(state: &ThumbnailState, scope: ThumbScope, job: ThumbJob) {
     let mut queue = state.queue.lock().expect("thumb queue lock");
-    if queue.in_flight.contains(&job.id) {
-        return;
+    if queue.enqueue(scope, job) {
+        state.condvar.notify_one();
     }
-    queue.in_flight.insert(job.id.clone());
-    push_latest_request(&mut queue, job);
-    state.condvar.notify_one();
-}
-
-fn push_latest_request(queue: &mut ThumbQueue, job: ThumbJob) {
-    // Prioritize the latest requests so current thumbnails appear sooner.
-    queue.items.push_front(job);
 }
 
 fn resolve_thumb_meta(input_path: &Path, request: &ThumbRequest) -> Option<ThumbMeta> {

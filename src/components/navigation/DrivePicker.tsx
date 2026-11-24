@@ -52,14 +52,8 @@ const buildDriveAriaLabel = (driveLabel: string, state?: DriveMarkerState) => {
   return state ? `${driveLabel}. Indexed search ${formatIndexedDriveState(state).toLowerCase()}.` : driveLabel;
 };
 
-const DriveStatusMarker = ({
-  state,
-  reserveSpace = false,
-}: {
-  state?: DriveMarkerState;
-  reserveSpace?: boolean;
-}) => {
-  if (!state && !reserveSpace) return null;
+const DriveStatusMarker = ({ state }: { state?: DriveMarkerState }) => {
+  if (!state) return null;
   return <span className="drive-picker-status" data-state={state} aria-hidden="true" />;
 };
 
@@ -99,8 +93,8 @@ export const DrivePicker = ({
   const displayLabel = extraCount > 0 ? `${label} +${extraCount}` : label;
   const canOpen = drives.length > 1;
   const expanded = canOpen && driveListOpen;
-  // Keep the open strip aligned across local drive letters using the live count.
-  const labelSpacer = expanded && /^[A-Z]:$/.test(label) ? `W: +${extraCount}` : null;
+  // Keep the same trigger width across drive letters and both toggle states.
+  const labelSpacer = canOpen && /^[A-Z]:$/.test(label) ? `W: +${extraCount}` : null;
   const activeTooltip = activeIndexedState === "loading"
     ? "Loading drives"
     : buildDriveTooltip(label, activeInfo, activeIndexedState === "checking" ? "Checking index" : undefined);
@@ -178,7 +172,7 @@ export const DrivePicker = ({
               aria-label={buildDriveAriaLabel(displayLabel, activeIndexedState)}
             >
               <span className="drive-picker-button-content">
-                <DriveStatusMarker state={activeIndexedState} reserveSpace={expanded} />
+                <DriveStatusMarker state={activeIndexedState} />
                 <span className="drive-picker-button-label tnum">
                   <span>{displayLabel}</span>
                   {labelSpacer ? (

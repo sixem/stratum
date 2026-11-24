@@ -295,6 +295,7 @@ export const useShellViewInteractions = ({
     onRemovePlace: removePlace,
   };
   const {
+    paneFileCommands,
     openKeyboardContextMenu,
     contextMenuItems,
     contextMenuOpen,
@@ -332,10 +333,12 @@ export const useShellViewInteractions = ({
     onOpenGallery: mainPreview.open,
     onOpenDir: viewState.browseFromView,
     onOpenDirNewTab: navigationController.handleOpenInNewTab,
+    onOpenDirInBackgroundTab: tabSession.openInBackgroundTab,
     onDeleteEntries: fileManager.deleteEntries,
     onClearSelection: handleClearSelection,
     onRenameEntry: handleRenameStart,
     onPasteEntries: fileManager.pasteEntries,
+    onCopyEntries: fileManager.copyEntries,
     onMoveEntries: fileManager.moveEntries,
     onCreateFolderWithSelection: async (paths, parent, name, onCreated) => {
       const created = await fileManager.createFolderWithSelection(paths, parent, name, onCreated);
@@ -399,6 +402,7 @@ export const useShellViewInteractions = ({
     handleSelectItemWithRename,
     handleManualRefresh,
     handleSelectAll,
+    paneFileCommands,
     handleRenameSelection,
     handleCreateFile,
     handleCreateFolder,

@@ -4,9 +4,11 @@ import App from "./App";
 import { PerfProfiler } from "@/components";
 import { initDebug } from "@/lib";
 import { applyStartupSession } from "@/modules/startupSession";
+import { shouldShowWelcomeOnFirstLaunch } from "@/modules/welcome";
 
 // Initialize debug logging before the app renders.
 initDebug();
+const showWelcome = shouldShowWelcomeOnFirstLaunch();
 try {
   applyStartupSession();
 } catch (error) {
@@ -36,7 +38,7 @@ if (import.meta.hot) {
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <PerfProfiler id="app">
-      <App />
+      <App showWelcome={showWelcome} />
     </PerfProfiler>
   </React.StrictMode>,
 );

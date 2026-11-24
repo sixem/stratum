@@ -310,6 +310,10 @@
     stroke-linecap: round;
   }
 
+  .transfer-item-action-open svg {
+    fill: none;
+  }
+
   .transfer-item-action:hover:not(:disabled) {
     border-color: rgba(var(--accent-rgb), 0.36);
     background: rgba(var(--accent-rgb), 0.08);

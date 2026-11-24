@@ -8,6 +8,7 @@ type BuildPlaceTargetMenuItemsOptions = {
   tabAction?: ContextMenuItem;
   onOpenPath?: (path: string) => void;
   onOpenPathNewTab?: (path: string) => void;
+  onOpenPathInBackgroundTab?: (path: string) => void;
   onAddPlace: (path: string, name?: string, options?: { pinned?: boolean }) => void;
   onPinPlace: (path: string) => void;
   onUnpinPlace: (path: string) => void;
@@ -45,6 +46,7 @@ export const buildPlaceTargetMenuItems = ({
   tabAction,
   onOpenPath,
   onOpenPathNewTab,
+  onOpenPathInBackgroundTab,
   onAddPlace,
   onPinPlace,
   onUnpinPlace,
@@ -66,7 +68,7 @@ export const buildPlaceTargetMenuItems = ({
     onAddPlace(path, target.name, options);
   };
 
-  const hasOpenActions = Boolean(onOpenPath) || Boolean(onOpenPathNewTab);
+  const hasOpenActions = onOpenPath || onOpenPathNewTab || onOpenPathInBackgroundTab;
 
   if (onOpenPath) {
     items.push({
@@ -83,6 +85,15 @@ export const buildPlaceTargetMenuItems = ({
       label: "Open in new tab",
       icon: "open-new-tab",
       onSelect: () => onOpenPathNewTab(path),
+    });
+  }
+
+  if (onOpenPathInBackgroundTab) {
+    items.push({
+      id: "place-target-open-background-tab",
+      label: "Open in background tab",
+      icon: "open-new-tab",
+      onSelect: () => onOpenPathInBackgroundTab(path),
     });
   }
 

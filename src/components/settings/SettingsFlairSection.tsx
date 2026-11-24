@@ -1,7 +1,7 @@
 // Visual flair toggles for the palette, accent, and ambient effects.
 import { useId } from "react";
 import { shallow } from "zustand/shallow";
-import type { AccentTheme } from "@/modules";
+import { ACCENT_THEMES } from "@/constants/settings";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useSettingsStore } from "@/modules";
 
@@ -36,16 +36,6 @@ export const FLAIR_SETTINGS_ITEMS = {
 type SettingsFlairSectionProps = {
   sectionId: string;
 };
-
-const ACCENT_THEMES: { id: AccentTheme; label: string }[] = [
-  { id: "red", label: "Red" },
-  { id: "purple", label: "Purple" },
-  { id: "green", label: "Green" },
-  { id: "yellow", label: "Yellow" },
-  { id: "orange", label: "Orange" },
-  { id: "teal", label: "Teal" },
-  { id: "white", label: "White" },
-];
 
 export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) => {
   const darkModeId = useId();

@@ -53,6 +53,7 @@ pub fn copy_entries(
         copied: 0,
         skipped: 0,
         failures: Vec::new(),
+        destination: Default::default(),
     };
 
     let requested = paths
@@ -96,6 +97,7 @@ pub fn copy_entries(
             Ok(outcome) => {
                 if outcome.copied_root {
                     report.copied = report.copied.saturating_add(1);
+                    report.destination.record_output(&manifest.destination);
                 }
                 report.skipped = report.skipped.saturating_add(outcome.skipped);
             }
@@ -259,6 +261,7 @@ fn transfer_roots(
             }
             Ok(TransferOutcome::Copied) => {
                 report.copied = report.copied.saturating_add(1);
+                report.destination.record_output(&strategy.destination);
                 false
             }
             Err(error) => {
@@ -279,6 +282,7 @@ fn record_move(
     identity: Option<EntryIdentity>,
 ) {
     report.moved = report.moved.saturating_add(1);
+    report.destination.record_output(&strategy.destination);
     report.moved_entries.push(MovedTransferEntry {
         source_path: strategy.source.to_string_lossy().into_owned(),
         destination_path: strategy.destination.to_string_lossy().into_owned(),

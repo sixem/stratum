@@ -1,4 +1,4 @@
-// Select and position the folder left behind when navigating to an ancestor.
+// Select and position the entry a navigation is meant to reveal.
 import { useLayoutEffect, useRef } from "react";
 import type { ScrollAlignment } from "@/hooks/perf/scroll";
 import { folderPathKey } from "@/lib/paths";
@@ -27,10 +27,10 @@ export const useNavigationReveal = ({
     const key = folderPathKey(path);
     const exactEntry = viewModel.entryByPath.get(path);
     const matchingItem = exactEntry ? undefined : viewModel.items.find(
-      (item) => item.type === "entry" && item.entry.isDir && folderPathKey(item.entry.path) === key,
+      (item) => item.type === "entry" && folderPathKey(item.entry.path) === key,
     );
     const entry = exactEntry ?? (matchingItem?.type === "entry" ? matchingItem.entry : undefined);
-    if (!entry?.isDir) return;
+    if (!entry) return;
     const index = viewModel.indexMap.get(entry.path);
     if (index == null) return;
 

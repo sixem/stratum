@@ -103,7 +103,8 @@ export function useBottomPaneActions({
     ...menu,
     pane: "bottom",
     mainRef: files,
-    contextMenu: ready || menu.contextMenu?.kind === "place-target" ? menu.contextMenu : null,
+    contextMenu: ready || menu.contextMenu?.kind === "place-target" || menu.contextMenu?.kind === "history"
+      ? menu.contextMenu : null,
     onShellCommand: () => {
       void refreshFileClipboard().catch(() => {});
       if (viewVisit.current) void dir.refreshAfterChange();
@@ -122,11 +123,14 @@ export function useBottomPaneActions({
     onOpenGallery: openGallery,
     onOpenDir: browseFromView,
     onOpenDirNewTab: tabs.openInNewTab,
+    onOpenDirInBackgroundTab: tabs.openInBackgroundTab,
     onDeleteEntries: actions.deleteEntries,
     onClearSelection: clearSelectionForVisit,
     onRenameEntry: selectionHandlers.handleRenameStart,
     onPasteEntries: actions.pasteEntries,
+    onCopyEntries: actions.copyEntries,
     onMoveEntries: moveEntries,
+    onRefreshTransferDestination: dir.refreshAfterChange,
     onCreateFolderWithSelection: async (paths, parent, name, onCreated) => {
       const created = await actions.createFolderWithSelection(paths, parent, name, onCreated);
       if (created && viewVisit.current) {

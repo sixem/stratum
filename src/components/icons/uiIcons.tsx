@@ -179,6 +179,14 @@ export const HourglassIcon = ({ className }: IconProps) => {
   );
 };
 
+export const SaveIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12l4 4v12a2 2 0 0 1-2 2Z" />
+    <path d="M7 3v6h9M7 21v-7h10v7" />
+  </svg>
+);
+
 // Compact checkmark icon for success states and confirmations.
 export const CheckmarkIcon = ({ className }: IconProps) => {
   return (

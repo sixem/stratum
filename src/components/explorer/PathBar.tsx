@@ -1,5 +1,6 @@
 // Navigation controls row that sits above the inputs.
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
+import type { TabHistoryDirection } from "@/types/tabs";
 import { PressButton } from "@/components/primitives/PressButton";
 import { WindowChromeBar } from "@/components/primitives/WindowChromeBar";
 import { ChevronDownIcon, ChevronUpIcon, NavArrowIcon } from "@/components/icons";
@@ -7,6 +8,7 @@ import { ChevronDownIcon, ChevronUpIcon, NavArrowIcon } from "@/components/icons
 type PathBarProps = {
   onBack: () => void;
   onForward: () => void;
+  onHistoryMenu: (event: MouseEvent<HTMLButtonElement>, direction: TabHistoryDirection) => void;
   onUp: () => void;
   onDown: () => void;
   canGoBack: boolean;
@@ -23,6 +25,7 @@ type PathBarProps = {
 export const PathBar = ({
   onBack,
   onForward,
+  onHistoryMenu,
   onUp,
   onDown,
   canGoBack,
@@ -45,6 +48,8 @@ export const PathBar = ({
           onClick={onBack}
           disabled={!canGoBack}
           aria-label="Back"
+          aria-haspopup="menu"
+          onContextMenu={(event) => onHistoryMenu(event, "back")}
         >
           <NavArrowIcon className="btn-icon nav-arrow is-back" />
         </PressButton>
@@ -54,6 +59,8 @@ export const PathBar = ({
           onClick={onForward}
           disabled={!canGoForward}
           aria-label="Forward"
+          aria-haspopup="menu"
+          onContextMenu={(event) => onHistoryMenu(event, "forward")}
         >
           <NavArrowIcon className="btn-icon nav-arrow" />
         </PressButton>
@@ -89,7 +96,6 @@ export const PathBar = ({
     <WindowChromeBar
       shellClassName="pathbar-shell"
       dragRegionClassName="pathbar"
-      windowControlsClassName="pathbar-window-controls"
       leftSlot={leftContent}
       centerSlot={centerContent}
       rightSlot={rightContent}

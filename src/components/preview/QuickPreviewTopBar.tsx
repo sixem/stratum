@@ -65,7 +65,6 @@ export const QuickPreviewTopBar = ({
     <WindowChromeBar
       shellClassName="quick-preview-topbar-shell"
       dragRegionClassName="quick-preview-topbar"
-      windowControlsClassName="quick-preview-topbar-window-controls"
       leftSlot={leftSlot}
       centerSlot={centerSlot}
       rightSlot={rightSlot}

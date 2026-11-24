@@ -21,6 +21,7 @@ type UseAppOverlaySectionOptions = {
     state: { x: number; y: number } | null;
     open: boolean;
     items: AppOverlaysProps["contextMenu"]["items"];
+    scrollable?: boolean;
     onClose: () => void;
   };
   quickPreview: AppOverlaysProps["quickPreview"];
@@ -50,6 +51,7 @@ export const useAppOverlaySection = ({
       x: contextMenu.state?.x ?? 0,
       y: contextMenu.state?.y ?? 0,
       items: contextMenu.items,
+      scrollable: contextMenu.scrollable,
       onClose: contextMenu.onClose,
     },
     conversion,

@@ -1,6 +1,6 @@
 // Shared transfer store types.
 // Keeping the shapes in one small module lets reducers and selectors stay pure.
-import type { TransferJobCapabilities, TransferJobKind, TransferJobPhase } from "@/types";
+import type { TransferDestination, TransferJobCapabilities, TransferJobKind, TransferJobPhase } from "@/types";
 
 export type TransferStatus =
   | "queued"
@@ -36,6 +36,7 @@ export type TransferJob = {
   finishedAt?: number;
   items?: string[];
   currentPath?: string;
+  destination?: TransferDestination;
   currentBytes?: number;
   currentTotalBytes?: number;
   progressPercent?: number;

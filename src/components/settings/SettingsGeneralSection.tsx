@@ -20,10 +20,6 @@ export const GENERAL_SETTINGS_ITEMS = {
     label: "Smooth scrolling",
     description: "Keep the original smooth wheel scroll instead of snapping by row.",
   },
-  centerGridItems: {
-    label: "Center grid items",
-    description: "Center the grid within the viewport. Will not have an effect with autosized grids.",
-  },
   parentEntry: {
     label: "Parent directory entry",
     description: "Show a pseudo entry for moving up one level.",
@@ -61,7 +57,6 @@ export const SettingsGeneralSection = ({ sectionId, open }: SettingsGeneralSecti
   const {
     defaultViewMode,
     smoothScroll,
-    gridCentered,
     showParentEntry,
     keepFilterOnNavigation,
     confirmDelete,
@@ -72,7 +67,6 @@ export const SettingsGeneralSection = ({ sectionId, open }: SettingsGeneralSecti
     (state) => ({
       defaultViewMode: state.defaultViewMode,
       smoothScroll: state.smoothScroll,
-      gridCentered: state.gridCentered,
       showParentEntry: state.showParentEntry,
       keepFilterOnNavigation: state.keepFilterOnNavigation,
       confirmDelete: state.confirmDelete,
@@ -111,16 +105,6 @@ export const SettingsGeneralSection = ({ sectionId, open }: SettingsGeneralSecti
             type="checkbox"
             checked={smoothScroll}
             onChange={(event) => updateSettings({ smoothScroll: event.currentTarget.checked })}
-          />
-          <span />
-        </label>
-      </SettingsItem>
-      <SettingsItem item={GENERAL_SETTINGS_ITEMS.centerGridItems}>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={gridCentered}
-            onChange={(event) => updateSettings({ gridCentered: event.currentTarget.checked })}
           />
           <span />
         </label>

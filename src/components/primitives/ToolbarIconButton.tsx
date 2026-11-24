@@ -1,5 +1,5 @@
 // Icon button with tooltip for toolbar actions.
-import type { ReactNode } from "react";
+import type { MouseEventHandler, ReactNode } from "react";
 import { PressButton } from "@/components/primitives/PressButton";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 
@@ -11,6 +11,7 @@ type ToolbarIconButtonProps = {
   pressed?: boolean;
   pressOnPointerDown?: boolean;
   onClick: () => void;
+  onContextMenu?: MouseEventHandler<HTMLButtonElement>;
   tooltipDelayMs?: number;
   children: ReactNode;
 };
@@ -23,6 +24,7 @@ export const ToolbarIconButton = ({
   pressed,
   pressOnPointerDown,
   onClick,
+  onContextMenu,
   tooltipDelayMs,
   children,
 }: ToolbarIconButtonProps) => {
@@ -33,8 +35,10 @@ export const ToolbarIconButton = ({
       disabled={disabled}
       pressOnPointerDown={pressOnPointerDown}
       onClick={onClick}
+      onContextMenu={onContextMenu}
       aria-label={ariaLabel}
       aria-pressed={pressed}
+      aria-haspopup={onContextMenu ? "menu" : undefined}
     >
       {children}
     </PressButton>
