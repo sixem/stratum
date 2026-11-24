@@ -24,11 +24,10 @@ export function useBottomFolder() {
     pane: "bottom", loadIdRef, primeEntryMeta: meta.primeEntryMeta, setMetaListingPending: meta.setMetaListingPending,
     reportError, getRestoreRevision, perf: log, log,
   });
-  const defaultViewMode = useBottomPaneStore(state => state.defaultViewMode);
   const keepFilterOnNavigation = useSettingsStore(state => state.keepFilterOnNavigation);
   const tabs = useTabSession({
     useStore: useBottomSessionStore, currentPath: dir.currentPath, loadingPath: dir.loadingPath,
-    loadDir: dir.loadDir, clearDir: dir.clearDir, defaultViewMode, newTabViewMode: defaultViewMode, recentJumpsLimit: 12,
+    loadDir: dir.loadDir, clearDir: dir.clearDir, recentJumpsLimit: 12,
     keepFilterOnNavigation,
   });
   const navigation = useBottomPaneStore(state => state.navigation);
@@ -55,15 +54,16 @@ export function useBottomFolder() {
     loading: busy,
     loadDir: dir.loadDir,
   });
+  const showParentEntry = useSettingsStore(state => state.showParentEntry);
+  const showParent = showParentEntry && !tabs.displaySearch.trim() && dir.entries.length > 0;
+  const model = useFileViewModel(dir.entries, showParent ? dir.parentPath : null);
   useDirWatch({
     pane: "bottom", enabled: "__TAURI_INTERNALS__" in window, sharesWatch,
     activeTabId: tabs.activeTabId, activeTabPath: watchPath, currentPath: path, tabs: tabs.tabs,
     sortState: tabs.sortState, searchQuery: tabs.searchValue, loadDir: dir.loadDir,
+    entryByPath: model.entryByPath,
     requestEntryMeta: meta.requestEntryMeta, loading: busy,
   });
-  const showParentEntry = useSettingsStore(state => state.showParentEntry);
-  const showParent = showParentEntry && !tabs.displaySearch.trim() && dir.entries.length > 0;
-  const model = useFileViewModel(dir.entries, showParent ? dir.parentPath : null);
   const viewKey = JSON.stringify([tabs.activeTabId, path]);
   const selection = useFileViewSelection({ viewModel: model, resetKey: viewKey });
   return { dir, meta, tabs, model, selection, viewKey, busy, navigation };

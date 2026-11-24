@@ -2,18 +2,24 @@
 import { useId } from "react";
 import { shallow } from "zustand/shallow";
 import { PressButton } from "@/components/primitives/PressButton";
-import { useSettingsStore } from "@/modules";
+import { resolveDefaultViewMode, useSettingsStore } from "@/modules/settings.store";
 
 import { SettingsItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
 import { NAVIGATION_SETTINGS_ITEMS, SettingsNavigationDefaults } from "./SettingsNavigationDefaults";
 import { DIAGNOSTICS_SETTINGS_ITEM, SettingsDiagnostics } from "./SettingsDiagnostics";
 
+const DEFAULT_VIEW_OPTIONS = [
+  { value: "thumbs", label: "Grid" },
+  { value: "list", label: "List" },
+  { value: "last", label: "Last used" },
+] as const;
+
 export const GENERAL_SETTINGS_ITEMS = {
   defaultView: {
     label: "Default view",
-    description: "Used for new tabs and new sessions.",
-    keywords: "list thumbnails grid",
+    description: "Used for new tabs in both panes. Last used follows the most recent view choice.",
+    keywords: "list thumbnails grid remember",
   },
   ...NAVIGATION_SETTINGS_ITEMS,
   smoothScrolling: {
@@ -82,20 +88,25 @@ export const SettingsGeneralSection = ({ sectionId, open }: SettingsGeneralSecti
       <div className="settings-section-title">General</div>
       <SettingsItem item={GENERAL_SETTINGS_ITEMS.defaultView}>
         <div className="settings-pills" role="group" aria-label="Default view">
-          <PressButton
-            type="button"
-            className={`settings-pill${defaultViewMode === "thumbs" ? " is-active" : ""}`}
-            onClick={() => updateSettings({ defaultViewMode: "thumbs" })}
-          >
-            Grid
-          </PressButton>
-          <PressButton
-            type="button"
-            className={`settings-pill${defaultViewMode === "list" ? " is-active" : ""}`}
-            onClick={() => updateSettings({ defaultViewMode: "list" })}
-          >
-            List
-          </PressButton>
+          {DEFAULT_VIEW_OPTIONS.map(({ value, label }) => (
+            <PressButton
+              key={value}
+              type="button"
+              className={`settings-pill${defaultViewMode === value ? " is-active" : ""}`}
+              aria-pressed={defaultViewMode === value}
+              onClick={() => {
+                if (defaultViewMode === value) return;
+                const current = useSettingsStore.getState();
+                if (value === "last" && current.lastUsedViewMode === null) {
+                  updateSettings({ defaultViewMode: value, lastUsedViewMode: resolveDefaultViewMode(current) });
+                } else {
+                  updateSettings({ defaultViewMode: value });
+                }
+              }}
+            >
+              {label}
+            </PressButton>
+          ))}
         </div>
       </SettingsItem>
       <SettingsNavigationDefaults />

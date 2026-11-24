@@ -3,7 +3,7 @@ import { createWithEqualityFn } from "zustand/traditional";
 import type { SortDir, SortKey, SortState, Tab, ViewMode } from "@/types";
 import type { TabHistory } from "@/types/tabs";
 import { createTab, DEFAULT_SORT, getDefaultSortDir } from "@/lib";
-import { useSettingsStore } from "./settings.store";
+import { resolveDefaultViewMode, useSettingsStore } from "./settings.store";
 import type { FixedGridSize } from "./settings.types";
 import { coerceTabGridSize, fillTabGridSizes, getDefaultTabGridSize, getTabGridSizeOnEnable } from "./tabGridSize";
 import {
@@ -58,10 +58,10 @@ const DEFAULT_SESSION: SessionState = {
   recentJumps: [],
 };
 
-export const createSessionTab = (...[path, base, defaults]: Parameters<typeof createTab>): Tab => {
+export const createSessionTab = (path: string, base?: Partial<Pick<Tab, "sort" | "search">>): Tab => {
   const settings = useSettingsStore.getState();
   return {
-    ...createTab(path, settings.newTabSort ? { ...base, sort: settings.newTabSort } : base, defaults),
+    ...createTab(path, { ...base, sort: settings.newTabSort ?? base?.sort, viewMode: resolveDefaultViewMode(settings) }),
     gridSize: getDefaultTabGridSize(settings),
   };
 };

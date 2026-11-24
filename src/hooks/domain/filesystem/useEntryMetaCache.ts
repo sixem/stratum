@@ -61,7 +61,7 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
   }, [clearMetaFlushTimer]);
 
   const scheduleMetaFlush = useCallback(() => {
-    if (metaFlushTimerRef.current != null) return;
+    if (metaFlushTimerRef.current != null || metaUpdatesRef.current.size === 0) return;
     metaFlushTimerRef.current = window.setTimeout(flushEntryMeta, META_FLUSH_INTERVAL_MS);
   }, [flushEntryMeta]);
 
@@ -69,7 +69,12 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
     const cache = metaCacheRef.current;
     cache.delete(meta.path);
     cache.set(meta.path, meta);
-    if (publish) metaUpdatesRef.current.set(meta.path, meta);
+    if (!publish) return;
+    const pending = metaUpdatesRef.current;
+    const previous = pending.get(meta.path) ?? entryMetaRef.current.get(meta.path);
+    if (!previous || previous.size !== meta.size || previous.modified !== meta.modified) {
+      pending.set(meta.path, meta);
+    }
   }, []);
 
   const scheduleWatchLookups = useCallback(() => {
@@ -89,7 +94,7 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
         watchLookupInFlightRef.current = false;
       }
 
-      const { updates, failedPaths, retry } = watchQueue.complete(batch, results);
+      const { updates, failedPaths, checkedFiles, retry } = watchQueue.complete(batch, results);
       for (const meta of updates) {
         const parent = getParentPath(meta.path);
         // Keep the warm cache current across navigation without publishing old rows into the new pane.
@@ -99,6 +104,7 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
       if (failedPaths.length && perf.enabled) perf("watch stat_entries gave up: paths=%d", failedPaths.length);
       trimMetaCache(metaCacheRef.current);
       if (updates.length) scheduleMetaFlush();
+      for (const { path, meta, notify } of checkedFiles) notify(path, meta);
       if (watchQueue.ready) {
         watchMetaTimerRef.current = window.setTimeout(drainBatch, retry ? WATCH_RETRY_DELAY_MS : WATCH_BATCH_INTERVAL_MS);
       }
@@ -158,7 +164,7 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
         for (const path of unique) {
           pending.delete(folderPathKey(path));
           updates.delete(path);
-          watchQueue.invalidate(path);
+          watchQueue.invalidate(path, options.onFileChecked);
         }
         scheduleWatchLookups();
         return [];

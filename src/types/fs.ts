@@ -174,7 +174,7 @@ export type TransferProgressEvent = {
   progressPercent?: number | null;
   statusText?: string | null;
   rateText?: string | null;
-  completedItem?: { path: string; sourceRemoved: boolean };
+  completedItems?: { path: string; sourceRemoved: boolean }[];
 };
 
 export type TransferJobsSnapshotEvent = TransferQueueSnapshot;

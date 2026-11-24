@@ -2,6 +2,7 @@
 use super::control::TransferJobControlHandle;
 use super::job_paths::TransferJobPaths;
 use super::manager_events::TransferEventEmitter;
+use super::progress_batch::TransferProgressBatch;
 use crate::domain::filesystem as fs;
 use crate::domain::filesystem::transfer::destination::TransferDestination;
 use crate::domain::filesystem::transfer::job_plan::{PlannedTransferJob, TransferProgressKind};
@@ -270,24 +271,15 @@ impl ActiveTransferRuntimeProgress {
     pub(super) fn update_snapshot(
         &mut self,
         snapshot: &mut TransferJobSnapshot,
-        update: &fs::TransferProgressUpdate,
+        batch: &TransferProgressBatch,
     ) {
         match self.progress_kind {
             Some(TransferProgressKind::Files) => {
-                let in_flight_bytes = match update.completed_file_work {
-                    Some(completed) => {
-                        self.committed_files = self.committed_files.saturating_add(completed.files);
-                        self.committed_bytes = self.committed_bytes.saturating_add(completed.bytes);
-                        0
-                    }
-                    None => update
-                        .current_bytes
-                        .unwrap_or(0)
-                        .min(update.current_total_bytes.unwrap_or(0)),
-                };
+                self.committed_files = self.committed_files.saturating_add(batch.file_work.files);
+                self.committed_bytes = self.committed_bytes.saturating_add(batch.file_work.bytes);
                 snapshot.work.files_completed = self.committed_files;
                 snapshot.work.bytes_completed =
-                    self.committed_bytes.saturating_add(in_flight_bytes);
+                    self.committed_bytes.saturating_add(batch.in_flight_bytes);
                 // A folder may grow between planning and execution. Count new
                 // work as we see it so the estimate can catch up.
                 if let Some(total) = snapshot.work.files_total.as_mut() {
@@ -298,8 +290,8 @@ impl ActiveTransferRuntimeProgress {
                 }
             }
             Some(TransferProgressKind::Items) => {
-                snapshot.work.files_total = Some(update.total);
-                snapshot.work.files_completed = update.processed;
+                snapshot.work.files_total = Some(batch.latest.total);
+                snapshot.work.files_completed = batch.latest.processed;
             }
             _ => {}
         }

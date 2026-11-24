@@ -26,7 +26,8 @@ export type Settings = {
   sidebarRecentLimit: number;
   sidebarSectionOrder: SidebarSectionId[];
   sidebarHiddenSections: SidebarSectionId[];
-  defaultViewMode: ViewMode;
+  defaultViewMode: ViewMode | "last";
+  lastUsedViewMode: ViewMode | null;
   startupMode: StartupMode;
   startupWorkspaceId: string | null;
   newTabSort: SortState | null;

@@ -128,8 +128,8 @@ export const useGridThumbRequests = ({
       if (thumbnailAppIcons && getExtension(item.entry.name) === "exe") {
         nextExecutables.push({
           path,
-          size: item.entry.size ?? resolvedSize,
-          modified: item.entry.modified ?? resolvedModified,
+          size: resolvedSize,
+          modified: resolvedModified,
         });
       }
     }

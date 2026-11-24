@@ -1,7 +1,7 @@
 // Layout preferences are separate from the two folder tab sessions.
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { ViewMode } from "@/types";
+import { BOTTOM_PANE_STORAGE_KEY } from "@/constants/settings";
 import { coercePaneLink } from "@/lib/paneLink";
 import type { PaneLink } from "@/lib/paneLink";
 import { createSessionTab, useBottomSessionStore, useSessionStore } from "./sessionStore";
@@ -14,24 +14,22 @@ type PaneHeight = { height: number; heightUnit: "px" | "%" };
 
 type BottomPaneState = PaneHeight & {
   open: boolean;
-  defaultViewMode: ViewMode;
   showBreadcrumbs: boolean;
   active: boolean;
   link: PaneLink | null;
   navigation: { path: string; newTab: boolean } | null;
 };
 
-export type BottomPaneLayout = Omit<BottomPaneState, "navigation" | "defaultViewMode" | "showBreadcrumbs">;
-export type BottomPanePreferences = Pick<BottomPaneState, "defaultViewMode" | "showBreadcrumbs">;
+export type BottomPaneLayout = Omit<BottomPaneState, "navigation" | "showBreadcrumbs">;
+export type BottomPanePreferences = Pick<BottomPaneState, "showBreadcrumbs">;
 
-const STORAGE_KEY = "stratum.bottom-pane";
 const STORAGE_VERSION = 0;
-const storedPane = ({ open, height, heightUnit, defaultViewMode, showBreadcrumbs, link }: BottomPaneLayout & BottomPanePreferences) => ({
-  open, height, heightUnit, defaultViewMode, showBreadcrumbs, link,
+const storedPane = ({ open, height, heightUnit, showBreadcrumbs, link }: BottomPaneLayout & BottomPanePreferences) => ({
+  open, height, heightUnit, showBreadcrumbs, link,
 });
 
 export const serializeBottomPane = (state: BottomPaneLayout & BottomPanePreferences) =>
-  [STORAGE_KEY, JSON.stringify({ state: storedPane(state), version: STORAGE_VERSION })] as const;
+  [BOTTOM_PANE_STORAGE_KEY, JSON.stringify({ state: storedPane(state), version: STORAGE_VERSION })] as const;
 
 export const DEFAULT_BOTTOM_PANE_LAYOUT: BottomPaneLayout = {
   open: false,
@@ -55,16 +53,17 @@ export const coerceBottomPaneHeight = (value?: Partial<PaneHeight>): PaneHeight 
 
 export const useBottomPaneStore = create<BottomPaneState>()(persist(
   (): BottomPaneState => ({
-    ...DEFAULT_BOTTOM_PANE_LAYOUT, defaultViewMode: "list", showBreadcrumbs: false, navigation: null,
+    ...DEFAULT_BOTTOM_PANE_LAYOUT, showBreadcrumbs: false, navigation: null,
   }),
   {
-    name: STORAGE_KEY,
+    name: BOTTOM_PANE_STORAGE_KEY,
     version: STORAGE_VERSION,
     partialize: storedPane,
     merge: (stored, current) => {
       const value = stored as Partial<Omit<BottomPaneState, "active" | "navigation">> | undefined;
       return {
-        ...current, ...value, ...coerceBottomPaneHeight(value),
+        ...current, ...coerceBottomPaneHeight(value),
+        open: value?.open === true,
         showBreadcrumbs: value?.showBreadcrumbs === true,
         link: coercePaneLink(value?.link),
       };
@@ -85,7 +84,7 @@ export const showBottomPane = (path?: string, newTab = true) => {
   if (!bottom.tabs.length) {
     const main = useSessionStore.getState();
     const initial = path ?? main.tabs.find(tab => tab.id === main.activeTabId)?.path ?? "";
-    const tab = createSessionTab(initial, { viewMode: preferences.defaultViewMode });
+    const tab = createSessionTab(initial);
     bottom.updateSession({ tabs: [tab], activeTabId: tab.id });
     // A mounted pane needs an explicit navigation for its new tab.
     if (!preferences.open) path = undefined;

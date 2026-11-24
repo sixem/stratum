@@ -39,6 +39,7 @@ export function buildFolderSelectionItems(
   const items: ContextMenuItem[] = [{
     id: "invert-selection",
     label: "Invert selection",
+    icon: "invert-selection",
     onSelect: () => invertFolderSelection(entries, selected, onSelectionChange),
   }];
   const extension = getSelectionExtension(entries, target?.path);
@@ -46,6 +47,7 @@ export function buildFolderSelectionItems(
     items.unshift({
       id: "select-same-extension",
       label: `Select all .${extension} files`,
+      icon: "select-same-extension",
       onSelect: () => selectFolderExtension(entries, onSelectionChange, target?.path),
     });
   }

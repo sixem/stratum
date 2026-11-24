@@ -14,6 +14,7 @@ import {
 import {
   ContextCutIcon,
   ContextGalleryIcon,
+  ContextInvertSelectionIcon,
   ContextMoreOptionsIcon,
   ContextNewFileIcon,
   ContextNewFolderIcon,
@@ -26,6 +27,7 @@ import {
   ContextPinIcon,
   ContextPropertiesIcon,
   ContextRenameIcon,
+  ContextSelectSameExtensionIcon,
   ContextTerminalIcon,
   ContextUnpinIcon,
 } from "@/components/icons/contextMenuIcons";
@@ -74,6 +76,8 @@ const contextIcons = {
   copy: CopyActionIcon,
   delete: DeleteActionIcon,
   rename: ContextRenameIcon,
+  "select-same-extension": ContextSelectSameExtensionIcon,
+  "invert-selection": ContextInvertSelectionIcon,
   properties: ContextPropertiesIcon,
   "more-options": ContextMoreOptionsIcon,
 } satisfies Record<ContextMenuIcon, typeof CopyActionIcon>;

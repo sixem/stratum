@@ -2,6 +2,7 @@
 // Keeps formatting and per-job calculations in one place for readability.
 import { formatBytes, getPathName } from "@/lib";
 import type { TransferJob, TransferStatus } from "@/modules/transferStore";
+import { isActiveStatus } from "@/modules/transferStore/shared";
 
 export type TransferSummary = {
   activeCount: number;
@@ -41,8 +42,15 @@ const compareTransferJobsByRecent = (left: TransferJob, right: TransferJob): num
   return right.startedAt - left.startedAt;
 };
 
-export const sortTransferJobsByRecent = (jobs: TransferJob[]): TransferJob[] =>
-  [...jobs].sort(compareTransferJobsByRecent);
+export const sortWorkListJobs = (jobs: readonly TransferJob[]): TransferJob[] =>
+  [...jobs].sort((left, right) => {
+    const leftActive = isActiveStatus(left.status);
+    const rightActive = isActiveStatus(right.status);
+    if (leftActive !== rightActive) return leftActive ? -1 : 1;
+    if (!leftActive) return compareTransferJobsByRecent(left, right);
+    // Progress and queued-to-running transitions can change the other timestamps.
+    return left.addedAt - right.addedAt || left.id.localeCompare(right.id);
+  });
 
 const formatDuration = (elapsedMs: number) => {
   if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return "0s";

@@ -150,6 +150,7 @@ const buildTransferJobFromSnapshot = (
     phase: nextPhase,
     total,
     processed,
+    addedAt: previousJob?.addedAt ?? now,
     startedAt,
     activityAt,
     finishedAt,

@@ -256,11 +256,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       </label>
       <ToolbarIconButton
         label={viewSwitchLabel}
-        onClick={() => {
-          // Keep the last choice as the default for new tabs in any workspace.
-          useBottomPaneStore.setState({ defaultViewMode: nextView });
-          if (tabs.activeTab) tabs.setViewMode(nextView);
-        }}
+        onClick={() => tabs.setViewMode(nextView)}
         pressOnPointerDown={false}
       >
         {nextView === "thumbs" ? <GridIcon /> : <ListIcon />}
@@ -283,6 +279,14 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     </nav>
     <TabsBar tabs={tabs.tabs} activeId={tabs.activeTabId} showTabNumbers={tabNumbers} fixedWidthTabs={fixedWidth}
       onSelect={tabs.selectTab} onClose={closeTab} onNew={tabs.newTab} onReorder={tabs.reorderTabs}
+      onMoveTab={(id, receive) => tabs.moveTab(id, receive, id === activeTabId ? scrollTop.current ?? undefined : undefined)}
+      onReceiveTab={(transfer, index) => {
+        if (activeTabId && scrollTop.current !== null) setTabScrollTop(activeTabId, scrollTop.current);
+        if (!tabs.receiveTab(transfer, index)) return false;
+        setBottomPaneActive(true);
+        focusFiles();
+        return true;
+      }}
       onOpenLocation={openLocationTab}
       onTabContextMenu={paneActions.handlePlaceTargetContextMenu}
       onTabContextMenuDown={paneActions.handlePlaceTargetContextMenuDown}

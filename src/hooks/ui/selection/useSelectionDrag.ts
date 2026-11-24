@@ -30,6 +30,7 @@ type SelectionDragOptions = {
   setSelection: (paths: string[], anchor?: string) => void;
   clearSelection: () => void;
   itemSelector: string;
+  canSelectPath: (path: string) => boolean;
   layout?: SelectionLayout;
 };
 
@@ -82,7 +83,7 @@ const isPointerOnNativeScrollbar = (element: HTMLElement, event: PointerEvent) =
 
 export const useSelectionDrag = (
   ref: RefObject<HTMLElement | null>,
-  { selected, setSelection, clearSelection, itemSelector, layout }: SelectionDragOptions,
+  { selected, setSelection, clearSelection, itemSelector, canSelectPath, layout }: SelectionDragOptions,
 ) => {
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
   const pointerIdRef = useRef<number | null>(null);
@@ -90,6 +91,7 @@ export const useSelectionDrag = (
   const selectedRef = useRef(selected);
   const setSelectionRef = useRef(setSelection);
   const clearSelectionRef = useRef(clearSelection);
+  const canSelectPathRef = useRef(canSelectPath);
   const layoutRef = useRef<SelectionLayout | undefined>(layout);
   // Cache item rects during a drag so we avoid repeated DOM queries.
   const cacheRef = useRef<CacheState | null>(null);
@@ -123,6 +125,11 @@ export const useSelectionDrag = (
     layoutRef.current = layout;
   }, [layout]);
 
+  useEffect(() => {
+    // Job state can change during a drag without changing its layout snapshot.
+    canSelectPathRef.current = canSelectPath;
+  }, [canSelectPath]);
+
   // Convert the current drag gesture into a visible box and the matching paths.
   const updateSelection = useCallback(() => {
     const element = ref.current;
@@ -152,6 +159,7 @@ export const useSelectionDrag = (
       orderedPaths = selectPathsFromLayoutSnapshot(
         drag.layoutSnapshot,
         selectionGeometry.contentRect,
+        canSelectPathRef.current,
       );
     } else {
       const cached = cacheRef.current;
@@ -176,6 +184,7 @@ export const useSelectionDrag = (
       orderedPaths = selectPathsFromDomRects(
         cacheRef.current?.items ?? [],
         selectionGeometry.viewportRect,
+        canSelectPathRef.current,
       );
     }
 

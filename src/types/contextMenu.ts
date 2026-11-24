@@ -39,6 +39,8 @@ export type ContextMenuIcon =
   | "copy"
   | "delete"
   | "rename"
+  | "select-same-extension"
+  | "invert-selection"
   | "properties"
   | "more-options";
 

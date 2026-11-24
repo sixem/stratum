@@ -109,6 +109,7 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
     driveStatuses,
     open,
     results,
+    refreshedAnchorPath: scrollRestore?.path,
     query: trimmedQuery,
     hasMore,
     loadMore,

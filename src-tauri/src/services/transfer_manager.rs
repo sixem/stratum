@@ -20,6 +20,8 @@ mod manager_run;
 mod manager_shutdown;
 #[path = "transfer_manager/manager_state.rs"]
 mod manager_state;
+#[path = "transfer_manager/progress_batch.rs"]
+mod progress_batch;
 #[path = "transfer_manager/progress_dispatch.rs"]
 mod progress_dispatch;
 

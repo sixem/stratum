@@ -60,9 +60,10 @@ export const PromptModal = () => {
 
       const lowerKey = event.key.toLowerCase();
 
-      // Enter is the universal confirm shortcut.
-      // For explicit confirm/cancel dialogs, also allow `y` (yes) to confirm.
-      if (event.key === "Enter" || (lowerKey === "y" && showCancel)) {
+      // Leave Enter to whichever control has focus. The shortcut still works
+      // on the dialog surface, including when opening it leaves focus on body.
+      const confirmWithEnter = event.key === "Enter" && (focused === panelRef.current || focused === document.body);
+      if (confirmWithEnter || (lowerKey === "y" && showCancel)) {
         if (!showConfirm) return;
         event.preventDefault();
         event.stopPropagation();

@@ -17,6 +17,7 @@ export const DEFAULT_SIDEBAR_SECTION_ORDER = SIDEBAR_SECTION_DEFINITIONS.map(
   (item) => item.id,
 );
 export const DEFAULT_SIDEBAR_HIDDEN_SECTIONS: SidebarSectionId[] = [];
+export const DEFAULT_VIEW_MODE = "thumbs";
 
 export const DEFAULT_SETTINGS: Settings = {
   sidebarOpen: true,
@@ -24,7 +25,8 @@ export const DEFAULT_SETTINGS: Settings = {
   sidebarRecentLimit: 10,
   sidebarSectionOrder: DEFAULT_SIDEBAR_SECTION_ORDER,
   sidebarHiddenSections: DEFAULT_SIDEBAR_HIDDEN_SECTIONS,
-  defaultViewMode: "thumbs",
+  defaultViewMode: DEFAULT_VIEW_MODE,
+  lastUsedViewMode: null,
   startupMode: "resume",
   startupWorkspaceId: null,
   newTabSort: null,

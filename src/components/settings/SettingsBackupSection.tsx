@@ -8,6 +8,7 @@ import { readStratumBackup } from "@/modules/backup/schema";
 import type { StratumBackup } from "@/modules/backup/types";
 import { useWorkspaceStore } from "@/modules/workspaceStore";
 import { BackupImportReview } from "./BackupImportReview";
+import { SettingsCheckbox } from "./SettingsCheckbox";
 import { SettingsItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
 
@@ -38,7 +39,7 @@ export const SettingsBackupSection = ({ sectionId }: { sectionId: string }) => {
     setFeedback(null);
     try {
       const backup = captureStratumBackup(scope, selection);
-      if (await saveStratumBackup(JSON.stringify(backup, null, 2))) {
+      if (await saveStratumBackup(backup)) {
         setFeedback({ kind: "success", text: "Backup exported." });
       }
     } catch (error) {
@@ -68,7 +69,7 @@ export const SettingsBackupSection = ({ sectionId }: { sectionId: string }) => {
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Backup</div>
       <SettingsItem item={BACKUP_SETTINGS_ITEMS.export} className="is-stacked">
-        <div className="settings-backup-form">
+        <div className="settings-backup-export">
           <div className="settings-pills" role="group" aria-label="Export scope">
             <PressButton
               type="button"
@@ -89,23 +90,21 @@ export const SettingsBackupSection = ({ sectionId }: { sectionId: string }) => {
             <ul className="settings-backup-list" aria-label="Workspaces to export">
               {workspaces.map(({ id, name }) => (
                 <li key={id}>
-                  <label className="settings-backup-check">
-                    <input
-                      type="checkbox"
-                      checked={selection.has(id)}
-                      disabled={busy}
-                      onChange={(event) => {
-                        const selected = event.currentTarget.checked;
-                        setSelection((previous) => {
-                          const next = new Set(previous);
-                          if (selected) next.add(id);
-                          else next.delete(id);
-                          return next;
-                        });
-                      }}
-                    />
-                    <span>{name}</span>
-                  </label>
+                  <SettingsCheckbox
+                    checked={selection.has(id)}
+                    disabled={busy}
+                    onChange={(event) => {
+                      const selected = event.currentTarget.checked;
+                      setSelection((previous) => {
+                        const next = new Set(previous);
+                        if (selected) next.add(id);
+                        else next.delete(id);
+                        return next;
+                      });
+                    }}
+                  >
+                    {name}
+                  </SettingsCheckbox>
                 </li>
               ))}
             </ul>

@@ -83,3 +83,25 @@ test("a missing stat reply is retried without delaying successful entries indefi
   assert.equal(last.retry, false);
   assert.equal(queue.ready, false);
 });
+
+test("known files confirm missing metadata only after retries", () => {
+  const queue = new EntryMetaRefreshQueue();
+  const path = "E:\\Work\\writing.mp4";
+  const notify = () => {};
+  queue.invalidate(path, notify);
+  const missing = { path, size: null, modified: null };
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const result = queue.complete(queue.take(120), [missing]);
+    assert.equal(result.retry, true);
+    assert.deepEqual(result.checkedFiles, []);
+  }
+  const result = queue.complete(queue.take(120), [missing]);
+  assert.equal(result.retry, false);
+  assert.deepEqual(result.updates, []);
+  assert.deepEqual(result.checkedFiles, [{ path, meta: null, notify }]);
+
+  queue.invalidate(path, notify);
+  const updated = read(path, 9);
+  assert.deepEqual(queue.complete(queue.take(120), [updated]).checkedFiles, [{ path, meta: updated, notify }]);
+});

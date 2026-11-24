@@ -35,6 +35,7 @@ export const startLocalJobTransition = (
     phase: "executing",
     total: Math.max(0, input.total),
     processed: 0,
+    addedAt: now,
     startedAt: now,
     activityAt: now,
     items: normalizeItems(input.items),

@@ -338,7 +338,7 @@ export const switchWorkspace = (target: WorkspaceSession, outgoing: WorkspaceLay
 
 export const createFreshWorkspace = (name: string, outgoing: WorkspaceLayout) => {
   const state = useWorkspaceStore.getState();
-  const start = createSessionTab("", { viewMode: useSettingsStore.getState().defaultViewMode });
+  const start = createSessionTab("");
   const layout: WorkspaceLayout = {
     main: { tabs: [start], activeTabId: start.id, recentJumps: [] },
     bottom: { tabs: [], activeTabId: null, recentJumps: [] },

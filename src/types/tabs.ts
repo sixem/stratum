@@ -20,3 +20,8 @@ export type TabHistory = {
 };
 
 export type TabHistoryDirection = keyof TabHistory;
+
+export type TabTransfer = {
+  tab: Tab;
+  history?: TabHistory;
+};

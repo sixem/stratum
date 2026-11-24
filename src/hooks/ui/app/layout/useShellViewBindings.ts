@@ -82,6 +82,7 @@ export const useShellViewBindings = ({
       sidebarOpen: resolvedView.sidebarOpen,
       deferredSearchValue: viewState.deferredSearchValue,
       sortState: resolvedView.sortState,
+      entryByPath: interactionModel.viewModel.entryByPath,
       tabs: resolvedView.tabs,
       contextMenuOpen: dataPipeline.contextMenuActive,
     },

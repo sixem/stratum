@@ -18,7 +18,11 @@ impl TransferEventEmitter {
         Self { transfer_id: None }
     }
 
-    pub(super) fn emit(&self, update: &fs::TransferProgressUpdate) {
+    pub(super) fn emit(
+        &self,
+        update: &fs::TransferProgressUpdate,
+        completed_items: Vec<fs::CompletedTransferItem>,
+    ) {
         let Some(transfer_id) = self.transfer_id.clone() else {
             return;
         };
@@ -32,7 +36,7 @@ impl TransferEventEmitter {
             progress_percent: update.progress_percent,
             status_text: update.status_text.clone(),
             rate_text: update.rate_text.clone(),
-            completed_item: update.completed_item.clone(),
+            completed_items,
         };
         self.send("transfer_progress", payload);
     }

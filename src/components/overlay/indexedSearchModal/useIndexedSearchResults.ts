@@ -9,12 +9,11 @@ import {
   INDEXED_SEARCH_PAGE_SIZE,
 } from "./indexedSearchModalConfig";
 import {
+  canFinishIndexedSearchRefresh,
   captureIndexedSearchAnchor,
-  hasIndexedSearchAnchor,
-  indexedSearchAnchorScrollTop,
-  MAX_REFRESH_PAGES,
+  restoreIndexedSearchAnchor,
 } from "./indexedSearchRefresh";
-import type { IndexedSearchRefreshAnchor } from "./indexedSearchRefresh";
+import type { IndexedSearchRefreshAnchor, IndexedSearchScrollRestore } from "./indexedSearchRefresh";
 
 type UseIndexedSearchResultsParams = {
   catalogPending: boolean;
@@ -31,12 +30,12 @@ type SearchResult = SearchScope & {
   error: string | null;
   pageError: string | null;
   refreshError?: string;
-  scrollRestore?: { top: number };
+  scrollRestore?: IndexedSearchScrollRestore;
 };
 type SearchRequest = SearchScope & (
   | { kind: "head" }
   | { kind: "next"; previous: SearchResult }
-  | { kind: "refresh"; previous: SearchResult; anchor: IndexedSearchRefreshAnchor | null }
+  | { kind: "refresh"; previous: SearchResult; selectedIndex: number }
 );
 
 const EMPTY_RESULTS: IndexedPathMatch[] = [];
@@ -93,12 +92,11 @@ export const useIndexedSearchResults = ({
           const previousPaths = previousPage && new Set(previousPage.matches.map(({ path }) => path));
           const addedIndexes = new Map<string, number>();
           const visitedCursors = new Set<string>();
-          let pages = 0;
+          let anchor: IndexedSearchRefreshAnchor | null = null;
           do {
             if (cursor) visitedCursors.add(cursor);
             const page = await queryIndexedPathPage({ query, limit: INDEXED_SEARCH_PAGE_SIZE, cursor });
             if (latestRequestRef.current !== request) break;
-            pages += 1;
             for (const match of page.matches) {
               if (previousPaths?.has(match.path) || addedIndexes.has(match.path)) continue;
               addedIndexes.set(match.path, added.length);
@@ -106,7 +104,14 @@ export const useIndexedSearchResults = ({
             }
             cursor = page.nextCursor && !visitedCursors.has(page.nextCursor) ? page.nextCursor : null;
             if (request.kind === "refresh") {
-              if (pages >= MAX_REFRESH_PAGES || hasIndexedSearchAnchor(addedIndexes, request.anchor)) break;
+              // The user can continue scrolling the old list during a refresh.
+              const viewport = resultsViewportRef.current;
+              if (viewport?.clientHeight && (
+                !anchor || viewport.scrollTop !== anchor.scrollTop || viewport.clientHeight !== anchor.viewportHeight
+              )) {
+                anchor = captureIndexedSearchAnchor(request.previous.matches, viewport, request.selectedIndex);
+              }
+              if (canFinishIndexedSearchRefresh(addedIndexes, anchor)) break;
             } else if (added.length) break;
             // A cursor can traverse a page whose paths are already in the list.
           } while (cursor !== null);
@@ -116,9 +121,9 @@ export const useIndexedSearchResults = ({
             query, catalogRevision, matches: previousPage ? previousPage.matches.concat(added) : added,
             nextCursor: cursor, paged: request.kind !== "head",
             error: null, pageError: null,
-            scrollRestore: request.kind === "refresh" ? {
-              top: indexedSearchAnchorScrollTop(addedIndexes, request.anchor),
-            } : previousPage?.scrollRestore,
+            scrollRestore: request.kind === "refresh"
+              ? restoreIndexedSearchAnchor(added, addedIndexes, anchor)
+              : previousPage?.scrollRestore,
           };
         } catch (error) {
           if (request.kind === "refresh") {
@@ -190,11 +195,9 @@ export const useIndexedSearchResults = ({
     const previous = lastResultRef.current;
     if (!open || catalogPending || !previous?.paged || previous.query !== trimmedQuery
       || previous.catalogRevision === catalogRevision || latestRequestRef.current?.kind === "refresh") return;
-    const viewport = resultsViewportRef.current;
-    const anchor = viewport ? captureIndexedSearchAnchor(previous.matches, viewport, selectedIndex) : null;
     setLoadingMore(false);
     setRefreshing(true);
-    latestRequestRef.current = { kind: "refresh", query: previous.query, catalogRevision, previous, anchor };
+    latestRequestRef.current = { kind: "refresh", query: previous.query, catalogRevision, previous, selectedIndex };
     void runLatest();
   }, [catalogPending, catalogRevision, open, runLatest, trimmedQuery]);
 

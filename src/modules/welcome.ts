@@ -3,8 +3,9 @@ import { PLACES_STORAGE_KEY, SESSION_LEGACY_STORAGE_KEY, SESSION_STORAGE_KEY } f
 import { SETTINGS_STORAGE_KEY } from "@/constants/settings";
 import { useSettingsStore } from "./settings.store";
 import type { Settings } from "./settings.types";
+import type { ViewMode } from "@/types";
 
-export type WelcomeSettings = Pick<Settings, "darkMode" | "accentTheme" | "defaultViewMode">;
+export type WelcomeSettings = Pick<Settings, "darkMode" | "accentTheme"> & { defaultViewMode: ViewMode };
 
 const WELCOME_STORAGE_KEY = "stratum.welcome";
 const EXISTING_PROFILE_KEYS = [

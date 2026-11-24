@@ -65,7 +65,11 @@ pub async fn open_stratum_backup(window: WebviewWindow) -> Result<Option<String>
 }
 
 #[tauri::command]
-pub async fn save_stratum_backup(window: WebviewWindow, data: String) -> Result<bool, String> {
+pub async fn save_stratum_backup(
+    window: WebviewWindow,
+    data: String,
+    file_name: String,
+) -> Result<bool, String> {
     if data.len() as u64 > MAX_BACKUP_BYTES {
         return Err("The backup exceeds 16 MiB. Export fewer workspaces at a time.".to_owned());
     }
@@ -75,7 +79,7 @@ pub async fn save_stratum_backup(window: WebviewWindow, data: String) -> Result<
             .file()
             .set_parent(&window)
             .set_title("Export Stratum backup")
-            .set_file_name("Stratum.stratum.json")
+            .set_file_name(file_name)
             .add_filter("Stratum backup", &["json"])
             .blocking_save_file()
         else {

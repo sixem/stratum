@@ -34,7 +34,6 @@ export const useAppShellModel = (welcomeOpen = false) => {
     loadingPath: fileManager.loadingPath,
     loadDir: fileManager.loadDir,
     clearDir: fileManager.clearDir,
-    defaultViewMode: settings.defaultViewMode,
     keepFilterOnNavigation: settings.keepFilterOnNavigation,
     recentJumpsLimit: settings.sidebarRecentLimit,
   });

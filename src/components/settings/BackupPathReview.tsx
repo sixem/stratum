@@ -2,6 +2,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { probeBackupFolders } from "@/api/backup";
+import { ChevronDownIcon } from "@/components/icons";
 import { PressButton } from "@/components/primitives/PressButton";
 import { toMessage } from "@/lib";
 import { backupLocationKey, createBackupPathRemapper, parseBackupLocation } from "@/modules/backup/locations";
@@ -109,15 +110,25 @@ export const BackupPathReview = ({ locations, mappings, setMappings }: Props) =>
   if (!locations.length) return null;
   const remapSuggestions = [...new Set([...preview.roots, ...locations])];
   return (
-    <div className="settings-backup-form">
+    <div className="settings-backup-paths">
       <div className="settings-label">Folder locations</div>
       {checking ? <p className="settings-desc" role="status">Checking folders…</p> : null}
       {checkFailed ? <p className="settings-desc" role="status">Location checks failed. You can still remap or import these folders.</p> : null}
       {missing.length ? (
         <details className="settings-backup-locations" open>
-          <summary>{missing.length} unavailable {missing.length === 1 ? "folder" : "folders"}</summary>
+          <summary>
+            <ChevronDownIcon />
+            <span>{missing.length} unavailable {missing.length === 1 ? "folder" : "folders"}</span>
+          </summary>
           <ul className="settings-backup-list">
-            {missing.map((path) => <li key={path}><button type="button" className="settings-backup-path" onClick={() => setFrom(preview.origins.get(backupLocationKey(path)) ?? path)}>{path}</button></li>)}
+            {missing.map((path) => (
+              <li key={path}>
+                <button type="button" className="settings-backup-path"
+                  onClick={() => setFrom(preview.origins.get(backupLocationKey(path)) ?? path)}>
+                  {path}
+                </button>
+              </li>
+            ))}
           </ul>
         </details>
       ) : null}
@@ -125,17 +136,19 @@ export const BackupPathReview = ({ locations, mappings, setMappings }: Props) =>
 
       <div className="settings-backup-fields">
         <div>
-          <span id={`${optionsId}-from`}>Old folder or drive</span>
+          <span className="settings-desc" id={`${optionsId}-from`}>Old folder or drive</span>
           <input className="settings-backup-input" aria-labelledby={`${optionsId}-from`} type="text" spellCheck={false} list={optionsId} value={from} onChange={(event) => setFrom(event.currentTarget.value)} />
         </div>
         <datalist id={optionsId}>{remapSuggestions.map((path) => <option key={path} value={path} />)}</datalist>
         <div>
-          <span id={`${optionsId}-to`}>Replacement folder</span>
-          <input className="settings-backup-input" aria-labelledby={`${optionsId}-to`} type="text" spellCheck={false} value={to} onChange={(event) => setTo(event.currentTarget.value)} />
+          <span className="settings-desc" id={`${optionsId}-to`}>Replacement folder</span>
+          <div className="settings-backup-replacement">
+            <input className="settings-backup-input" aria-labelledby={`${optionsId}-to`} type="text" spellCheck={false} value={to} onChange={(event) => setTo(event.currentTarget.value)} />
+            <PressButton type="button" className="btn ghost" disabled={browsing} onClick={browse}>Browse…</PressButton>
+          </div>
         </div>
       </div>
-      <div className="settings-actions">
-        <PressButton type="button" className="btn ghost" disabled={browsing} onClick={browse}>Browse…</PressButton>
+      <div className="settings-actions settings-backup-remap-action">
         <PressButton type="button" className="btn ghost" disabled={browsing || !from.trim() || !to.trim()} onClick={addMapping}>Add remap</PressButton>
       </div>
       {issue ? <p className="settings-desc settings-desc-error" role="alert">{issue}</p> : null}
@@ -143,7 +156,7 @@ export const BackupPathReview = ({ locations, mappings, setMappings }: Props) =>
         <ul className="settings-backup-list" aria-label="Applied remaps">
           {mappings.map((rule) => (
             <li key={rule.from} className="settings-backup-mapping">
-              <span><samp>{rule.from}</samp> → <samp>{rule.to}</samp></span>
+              <span>{rule.from} → {rule.to}</span>
               <PressButton type="button" className="btn ghost" aria-label={`Remove remap from ${rule.from}`} onClick={() => setMappings(mappings.filter((item) => item !== rule))}>Remove</PressButton>
             </li>
           ))}
@@ -151,7 +164,7 @@ export const BackupPathReview = ({ locations, mappings, setMappings }: Props) =>
       ) : null}
       {preview.example ? (
         <p className="settings-desc settings-backup-example">
-          {preview.changed} {preview.changed === 1 ? "location" : "locations"} will change. <samp>{preview.example.from}</samp> → <samp>{preview.example.to}</samp>
+          {preview.changed} {preview.changed === 1 ? "location" : "locations"} will change. {preview.example.from} → {preview.example.to}
         </p>
       ) : null}
     </div>

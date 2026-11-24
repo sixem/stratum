@@ -71,13 +71,9 @@ const FileGrid = ({
     () =>
       viewItems.map((item) => ({
         path: item.type === "parent" ? item.path : item.entry.path,
-        selectable:
-          item.type !== "parent" &&
-          item.presence !== "removed" &&
-          !isDeletePending(item.entry.path) &&
-          !isTransferPending(item.entry.path),
+        selectable: item.type !== "parent" && item.presence !== "removed",
       })),
-    [isDeletePending, isTransferPending, viewItems],
+    [viewItems],
   );
 
   const {
@@ -190,6 +186,7 @@ const FileGrid = ({
     viewportRef,
     selectedPaths: selection.selectedPaths,
     selectionItems,
+    canSelectPath: (path) => !isDeletePending(path) && !isTransferPending(path),
     columnCount,
     columnWidth,
     rowHeight,

@@ -50,6 +50,7 @@ export const useAppEffects = ({
     sidebarOpen,
     deferredSearchValue,
     sortState,
+    entryByPath,
     tabs,
     contextMenuOpen,
   } = view;
@@ -83,6 +84,7 @@ export const useAppEffects = ({
     currentPath,
     tabs,
     sortState,
+    entryByPath,
     searchQuery: activeSearch,
     loadDir,
     requestEntryMeta,

@@ -260,14 +260,14 @@
     background: var(--dark-selection);
   }
 
-  :is(.tab[data-drop-target="true"], .tabsbar[data-location-drop-hover="true"]) {
+  :is(.tab[data-drop-target="true"], .tabsbar:is([data-location-drop-hover="true"], [data-tab-transfer-hover="true"])) {
     background-color: rgba(var(--accent-rgb), 0.18);
     // Inset the outline so clipped tab strips retain the complete drop marker.
     outline: 2px dashed color-mix(in srgb, var(--accent) 76%, white);
     outline-offset: -2px;
   }
 
-  .tabsbar[data-location-drop-hover="true"] {
+  .tabsbar:is([data-location-drop-hover="true"], [data-tab-transfer-hover="true"]) {
     box-shadow: none;
   }
 

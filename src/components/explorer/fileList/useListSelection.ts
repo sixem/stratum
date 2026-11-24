@@ -7,6 +7,7 @@ type UseListSelectionOptions = {
   listRef: RefObject<HTMLDivElement | null>;
   selectedPaths: Set<string>;
   selectionItems: { path: string; selectable: boolean }[];
+  canSelectPath: (path: string) => boolean;
   itemHeight: number;
   rowHeight: number;
   onSetSelection: (paths: string[], anchor?: string) => void;
@@ -19,6 +20,7 @@ export const useListSelection = ({
   listRef,
   selectedPaths,
   selectionItems,
+  canSelectPath,
   itemHeight,
   rowHeight,
   onSetSelection,
@@ -31,6 +33,7 @@ export const useListSelection = ({
     setSelection: onSetSelection,
     clearSelection: onClearSelection,
     itemSelector: "[data-selectable=\"true\"]",
+    canSelectPath,
     layout: {
       kind: "list",
       items: selectionItems,

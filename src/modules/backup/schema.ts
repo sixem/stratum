@@ -2,7 +2,7 @@
 import { SETTINGS_STORAGE_VERSION } from "@/constants";
 import { readBatchRenamePresets } from "../batchRenamePresetStore";
 import { coerceQuickMovePreferences } from "../quickMovePreferences";
-import { coerceSettings, normalizeLegacySettings } from "../settings.normalize";
+import { coerceRememberedViewMode, coerceSettings, normalizeLegacySettings } from "../settings.normalize";
 import type { Settings } from "../settings.types";
 import { readWorkspaceLayout } from "../workspaceStore";
 import type { WorkspaceLayout } from "../workspaceStore";
@@ -78,7 +78,14 @@ const importProfile = (value: unknown, ids: ReadonlySet<string>): BackupProfile 
   const renamePresets = readBatchRenamePresets(value.renamePresets);
   if (renamePresets.length !== value.renamePresets.length) return invalidBackup();
   const rawVolume = previewPreferences.volume;
-  const { ffmpegPath: _toolPath, ...settings } = coerceSettings(normalizeLegacySettings(value.settings as Partial<Settings>, settingsVersion));
+  const storedSettings = normalizeLegacySettings(value.settings as Partial<Settings>, settingsVersion);
+  const { ffmpegPath: _toolPath, ...settings } = coerceSettings({
+    ...storedSettings,
+    // Older backups saved their remembered view with the lower pane preferences.
+    lastUsedViewMode: storedSettings.lastUsedViewMode === undefined
+      ? coerceRememberedViewMode(panePreferences.defaultViewMode)
+      : storedSettings.lastUsedViewMode,
+  });
   return {
     settings,
     settingsVersion: SETTINGS_STORAGE_VERSION,
@@ -88,7 +95,6 @@ const importProfile = (value: unknown, ids: ReadonlySet<string>): BackupProfile 
     unnamedRecentMoves: pathList(value.unnamedRecentMoves),
     unnamedQuickMove: importQuickMove(value.unnamedQuickMove),
     panePreferences: {
-      defaultViewMode: panePreferences.defaultViewMode === "thumbs" ? "thumbs" : "list",
       showBreadcrumbs: panePreferences.showBreadcrumbs === true,
     },
     previewPreferences: {

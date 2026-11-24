@@ -61,12 +61,9 @@ const FileList = ({
     () =>
       rows.map((row) => ({
         path: row.type === "parent" ? row.path : row.entry.path,
-        selectable:
-          row.presence !== "removed" &&
-          (row.type === "parent" ||
-            (!isDeletePending(row.entry.path) && !isTransferPending(row.entry.path))),
+        selectable: row.presence !== "removed",
       })),
-    [isDeletePending, isTransferPending, rows],
+    [rows],
   );
 
   const { listRef, itemHeight, rowHeight, listVars } = useListLayout({
@@ -110,6 +107,7 @@ const FileList = ({
     listRef,
     selectedPaths: selection.selectedPaths,
     selectionItems,
+    canSelectPath: (path) => !view.entryByPath.has(path) || (!isDeletePending(path) && !isTransferPending(path)),
     itemHeight,
     rowHeight,
     onSetSelection: selection.onSetSelection,

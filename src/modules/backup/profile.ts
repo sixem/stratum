@@ -64,7 +64,7 @@ export const captureStratumBackup = (scope: StratumBackup["scope"], selected: Re
     if (!workspaces.length) throw new Error("Select a workspace to export.");
     return { ...header, scope };
   }
-  const { defaultViewMode, showBreadcrumbs } = useBottomPaneStore.getState();
+  const { showBreadcrumbs } = useBottomPaneStore.getState();
   const previous = state.previous;
   const { ffmpegPath: _toolPath, ...settings } = coerceSettings(useSettingsStore.getState());
   return {
@@ -81,7 +81,7 @@ export const captureStratumBackup = (scope: StratumBackup["scope"], selected: Re
       },
       unnamedRecentMoves: recent.get(null) ?? [],
       unnamedQuickMove: getQuickMovePreferences(null),
-      panePreferences: { defaultViewMode, showBreadcrumbs },
+      panePreferences: { showBreadcrumbs },
       previewPreferences: readPreviewPreferences(),
     },
   };
@@ -90,14 +90,14 @@ export const captureStratumBackup = (scope: StratumBackup["scope"], selected: Re
 export const isUnusedBackupProfile = () => {
   const live = captureWorkspaceLayout();
   const { workspaces, previous } = useWorkspaceStore.getState();
-  const { defaultViewMode, showBreadcrumbs } = useBottomPaneStore.getState();
+  const { showBreadcrumbs } = useBottomPaneStore.getState();
   const { volume, stripOpen } = readPreviewPreferences();
   return !workspaces.length && !previous && !useBatchRenamePresetStore.getState().presets.length
     && !getRecentMoveHistory().size && !getQuickMoveWorkspacePreferences().size
     && ![...live.main.tabs, ...live.bottom.tabs].some(({ path }) => path)
     && !live.main.recentJumps.length && !live.bottom.recentJumps.length && !hasCustomWorkspacePlaces(live.places)
     && !live.pane.open && live.pane.height === DEFAULT_BOTTOM_PANE_LAYOUT.height
-    && defaultViewMode === "list" && !showBreadcrumbs && volume === 0.1 && stripOpen
+    && !showBreadcrumbs && volume === 0.1 && stripOpen
     && JSON.stringify(coerceSettings(useSettingsStore.getState())) === JSON.stringify(coerceSettings(DEFAULT_SETTINGS));
 };
 

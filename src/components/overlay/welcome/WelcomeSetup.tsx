@@ -3,7 +3,7 @@ import { useId, useRef, useState } from "react";
 import { CheckmarkIcon, StratumBrandIcon } from "@/components/icons";
 import { ACCENT_THEMES } from "@/constants/settings";
 import { useModalFocusTrap } from "@/hooks/ui/app/useModalFocusTrap";
-import { useSettingsStore } from "@/modules/settings.store";
+import { resolveDefaultViewMode, useSettingsStore } from "@/modules/settings.store";
 import type { WelcomeSettings } from "@/modules/welcome";
 import type { ViewMode } from "@/types";
 import { DialogCloseButton } from "../DialogCloseButton";
@@ -23,8 +23,12 @@ export const WelcomeSetup = ({ onFinish }: WelcomeSetupProps) => {
   const id = useId();
   const panelRef = useRef<HTMLFormElement>(null);
   const [draft, setDraft] = useState<WelcomeSettings>(() => {
-    const { darkMode, accentTheme, defaultViewMode } = useSettingsStore.getState();
-    return { darkMode, accentTheme, defaultViewMode };
+    const settings = useSettingsStore.getState();
+    return {
+      darkMode: settings.darkMode,
+      accentTheme: settings.accentTheme,
+      defaultViewMode: resolveDefaultViewMode(settings),
+    };
   });
   useModalFocusTrap({ open: true, containerRef: panelRef, initialFocusRef: panelRef });
 

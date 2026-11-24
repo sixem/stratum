@@ -7,15 +7,16 @@ import type { Workspace } from "@/modules/workspaceStore";
 
 type ActionProps = {
   label: string;
+  workspaceName: string;
   onClick: () => void;
   destructive?: boolean;
   children: ReactNode;
 };
 
-function WorkspaceAction({ label, onClick, destructive, children }: ActionProps) {
+function WorkspaceAction({ label, workspaceName, onClick, destructive, children }: ActionProps) {
   return (
     <TooltipWrapper text={label}>
-      <button type="button" className="workspace-action" aria-label={label}
+      <button type="button" className="workspace-action" aria-label={`${label}, ${workspaceName}`}
         data-destructive={destructive || undefined} onClick={onClick}>
         {children}
       </button>
@@ -51,23 +52,25 @@ export function WorkspaceList({
                 aria-current={active ? "true" : undefined}
                 aria-label={changed ? `${workspace.name}, unsaved changes` : undefined}>
                 <span className="workspace-current-mark">{active ? <CheckmarkIcon /> : null}</span>
-                <span className="workspace-name-text">{workspace.name}</span>
-                {changed ? <span className="workspace-dirty-mark" aria-hidden="true" /> : null}
+                <span className="workspace-name-caption">
+                  <span className="workspace-name-text">{workspace.name}</span>
+                  {changed ? <span className="workspace-dirty-mark" aria-hidden="true">*</span> : null}
+                </span>
               </button>
             </TooltipWrapper>
             <div className="workspace-actions">
               {!active ? (
-                <WorkspaceAction label={`Replace ${workspace.name} with current layout`} onClick={() => onReplace(workspace)}>
+                <WorkspaceAction label="Replace with current layout" workspaceName={workspace.name} onClick={() => onReplace(workspace)}>
                   <SaveIcon />
                 </WorkspaceAction>
               ) : null}
-              <WorkspaceAction label={`Rename ${workspace.name}`} onClick={() => onRename(workspace)}>
+              <WorkspaceAction label="Rename workspace" workspaceName={workspace.name} onClick={() => onRename(workspace)}>
                 <ContextRenameIcon />
               </WorkspaceAction>
-              <WorkspaceAction label={`Duplicate ${workspace.name}`} onClick={() => onDuplicate(workspace)}>
+              <WorkspaceAction label="Duplicate workspace" workspaceName={workspace.name} onClick={() => onDuplicate(workspace)}>
                 <CopyActionIcon />
               </WorkspaceAction>
-              <WorkspaceAction label={`Delete ${workspace.name}`} onClick={() => onRemove(workspace)} destructive>
+              <WorkspaceAction label="Delete workspace" workspaceName={workspace.name} onClick={() => onRemove(workspace)} destructive>
                 <RecycleBinIcon />
               </WorkspaceAction>
             </div>

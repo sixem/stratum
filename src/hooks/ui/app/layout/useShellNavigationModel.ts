@@ -104,6 +104,17 @@ export const useShellNavigationModel = ({
         navigationController.handleOpenInNewTab(path);
       },
       onReorder: tabSession.reorderTabs,
+      onMoveTab: (id, receive) => {
+        if (tabSession.activeTabId === id) navigationController.stashActiveScroll();
+        tabSession.moveTab(id, receive);
+      },
+      onReceiveTab: (transfer, index) => {
+        navigationController.stashActiveScroll();
+        if (!tabSession.receiveTab(transfer, index)) return false;
+        setBottomPaneActive(false);
+        viewState.mainRef.current?.focus({ preventScroll: true });
+        return true;
+      },
       onSubmenuHoverTargetChange: fileDrop.setDropTarget,
       onSubmenuCloseRequest: fileDrop.clearDragState,
       showTabNumbers: settings.showTabNumbers,

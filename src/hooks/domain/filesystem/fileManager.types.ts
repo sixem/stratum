@@ -1,5 +1,5 @@
 // Shared file manager types used across focused filesystem hooks.
-import type { FileEntry, ListDirOptions, SortState } from "@/types";
+import type { EntryMeta, FileEntry, ListDirOptions, SortState } from "@/types";
 import type { LinkedNavigation } from "@/modules/paneLinkNavigation";
 
 export type StatusLevel = "idle" | "loading" | "error";
@@ -31,6 +31,8 @@ export type MetaRequestOptions = {
   defer?: boolean;
   // Queue a watcher invalidation even when metadata is already cached.
   force?: boolean;
+  // For a watched file, report if retries could not confirm that it still exists.
+  onFileChecked?: (path: string, meta: EntryMeta | null) => void;
 };
 
 export type RenameRequest = {

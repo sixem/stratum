@@ -24,6 +24,7 @@ type UseIndexedSearchSelectionParams = {
   driveStatuses: IndexedDriveStatus[];
   open: boolean;
   results: IndexedPathMatch[];
+  refreshedAnchorPath?: string;
   query: string;
   hasMore: boolean;
   loadMore: () => void;
@@ -35,6 +36,7 @@ export const useIndexedSearchSelection = ({
   driveStatuses,
   open,
   results,
+  refreshedAnchorPath,
   query,
   hasMore,
   loadMore,
@@ -90,14 +92,15 @@ export const useIndexedSearchSelection = ({
         }
       }
 
-      const firstResult = results[0];
-      if (firstResult) {
-        return { kind: "result", path: firstResult.path };
+      const anchorIndex = refreshedAnchorPath ? resultIndexes.get(refreshedAnchorPath) : undefined;
+      const fallback = results[anchorIndex ?? 0];
+      if (fallback) {
+        return { kind: "result", path: fallback.path };
       }
 
       return null;
     });
-  }, [driveStatuses, open, resultIndexes, results]);
+  }, [driveStatuses, open, refreshedAnchorPath, resultIndexes, results]);
 
   const selectedResultPath = selectedResult?.path;
 

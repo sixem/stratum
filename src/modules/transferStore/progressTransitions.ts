@@ -18,7 +18,7 @@ export const applyProgressHintTransition = (
     // The queue snapshot owns status so late hints cannot turn waiting work active.
     return applyProgressUpdateToJob(job, event, {
       now,
-      resetByteHintsOnPathChange: false,
+      resetByteHintsOnPathChange: true,
     });
   };
 

@@ -18,6 +18,7 @@ import { coerceKeybinds } from "./keybinds";
 import {
   DEFAULT_SETTINGS,
   DEFAULT_SIDEBAR_HIDDEN_SECTIONS,
+  DEFAULT_VIEW_MODE,
   SIDEBAR_SECTION_DEFINITIONS,
 } from "./settings.defaults";
 import type {
@@ -54,9 +55,8 @@ const coerceThumbnailFit = (value: unknown): ThumbnailFit => {
   return value === "contain" ? "contain" : "cover";
 };
 
-const coerceViewMode = (value: unknown): ViewMode => {
-  return value === "list" ? "list" : "thumbs";
-};
+export const coerceRememberedViewMode = (value: unknown): ViewMode | null =>
+  value === "list" || value === "thumbs" ? value : null;
 
 const coerceNewTabSort = (value: unknown): Settings["newTabSort"] => {
   if (!value || typeof value !== "object") return null;
@@ -157,7 +157,9 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
     sidebarRecentLimit: coerceSidebarRecentLimit(value?.sidebarRecentLimit),
     sidebarSectionOrder: normalizeSidebarSectionOrder(value?.sidebarSectionOrder),
     sidebarHiddenSections: normalizeSidebarHiddenSections(value?.sidebarHiddenSections),
-    defaultViewMode: coerceViewMode(value?.defaultViewMode),
+    defaultViewMode: value?.defaultViewMode === "last"
+      ? "last" : coerceRememberedViewMode(value?.defaultViewMode) ?? DEFAULT_VIEW_MODE,
+    lastUsedViewMode: coerceRememberedViewMode(value?.lastUsedViewMode),
     startupMode: value?.startupMode === "workspace" || value?.startupMode === "start"
       ? value.startupMode : DEFAULT_SETTINGS.startupMode,
     startupWorkspaceId: typeof value?.startupWorkspaceId === "string" && value.startupWorkspaceId.length

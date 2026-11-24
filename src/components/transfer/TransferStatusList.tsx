@@ -4,7 +4,7 @@ import { useNowTick } from "@/hooks";
 import type { TransferJob } from "@/modules/transferStore.types";
 import type { TransferDestination } from "@/types";
 import { TransferStatusItem } from "./TransferStatusItem";
-import { sortTransferJobsByRecent } from "./transferStatusView";
+import { sortWorkListJobs } from "./transferStatusView";
 
 type TransferStatusListProps = {
   jobs: TransferJob[];
@@ -12,12 +12,12 @@ type TransferStatusListProps = {
 };
 
 export const TransferStatusList = ({ jobs, onOpenDestination }: TransferStatusListProps) => {
-  const recentJobs = useMemo(() => sortTransferJobsByRecent(jobs), [jobs]);
+  const orderedJobs = useMemo(() => sortWorkListJobs(jobs), [jobs]);
   const now = useNowTick({ enabled: true });
 
   return (
     <div className="toolbar-popover-list transfer-list" role="list" data-window-drag-ignore="true">
-      {recentJobs.map((job) => (
+      {orderedJobs.map((job) => (
         <TransferStatusItem key={job.id} job={job} now={now} onOpenDestination={onOpenDestination} />
       ))}
     </div>

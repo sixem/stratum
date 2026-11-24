@@ -1,12 +1,13 @@
 // Settings store wiring for persistence and updates.
 import { createWithEqualityFn } from "zustand/traditional";
 import {
+  BOTTOM_PANE_STORAGE_KEY,
   SETTINGS_STORAGE_KEY,
   SETTINGS_STORAGE_VERSION,
-} from "@/constants";
+} from "@/constants/settings";
 import { coerceKeybinds, DEFAULT_KEYBINDS } from "./keybinds";
-import { DEFAULT_SETTINGS } from "./settings.defaults";
-import { coerceSettings, normalizeLegacySettings } from "./settings.normalize";
+import { DEFAULT_SETTINGS, DEFAULT_VIEW_MODE } from "./settings.defaults";
+import { coerceRememberedViewMode, coerceSettings, normalizeLegacySettings } from "./settings.normalize";
 import type { Settings } from "./settings.types";
 
 type SettingsStore = Settings & {
@@ -23,20 +24,40 @@ type StoredSettings = {
 const STORAGE_KEY = SETTINGS_STORAGE_KEY;
 const STORAGE_VERSION = SETTINGS_STORAGE_VERSION;
 
+export const resolveDefaultViewMode = ({ defaultViewMode, lastUsedViewMode }: Pick<Settings, "defaultViewMode" | "lastUsedViewMode">) =>
+  defaultViewMode === "last" ? lastUsedViewMode ?? DEFAULT_VIEW_MODE : defaultViewMode;
+
+const readLegacyBottomView = (storage: Storage) => {
+  try {
+    const raw = storage.getItem(BOTTOM_PANE_STORAGE_KEY);
+    const pane = raw ? JSON.parse(raw) as { state?: { defaultViewMode?: unknown } } | null : null;
+    return coerceRememberedViewMode(pane?.state?.defaultViewMode);
+  } catch {
+    return null;
+  }
+};
+
 const readStoredSettings = () => {
   try {
     if (!("localStorage" in globalThis)) {
       return DEFAULT_SETTINGS;
     }
-    const raw = globalThis.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as StoredSettings | Partial<Settings>;
-    if ("settings" in parsed) {
-      const normalized = normalizeLegacySettings(parsed.settings, parsed.version);
-      return coerceSettings(normalized);
+    const storage = globalThis.localStorage;
+    const raw = storage.getItem(STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) as StoredSettings | Partial<Settings> : {};
+    const normalized = "settings" in parsed
+      ? normalizeLegacySettings(parsed.settings, parsed.version)
+      : normalizeLegacySettings(parsed, undefined);
+    const settings = raw ? coerceSettings(normalized) : { ...DEFAULT_SETTINGS };
+    if (normalized.lastUsedViewMode === undefined) {
+      // The bottom pane held the only remembered view in older profiles.
+      const remembered = readLegacyBottomView(storage);
+      if (remembered) {
+        settings.lastUsedViewMode = remembered;
+        writeStoredSettings(settings);
+      }
     }
-    const normalized = normalizeLegacySettings(parsed, undefined);
-    return coerceSettings(normalized);
+    return settings;
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -77,6 +98,7 @@ useSettingsStore.subscribe((state) => {
     sidebarSectionOrder: state.sidebarSectionOrder,
     sidebarHiddenSections: state.sidebarHiddenSections,
     defaultViewMode: state.defaultViewMode,
+    lastUsedViewMode: state.lastUsedViewMode,
     startupMode: state.startupMode,
     startupWorkspaceId: state.startupWorkspaceId,
     newTabSort: state.newTabSort,

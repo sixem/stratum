@@ -20,7 +20,7 @@ export type BackupProfile = {
   previous: WorkspaceSession | null;
   unnamedRecentMoves: readonly string[];
   unnamedQuickMove?: QuickMovePreferences;
-  panePreferences: { defaultViewMode: "list" | "thumbs"; showBreadcrumbs: boolean };
+  panePreferences: { showBreadcrumbs: boolean };
   previewPreferences: { volume: number; stripOpen: boolean };
 };
 

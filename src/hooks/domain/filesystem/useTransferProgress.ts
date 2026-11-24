@@ -16,13 +16,13 @@ export const useTransferProgress = ({ enabled }: UseTransferProgressOptions) => 
     const unlisten: Array<() => void> = [];
     const settledPaths = new Map<string, Set<string>>();
     let settledPathsFrame: number | null = null;
-    const queueSettledPath = (id: string, path: string) => {
+    const queueSettledPaths = (id: string, items: NonNullable<TransferProgressEvent["completedItems"]>) => {
       let paths = settledPaths.get(id);
       if (!paths) {
         paths = new Set();
         settledPaths.set(id, paths);
       }
-      paths.add(path);
+      for (const { path } of items) paths.add(path);
       if (settledPathsFrame != null) return;
 
       // Batch fast same-drive moves into one explorer update per frame.
@@ -54,9 +54,8 @@ export const useTransferProgress = ({ enabled }: UseTransferProgressOptions) => 
           if (!active) return;
           const payload = event.payload;
           if (!payload) return;
-          if (payload.completedItem) {
-            queueSettledPath(payload.id, payload.completedItem.path);
-            return;
+          if (payload.completedItems?.length) {
+            queueSettledPaths(payload.id, payload.completedItems);
           }
           useTransferStore.getState().applyProgressHint(payload);
         },

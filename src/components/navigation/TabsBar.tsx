@@ -1,4 +1,4 @@
-// Tab strip for open folders with drag reordering.
+// Tab strip for open folders with drag reordering and pane moves.
 import type { MouseEvent as ReactMouseEvent, PointerEvent, ReactNode } from "react";
 import {
   Fragment,
@@ -14,6 +14,7 @@ import { registerTabLocationDrop } from "@/lib/tabLocationDrop";
 import { useHorizontalOverflowScroll, useTabDragDrop } from "@/hooks";
 import { DropTargetSubmenu } from "@/components/overlay/DropTargetSubmenu";
 import type { PlaceContextTarget, Tab } from "@/types";
+import type { TabTransfer } from "@/types/tabs";
 import { PlusIcon, TabCloseIcon } from "@/components/icons";
 import { HorizontalChevronButton, PressButton } from "@/components/primitives";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
@@ -35,6 +36,8 @@ type TabsBarProps = {
   onNew: () => void;
   onOpenLocation: (path: string) => void;
   onReorder: (fromId: string, toIndex: number) => void;
+  onMoveTab: (id: string, receive: (transfer: TabTransfer) => boolean) => void;
+  onReceiveTab: (transfer: TabTransfer, toIndex: number) => boolean;
   onSubmenuHoverTargetChange?: (target: DropTarget | null) => void;
   onSubmenuCloseRequest?: () => void;
   onTabContextMenu?: (event: PointerEvent<HTMLDivElement>, target: PlaceContextTarget) => void;
@@ -167,6 +170,8 @@ export const TabsBar = ({
   onNew,
   onOpenLocation,
   onReorder,
+  onMoveTab,
+  onReceiveTab,
   onSubmenuHoverTargetChange,
   onSubmenuCloseRequest,
   onTabContextMenu,
@@ -179,13 +184,16 @@ export const TabsBar = ({
   const [submenuAnchorElement, setSubmenuAnchorElement] = useState<HTMLElement | null>(null);
   const {
     draggingId,
-    dropIndex,
     dropIndicatorX,
+    receivingTab,
     handlePointerDown,
     handleSuppressClick,
   } = useTabDragDrop({
-    onReorder,
     containerRef: tabsRef,
+    stripRef,
+    onReorder,
+    onMoveTab,
+    onReceiveTab,
   });
   const { canScrollLeft, canScrollRight, overflowed, scrollByDirection, updateScrollState } =
     useHorizontalOverflowScroll(tabsRef, {
@@ -229,7 +237,7 @@ export const TabsBar = ({
   }, [tabDropSubmenu?.hostTabId, tabs]);
 
   return (
-    <div className="tabsbar" data-tab-location-strip="true" ref={stripRef}>
+    <div className="tabsbar" data-tab-location-strip="true" data-tab-transfer-hover={receivingTab || undefined} ref={stripRef}>
       {leading}
       <div
         className="tabs-scroll-wrap"
@@ -270,7 +278,7 @@ export const TabsBar = ({
               />
             </Fragment>
           ))}
-          {dropIndex != null && dropIndicatorX != null ? (
+          {dropIndicatorX != null ? (
             <div
               className="tab-drop-indicator"
               style={{ left: `${dropIndicatorX}px` }}

@@ -126,6 +126,24 @@ export const ContextRenameIcon = ({ className }: IconProps) => (
   </ContextGlyph>
 );
 
+export const ContextSelectSameExtensionIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="file-scan" className={className}>
+    <path d="M20 10V8a2.4 2.4 0 0 0-.706-1.704l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.35" />
+    <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+    <path d="M16 14a2 2 0 0 0-2 2" />
+    <path d="M16 22a2 2 0 0 1-2-2" />
+    <path d="M20 14a2 2 0 0 1 2 2" />
+    <path d="M20 22a2 2 0 0 0 2-2" />
+  </ContextGlyph>
+);
+
+export const ContextInvertSelectionIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="squares-exclude" className={className}>
+    <path d="M16 12v2a2 2 0 0 1-2 2H9a1 1 0 0 0-1 1v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h0" />
+    <path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3a1 1 0 0 1-1 1h-5a2 2 0 0 0-2 2v2" />
+  </ContextGlyph>
+);
+
 export const ContextPropertiesIcon = ({ className }: IconProps) => (
   <ContextGlyph name="brackets" className={className}>
     <path d="M16 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-3" />

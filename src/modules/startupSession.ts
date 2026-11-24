@@ -5,7 +5,7 @@ import { useSettingsStore } from "./settings.store";
 import { switchWorkspace, useWorkspaceStore } from "./workspaceStore";
 
 export const applyStartupSession = () => {
-  const { startupMode, startupWorkspaceId, defaultViewMode } = useSettingsStore.getState();
+  const { startupMode, startupWorkspaceId } = useSettingsStore.getState();
   if (startupMode === "resume") return;
 
   const { activeId, workspaces, drafts } = useWorkspaceStore.getState();
@@ -22,7 +22,7 @@ export const applyStartupSession = () => {
   if (!activeId && !outgoing.pane.open && !outgoing.bottom.tabs.length &&
     outgoing.main.tabs.length <= 1 && !outgoing.main.tabs[0]?.path.trim()) return;
 
-  const tab = createSessionTab("", { viewMode: defaultViewMode });
+  const tab = createSessionTab("");
   // Keep places and recent locations available on the Start browsing screen.
   // The old tabs and split layout remain reachable from Previous session.
   switchWorkspace({

@@ -5,7 +5,7 @@ use super::manager_state::{
     snapshot_from_state, QueuedTransferPlanningState, TransferJobRequest, TransferManagerInner,
     TransferOperationOutcome,
 };
-use crate::domain::filesystem as fs;
+use super::progress_batch::TransferProgressBatch;
 use crate::domain::filesystem::transfer::delete_discovery::DeleteDiscoveryProgress;
 use crate::domain::filesystem::transfer::job_plan::{PlannedTransferJob, TransferProgressKind};
 use crate::domain::filesystem::transfer::types::{
@@ -64,11 +64,12 @@ pub(super) fn apply_running_progress(
     inner: &Arc<TransferManagerInner>,
     job_id: &str,
     progress_kind: TransferProgressKind,
-    update: &fs::TransferProgressUpdate,
+    batch: &TransferProgressBatch,
     include_snapshot: bool,
 ) -> Option<TransferQueueSnapshot> {
     let mut guard = inner.state.lock().ok()?;
     let active = guard.active_job_mut(job_id)?;
+    let update = &batch.latest;
 
     match progress_kind {
         TransferProgressKind::Roots | TransferProgressKind::Files => {
@@ -82,14 +83,12 @@ pub(super) fn apply_running_progress(
             }
         }
         TransferProgressKind::Items => {
-            if update.completed_item.is_some() {
-                active.snapshot.work.roots_completed = active
-                    .snapshot
-                    .work
-                    .roots_completed
-                    .saturating_add(1)
-                    .min(active.snapshot.work.roots_total);
-            }
+            active.snapshot.work.roots_completed = active
+                .snapshot
+                .work
+                .roots_completed
+                .saturating_add(batch.completed_items.len())
+                .min(active.snapshot.work.roots_total);
         }
     }
 
@@ -101,7 +100,7 @@ pub(super) fn apply_running_progress(
         if runtime.progress_kind != Some(progress_kind) {
             runtime.progress_kind = Some(progress_kind);
         }
-        runtime.update_snapshot(&mut active.snapshot, update);
+        runtime.update_snapshot(&mut active.snapshot, batch);
     }
 
     include_snapshot.then(|| snapshot_from_state(&mut guard))

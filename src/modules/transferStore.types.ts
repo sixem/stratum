@@ -31,6 +31,7 @@ export type TransferJob = {
   phase: TransferJobPhase;
   total: number;
   processed: number;
+  addedAt: number;
   startedAt: number;
   activityAt: number;
   finishedAt?: number;

@@ -2,11 +2,11 @@
 import { useCallback, useLayoutEffect, useMemo } from "react";
 import { shallow } from "zustand/shallow";
 import type { ListDirOptions, SortState, Tab, ViewMode } from "@/types";
-import type { TabHistoryDirection } from "@/types/tabs";
+import type { TabHistoryDirection, TabTransfer } from "@/types/tabs";
 import { DEFAULT_TAB_STATE, makeDebug, folderPathKey, getNextTrailPath } from "@/lib";
 import { useSessionStore } from "@/modules";
 import { createSessionTab, useBottomSessionStore } from "@/modules/sessionStore";
-import { useSettingsStore } from "@/modules/settings.store";
+import { resolveDefaultViewMode, useSettingsStore } from "@/modules/settings.store";
 import { beginLinkedNavigation, closeLinkedTab, registerPaneLinkReceiver } from "@/modules/paneLinkNavigation";
 import type { LinkedNavigation } from "@/modules/paneLinkNavigation";
 import type { LoadDirOptions } from "@/hooks/domain/filesystem/fileManager.types";
@@ -20,8 +20,6 @@ type TabSessionOptions = {
   loadingPath: string | null;
   loadDir: (path: string, options?: LoadDirOptions) => Promise<void>;
   clearDir: (options?: { silent?: boolean }) => void;
-  defaultViewMode: ViewMode;
-  newTabViewMode?: ViewMode;
   keepFilterOnNavigation: boolean;
   recentJumpsLimit: number;
 };
@@ -41,12 +39,11 @@ export const useTabSession = ({
   loadingPath,
   loadDir,
   clearDir,
-  defaultViewMode,
-  newTabViewMode,
   keepFilterOnNavigation,
   recentJumpsLimit,
 }: TabSessionOptions) => {
   const pane = useStore === useBottomSessionStore ? "bottom" : "main";
+  const defaultViewMode = useSettingsStore(resolveDefaultViewMode);
   const rememberRecentLocations = useSettingsStore((state) => state.rememberRecentLocations);
   const newTabSort = useSettingsStore((state) => state.newTabSort);
   const {
@@ -78,19 +75,10 @@ export const useTabSession = ({
     () => tabs.find((tab) => tab.id === activeTabId) ?? null,
     [activeTabId, tabs],
   );
-  const defaultTabState = useMemo(
-    () => ({
-      viewMode: defaultViewMode,
-      sort: newTabSort ?? DEFAULT_TAB_STATE.sort,
-      search: DEFAULT_TAB_STATE.search,
-    }),
-    [defaultViewMode, newTabSort],
-  );
-  const viewMode = activeTab?.viewMode ?? defaultTabState.viewMode;
-  const nextViewMode = newTabViewMode ?? viewMode;
-  const sortState = activeTab?.sort ?? defaultTabState.sort;
+  const viewMode = activeTab?.viewMode ?? defaultViewMode;
+  const sortState = activeTab?.sort ?? newTabSort ?? DEFAULT_TAB_STATE.sort;
   // Keep search filters tied to their owning tab.
-  const searchValue = activeTab?.search ?? defaultTabState.search;
+  const searchValue = activeTab?.search ?? DEFAULT_TAB_STATE.search;
   const safeRecentLimit = Number.isFinite(recentJumpsLimit)
     ? Math.max(1, Math.round(recentJumpsLimit))
     : 1;
@@ -157,17 +145,13 @@ export const useTabSession = ({
         setActiveTabId(fallback.id);
         return fallback.id;
       }
-      const nextTab = createSessionTab(
-        path,
-        { viewMode, sort: sortState, search: searchValue },
-        defaultTabState,
-      );
+      const nextTab = createSessionTab(path, { sort: sortState, search: searchValue });
       emptyTabIdsRef.current.delete(nextTab.id);
       setTabs([nextTab]);
       setActiveTabId(nextTab.id);
       return nextTab.id;
     },
-    [activeTabId, defaultTabState, searchValue, setActiveTabId, setTabs, sortState, tabs, viewMode],
+    [activeTabId, searchValue, setActiveTabId, setTabs, sortState, tabs],
   );
 
   const performNavigation = useCallback(
@@ -255,6 +239,8 @@ export const useTabSession = ({
   const setViewMode = useCallback(
     (nextView: ViewMode) => {
       log("view mode -> %s", nextView);
+      const settings = useSettingsStore.getState();
+      if (settings.lastUsedViewMode !== nextView) settings.updateSettings({ lastUsedViewMode: nextView });
       updateActiveTab({ viewMode: nextView });
     },
     [updateActiveTab],
@@ -278,20 +264,20 @@ export const useTabSession = ({
 
   const newTab = useCallback(() => {
     log("new tab -> empty");
-    const nextTab = createSessionTab("", { viewMode: nextViewMode, sort: sortState }, defaultTabState);
+    const nextTab = createSessionTab("", { sort: sortState });
     emptyTabIdsRef.current.add(nextTab.id);
     pendingNavigationRef.current = null;
     setTabs((prev) => [...prev, nextTab]);
     setActiveTabId(nextTab.id);
     clearDir({ silent: true });
-  }, [clearDir, defaultTabState, setActiveTabId, setTabs, sortState, nextViewMode]);
+  }, [clearDir, setActiveTabId, setTabs, sortState]);
 
   const openInNewTab = useCallback(
     (path: string, options?: OpenNewTabOptions) => {
       const target = path.trim();
       if (!target) return;
       log("open in new tab -> %s", target);
-      const nextTab = createSessionTab(target, { viewMode: nextViewMode, sort: sortState }, defaultTabState);
+      const nextTab = createSessionTab(target, { sort: sortState });
       emptyTabIdsRef.current.delete(nextTab.id);
       setTabs((prev) => {
         const index = activeTabId ? prev.findIndex((tab) => tab.id === activeTabId) : -1;
@@ -308,7 +294,7 @@ export const useTabSession = ({
         revealPath: options?.revealPath,
       });
     },
-    [activeTabId, defaultTabState, performNavigation, setActiveTabId, setTabs, sortState, nextViewMode],
+    [activeTabId, performNavigation, setActiveTabId, setTabs, sortState],
   );
 
   const openInBackgroundTab = useCallback(
@@ -369,20 +355,24 @@ export const useTabSession = ({
     [clearDir, performNavigation, setActiveTabId, setTabs, tabs],
   );
 
-  const closeTab = useCallback(
-    (id: string, scrollTop?: number) => {
+  const removeTab = useCallback(
+    (id: string, scrollTop?: number, receive?: (transfer: TabTransfer) => boolean) => {
       // The UI may have just saved the outgoing scroll position.
       const session = useStore.getState();
       const index = session.tabs.findIndex((tab) => tab.id === id);
       if (index === -1) return;
-      closeLinkedTab(pane, id);
-
-      log("close tab -> %s", id);
       const tab = session.tabs[index];
       const savedTab = scrollTop !== undefined && Number.isFinite(scrollTop)
         ? { ...tab, scrollTop: Math.max(0, Math.round(scrollTop)) }
         : tab;
-      const closed = { tab: savedTab, index, history: takeHistory(id) };
+      const transfer: TabTransfer = { tab: savedTab, history: takeHistory(id) };
+      // A move only removes the original once the other pane owns the tab.
+      if (receive && !receive(transfer)) {
+        if (transfer.history) restoreHistory(id, transfer.history);
+        return;
+      }
+      closeLinkedTab(pane, id);
+      log("%s tab -> %s", receive ? "move" : "close", id);
       emptyTabIdsRef.current.delete(id);
       const nextTabs = session.tabs.filter((tab) => tab.id !== id);
       const wasActive = id === session.activeTabId;
@@ -390,7 +380,7 @@ export const useTabSession = ({
       session.updateSession({
         tabs: nextTabs,
         activeTabId: wasActive || !fallback ? fallback?.id ?? null : session.activeTabId,
-        closedTabs: [closed, ...session.closedTabs].slice(0, CLOSED_TAB_LIMIT),
+        ...(receive ? {} : { closedTabs: [{ ...transfer, index }, ...session.closedTabs].slice(0, CLOSED_TAB_LIMIT) }),
       });
 
       if (!fallback || (wasActive && !fallback.path.trim())) {
@@ -403,8 +393,35 @@ export const useTabSession = ({
         performNavigation(fallback.path, { sort: fallback.sort, search: fallback.search }, "switch", fallback.id);
       }
     },
-    [clearDir, emptyTabIdsRef, pane, pendingNavigationRef, performNavigation, takeHistory, useStore],
+    [clearDir, emptyTabIdsRef, pane, pendingNavigationRef, performNavigation, restoreHistory, takeHistory, useStore],
   );
+
+  const closeTab = useCallback((id: string, scrollTop?: number) => removeTab(id, scrollTop), [removeTab]);
+  const moveTab = useCallback((id: string, receive: (transfer: TabTransfer) => boolean, scrollTop?: number) =>
+    removeTab(id, scrollTop, receive), [removeTab]);
+
+  const activateStoredTab = useCallback((tab: Tab) => {
+    if (!tab.path.trim()) {
+      emptyTabIdsRef.current.add(tab.id);
+      pendingNavigationRef.current = null;
+      clearDir({ silent: true });
+    } else {
+      performNavigation(tab.path, { sort: tab.sort, search: tab.search }, "switch", tab.id);
+    }
+  }, [clearDir, emptyTabIdsRef, pendingNavigationRef, performNavigation]);
+
+  const receiveTab = useCallback(({ tab, history }: TabTransfer, toIndex: number) => {
+    const session = useStore.getState();
+    const idInUse = session.tabs.some(({ id }) => id === tab.id) ||
+      session.closedTabs.some((closed) => closed.tab.id === tab.id);
+    const incoming = idInUse ? { ...tab, id: createSessionTab(tab.path).id } : tab;
+    const nextTabs = [...session.tabs];
+    nextTabs.splice(Math.min(Math.max(toIndex, 0), nextTabs.length), 0, incoming);
+    session.updateSession({ tabs: nextTabs, activeTabId: incoming.id });
+    if (history) restoreHistory(incoming.id, history);
+    activateStoredTab(incoming);
+    return true;
+  }, [activateStoredTab, restoreHistory, useStore]);
 
   const reopenClosedTab = useCallback(() => {
     const session = useStore.getState();
@@ -414,18 +431,11 @@ export const useTabSession = ({
     const { tab, index, history } = closed;
     const nextTabs = [...session.tabs];
     nextTabs.splice(Math.min(index, nextTabs.length), 0, tab);
-    const isEmpty = !tab.path.trim();
-    if (isEmpty) {
-      emptyTabIdsRef.current.add(tab.id);
-      pendingNavigationRef.current = null;
-    }
     session.updateSession({ tabs: nextTabs, activeTabId: tab.id, closedTabs: remainingClosedTabs });
     if (history) restoreHistory(tab.id, history);
-
-    if (isEmpty) clearDir({ silent: true });
-    else performNavigation(tab.path, { sort: tab.sort, search: tab.search }, "switch", tab.id);
+    activateStoredTab(tab);
     return true;
-  }, [clearDir, emptyTabIdsRef, pendingNavigationRef, performNavigation, restoreHistory, useStore]);
+  }, [activateStoredTab, restoreHistory, useStore]);
 
   const reorderTabs = useCallback(
     (fromId: string, toIndex: number) => {
@@ -483,6 +493,8 @@ export const useTabSession = ({
     openInBackgroundTab,
     selectTab,
     closeTab,
+    moveTab,
+    receiveTab,
     reopenClosedTab,
     reorderTabs,
     setTabScrollTop,
