@@ -96,7 +96,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   useLayoutEffect(() => {
     if (!ready || !root.current || !files.current) return;
     return registerPreviewSource({
-      gallery: bottomGallery,
+      getGallery: () => bottomGallery,
       paneRoot: root.current,
       filesRoot: files.current,
       isCurrent: () => viewVisit.current,

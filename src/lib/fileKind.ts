@@ -8,7 +8,7 @@ import {
   SECURE_EXTENSIONS,
   SVG_LIKE_EXTENSIONS,
   VIDEO_EXTENSIONS,
-} from "@/constants";
+} from "../constants/fileKinds.ts";
 
 export type FileKind =
   | "secure"

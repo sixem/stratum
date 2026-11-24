@@ -1,5 +1,5 @@
 // File extension buckets for type detection and search.
-import fileKinds from "./fileKinds.json";
+import fileKinds from "./fileKinds.json" with { type: "json" };
 
 export const CONFIG_EXTENSIONS = new Set(fileKinds.config);
 

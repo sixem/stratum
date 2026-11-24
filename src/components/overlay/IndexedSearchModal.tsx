@@ -7,7 +7,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef } from 
 
 import { LibraryIcon, TabCloseIcon } from "@/components/icons";
 import { ContextMenu } from "@/components/overlay/ContextMenu";
-import { buildIndexedSearchGallery } from "@/components/overlay/indexedSearchModal/buildIndexedSearchGallery";
+import { createIndexedGalleryLookup } from "@/components/overlay/indexedSearchModal/indexedSearchGallery";
 import { IndexedSearchDriveList } from "@/components/overlay/indexedSearchModal/IndexedSearchDriveList";
 import { IndexedSearchResultsList } from "@/components/overlay/indexedSearchModal/IndexedSearchResultsList";
 import { IndexedSearchSelectionDetail } from "@/components/overlay/indexedSearchModal/IndexedSearchSelectionDetail";
@@ -119,10 +119,14 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
     onOpenFolder: openFolderInNewTab,
   });
 
-  const gallery = useMemo(() => buildIndexedSearchGallery(results, selectResult), [results, selectResult]);
+  const getGallery = useMemo(
+    () => createIndexedGalleryLookup(results, resultIndexes, selectResult),
+    [results, resultIndexes, selectResult],
+  );
   const openGallery = useCallback((path: string) => {
-    if (gallery.entryByPath.has(path)) onOpenGallery(path, gallery);
-  }, [gallery, onOpenGallery]);
+    const gallery = getGallery(path);
+    if (gallery) onOpenGallery(path, gallery);
+  }, [getGallery, onOpenGallery]);
   const resultMenu = useIndexedSearchResultMenu({
     visible,
     results,
@@ -140,16 +144,16 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
   useLayoutEffect(() => {
     const paneRoot = panelRef.current;
     const filesRoot = resultsViewportRef.current;
-    if (!visible || !paneRoot || !filesRoot || !gallery.items.length) return;
+    if (!visible || !paneRoot || !filesRoot || !results.length) return;
     return preview.registerSource({
-      gallery,
+      getGallery,
       paneRoot,
       filesRoot,
       isCurrent: () => !resultMenuOpen && modalRef.current?.inert === false,
       getSelectedPath: () => selectedPath,
       shortcutInput: inputRef.current ?? undefined,
     });
-  }, [gallery, preview, resultMenuOpen, resultsViewportRef, selectedPath, visible]);
+  }, [getGallery, preview, resultMenuOpen, results.length, resultsViewportRef, selectedPath, visible]);
 
   useModalFocusTrap({
     open: visible,

@@ -149,7 +149,7 @@ export const useShellViewInteractions = ({
     if (!root || mainLoading) return;
     currentMainGallery.current = mainGallery;
     const unregister = registerMainPreview({
-      gallery: mainGallery,
+      getGallery: () => mainGallery,
       paneRoot: root,
       filesRoot: root,
       isCurrent: () => viewVisit.current,

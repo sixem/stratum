@@ -8,7 +8,7 @@ import { scopeGalleryToSelection, type PreviewGallerySource } from "./previewGal
 export type { PreviewGallerySource } from "./previewGallerySource";
 
 export type PreviewSource = {
-  gallery: PreviewGallerySource;
+  getGallery: (path: string) => PreviewGallerySource | undefined;
   paneRoot: HTMLElement;
   filesRoot: HTMLElement;
   isCurrent: () => boolean;
@@ -136,7 +136,7 @@ export const useQuickPreview = ({
 
   const openTarget = useCallback((target: PreviewTarget) => {
     const source = sourcesRef.current[target.source];
-    if (source?.gallery !== target.gallery || !source.isCurrent()) return false;
+    if (!source?.isCurrent() || source.getGallery(target.path) !== target.gallery) return false;
     if (target.source === "indexed") target.gallery.onSelectPath?.(target.path);
     const gallery = scopeGalleryToSelection(target.gallery, target.path, source.getSelectionSnapshot?.());
     openPreview(target.path, gallery, target.gallery);
@@ -163,9 +163,10 @@ export const useQuickPreview = ({
       if (!path) return null;
       const source = sourcesRef.current[kind];
       if (!source?.isCurrent()) return null;
-      const entry = source.gallery.entryByPath.get(path);
-      return entry && isPreviewableEntry(entry)
-        ? { path: entry.path, source: kind, gallery: source.gallery }
+      const gallery = source.getGallery(path);
+      const entry = gallery?.entryByPath.get(path);
+      return gallery && entry && isPreviewableEntry(entry)
+        ? { path: entry.path, source: kind, gallery }
         : null;
     },
     [],
