@@ -22,14 +22,17 @@
   }
 
   .indexed-search-selection-detail-body {
-    display: grid;
-    grid-auto-rows: max-content;
-    align-content: start;
+    display: flex;
+    flex-direction: column;
     gap: 4px;
     min-height: 0;
     min-width: 0;
     overflow-y: auto;
     scrollbar-width: thin;
+
+    > * {
+      flex-shrink: 0;
+    }
   }
 
   .indexed-search-selection-detail-copy {
@@ -78,6 +81,7 @@
   .indexed-search-selection-usage {
     display: grid;
     gap: 3px;
+    margin-block: auto 8px;
   }
 
   .indexed-search-selection-progress {

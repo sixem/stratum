@@ -47,7 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
   confirmDelete: true,
   confirmClose: true,
   warnOnUnsavedWorkspaces: true,
-  ambientBackground: true,
+  ambientBackground: false,
   blurOverlays: true,
   keybinds: DEFAULT_KEYBINDS,
   gridSize: "auto",

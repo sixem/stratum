@@ -149,11 +149,7 @@
   .indexed-search-empty-symbol {
     display: grid;
     flex: 0 0 auto;
-    place-items: center;
-    width: 42px;
-    height: 42px;
     margin-bottom: 4px;
-    @include control.panel-card(9px, var(--surface-control-muted));
     color: var(--muted);
   }
 
