@@ -1,7 +1,7 @@
 // Manages quick preview sessions and activation across panes and search results.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isEditableElement, isPreviewableEntry } from "@/lib";
-import { buildKeybindFromEvent, normalizeKeybind, useIndexedSearchUiStore } from "@/modules";
+import { getFileKind, getPathName, isEditableElement, isPreviewableEntry } from "@/lib";
+import { buildKeybindFromEvent, normalizeKeybind, useIndexedSearchUiStore, useSettingsStore } from "@/modules";
 import { useQuickMoveSession } from "@/modules/quickMoveSession";
 import { scopeGalleryToSelection, type PreviewGallerySource } from "./previewGallerySource";
 
@@ -51,6 +51,7 @@ export const useQuickPreview = ({
   contextMenuOpen,
   promptOpen,
 }: UseQuickPreviewOptions) => {
+  const includeAudio = useSettingsStore((state) => state.galleryAudio);
   const [preview, setPreview] = useState<PreviewSession | null>(null);
   const previewPath = preview?.path ?? null;
   const previewRef = useRef<PreviewSession | null>(null);
@@ -138,10 +139,10 @@ export const useQuickPreview = ({
     const source = sourcesRef.current[target.source];
     if (!source?.isCurrent() || source.getGallery(target.path) !== target.gallery) return false;
     if (target.source === "indexed") target.gallery.onSelectPath?.(target.path);
-    const gallery = scopeGalleryToSelection(target.gallery, target.path, source.getSelectionSnapshot?.());
+    const gallery = scopeGalleryToSelection(target.gallery, target.path, source.getSelectionSnapshot?.(), includeAudio);
     openPreview(target.path, gallery, target.gallery);
     return true;
-  }, [openPreview]);
+  }, [includeAudio, openPreview]);
 
   useEffect(() => {
     // Pointer tracking is only needed for keyboard-triggered previews, because we need to
@@ -165,11 +166,11 @@ export const useQuickPreview = ({
       if (!source?.isCurrent()) return null;
       const gallery = source.getGallery(path);
       const entry = gallery?.entryByPath.get(path);
-      return gallery && entry && isPreviewableEntry(entry)
+      return gallery && entry && isPreviewableEntry(entry, includeAudio)
         ? { path: entry.path, source: kind, gallery }
         : null;
     },
-    [],
+    [includeAudio],
   );
 
   const openFromSource = useCallback((path: string, kind: PreviewSourceKind) => {
@@ -349,6 +350,9 @@ export const useQuickPreview = ({
       const next = buildKeybindFromEvent(event);
       if (!next || next !== previewBinding) return;
       const modified = (event.ctrlKey || event.altKey || event.metaKey) && !event.getModifierState("AltGraph");
+      const current = previewRef.current;
+      if (event.code === "Space" && !modified && !event.shiftKey && current &&
+        getFileKind(getPathName(current.path)) === "audio") return;
       const handled = startHold(getHoveredPreviewTarget(), "key", event.code, false, modified);
       if (!handled) return;
       event.preventDefault();

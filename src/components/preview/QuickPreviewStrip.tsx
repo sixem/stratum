@@ -11,6 +11,7 @@ import { formatBytes, formatDate, getFileKind, normalizePath, splitNameExtension
 import { useEntryMetaRequest, useThumbnailRequest, useVirtualRange } from "@/hooks";
 import { useThumbnailScope } from "@/hooks/domain/metadata/useThumbnailScope";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
+import { FileTypeIcon } from "@/components/icons";
 
 type QuickPreviewStripProps = {
   open: boolean;
@@ -195,6 +196,8 @@ export const QuickPreviewStrip = ({
     const nextThumbs: ThumbnailRequest[] = [];
     visibleItems.forEach((entry) => {
       const path = entry.path;
+      // Audio uses the file glyph, so it needs no thumbnail or nearby metadata lookup.
+      if (getFileKind(entry.name) === "audio") return;
       nextMeta.push(path);
       const meta = entryMeta.get(path);
       nextThumbs.push({
@@ -317,19 +320,21 @@ export const QuickPreviewStrip = ({
           const distance = activeIndex >= 0 ? Math.abs(absoluteIndex - activeIndex) : 0;
           const opacity =
             isActive || activeIndex < 0 ? 1 : clamp(1 - distance * 0.08, 0.25, 0.9);
-          const thumbUrl = thumbnails.get(entry.path);
+          const kind = getFileKind(entry.name);
+          const thumbUrl = kind === "audio" ? undefined : thumbnails.get(entry.path);
           const thumbReadyKey = thumbUrl ? `${entry.path}|${thumbUrl}` : "";
           const thumbKnownReady = thumbReadyKey
             ? stripThumbReadyCache.has(thumbReadyKey)
             : false;
           const extension = splitNameExtension(entry.name).extension;
-          const kind = getFileKind(entry.name);
           const fallbackLabel =
             extension ? extension.toUpperCase() : kind === "video" ? "VID" : "IMG";
           const meta = entryMeta.get(entry.path);
           const sizeLabel = formatBytes(meta?.size ?? null);
           const modifiedLabel = formatDate(meta?.modified ?? null);
-          const tooltipText = `${entry.name}\nSize: (${sizeLabel})\nModified: ${modifiedLabel}`;
+          const tooltipText = kind === "audio" && !meta
+            ? entry.name
+            : `${entry.name}\nSize: (${sizeLabel})\nModified: ${modifiedLabel}`;
           return (
             <TooltipWrapper
               key={entry.path}
@@ -363,6 +368,8 @@ export const QuickPreviewStrip = ({
                       event.currentTarget.dataset.ready = "false";
                     }}
                   />
+                ) : kind === "audio" ? (
+                  <FileTypeIcon className="quick-preview-strip-audio-icon" fileKind="audio" extension={extension || null} isDir={false} />
                 ) : (
                   <div className="quick-preview-strip-fallback">{fallbackLabel}</div>
                 )}

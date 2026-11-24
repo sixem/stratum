@@ -160,6 +160,7 @@ useSettingsStore.subscribe((state) => {
     thumbnailFit: state.thumbnailFit,
     thumbnailAppIcons: state.thumbnailAppIcons,
     videoAutoplay: state.videoAutoplay,
+    galleryAudio: state.galleryAudio,
     ffmpegPath: state.ffmpegPath,
   });
 });

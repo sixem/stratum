@@ -46,3 +46,23 @@ test("a gallery can open after a later page arrives and still select within its 
   original.onSelectPath(first[0].path);
   assert.deepEqual(selected, [next[1], first[0]]);
 });
+
+test("supported audio is opt-in and shares the lazy gallery snapshot", () => {
+  let otherReads = 0;
+  const photo = { ...match("photo.png"), get name() { otherReads++; return "photo.png"; } };
+  const audio = match("recording.WAV");
+  const rows = [photo, audio, match("legacy.wma"), match("folder.mp3", "directory")];
+  const indexes = indexedResultLookup(new Map(rows.map((row, index) => [row.path, index])), rows.length);
+  const select = () => {};
+  const defaultGallery = createIndexedGalleryLookup(rows, indexes, select);
+  const audioGallery = createIndexedGalleryLookup(rows, indexes, select, true);
+
+  assert.equal(defaultGallery(audio.path), undefined);
+  assert.equal(audioGallery(rows[2].path), undefined);
+  assert.equal(otherReads, 0);
+
+  const gallery = audioGallery(audio.path);
+  assert.deepEqual(gallery.items.map(entry => entry.path), [photo.path, audio.path]);
+  assert.equal(audioGallery(photo.path), gallery);
+  assert.deepEqual(defaultGallery(photo.path).items.map(entry => entry.path), [photo.path]);
+});

@@ -4,6 +4,7 @@ import { PREVIEW_STRIP_OPEN_KEY } from "@/constants/settings";
 import { getFileKind, getPathName, isPreviewableEntry, normalizePath } from "@/lib";
 import type { EntryMeta, EntryMetaLookup, FileEntry, RequestScopedThumbnails } from "@/types";
 import { LoadingIndicator } from "@/components/primitives/LoadingIndicator";
+import { useSettingsStore } from "@/modules";
 import { QuickPreviewFooter } from "./QuickPreviewFooter";
 import { QuickPreviewStrip } from "./QuickPreviewStrip";
 import { QuickPreviewTopBar } from "./QuickPreviewTopBar";
@@ -59,17 +60,21 @@ const QuickPreviewOverlayContent = ({
   const [stripOpen, setStripOpen] = useState(readPreviewStripOpen);
   const stripId = useId();
   const stripToggleRef = useRef<HTMLButtonElement>(null);
-  const previewPathIsVideo = useMemo(() => {
-    return getFileKind(getPathName(path)) === "video";
-  }, [path]);
+  const includeAudio = useSettingsStore((state) => state.galleryAudio);
+  const fileKind = getFileKind(getPathName(path));
+  const kind = fileKind === "audio" || fileKind === "video" ? fileKind : "image";
+  const playable = kind !== "image";
   const activePathKey = useMemo(() => normalizePath(path), [path]);
-  const previewItems = useMemo(() => items.filter(isPreviewableEntry), [items]);
+  const previewItems = useMemo(
+    () => items.filter((entry) => isPreviewableEntry(entry, includeAudio)),
+    [includeAudio, items],
+  );
 
   const {
     containerRef,
     stageRef,
     stripRef,
-    videoRef,
+    mediaRef,
     zoom,
     offset,
     dragging,
@@ -83,7 +88,7 @@ const QuickPreviewOverlayContent = ({
     handlePointerCancel,
   } = useQuickPreviewInput({
     open,
-    isVideo: previewPathIsVideo,
+    playable,
     stripOpen,
     previewItems,
     activePath: path,
@@ -95,10 +100,11 @@ const QuickPreviewOverlayContent = ({
   const preview = useQuickPreviewMedia({
     open,
     path,
+    kind,
     meta,
     thumbnails,
     zoom,
-    videoRef,
+    mediaRef,
     resetViewport,
     fitMediaToViewport,
   });
@@ -170,30 +176,33 @@ const QuickPreviewOverlayContent = ({
       <PreviewStage
         src={preview.src}
         label={preview.label}
-        isVideo={preview.isVideo}
+        kind={preview.kind}
+        analyseAudio={preview.analyseAudio}
+        playbackKey={preview.playbackKey}
         videoAutoplay={preview.videoAutoplay}
         isReady={preview.isReady}
         dragging={dragging}
         transforming={transforming}
         videoPoster={preview.videoPoster}
         mediaStyle={preview.mediaStyle}
+        mediaVolume={preview.mediaVolume}
         offset={offset}
         stageRef={stageRef}
-        videoRef={videoRef}
+        mediaRef={mediaRef}
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         onImageLoad={preview.handleImageLoad}
-        onVideoMetadata={preview.handleVideoMetadata}
-        onVideoPlay={preview.handleVideoPlay}
-        onVideoPause={preview.handleVideoPause}
+        onPlaybackMetadata={preview.handlePlaybackMetadata}
+        onPlaybackPlay={preview.handlePlaybackPlay}
+        onPlaybackPause={preview.handlePlaybackPause}
         onMediaError={preview.handleMediaError}
         errorContent={
           <PreviewError
             visible={preview.hasError}
-            isVideo={preview.isVideo}
+            kind={preview.kind}
             name={preview.name}
             typeLabel={preview.typeLabel}
             canUseExternalActions={preview.canUseExternalActions}
@@ -222,18 +231,19 @@ const QuickPreviewOverlayContent = ({
       </div>
       <div className="quick-preview-loading" data-visible={preview.isLoading ? "true" : "false"}>
         <div className="quick-preview-loading-card">
-          <LoadingIndicator label={preview.isVideo ? "Loading video" : "Loading image"} />
+          <LoadingIndicator label={`Loading ${preview.kind}`} />
         </div>
       </div>
       <PreviewControls
         open={open}
-        visible={preview.isVideo}
-        disabled={preview.loadState === "error"}
-        videoRef={videoRef}
-        videoPaused={preview.videoPaused}
+        visible={playable}
+        disabled={!preview.src || preview.hasError}
+        mediaRef={mediaRef}
+        mediaKey={preview.playbackKey}
+        mediaPaused={preview.mediaPaused}
         volumePickerOpen={preview.volumePickerOpen}
         volumeLabel={preview.volumeLabel}
-        videoVolume={preview.videoVolume}
+        mediaVolume={preview.mediaVolume}
         volumeStyle={preview.volumeStyle}
         volumeButtonRef={preview.volumeButtonRef}
         volumeRangeRef={preview.volumeRangeRef}

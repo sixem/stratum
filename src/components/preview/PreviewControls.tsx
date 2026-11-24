@@ -1,4 +1,4 @@
-// Presentational controls for video quick preview playback and volume.
+// Shared playback controls for audio and video previews.
 import type { ChangeEvent as ReactChangeEvent, CSSProperties, RefObject } from "react";
 import { PressButton } from "@/components/primitives/PressButton";
 import { QuickPreviewTimeline } from "./QuickPreviewTimeline";
@@ -7,11 +7,12 @@ type PreviewControlsProps = {
   open: boolean;
   visible: boolean;
   disabled: boolean;
-  videoRef: RefObject<HTMLVideoElement | null>;
-  videoPaused: boolean;
+  mediaRef: RefObject<HTMLMediaElement | null>;
+  mediaKey: string;
+  mediaPaused: boolean;
   volumePickerOpen: boolean;
   volumeLabel: string;
-  videoVolume: number;
+  mediaVolume: number;
   volumeStyle: CSSProperties;
   volumeButtonRef: RefObject<HTMLButtonElement | null>;
   volumeRangeRef: RefObject<HTMLInputElement | null>;
@@ -29,11 +30,12 @@ export const PreviewControls = ({
   open,
   visible,
   disabled,
-  videoRef,
-  videoPaused,
+  mediaRef,
+  mediaKey,
+  mediaPaused,
   volumePickerOpen,
   volumeLabel,
-  videoVolume,
+  mediaVolume,
   volumeStyle,
   volumeButtonRef,
   volumeRangeRef,
@@ -48,13 +50,19 @@ export const PreviewControls = ({
 }: PreviewControlsProps) => {
   if (!visible) return null;
   return (
-    <div className="quick-preview-controls">
+    <div
+      className="quick-preview-controls"
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+      }}
+    >
       <PressButton
         type="button"
         className="quick-preview-control-button quick-preview-control-button--playback"
+        disabled={disabled}
         onClick={onTogglePlayback}
       >
-        {videoPaused ? "Play" : "Pause"}
+        {mediaPaused ? "Play" : "Pause"}
       </PressButton>
       <div
         className="quick-preview-control-volume"
@@ -82,7 +90,7 @@ export const PreviewControls = ({
             min={0}
             max={1}
             step={0.01}
-            value={videoVolume}
+            value={mediaVolume}
             onChange={onVolumeChange}
             onPointerDown={onVolumePointerDown}
             onPointerUp={onVolumePointerUp}
@@ -93,7 +101,7 @@ export const PreviewControls = ({
           />
         </div>
       </div>
-      <QuickPreviewTimeline videoRef={videoRef} open={open} disabled={disabled} />
+      <QuickPreviewTimeline mediaRef={mediaRef} mediaKey={mediaKey} open={open} disabled={disabled} />
     </div>
   );
 };

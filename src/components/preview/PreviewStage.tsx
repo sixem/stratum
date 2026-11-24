@@ -7,29 +7,36 @@ import type {
   SyntheticEvent as ReactSyntheticEvent,
   WheelEvent as ReactWheelEvent,
 } from "react";
+import { FileTypeIcon } from "@/components/icons";
+import { getExtension } from "@/lib";
+import { PreviewPlaybackMedia } from "./PreviewPlaybackMedia";
+import type { PreviewMediaKind } from "./quickPreviewDerivedState";
 
 type PreviewStageProps = {
   src: string;
   label: string;
-  isVideo: boolean;
+  kind: PreviewMediaKind;
+  analyseAudio: boolean;
+  playbackKey: string;
   videoAutoplay: boolean;
   isReady: boolean;
   dragging: boolean;
   transforming: boolean;
   videoPoster?: string;
   mediaStyle: CSSProperties;
+  mediaVolume: number;
   offset: { x: number; y: number };
   stageRef: RefObject<HTMLDivElement | null>;
-  videoRef: RefObject<HTMLVideoElement | null>;
+  mediaRef: RefObject<HTMLMediaElement | null>;
   onWheel: (event: ReactWheelEvent<HTMLDivElement>) => void;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerCancel: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onImageLoad: (event: ReactSyntheticEvent<HTMLImageElement>) => void;
-  onVideoMetadata: (event: ReactSyntheticEvent<HTMLVideoElement>) => void;
-  onVideoPlay: () => void;
-  onVideoPause: () => void;
+  onPlaybackMetadata: (event: ReactSyntheticEvent<HTMLMediaElement>) => void;
+  onPlaybackPlay: () => void;
+  onPlaybackPause: () => void;
   onMediaError: () => void;
   errorContent: ReactNode;
 };
@@ -37,36 +44,41 @@ type PreviewStageProps = {
 export const PreviewStage = ({
   src,
   label,
-  isVideo,
+  kind,
+  analyseAudio,
+  playbackKey,
   videoAutoplay,
   isReady,
   dragging,
   transforming,
   videoPoster,
   mediaStyle,
+  mediaVolume,
   offset,
   stageRef,
-  videoRef,
+  mediaRef,
   onWheel,
   onPointerDown,
   onPointerMove,
   onPointerUp,
   onPointerCancel,
   onImageLoad,
-  onVideoMetadata,
-  onVideoPlay,
-  onVideoPause,
+  onPlaybackMetadata,
+  onPlaybackPlay,
+  onPlaybackPause,
   onMediaError,
   errorContent,
 }: PreviewStageProps) => {
+  const isAudio = kind === "audio";
   return (
     <div
       className={`quick-preview-stage${dragging ? " is-dragging" : ""}${
         transforming ? " is-transforming" : ""
       }`}
       ref={stageRef}
-      onWheel={onWheel}
-      onPointerDown={onPointerDown}
+      data-media-kind={kind}
+      onWheel={isAudio ? undefined : onWheel}
+      onPointerDown={isAudio ? undefined : onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
@@ -76,24 +88,27 @@ export const PreviewStage = ({
         className="quick-preview-pan"
         style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0)` }}
       >
-        {!src ? null : isVideo ? (
-          <video
-            key={src}
-            className="quick-preview-media is-video"
+        {isAudio && isReady ? (
+          <div className="quick-preview-audio">
+            <FileTypeIcon className="quick-preview-audio-icon" isDir={false} fileKind="audio" extension={getExtension(label)} />
+          </div>
+        ) : null}
+        {!src ? null : kind !== "image" ? (
+          <PreviewPlaybackMedia
+            key={playbackKey}
             src={src}
-            poster={videoPoster}
-            playsInline
-            preload="metadata"
-            autoPlay={videoAutoplay}
-            loop
-            draggable={false}
-            onLoadedMetadata={onVideoMetadata}
-            onPlay={onVideoPlay}
-            onPause={onVideoPause}
-            ref={videoRef}
+            audio={isAudio}
+            analyseAudio={analyseAudio}
+            ready={isReady}
+            videoAutoplay={videoAutoplay}
+            videoPoster={videoPoster}
+            mediaStyle={mediaStyle}
+            mediaVolume={mediaVolume}
+            mediaRef={mediaRef}
+            onMetadata={onPlaybackMetadata}
+            onPlay={onPlaybackPlay}
+            onPause={onPlaybackPause}
             onError={onMediaError}
-            data-ready={isReady ? "true" : "false"}
-            style={mediaStyle}
           />
         ) : (
           <img

@@ -6,6 +6,11 @@ import { usePromptStore, useSettingsStore, useShellStore } from "@/modules";
 import { SettingsItem, type SettingsItemText } from "./SettingsItem";
 
 export const MEDIA_SETTINGS_ITEMS = {
+  galleryAudio: {
+    label: "Audio in gallery",
+    description: "Include supported audio files in Quick Preview and Gallery.",
+    keywords: "music playback mp3 wav flac",
+  },
   videoAutoplay: {
     label: "Autoplay videos",
     description: "Start videos automatically when opening them in Quick Preview or Gallery.",
@@ -19,6 +24,7 @@ export const MEDIA_SETTINGS_ITEMS = {
 } satisfies Record<string, SettingsItemText>;
 
 export const SettingsMediaSection = ({ sectionId }: { sectionId: string }) => {
+  const galleryAudio = useSettingsStore((state) => state.galleryAudio);
   const videoAutoplay = useSettingsStore((state) => state.videoAutoplay);
   const ffmpegPath = useSettingsStore((state) => state.ffmpegPath);
   const updateSettings = useSettingsStore((state) => state.updateSettings);
@@ -83,6 +89,17 @@ export const SettingsMediaSection = ({ sectionId }: { sectionId: string }) => {
   return (
     <section className="settings-section" id={sectionId}>
       <div className="settings-section-title">Media</div>
+      <SettingsItem item={MEDIA_SETTINGS_ITEMS.galleryAudio}>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            aria-label={MEDIA_SETTINGS_ITEMS.galleryAudio.label}
+            checked={galleryAudio}
+            onChange={(event) => updateSettings({ galleryAudio: event.currentTarget.checked })}
+          />
+          <span aria-hidden="true" />
+        </label>
+      </SettingsItem>
       <SettingsItem item={MEDIA_SETTINGS_ITEMS.videoAutoplay}>
         <label className="settings-toggle">
           <input

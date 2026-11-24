@@ -21,6 +21,38 @@
   cursor: grabbing;
 }
 
+.quick-preview-stage[data-media-kind="audio"] {
+  cursor: default;
+  touch-action: auto;
+}
+
+.quick-preview-audio {
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+}
+
+.quick-preview-audio-icon {
+  width: clamp(4rem, 15vmin, 7rem);
+  aspect-ratio: 1;
+  opacity: 0.8;
+}
+
+.quick-preview-audio-spectrum {
+  position: absolute;
+  top: calc(100% + 1rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(24rem, 65vw);
+  height: auto;
+  color: var(--accent);
+  visibility: hidden;
+}
+
+.quick-preview-audio-spectrum[data-active="true"] {
+  visibility: visible;
+}
+
 .quick-preview-loading {
   position: absolute;
   inset: 0;

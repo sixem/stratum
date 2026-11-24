@@ -51,8 +51,12 @@ export const getFileKind = (name: string): FileKind => {
   return "generic";
 };
 
-export const isPreviewableEntry = (entry: { name: string; isDir: boolean }) => {
+// Match the audio containers accepted by the preview protocol on Windows.
+const PREVIEW_AUDIO_EXTENSIONS = new Set(["mp3", "wav", "flac", "aac", "m4a", "ogg", "oga", "opus"]);
+
+export const isPreviewableEntry = (entry: { name: string; isDir: boolean }, includeAudio = false) => {
   if (entry.isDir) return false;
   const kind = getFileKind(entry.name);
-  return kind === "image" || kind === "video";
+  return kind === "image" || kind === "video" ||
+    (includeAudio && kind === "audio" && PREVIEW_AUDIO_EXTENSIONS.has(getExtension(entry.name) ?? ""));
 };

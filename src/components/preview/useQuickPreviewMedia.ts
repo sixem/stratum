@@ -1,12 +1,12 @@
 // Composes the focused quick preview hooks into the public preview model used
 // by the overlay. The heavy state logic lives in smaller hooks and a pure
 // derived-state builder.
-import { useMemo } from "react";
-import { getFileKind, getPathName } from "@/lib";
+import { useMemo, useState } from "react";
 import { useSettingsStore } from "@/modules";
 import type { EntryMeta } from "@/types";
 import type { RefObject } from "react";
 import { buildQuickPreviewDerivedState } from "./quickPreviewDerivedState";
+import type { PreviewMediaKind } from "./quickPreviewDerivedState";
 import { usePreviewMediaLifecycle } from "./usePreviewMediaLifecycle";
 import { usePreviewSource } from "./usePreviewSource";
 import { usePreviewVolumeController } from "./usePreviewVolumeController";
@@ -14,10 +14,11 @@ import { usePreviewVolumeController } from "./usePreviewVolumeController";
 type UseQuickPreviewMediaOptions = {
   open: boolean;
   path: string | null;
+  kind: PreviewMediaKind;
   meta?: EntryMeta | null;
   thumbnails: Map<string, string>;
   zoom: number;
-  videoRef: RefObject<HTMLVideoElement | null>;
+  mediaRef: RefObject<HTMLMediaElement | null>;
   resetViewport: () => void;
   fitMediaToViewport: (width: number, height: number) => void;
 };
@@ -27,33 +28,31 @@ const isTauriEnv = () => "__TAURI_INTERNALS__" in globalThis || "__TAURI__" in g
 export const useQuickPreviewMedia = ({
   open,
   path,
+  kind,
   meta,
   thumbnails,
   zoom,
-  videoRef,
+  mediaRef,
   resetViewport,
   fitMediaToViewport,
 }: UseQuickPreviewMediaOptions) => {
   const videoAutoplay = useSettingsStore((state) => state.videoAutoplay);
-  const previewSessionKey = open ? `open:${path ?? ""}` : "closed";
   const { src, failed: sourceFailed } = usePreviewSource(open ? path : null);
-  const isVideo = useMemo(() => {
-    if (!open || !path) return false;
-    return getFileKind(getPathName(path)) === "video";
-  }, [open, path]);
-
-  const volume = usePreviewVolumeController({ previewSessionKey });
+  const [plainAudioSource, setPlainAudioSource] = useState<string | null>(null);
+  const analyseAudio = kind === "audio" && src !== plainAudioSource;
+  const playbackKey = analyseAudio ? `${src}#spectrum` : src;
+  const previewSessionKey = open ? `open:${path ?? ""}:${analyseAudio}` : "closed";
+  const volume = usePreviewVolumeController({ previewSessionKey, isAudio: kind === "audio" });
   const canUseExternalActions = isTauriEnv();
   const lifecycle = usePreviewMediaLifecycle({
     open,
     path,
     src,
-    isVideo,
+    kind,
     previewSessionKey,
-    videoRef,
+    mediaRef,
     resetViewport,
     fitMediaToViewport,
-    videoVolume: volume.videoVolume,
     videoAutoplay,
     canUseExternalActions,
   });
@@ -65,19 +64,19 @@ export const useQuickPreviewMedia = ({
         open,
         path,
         src,
-        isVideo,
+        kind,
         meta,
         thumbnails,
         zoom,
         loadState,
         loadedSrc: lifecycle.loadedSrc,
         mediaSize: lifecycle.mediaSize,
-        videoVolume: volume.videoVolume,
+        mediaVolume: volume.mediaVolume,
         canUseExternalActions,
       }),
     [
       canUseExternalActions,
-      isVideo,
+      kind,
       lifecycle.loadedSrc,
       lifecycle.mediaSize,
       loadState,
@@ -86,7 +85,7 @@ export const useQuickPreviewMedia = ({
       path,
       src,
       thumbnails,
-      volume.videoVolume,
+      volume.mediaVolume,
       zoom,
     ],
   );
@@ -95,14 +94,16 @@ export const useQuickPreviewMedia = ({
     ...derivedState,
     loadState,
     videoAutoplay,
-    videoPaused: lifecycle.videoPaused,
-    videoVolume: volume.videoVolume,
+    analyseAudio,
+    playbackKey,
+    mediaPaused: lifecycle.mediaPaused,
+    mediaVolume: volume.mediaVolume,
     volumePickerOpen: volume.volumePickerOpen,
     externalActionError: lifecycle.externalActionError,
     volumeButtonRef: volume.volumeButtonRef,
     volumeRangeRef: volume.volumeRangeRef,
-    handleVideoPlay: lifecycle.handleVideoPlay,
-    handleVideoPause: lifecycle.handleVideoPause,
+    handlePlaybackPlay: lifecycle.handlePlaybackPlay,
+    handlePlaybackPause: lifecycle.handlePlaybackPause,
     handleVolumeChange: volume.handleVolumeChange,
     handleVolumePointerDown: volume.handleVolumePointerDown,
     handleVolumePointerUp: volume.handleVolumePointerUp,
@@ -112,8 +113,12 @@ export const useQuickPreviewMedia = ({
     handleVolumeHoverEnd: volume.handleVolumeHoverEnd,
     scheduleVolumePickerClose: volume.scheduleVolumePickerClose,
     handleImageLoad: lifecycle.handleImageLoad,
-    handleVideoMetadata: lifecycle.handleVideoMetadata,
-    handleMediaError: lifecycle.handleMediaError,
+    handlePlaybackMetadata: lifecycle.handlePlaybackMetadata,
+    handleMediaError: () => {
+      // If the WebView cannot load a CORS-enabled audio source, retry plain playback.
+      if (analyseAudio) setPlainAudioSource(src);
+      else lifecycle.handleMediaError();
+    },
     handleOpenExternal: lifecycle.handleOpenExternal,
     handleRevealExternal: lifecycle.handleRevealExternal,
   };

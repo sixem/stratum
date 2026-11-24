@@ -94,6 +94,7 @@ export const useEntryMenuItems = ({
   const clipboard = useClipboardStore((state) => state.clipboard);
   const { workspaceId, destinations } = useRecentMoveDestinations();
   const showOpenWith = useSettingsStore((state) => !state.hiddenContextMenuActions.includes("open-with"));
+  const includeAudio = useSettingsStore((state) => state.galleryAudio);
   const openWithMenuState = useOpenWithMenuState(showOpenWith ? target : null);
 
   return useMemo<ContextMenuItem[]>(() => {
@@ -162,7 +163,7 @@ export const useEntryMenuItems = ({
         targetCount: actionTargets.length,
         onOpenEntry,
         onOpenGallery,
-        galleryPath: onOpenGallery && resolveGalleryStartPath(target, actionTargets, entryByPath),
+        galleryPath: onOpenGallery && resolveGalleryStartPath(target, actionTargets, entryByPath, includeAudio),
         onOpenDir,
         onOpenDirNewTab,
         onOpenDirInBackgroundTab,
@@ -237,6 +238,7 @@ export const useEntryMenuItems = ({
     destinations,
     entryByPath,
     extraOpenItems,
+    includeAudio,
     menuShowConvert,
     onClearSelection,
     onDeleteEntries,

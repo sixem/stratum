@@ -94,3 +94,10 @@
   @include control.eyebrow-label(var(--font-size-2xs), 0.08em, null);
   pointer-events: none;
 }
+
+.quick-preview-strip-audio-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--text);
+  pointer-events: none;
+}

@@ -36,3 +36,4 @@ export const SETTINGS_STORAGE_VERSION = 19;
 export const BOTTOM_PANE_STORAGE_KEY = "stratum.bottom-pane";
 export const PREVIEW_STRIP_OPEN_KEY = "stratum.preview.strip-open";
 export const PREVIEW_VOLUME_KEY = "stratum.preview.volume";
+export const AUDIO_PREVIEW_VOLUME_KEY = "stratum.preview.audio-volume";

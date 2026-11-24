@@ -5,6 +5,7 @@ import { TooltipWrapper } from "@/components/overlay/Tooltip";
 
 type QuickPreviewFooterProps = {
   preview: {
+    kind: "image" | "video" | "audio";
     typeLabel: string;
     dimensionLabel: string;
     sizeLabel: string;
@@ -33,10 +34,10 @@ export const QuickPreviewFooter = ({
           <span className="quick-preview-info-label">Type</span>
           <span className="quick-preview-info-value">{preview.typeLabel}</span>
         </div>
-        <div className="quick-preview-info-item">
+        {preview.kind !== "audio" ? <div className="quick-preview-info-item">
           <span className="quick-preview-info-label">Dimensions</span>
           <span className="quick-preview-info-value tnum">{preview.dimensionLabel}</span>
-        </div>
+        </div> : null}
         <div className="quick-preview-info-item">
           <span className="quick-preview-info-label">Size</span>
           <span className="quick-preview-info-value tnum">{preview.sizeLabel}</span>
@@ -45,10 +46,10 @@ export const QuickPreviewFooter = ({
           <span className="quick-preview-info-label">Modified</span>
           <span className="quick-preview-info-value tnum">{preview.modifiedLabel}</span>
         </div>
-        <div className="quick-preview-info-item">
+        {preview.kind !== "audio" ? <div className="quick-preview-info-item">
           <span className="quick-preview-info-label">Zoom</span>
           <span className="quick-preview-info-value tnum">{preview.zoomLabel}</span>
-        </div>
+        </div> : null}
       </div>
       <TooltipWrapper text="Toggle preview list">
         <button

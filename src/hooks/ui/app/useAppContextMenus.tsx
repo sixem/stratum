@@ -163,6 +163,7 @@ export const useAppContextMenus = ({
   const defaultTabGridSize = useSettingsStore(getDefaultTabGridSize);
   const quickMoveEnabled = useSettingsStore((state) => state.indexedSearchEnabled);
   const menuUseWindowsForItems = useSettingsStore((state) => state.menuUseWindowsForItems);
+  const includeAudio = useSettingsStore((state) => state.galleryAudio);
   const menuPaneTransfers = useSettingsStore((state) => state.menuPaneTransfers);
   const menuSelectionActions = useSettingsStore((state) => state.menuSelectionActions);
   const menuOpenBackgroundTab = useSettingsStore((state) => state.menuOpenBackgroundTab);
@@ -199,9 +200,9 @@ export const useAppContextMenus = ({
   });
   const galleryAction = useCallback((entry: EntryContextTarget | undefined, target: ShellMenuTarget) => {
     if (!entry || !("paths" in target)) return;
-    const path = resolveGalleryStartPath(entry, target.paths, entryByPath);
+    const path = resolveGalleryStartPath(entry, target.paths, entryByPath, includeAudio);
     if (path) return () => onOpenGallery(path);
-  }, [entryByPath, onOpenGallery]);
+  }, [entryByPath, includeAudio, onOpenGallery]);
   const menuTarget = useMemo<ShellMenuTarget | null>(() => {
     if (!contextMenu || !windowsMenuEnabled) return null;
     switch (contextMenu.kind) {

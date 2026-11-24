@@ -48,6 +48,7 @@ export const useIndexedSearchResultMenu = ({
   visible, results, actions, closeSearch, openResult, openGallery, selectResult, selectResultForCopy, copyPaths,
 }: Options) => {
   const menuUseWindowsForItems = useSettingsStore((state) => state.menuUseWindowsForItems);
+  const includeAudio = useSettingsStore((state) => state.galleryAudio);
   const hiddenMenuActions = useSettingsStore((state) => state.hiddenContextMenuActions);
   const [request, setRequest] = useState<MenuRequest | null>(null);
   const result = visible && request ? results.find(({ path }) => path === request.path) : undefined;
@@ -70,7 +71,7 @@ export const useIndexedSearchResultMenu = ({
 
   const openNativeMenu = (entry: EntryContextTarget, point: MenuPoint, extended: boolean) =>
     openWindowsMenu({ paths: [entry.path] }, point, extended,
-      isPreviewableEntry(entry) ? () => openGallery(entry.path) : undefined);
+      isPreviewableEntry(entry, includeAudio) ? () => openGallery(entry.path) : undefined);
 
   const openAt = (match: IndexedPathMatch, point: MenuPoint, extended: boolean) => {
     if (copyPaths?.has(match.path)) selectResult(match);

@@ -2,6 +2,8 @@
 // Isolating this keeps multipart/range edge cases out of the main request handler.
 
 const MAX_RANGE_RESPONSE_BYTES: u64 = 8 * 1024 * 1024;
+// An open-ended request is common even when the player only needs audio metadata.
+const MAX_AUDIO_RANGE_RESPONSE_BYTES: u64 = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ByteRange {
@@ -15,10 +17,19 @@ impl ByteRange {
     }
 }
 
-pub fn parse_range_header(header_value: &str, size: u64) -> Result<Option<ByteRange>, ()> {
+pub fn parse_range_header(
+    header_value: &str,
+    size: u64,
+    content_type: &str,
+) -> Result<Option<ByteRange>, ()> {
     if size == 0 {
         return Ok(None);
     }
+    let max_response_bytes = if content_type.starts_with("audio/") {
+        MAX_AUDIO_RANGE_RESPONSE_BYTES
+    } else {
+        MAX_RANGE_RESPONSE_BYTES
+    };
 
     let range_set = header_value.trim();
     let range_set = match range_set.strip_prefix("bytes=") {
@@ -44,7 +55,7 @@ pub fn parse_range_header(header_value: &str, size: u64) -> Result<Option<ByteRa
         if suffix_len == 0 {
             return Ok(None);
         }
-        let suffix_len = suffix_len.min(size).min(MAX_RANGE_RESPONSE_BYTES);
+        let suffix_len = suffix_len.min(size).min(max_response_bytes);
         let start = size.saturating_sub(suffix_len);
         let end = size - 1;
         return Ok(Some(ByteRange { start, end }));
@@ -68,7 +79,7 @@ pub fn parse_range_header(header_value: &str, size: u64) -> Result<Option<ByteRa
 
     // Cap the response size to avoid reading extremely large ranges into memory.
     let max_end = start
-        .saturating_add(MAX_RANGE_RESPONSE_BYTES.saturating_sub(1))
+        .saturating_add(max_response_bytes.saturating_sub(1))
         .min(size - 1);
     let end = requested_end.min(max_end);
 

@@ -330,6 +330,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
         ? value.thumbnailAppIcons
         : DEFAULT_SETTINGS.thumbnailAppIcons,
     videoAutoplay: typeof value?.videoAutoplay === "boolean" ? value.videoAutoplay : DEFAULT_SETTINGS.videoAutoplay,
+    galleryAudio: typeof value?.galleryAudio === "boolean" ? value.galleryAudio : DEFAULT_SETTINGS.galleryAudio,
     ffmpegPath:
       typeof value?.ffmpegPath === "string" ? value.ffmpegPath : DEFAULT_SETTINGS.ffmpegPath,
   };

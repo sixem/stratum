@@ -11,19 +11,20 @@ import {
 import type { EntryMeta } from "@/types";
 
 export type QuickPreviewLoadState = "loading" | "ready" | "error";
+export type PreviewMediaKind = "image" | "video" | "audio";
 
 type BuildQuickPreviewDerivedStateParams = {
   open: boolean;
   path: string | null;
   src: string;
-  isVideo: boolean;
+  kind: PreviewMediaKind;
   meta?: EntryMeta | null;
   thumbnails: Map<string, string>;
   zoom: number;
   loadState: QuickPreviewLoadState;
   loadedSrc: string | null;
   mediaSize: { width: number; height: number } | null;
-  videoVolume: number;
+  mediaVolume: number;
   canUseExternalActions: boolean;
 };
 
@@ -37,14 +38,14 @@ export const buildQuickPreviewDerivedState = ({
   open,
   path,
   src,
-  isVideo,
+  kind,
   meta,
   thumbnails,
   zoom,
   loadState,
   loadedSrc,
   mediaSize,
-  videoVolume,
+  mediaVolume,
   canUseExternalActions,
 }: BuildQuickPreviewDerivedStateParams) => {
   const label = !open || !path ? "Media preview" : getPathName(path) || "Media preview";
@@ -54,17 +55,18 @@ export const buildQuickPreviewDerivedState = ({
   const hasError = loadState === "error";
   const name = getPathName(path ?? "");
   const extension = splitNameExtension(name).extension;
-  const typeLabel = extension ? extension.toUpperCase() : isVideo ? "Video" : "Image";
+  const kindLabel = kind === "audio" ? "Audio" : kind === "video" ? "Video" : "Image";
+  const typeLabel = extension ? extension.toUpperCase() : kindLabel;
   const sizeLabel = formatBytes(meta?.size ?? null);
   const modifiedLabel = meta?.modified == null ? "-" : formatDate(meta.modified);
   const dimensionLabel = mediaSize
     ? `${formatCount(mediaSize.width)} x ${formatCount(mediaSize.height)}`
     : "...";
   const zoomLabel = `${Math.round(zoom * 100)}%`;
-  const videoPoster = isVideo && path ? thumbnails.get(path) : undefined;
-  const volumeLabel = `${Math.round(videoVolume * 100)}%`;
-  const titleText = name || (isVideo ? "Video" : "Image");
-  const volumeProgress = clamp(videoVolume * 100, 0, 100);
+  const videoPoster = kind === "video" && path ? thumbnails.get(path) : undefined;
+  const volumeLabel = `${Math.round(mediaVolume * 100)}%`;
+  const titleText = name || kindLabel;
+  const volumeProgress = clamp(mediaVolume * 100, 0, 100);
   const volumeStyle = {
     "--preview-volume-progress": `${volumeProgress}%`,
   } as CSSProperties;
@@ -81,7 +83,7 @@ export const buildQuickPreviewDerivedState = ({
   return {
     src,
     label,
-    isVideo,
+    kind,
     isReady,
     isLoading,
     hasError,

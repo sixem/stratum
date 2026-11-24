@@ -1,9 +1,10 @@
 // Error block for unsupported/failed quick preview rendering.
 import { PressButton } from "@/components/primitives/PressButton";
+import type { PreviewMediaKind } from "./quickPreviewDerivedState";
 
 type PreviewErrorProps = {
   visible: boolean;
-  isVideo: boolean;
+  kind: PreviewMediaKind;
   name: string;
   typeLabel: string;
   canUseExternalActions: boolean;
@@ -14,7 +15,7 @@ type PreviewErrorProps = {
 
 export const PreviewError = ({
   visible,
-  isVideo,
+  kind,
   name,
   typeLabel,
   canUseExternalActions,
@@ -23,11 +24,12 @@ export const PreviewError = ({
   onRevealExternal,
 }: PreviewErrorProps) => {
   if (!visible) return null;
-  const errorTitle = isVideo ? "Video preview unavailable" : "Preview unavailable";
-  const errorSummary = isVideo
+  const isVideo = kind === "video";
+  const errorTitle = kind === "audio" ? "Audio preview unavailable" : isVideo ? "Video preview unavailable" : "Preview unavailable";
+  const errorSummary = kind === "audio" ? "Try opening this audio file in your default app." : isVideo
     ? "Stratum plays videos using your system webview's built-in media decoder."
     : "Stratum previews files using your system webview.";
-  const errorDetail = isVideo
+  const errorDetail = kind === "audio" ? "" : isVideo
     ? "Some containers/codecs (often MKV/H.265/AV1, depending on your OS) are not supported there, so playback can fail."
     : "Large files or unsupported formats may need to be opened in your default app.";
 

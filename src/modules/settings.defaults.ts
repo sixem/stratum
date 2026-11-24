@@ -88,5 +88,6 @@ export const DEFAULT_SETTINGS: Settings = {
   thumbnailFit: "contain",
   thumbnailAppIcons: true,
   videoAutoplay: true,
+  galleryAudio: false,
   ffmpegPath: "",
 };

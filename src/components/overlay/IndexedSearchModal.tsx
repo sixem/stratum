@@ -23,7 +23,7 @@ import { useModalFocusTrap } from "@/hooks";
 import { isPlainEscape, releaseInputFocusOnEscape } from "@/hooks/ui/inputs/inputFocus";
 import type { PreviewGallerySource, PreviewSourceBindings } from "@/hooks/ui/view/useQuickPreview";
 import { formatCount, formatIndexedSearchServiceState, isIndexedDriveActiveState } from "@/lib";
-import { useIndexedSearchUiStore } from "@/modules";
+import { useIndexedSearchUiStore, useSettingsStore } from "@/modules";
 import { DialogCloseButton } from "./DialogCloseButton";
 
 export type IndexedSearchModalProps = {
@@ -35,6 +35,7 @@ export type IndexedSearchModalProps = {
 
 export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGallery }: IndexedSearchModalProps) => {
   const open = useIndexedSearchUiStore((state) => state.open);
+  const includeAudio = useSettingsStore((state) => state.galleryAudio);
   const query = useIndexedSearchUiStore((state) => state.query);
   const setQuery = useIndexedSearchUiStore((state) => state.setQuery);
   const closeModal = useIndexedSearchUiStore((state) => state.closeModal);
@@ -120,8 +121,8 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
   });
 
   const getGallery = useMemo(
-    () => createIndexedGalleryLookup(results, resultIndexes, selectResult),
-    [results, resultIndexes, selectResult],
+    () => createIndexedGalleryLookup(results, resultIndexes, selectResult, includeAudio),
+    [includeAudio, results, resultIndexes, selectResult],
   );
   const openGallery = useCallback((path: string) => {
     const gallery = getGallery(path);

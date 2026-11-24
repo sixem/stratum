@@ -56,6 +56,27 @@ pub fn register_preview_protocol<R: tauri::Runtime>(
                     responder.respond(unavailable_grant());
                     return;
                 };
+                #[cfg(windows)]
+                let audio_origin = request
+                    .headers()
+                    .get(header::ORIGIN)
+                    .filter(|origin| {
+                        if !source.content_type.starts_with("audio/") {
+                            return false;
+                        }
+                        let url = origin
+                            .to_str()
+                            .ok()
+                            .and_then(|value| tauri::Url::parse(value).ok());
+                        let window = ctx.app_handle().get_webview_window(ctx.webview_label());
+                        url.zip(window).is_some_and(|(url, window)| {
+                            crate::platform::windows::webview_navigation::allows_app_navigation(
+                                window.as_ref(),
+                                &url,
+                            )
+                        })
+                    })
+                    .cloned();
                 let range_header = request
                     .headers()
                     .get(header::RANGE)
@@ -79,6 +100,20 @@ pub fn register_preview_protocol<R: tauri::Runtime>(
                         if_none_match.as_deref(),
                         if_modified_since.as_deref(),
                     );
+                    // Only the issuing app origin can use its audio stream with Web Audio.
+                    #[cfg(windows)]
+                    let response = if let Some(origin) = audio_origin {
+                        let mut response = response;
+                        response
+                            .headers_mut()
+                            .insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
+                        response
+                            .headers_mut()
+                            .append(header::VARY, header::HeaderValue::from_static("Origin"));
+                        response
+                    } else {
+                        response
+                    };
                     responder.respond(response);
                 });
             },
@@ -173,7 +208,7 @@ fn build_range_response(
     range_header: &str,
     validators: &cache::CacheValidators,
 ) -> Response<Vec<u8>> {
-    let range = match parse_range_header(range_header, size) {
+    let range = match parse_range_header(range_header, size, content_type) {
         Ok(Some(range)) => range,
         Ok(None) | Err(_) => return range_not_satisfiable(size, validators),
     };
@@ -314,6 +349,29 @@ mod tests {
             response.headers()[header::X_CONTENT_TYPE_OPTIONS],
             "nosniff"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn audio_previews_use_small_ranges_and_can_seek() -> io::Result<()> {
+        let fixture = PreviewFixture::new("audio-range")?;
+        let path = fixture.directory.join("recording.WAV");
+        let length = 3 * 1024 * 1024;
+        File::create(&path)?.set_len(length)?;
+        let grants = PreviewGrants::default();
+        let token = open_grant(&grants, &path).unwrap();
+        let source = grants.resolve("main", &format!("/{token}")).unwrap();
+
+        let first = build_file_response(&source, false, Some("bytes=0-"), None, None);
+        assert_eq!(first.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(first.headers()[header::CONTENT_TYPE], "audio/wav");
+        assert_eq!(first.body().len(), 1024 * 1024);
+        let seek = build_file_response(&source, false, Some("bytes=3145720-"), None, None);
+        assert_eq!(
+            seek.headers()[header::CONTENT_RANGE],
+            "bytes 3145720-3145727/3145728"
+        );
+        assert_eq!(seek.body().len(), 8);
         Ok(())
     }
 

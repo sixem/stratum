@@ -89,5 +89,6 @@ export type Settings = {
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;
   videoAutoplay: boolean;
+  galleryAudio: boolean;
   ffmpegPath: string;
 };

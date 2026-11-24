@@ -1,4 +1,4 @@
-// Custom video timeline for preview mode.
+// Shared audio and video timeline for preview mode.
 // Uses direct CSS variable updates for smooth playhead motion without per-frame React renders.
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -8,7 +8,8 @@ import type {
 } from "react";
 
 type QuickPreviewTimelineProps = {
-  videoRef: RefObject<HTMLVideoElement | null>;
+  mediaRef: RefObject<HTMLMediaElement | null>;
+  mediaKey: string;
   open: boolean;
   disabled: boolean;
   onCommitSeek?: (seconds: number) => void;
@@ -45,15 +46,16 @@ const formatMediaTime = (seconds: number) => {
   return `${paddedMinutes}:${padded}`;
 };
 
-const resolveDuration = (video: HTMLVideoElement | null) => {
-  if (!video) return 0;
-  const duration = video.duration;
+const resolveDuration = (media: HTMLMediaElement | null) => {
+  if (!media) return 0;
+  const duration = media.duration;
   if (!Number.isFinite(duration) || duration <= 0) return 0;
   return duration;
 };
 
 export const QuickPreviewTimeline = ({
-  videoRef,
+  mediaRef,
+  mediaKey,
   open,
   disabled,
   onCommitSeek,
@@ -120,18 +122,18 @@ export const QuickPreviewTimeline = ({
   };
 
   const commitSeek = (time: number) => {
-    const video = videoRef.current;
-    const duration = resolveDuration(video);
-    if (!video || duration <= 0) return;
+    const media = mediaRef.current;
+    const duration = resolveDuration(media);
+    if (!media || duration <= 0) return;
     const target = clamp(time, 0, duration);
-    if (typeof video.fastSeek === "function") {
+    if (typeof media.fastSeek === "function") {
       try {
-        video.fastSeek(target);
+        media.fastSeek(target);
       } catch {
-        video.currentTime = target;
+        media.currentTime = target;
       }
     } else {
-      video.currentTime = target;
+      media.currentTime = target;
     }
     playheadAnchorRef.current = { time: target, perf: performance.now() };
     onCommitSeek?.(target);
@@ -150,69 +152,72 @@ export const QuickPreviewTimeline = ({
   };
 
   useEffect(() => {
-    if (!open) {
+    const media = mediaRef.current;
+    if (!open || !media || !mediaKey) {
       playheadAnchorRef.current = { time: 0, perf: 0 };
       syncDisplay(0, 0, true);
       return;
     }
 
-    const tick = () => {
-      const video = videoRef.current;
-      if (!video) {
-        playheadAnchorRef.current = { time: 0, perf: performance.now() };
-        syncDisplay(0, 0);
-        rafRef.current = window.requestAnimationFrame(tick);
-        return;
-      }
-
-      const now = performance.now();
-      const duration = resolveDuration(video);
-      if (dragActiveRef.current) {
-        syncDisplay(previewTimeRef.current ?? 0, duration);
-      } else if (duration <= 0) {
-        playheadAnchorRef.current = { time: 0, perf: now };
-        syncDisplay(0, 0);
-      } else if (video.paused || video.ended) {
-        const raw = clamp(video.currentTime, 0, duration);
-        playheadAnchorRef.current = { time: raw, perf: now };
-        syncDisplay(raw, duration);
-      } else {
-        // The webview can report currentTime in coarse steps. We anchor to the latest
-        // decoder time and interpolate between samples so the playhead glides smoothly.
-        const rate = Number.isFinite(video.playbackRate) ? video.playbackRate : 1;
-        const safeRate = rate > 0 ? rate : 1;
-        const raw = clamp(video.currentTime, 0, duration);
+    const canAnimate = () => !document.hidden && !media.paused && !media.ended &&
+      media.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA;
+    const syncClock = () => {
+      const duration = resolveDuration(media);
+      const time = clamp(media.currentTime, 0, duration);
+      playheadAnchorRef.current = { time, perf: performance.now() };
+      if (!dragActiveRef.current) syncDisplay(time, duration, true);
+    };
+    const stopFrames = () => {
+      if (rafRef.current == null) return;
+      window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
+    const tick = (now: number) => {
+      rafRef.current = null;
+      if (!canAnimate()) return;
+      if (!dragActiveRef.current) {
+        // Smooth the playhead between decoder updates, only while playing.
+        const duration = resolveDuration(media);
+        const raw = clamp(media.currentTime, 0, duration);
         const anchor = playheadAnchorRef.current;
-
-        if (anchor.perf === 0) {
+        const rate = media.playbackRate > 0 ? media.playbackRate : 1;
+        const projected = clamp(anchor.time + ((now - anchor.perf) / 1000) * rate, 0, duration);
+        if (Math.abs(raw - projected) > DECODER_DRIFT_THRESHOLD || raw > projected) {
           playheadAnchorRef.current = { time: raw, perf: now };
           syncDisplay(raw, duration);
         } else {
-          const projected = clamp(
-            anchor.time + ((now - anchor.perf) / 1000) * safeRate,
-            0,
-            duration,
-          );
-          const drift = Math.abs(raw - projected);
-          if (drift > DECODER_DRIFT_THRESHOLD || raw > projected) {
-            playheadAnchorRef.current = { time: raw, perf: now };
-            syncDisplay(raw, duration);
-          } else {
-            syncDisplay(projected, duration);
-          }
+          syncDisplay(projected, duration);
         }
       }
       rafRef.current = window.requestAnimationFrame(tick);
     };
-
-    rafRef.current = window.requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current != null) {
-        window.cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
+    const startFrames = () => {
+      syncClock();
+      if (rafRef.current == null && canAnimate()) rafRef.current = window.requestAnimationFrame(tick);
     };
-  }, [open, videoRef]);
+    const settle = () => {
+      stopFrames();
+      syncClock();
+    };
+
+    const listeners = new AbortController();
+    const { signal } = listeners;
+    // Update from media events while paused, loading or hidden.
+    for (const event of ["loadedmetadata", "durationchange", "ratechange"]) {
+      media.addEventListener(event, syncClock, { signal });
+    }
+    for (const event of ["pause", "ended", "waiting", "seeking", "error", "emptied"]) {
+      media.addEventListener(event, settle, { signal });
+    }
+    media.addEventListener("playing", startFrames, { signal });
+    media.addEventListener("seeked", startFrames, { signal });
+    document.addEventListener("visibilitychange", () => document.hidden ? settle() : startFrames(), { signal });
+    startFrames();
+    return () => {
+      listeners.abort();
+      stopFrames();
+    };
+  }, [mediaKey, mediaRef, open]);
 
   useEffect(() => {
     if (!open) {
@@ -315,7 +320,7 @@ export const QuickPreviewTimeline = ({
         className={`quick-preview-timeline${dragging ? " is-dragging" : ""}${seekDisabled ? " is-disabled" : ""}`}
         ref={rootRef}
         role="slider"
-        aria-label="Video timeline"
+        aria-label="Playback position"
         aria-valuemin={0}
         aria-valuemax={seekDisabled ? 0 : labels.max}
         aria-valuenow={seekDisabled ? 0 : labels.now}
