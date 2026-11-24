@@ -85,10 +85,10 @@ export const IndexedSearchResultsList = ({
   const appliedScroll = useRef<typeof scrollRestore>(undefined);
   const restoreScroll = useCallback(() => {
     const viewport = resultsViewportRef.current;
-    if (!viewport || !scrollRestore || appliedScroll.current === scrollRestore) return;
+    if (!visible || !viewport?.clientHeight || !scrollRestore || appliedScroll.current === scrollRestore) return;
     viewport.scrollTop = scrollRestore.top;
     appliedScroll.current = scrollRestore;
-  }, [resultsViewportRef, scrollRestore]);
+  }, [resultsViewportRef, scrollRestore, visible]);
   const { startIndex, endIndex } = useVirtualRange(
     resultsViewportRef, resultCount, INDEXED_SEARCH_RESULT_STRIDE, OVERSCAN,
     INDEXED_SEARCH_RESULT_INSET, INDEXED_SEARCH_RESULT_INSET, { beforeLayoutMeasure: restoreScroll },

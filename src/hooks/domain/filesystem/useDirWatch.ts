@@ -6,6 +6,7 @@ import { folderPathKey, makeDebug } from "@/lib";
 import { bumpDirectoryChildVersions } from "@/modules";
 import type { FileEntry, SortState, Tab } from "@/types";
 import type { LoadDirOptions, MetaRequestOptions } from "./fileManager.types";
+import { FileWriteChecks } from "./fileWriteChecks";
 import {
   consumePendingChanges,
   consumeQueuedRefreshWhenIdle,
@@ -45,12 +46,11 @@ const DIR_CHANGE_DEBOUNCE_MS = 260;
 const TAB_SWITCH_CHECK_DELAY_MS = 140;
 const TAB_SWITCH_REFRESH_COOLDOWN_MS = 2000;
 const REFRESH_COOLDOWN_MS = 900;
-// Windows may expose a file's updated size or timestamp after the write event.
-const WRITE_CHECK_DELAYS_MS = [1000, 2000, 4000];
 
 type PendingFolderChange = {
   path: string;
   entryPaths: Set<string>;
+  writtenPaths: Set<string>;
   rename: boolean;
   rescan: boolean;
   writesOnly: boolean;
@@ -97,7 +97,7 @@ export const useDirWatch = ({
   const lastTabIdRef = useRef<string | null>(null);
   const tabCheckTimerRef = useRef<number | null>(null);
   const writeCheckTimerRef = useRef<number | null>(null);
-  const writeChecksRef = useRef<{ key: string; paths: Set<string> } | null>(null);
+  const writeChecksRef = useRef<{ key: string; checks: FileWriteChecks } | null>(null);
 
   useEffect(() => {
     enabledRef.current = enabled;
@@ -227,12 +227,17 @@ export const useDirWatch = ({
 
   const scheduleWriteChecks = useCallback((key: string, paths: string[]) => {
     const previous = writeChecksRef.current;
-    const pending = previous?.key === key ? previous : { key, paths: new Set<string>() };
-    for (const path of paths) pending.paths.add(path);
+    const pending = previous?.key === key ? previous : { key, checks: new FileWriteChecks() };
+    pending.checks.schedule(paths, performance.now());
     writeChecksRef.current = pending;
     if (writeCheckTimerRef.current != null) window.clearTimeout(writeCheckTimerRef.current);
 
-    const scheduleStep = (index: number) => {
+    const scheduleNext = () => {
+      const nextDueAt = pending.checks.nextDueAt;
+      if (nextDueAt === null) {
+        writeChecksRef.current = null;
+        return;
+      }
       writeCheckTimerRef.current = window.setTimeout(() => {
         writeCheckTimerRef.current = null;
         if (!enabledRef.current || folderPathKey(activeTabPathRef.current) !== key ||
@@ -240,22 +245,21 @@ export const useDirWatch = ({
           writeChecksRef.current = null;
           return;
         }
-        checkWrittenFiles(key, [...pending.paths]);
-        if (index + 1 < WRITE_CHECK_DELAYS_MS.length) scheduleStep(index + 1);
-        else writeChecksRef.current = null;
-      }, WRITE_CHECK_DELAYS_MS[index]);
+        const due = pending.checks.takeDue(performance.now());
+        if (due.length > 0) checkWrittenFiles(key, due);
+        scheduleNext();
+      }, Math.max(0, Math.ceil(nextDueAt - performance.now())));
     };
 
-    scheduleStep(0);
+    scheduleNext();
   }, [checkWrittenFiles]);
 
   const recoverVisibleFolder = useCallback((path: string) => {
     const key = folderPathKey(path);
     if (!key || key !== folderPathKey(activeTabPathRef.current)) return;
     recoveryPathRef.current = key;
-    clearWriteChecks();
     refreshActiveRef.current("watch-recovery");
-  }, [clearWriteChecks]);
+  }, []);
 
   const flushPendingChanges = useCallback(() => {
     const pending = pendingChangesRef.current;
@@ -267,7 +271,8 @@ export const useDirWatch = ({
     const activeKey = folderPathKey(activeTabPathRef.current);
     const currentKey = folderPathKey(currentPathRef.current);
     const activeChange = pending.get(activeKey);
-    const metaPaths = [...(pending.get(currentKey)?.entryPaths ?? [])];
+    const currentChange = pending.get(currentKey);
+    const metaPaths = [...(currentChange?.entryPaths ?? [])];
     const changes = [...pending.values()];
     pending.clear();
     const paths = changes.map(({ path }) => path);
@@ -282,25 +287,34 @@ export const useDirWatch = ({
       tabs: tabsRef.current,
     });
 
+    const writtenPaths = changeResult.shouldRefreshActive && activeKey === currentKey && requestEntryMetaRef.current
+      ? currentChange?.writtenPaths : undefined;
+    const knownWrites: string[] = [];
+    const otherPaths: string[] = [];
+    for (const path of metaPaths) {
+      if (writtenPaths?.has(path) && entriesRef.current.get(path)?.isDir === false) knownWrites.push(path);
+      else otherPaths.push(path);
+    }
     if (changeResult.shouldRefreshActive) {
-      if (activeChange?.rescan) recoverVisibleFolder(activeTabPathRef.current);
-      else if (activeChange?.writesOnly && activeKey === currentKey && !loadingRef.current &&
-        requestEntryMetaRef.current && metaPaths.length > 0 &&
-        metaPaths.every((path) => entriesRef.current.get(path)?.isDir === false)) {
-        checkWrittenFiles(currentKey, metaPaths);
-        scheduleWriteChecks(currentKey, metaPaths);
-        return;
-      } else {
-        clearWriteChecks();
+      if (activeChange?.rescan) {
+        recoverVisibleFolder(activeTabPathRef.current);
+      } else if (!(activeChange?.writesOnly && !loadingRef.current &&
+        knownWrites.length > 0 && otherPaths.length === 0)) {
         refreshActiveRef.current("fs-event");
       }
     }
 
-    if (metaPaths.length > 0) {
-      // Retain changed entries while the listing refresh and bounded stats settle.
-      void requestEntryMetaRef.current?.(metaPaths, { force: true }).catch(() => {});
+    // A listing can run while a different file is still being written.
+    // Keep the write checks even if this batch also contains a namespace change.
+    if (knownWrites.length > 0) {
+      checkWrittenFiles(currentKey, knownWrites);
+      scheduleWriteChecks(currentKey, knownWrites);
     }
-  }, [checkWrittenFiles, clearWriteChecks, pane, recoverVisibleFolder, scheduleWriteChecks]);
+    if (otherPaths.length > 0) {
+      // Retain changed entries while the listing refresh and bounded stats settle.
+      void requestEntryMetaRef.current?.(otherPaths, { force: true }).catch(() => {});
+    }
+  }, [checkWrittenFiles, pane, recoverVisibleFolder, scheduleWriteChecks]);
 
   const scheduleFlush = useCallback(() => {
     if (flushTimerRef.current != null) return;
@@ -316,12 +330,16 @@ export const useDirWatch = ({
       if (change.watchFailed) markDirectoryWatchFailed(pane, change.watchedPath);
       const pending = pendingChangesRef.current;
       const folder = pending.get(key) ?? {
-        path: change.watchedPath, entryPaths: new Set<string>(), rename: false, rescan: false, writesOnly: true,
+        path: change.watchedPath, entryPaths: new Set<string>(), writtenPaths: new Set<string>(),
+        rename: false, rescan: false, writesOnly: true,
       };
       folder.rename ||= change.rename === true;
       folder.rescan ||= Boolean(change.rescan || change.watchFailed);
       folder.writesOnly &&= change.writing === true && change.entryPaths.length > 0 && !folder.rename && !folder.rescan;
-      for (const path of change.entryPaths) folder.entryPaths.add(path);
+      for (const path of change.entryPaths) {
+        folder.entryPaths.add(path);
+        if (change.writing) folder.writtenPaths.add(path);
+      }
       pending.set(key, folder);
       scheduleFlush();
     },

@@ -35,7 +35,7 @@ type SearchResult = SearchScope & {
 type SearchRequest = SearchScope & (
   | { kind: "head" }
   | { kind: "next"; previous: SearchResult }
-  | { kind: "refresh"; previous: SearchResult; selectedIndex: number }
+  | { kind: "refresh"; previous: SearchResult; selectedIndex: number; anchor: IndexedSearchRefreshAnchor | null }
 );
 
 const EMPTY_RESULTS: IndexedPathMatch[] = [];
@@ -92,7 +92,7 @@ export const useIndexedSearchResults = ({
           const previousPaths = previousPage && new Set(previousPage.matches.map(({ path }) => path));
           const addedIndexes = new Map<string, number>();
           const visitedCursors = new Set<string>();
-          let anchor: IndexedSearchRefreshAnchor | null = null;
+          let anchor = request.kind === "refresh" ? request.anchor : null;
           do {
             if (cursor) visitedCursors.add(cursor);
             const page = await queryIndexedPathPage({ query, limit: INDEXED_SEARCH_PAGE_SIZE, cursor });
@@ -195,9 +195,12 @@ export const useIndexedSearchResults = ({
     const previous = lastResultRef.current;
     if (!open || catalogPending || !previous?.paged || previous.query !== trimmedQuery
       || previous.catalogRevision === catalogRevision || latestRequestRef.current?.kind === "refresh") return;
+    // Preview can hide the viewport before the first refreshed page arrives.
+    const viewport = resultsViewportRef.current;
+    const anchor = viewport?.clientHeight ? captureIndexedSearchAnchor(previous.matches, viewport, selectedIndex) : null;
     setLoadingMore(false);
     setRefreshing(true);
-    latestRequestRef.current = { kind: "refresh", query: previous.query, catalogRevision, previous, selectedIndex };
+    latestRequestRef.current = { kind: "refresh", query: previous.query, catalogRevision, previous, selectedIndex, anchor };
     void runLatest();
   }, [catalogPending, catalogRevision, open, runLatest, trimmedQuery]);
 

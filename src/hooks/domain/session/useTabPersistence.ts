@@ -8,7 +8,10 @@ type SetTabs = (next: Tab[] | ((prev: Tab[]) => Tab[])) => void;
 type SetRecentJumps = (next: string[] | ((prev: string[]) => string[])) => void;
 
 type PendingNavigation = {
+  tabId: string | null;
   path: string;
+  sort?: SortState;
+  search?: string;
   revealPath?: string | null;
   waitForListing?: boolean;
   resetFilter?: { tabId: string; previousSearch: string };
@@ -97,7 +100,7 @@ export const useTabPersistence = ({
       // Invalidate the outgoing request before it can write into the new tabs.
       clearDir({ silent: true });
       const path = activeTab?.path.trim();
-      pendingNavigationRef.current = path ? { path } : null;
+      pendingNavigationRef.current = path ? { path, tabId: activeTabId } : null;
       if (path && activeTab) {
         void loadDir(path, { sort: activeTab.sort, search: activeTab.search });
       } else if (activeTabId) {
@@ -170,9 +173,9 @@ export const useTabPersistence = ({
       return;
     }
     restoreRequestedRef.current = true;
-    pendingNavigationRef.current = { path: target };
+    pendingNavigationRef.current = { path: target, tabId: activeTabId };
     void loadDir(target, { sort: sortState, search: searchValue });
-  }, [currentPath, loadDir, searchValue, sortState]);
+  }, [activeTabId, currentPath, loadDir, searchValue, sortState]);
 
   useEffect(() => {
     setRecentJumps((prev) => {

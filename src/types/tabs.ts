@@ -24,4 +24,11 @@ export type TabHistoryDirection = keyof TabHistory;
 export type TabTransfer = {
   tab: Tab;
   history?: TabHistory;
+  navigation?: {
+    path: string;
+    sort?: SortState;
+    search?: string;
+    revealPath?: string;
+    resetFilter?: boolean;
+  };
 };
