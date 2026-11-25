@@ -137,10 +137,10 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       if (activeTabId && scrollTop.current !== null) setTabScrollTop(activeTabId, scrollTop.current);
     };
   }, [activeTabId, setTabScrollTop]);
-  const closeTab = (id: string) => {
+  const closeTab = (id: string, close = tabs.closeTab) => {
     const outgoing = id === activeTabId ? scrollTop.current ?? undefined : undefined;
     focusFiles();
-    tabs.closeTab(id, outgoing);
+    close(id, outgoing);
   };
   const navigate = (next: string) => { if (next.trim()) tabs.browseTo(next.trim()); };
   const clearSearchAndFocusFiles = () => {
@@ -173,6 +173,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   });
   const paneActions = useBottomPaneActions({
     folder, actions, menu, files, ready, viewVisit, browseFromView, openGallery: bottomPreview.open, scrollTo,
+    onCloseAnchoredTab: id => closeTab(id, tabs.closeAnchoredTab),
     hideExtension: upper.gridNameHideExtension,
     clearDragState: drop.clearDragState,
   });

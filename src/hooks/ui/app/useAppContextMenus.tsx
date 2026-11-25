@@ -78,6 +78,7 @@ type UseAppContextMenusOptions = {
   onOpenDirInBackgroundTab: (path: string) => void;
   onOpenDirInMainPane?: (path: string) => void;
   onSelectTab: (id: string) => void;
+  onCloseAnchoredTab: (id: string) => void;
   terminalTabs: Pick<ReturnType<typeof useTabSession>, "closeTab" | "endTerminalSplit">;
   onRenameFolder: (path: string, name: string) => Promise<unknown>;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
@@ -149,6 +150,7 @@ export const useAppContextMenus = ({
   onOpenDirInBackgroundTab,
   onOpenDirInMainPane,
   onSelectTab,
+  onCloseAnchoredTab,
   terminalTabs,
   onRenameFolder,
   onDeleteEntries,
@@ -388,6 +390,14 @@ export const useAppContextMenus = ({
       icon: "anchor",
       onSelect: () => usePaneSession.getState().setTabs(tabs => setTabAnchored(tabs, menuTab.id, !menuTab.anchored)),
     });
+    if (menuTab.anchored) {
+      tabActions.push({
+        id: "close-anchored-tab",
+        label: "Close tab",
+        icon: "remove",
+        onSelect: () => onCloseAnchoredTab(menuTab.id),
+      });
+    }
     if (menuTab.terminal && !menuTab.anchored) {
       tabActions.push({
         id: "split-terminal", label: "Split with…", icon: "split-tab", disabled: !hasSplitTarget(),

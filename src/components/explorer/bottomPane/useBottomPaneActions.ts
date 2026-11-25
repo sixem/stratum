@@ -20,12 +20,14 @@ type Options = {
   hideExtension: boolean;
   browseFromView: (path: string) => void;
   openGallery: (path: string) => void;
+  onCloseAnchoredTab: (id: string) => void;
   scrollTo: (index: number) => void;
   clearDragState: () => void;
 };
 
 export function useBottomPaneActions({
-  folder, actions, menu, files, ready, viewVisit, hideExtension, browseFromView, openGallery, scrollTo, clearDragState,
+  folder, actions, menu, files, ready, viewVisit, hideExtension, browseFromView, openGallery, onCloseAnchoredTab,
+  scrollTo, clearDragState,
 }: Options) {
   const { dir, tabs, model, selection, viewKey } = folder;
   const { closeContextMenu } = menu;
@@ -125,6 +127,7 @@ export function useBottomPaneActions({
     onOpenDirNewTab: tabs.openInNewTab,
     onOpenDirInBackgroundTab: tabs.openInBackgroundTab,
     onSelectTab: tabs.selectTab,
+    onCloseAnchoredTab,
     terminalTabs: tabs,
     onRenameFolder: async (path, name) => {
       const result = await actions.renameEntry(path, name, { updateFolderLocations: true });

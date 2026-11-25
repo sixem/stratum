@@ -339,6 +339,10 @@ export const useShellViewInteractions = ({
     onOpenDirNewTab: navigationController.handleOpenInNewTab,
     onOpenDirInBackgroundTab: tabSession.openInBackgroundTab,
     onSelectTab: navigationController.handleSelectTab,
+    onCloseAnchoredTab: (id) => {
+      if (id === tabSession.activeTabId) navigationController.stashActiveScroll();
+      tabSession.closeAnchoredTab(id);
+    },
     terminalTabs: tabSession,
     onRenameFolder: (path, name) => fileManager.renameEntry(path, name, { updateFolderLocations: true }),
     onDeleteEntries: fileManager.deleteEntries,

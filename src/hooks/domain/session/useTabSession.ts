@@ -358,13 +358,17 @@ export const useTabSession = ({
   );
 
   const removeTab = useCallback(
-    (id: string, scrollTop?: number, receive?: (transfer: TabTransfer) => boolean) => {
+    (id: string, { scrollTop, receive, closeAnchored }: {
+      scrollTop?: number;
+      receive?: (transfer: TabTransfer) => boolean;
+      closeAnchored?: boolean;
+    }) => {
       // The UI may have just saved the outgoing scroll position.
       const session = useStore.getState();
       const index = session.tabs.findIndex((tab) => tab.id === id);
       if (index === -1) return;
       const tab = session.tabs[index];
-      if (tab.anchored) return;
+      if (tab.anchored && !closeAnchored) return;
       const savedTab = scrollTop !== undefined && Number.isFinite(scrollTop)
         ? { ...tab, scrollTop: Math.max(0, Math.round(scrollTop)) }
         : tab;
@@ -409,9 +413,12 @@ export const useTabSession = ({
       restoreHistory, takeHistory, useStore],
   );
 
-  const closeTab = useCallback((id: string, scrollTop?: number) => removeTab(id, scrollTop), [removeTab]);
+  const closeTab = useCallback((id: string, scrollTop?: number) => removeTab(id, { scrollTop }), [removeTab]);
+  // The tab context menu is the only close action that bypasses anchoring.
+  const closeAnchoredTab = useCallback((id: string, scrollTop?: number) =>
+    removeTab(id, { scrollTop, closeAnchored: true }), [removeTab]);
   const moveTab = useCallback((id: string, receive: (transfer: TabTransfer) => boolean, scrollTop?: number) =>
-    removeTab(id, scrollTop, receive), [removeTab]);
+    removeTab(id, { scrollTop, receive }), [removeTab]);
 
   const activateStoredTab = useCallback((tab: Tab, navigation?: TabTransfer["navigation"]) => {
     if (navigation) {
@@ -470,7 +477,9 @@ export const useTabSession = ({
 
     const { tab, index, history } = closed;
     const nextTabs = [...session.tabs];
-    nextTabs.splice(Math.min(Math.max(index, firstUnanchoredTabIndex(nextTabs)), nextTabs.length), 0, tab);
+    const boundary = firstUnanchoredTabIndex(nextTabs);
+    const position = tab.anchored ? Math.min(index, boundary) : Math.max(index, boundary);
+    nextTabs.splice(Math.min(position, nextTabs.length), 0, tab);
     session.updateSession({ tabs: nextTabs, activeTabId: tab.id, closedTabs: remainingClosedTabs });
     if (history) restoreHistory(tab.id, history);
     activateStoredTab(tab);
@@ -514,6 +523,7 @@ export const useTabSession = ({
     openInBackgroundTab,
     selectTab,
     closeTab,
+    closeAnchoredTab,
     moveTab,
     receiveTab,
     reopenClosedTab,
