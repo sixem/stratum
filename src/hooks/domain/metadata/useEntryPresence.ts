@@ -116,7 +116,6 @@ export const useEntryPresence = ({
     const prevMap = stateRef.current;
     const nextMap = new Map<string, PresenceState>();
     const nextKeys = items.map((item) => item.key);
-    const nextKeySet = new Set(nextKeys);
 
     items.forEach((item) => {
       const isParent = item.type === "parent";
@@ -129,21 +128,29 @@ export const useEntryPresence = ({
       });
     });
 
-    let mergedKeys = [...nextKeys];
+    let mergedKeys = nextKeys;
     if (allowAnimate) {
-      // Reinsert removed keys near their previous positions so layout shifts happen after fade-out.
+      // Fill gaps with live rows in their new order, leaving fading rows at
+      // their old positions. Each live row is copied at most once.
+      let liveIndex = 0;
       prevKeys.forEach((key, index) => {
-        if (nextKeySet.has(key)) return;
+        if (nextMap.has(key)) return;
         const previous = prevMap.get(key);
         if (!previous || previous.item.type === "parent") return;
+        if (mergedKeys === nextKeys) mergedKeys = [];
+        while (mergedKeys.length < index && liveIndex < nextKeys.length) {
+          mergedKeys.push(nextKeys[liveIndex++]);
+        }
+        mergedKeys.push(key);
         nextMap.set(key, {
           item: previous.item,
           presence: "removed",
           expiresAt: now + FADE_OUT_MS,
         });
-        const insertIndex = Math.min(Math.max(index, 0), mergedKeys.length);
-        mergedKeys.splice(insertIndex, 0, key);
       });
+      if (mergedKeys !== nextKeys) {
+        while (liveIndex < nextKeys.length) mergedKeys.push(nextKeys[liveIndex++]);
+      }
     }
 
     stateRef.current = nextMap;

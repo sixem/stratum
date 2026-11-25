@@ -12,14 +12,16 @@ const clampHeight = (height: number, { min, max }: HeightBounds) => Math.min(max
 function readSplit(divider: HTMLElement) {
   const stack = divider.parentElement;
   const layout = stack?.parentElement;
-  const upper = divider.previousElementSibling;
-  if (!stack || !layout || !upper) return null;
-  const stackHeight = stack.getBoundingClientRect().height;
-  const available = stackHeight - PANE_DIVIDER_HEIGHT;
-  const max = Math.max(0, Math.floor(available - Math.min(MIN_MAIN_PANE_HEIGHT, stackHeight / 2)));
+  if (!stack || !layout) return null;
+  const stackRect = stack.getBoundingClientRect();
+  const dividerRect = divider.getBoundingClientRect();
+  const available = stackRect.height - PANE_DIVIDER_HEIGHT;
+  const max = Math.max(0, Math.floor(available - Math.min(MIN_MAIN_PANE_HEIGHT, stackRect.height / 2)));
   const min = Math.min(MIN_BOTTOM_PANE_HEIGHT, max);
-  const height = clampHeight(available - upper.getBoundingClientRect().height, { min: 0, max });
-  return { layout, stack, upper, height, min, max };
+  // The grab area extends equally above and below the divider's grid track.
+  const center = (dividerRect.top + dividerRect.bottom) / 2;
+  const height = clampHeight(stackRect.bottom - center - PANE_DIVIDER_HEIGHT / 2, { min: 0, max });
+  return { layout, stack, height, min, max };
 }
 
 function setDividerValue(divider: HTMLElement, height: number) {
@@ -28,7 +30,7 @@ function setDividerValue(divider: HTMLElement, height: number) {
 }
 
 export function PaneDivider() {
-  const heightUnit = useBottomPaneStore(state => state.heightUnit);
+  const savedHeight = useBottomPaneStore(state => `${state.height}${state.heightUnit}`);
   const dividerRef = useRef<HTMLDivElement>(null);
   const drag = useRef<Resize | null>(null);
   useLayoutEffect(() => () => {
@@ -55,9 +57,8 @@ export function PaneDivider() {
     sync();
     const observer = new ResizeObserver(sync);
     observer.observe(split.stack);
-    observer.observe(split.upper);
     return () => observer.disconnect();
-  }, [heightUnit]);
+  }, [savedHeight]);
 
   return (
     <div

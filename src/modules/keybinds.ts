@@ -8,8 +8,8 @@ import {
   RESERVED_KEYBIND_DEFINITIONS,
   RESERVED_KEYBINDS,
   SINGLE_CHAR_PATTERN,
-} from "@/constants";
-import type { KeybindAction, KeybindDefinition, KeybindMap } from "@/constants";
+} from "../constants/keybinds.ts";
+import type { KeybindAction, KeybindDefinition, KeybindMap } from "../constants/keybinds";
 
 export type { KeybindAction, KeybindDefinition, KeybindMap };
 export { DEFAULT_KEYBINDS, KEYBIND_DEFINITIONS, RESERVED_KEYBINDS };
@@ -29,7 +29,7 @@ const normalizeKeyToken = (token: string) => {
   if (["arrowdown", "down"].includes(lower)) return "ArrowDown";
   if (lower === "escape" || lower === "esc") return "Escape";
   if (lower === "delete" || lower === "del") return "Delete";
-  if (lower === " ") return "Space";
+  if (lower === "space") return "Space";
   if (
     [
       "mousemiddle",
@@ -120,7 +120,8 @@ const isSingleCharacterBinding = (normalized: string) => {
 // Single-character shortcuts must include Ctrl/Alt/Win to avoid interfering with typeahead.
 export const isBareCharacterKeybind = (binding: string) => {
   const normalized = normalizeKeybind(binding);
-  return isSingleCharacterBinding(normalized);
+  // Space has a named token, but pressing it in a text field still types a character.
+  return normalized === "Space" || normalized === "Shift+Space" || isSingleCharacterBinding(normalized);
 };
 
 export const formatKeybind = (binding: string) => {
@@ -146,7 +147,7 @@ export const isReservedKeybind = (binding: string) => {
 };
 
 export const buildKeybindFromEvent = (event: KeyboardEvent) => {
-  const keyToken = normalizeKeyToken(event.key);
+  const keyToken = event.key === " " ? "Space" : normalizeKeyToken(event.key);
   if (!keyToken) return null;
   if (MODIFIER_KEYS.has(keyToken as (typeof MODIFIER_ORDER)[number])) {
     return null;
@@ -175,7 +176,13 @@ const sanitizeKeybinds = (bindings: KeybindMap) => {
   };
 
   KEYBIND_DEFINITIONS.forEach((definition) => {
-    const candidate = normalizeKeybind(bindings[definition.id] ?? "");
+    const binding = bindings[definition.id];
+    // An explicit empty string is an unassigned shortcut, even with a default.
+    if (binding === "") {
+      next[definition.id] = "";
+      return;
+    }
+    const candidate = normalizeKeybind(binding);
     const fallback = normalizeKeybind(definition.default);
     if (isAllowed(candidate, definition.id)) {
       next[definition.id] = candidate;
@@ -199,7 +206,7 @@ export const coerceKeybinds = (value: unknown) => {
   if (record) {
     KEYBIND_DEFINITIONS.forEach((definition) => {
       const candidate = record[definition.id];
-      if (typeof candidate === "string" && candidate.trim().length > 0) {
+      if (typeof candidate === "string") {
         merged[definition.id] = candidate.trim();
       }
     });

@@ -4,6 +4,7 @@ import type { PlaceContextTarget } from "@/types";
 type MenuRequest = {
   target: ShellMenuTarget | null;
   place?: PlaceContextTarget;
+  listHeader?: boolean;
   point: { x: number; y: number };
 };
 
@@ -29,9 +30,8 @@ export const getKeyboardMenuRequest = (
   currentPath: string,
   selectedPaths: string[],
   parentPath: string | null,
-  allowUntitledTab = false,
 ): MenuRequest | null => {
-  const focus = getFileCommandFocus(main, allowUntitledTab);
+  const focus = getFileCommandFocus(main, true);
   if (!focus) return null;
   if (focus !== "view") {
     const rect = focus.element.getBoundingClientRect();
@@ -42,6 +42,16 @@ export const getKeyboardMenuRequest = (
     };
   }
   if (!currentPath) return null;
+
+  const listHeader = document.activeElement?.closest("[data-list-header]");
+  if (listHeader && main.contains(listHeader)) {
+    const anchor = document.activeElement?.getBoundingClientRect() ?? listHeader.getBoundingClientRect();
+    return {
+      target: { backgroundPath: currentPath },
+      listHeader: true,
+      point: { x: anchor.left, y: anchor.bottom },
+    };
+  }
 
   const focused = document.activeElement?.closest<HTMLElement>('[data-selectable="true"]');
   const focusedPath = focused?.dataset.path;

@@ -1,17 +1,19 @@
 // Status bar layout and counters.
+@use "./control-recipes" as control;
+
 .statusbar {
+  --statusbar-padding-block: 0.42rem;
   display: flex;
   gap: 0.75rem;
   justify-content: space-between;
   align-items: center;
-  padding: 0.42rem 0.75rem;
+  padding: var(--statusbar-padding-block) 0.75rem;
   background: linear-gradient(180deg, rgba(8, 10, 16, 0.82), rgba(8, 10, 16, 0.66));
   border-top: var(--surface-border-width) solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(2px) saturate(1.05);
   -webkit-backdrop-filter: blur(2px) saturate(1.05);
-  font-size: 0.6875rem;
-  letter-spacing: 0.04em;
-  color: rgba(228, 234, 244, 0.8);
+  @include control.footer-text();
+  line-height: 1.2;
   width: 100%;
   overflow: hidden;
 }

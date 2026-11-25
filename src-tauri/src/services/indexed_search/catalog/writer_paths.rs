@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use rusqlite::{params, Connection, OptionalExtension, Statement};
 
 #[cfg(windows)]
-use super::{int_to_kind, IndexedEntryKind};
+use super::{super::CatalogChild, int_to_kind};
 use super::{kind_to_int, trim_catalog_path, CatalogEntryRecord};
 
 pub(super) const DELETE_PATH_TREE: &str =
@@ -15,18 +15,31 @@ pub(super) const SEEK_PATH: &str =
     "SELECT path FROM indexed_entries WHERE path >= ? ORDER BY path LIMIT 1";
 pub(super) const FIND_PATH_TREE: &str =
     "SELECT 1 FROM indexed_entries WHERE path = ?1 OR (path >= ?2 AND path < ?3) LIMIT 1";
-pub(super) const READ_PATH_TREE: &str = "SELECT path, normalized_name, kind FROM indexed_entries
+pub(super) const READ_PATH_TREE: &str =
+    "SELECT path, normalized_name, kind, size_bytes FROM indexed_entries
                                        WHERE path = ?1 OR (path >= ?2 AND path < ?3) LIMIT ?4";
 const MAX_CASE_PROBE_SEEKS: usize = 64;
+
+#[cfg(windows)]
+pub(super) type IndexedChildren = BTreeMap<String, Option<CatalogChild>>;
 
 #[cfg(windows)]
 pub(super) fn indexed_children(
     connection: &Connection,
     parent: &str,
-) -> Result<BTreeMap<String, Option<IndexedEntryKind>>, String> {
+) -> Result<IndexedChildren, String> {
+    bounded_indexed_children(connection, parent, usize::MAX).map(Option::unwrap_or_default)
+}
+
+#[cfg(windows)]
+pub(super) fn bounded_indexed_children(
+    connection: &Connection,
+    parent: &str,
+    limit: usize,
+) -> Result<Option<IndexedChildren>, String> {
     let read = || -> rusqlite::Result<_> {
         let mut scan = connection.prepare_cached(
-            "SELECT path, kind FROM indexed_entries
+            "SELECT path, kind, size_bytes FROM indexed_entries
              WHERE path >= ?1 AND path < ?2 ORDER BY path",
         )?;
         let mut children = BTreeMap::new();
@@ -43,17 +56,72 @@ pub(super) fn indexed_children(
                     if let Some((name, _)) = relative.split_once('\\') {
                         // Stream direct children and seek again only to skip a subtree.
                         children.entry(name.to_owned()).or_insert(None);
+                        if children.len() > limit {
+                            return Ok(None);
+                        }
                         start = format!("{prefix}{name}]");
                         continue 'seek;
                     }
-                    children.insert(relative.to_owned(), Some(int_to_kind(row.get(1)?)));
+                    children.insert(
+                        relative.to_owned(),
+                        Some(CatalogChild {
+                            kind: int_to_kind(row.get(1)?),
+                            size_bytes: row.get(2)?,
+                        }),
+                    );
+                    if children.len() > limit {
+                        return Ok(None);
+                    }
                 }
                 break;
             }
         }
-        Ok(children)
+        Ok(Some(children))
     };
     read().map_err(|error| format!("Failed to read indexed-search direct children: {error}"))
+}
+
+#[cfg(windows)]
+pub(super) fn contains_exact_directory(
+    connection: &Connection,
+    path: &str,
+) -> Result<bool, String> {
+    if path.len() == 3 {
+        return Ok(true);
+    }
+    let path = validated_path_tree(path)?;
+    let read = || -> rusqlite::Result<bool> {
+        let mut select = connection
+            .prepare_cached("SELECT 1 FROM indexed_entries WHERE path = ?1 AND kind = 1")?;
+        for spelling in drive_spellings(path) {
+            if select.exists([spelling])? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    };
+    read().map_err(|error| format!("Failed to verify indexed-search folder {path}: {error}"))
+}
+
+#[cfg(windows)]
+pub(super) fn update_file_size(
+    connection: &Connection,
+    path: &str,
+    size_bytes: Option<i64>,
+) -> Result<bool, String> {
+    let path = validated_path_tree(path)?;
+    let update = || -> rusqlite::Result<bool> {
+        let mut statement = connection.prepare_cached(
+            "UPDATE indexed_entries SET size_bytes = ?2
+             WHERE path = ?1 AND kind = 0 AND size_bytes IS NOT ?2",
+        )?;
+        let mut changed = false;
+        for spelling in drive_spellings(path) {
+            changed |= statement.execute(params![spelling, size_bytes])? > 0;
+        }
+        Ok(changed)
+    };
+    update().map_err(|error| format!("Failed to update indexed-search size for {path}: {error}"))
 }
 
 #[cfg(windows)]
@@ -107,11 +175,13 @@ pub(super) fn bounded_tree_differs(
                 let path = row.get_ref(0)?.as_str().ok();
                 let name = row.get_ref(1)?.as_str().ok();
                 let kind: i64 = row.get(2)?;
+                let size_bytes: Option<i64> = row.get(3)?;
                 let same = path
                     .and_then(|path| expected.get(path))
                     .is_some_and(|record| {
                         name == Some(record.normalized_name.as_str())
                             && kind == kind_to_int(record.kind)
+                            && size_bytes == record.size_bytes
                     });
                 changed |= !same;
             }
@@ -125,14 +195,15 @@ pub(super) fn remove_path_trees(
     connection: &Connection,
     paths: &[String],
     mut row_budget: Option<usize>,
-) -> Result<bool, String> {
+) -> Result<Option<usize>, String> {
     if paths.is_empty() {
-        return Ok(true);
+        return Ok(Some(0));
     }
     let mut delete = connection
         .prepare_cached(DELETE_PATH_TREE)
         .map_err(|error| format!("Failed to prepare indexed-search delete: {error}"))?;
 
+    let mut total = 0;
     for path in paths {
         let path = validated_path_tree(path)?;
 
@@ -151,7 +222,7 @@ pub(super) fn remove_path_trees(
                     )
                     .map_err(|error| format!("Failed to bound indexed-search deletion: {error}"))?;
                 let Some(left) = remaining.checked_sub(rows) else {
-                    return Ok(false);
+                    return Ok(None);
                 };
                 *remaining = left;
             }
@@ -164,10 +235,11 @@ pub(super) fn remove_path_trees(
         if removed == 0 && needs_case_check(connection, path)? {
             // A different spelling could represent a distinct item in a
             // case-sensitive directory. Leave it to a physical volume scan.
-            return Ok(false);
+            return Ok(None);
         }
+        total += removed;
     }
-    Ok(true)
+    Ok(Some(total))
 }
 
 fn validated_path_tree(path: &str) -> Result<&str, String> {
@@ -312,7 +384,9 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         connection
             .execute_batch(
-                "CREATE TABLE indexed_entries (path TEXT PRIMARY KEY, kind INTEGER NOT NULL)",
+                "CREATE TABLE indexed_entries (
+                    path TEXT PRIMARY KEY, kind INTEGER NOT NULL, size_bytes INTEGER
+                )",
             )
             .unwrap();
         for (path, kind) in [
@@ -326,20 +400,27 @@ mod tests {
         ] {
             connection
                 .execute(
-                    "INSERT INTO indexed_entries VALUES (?1, ?2)",
+                    "INSERT INTO indexed_entries (path, kind) VALUES (?1, ?2)",
                     params![path, kind],
                 )
                 .unwrap();
         }
         let children = indexed_children(&connection, r"C:\").unwrap();
+        let child = |kind| {
+            Some(CatalogChild {
+                kind,
+                size_bytes: None,
+            })
+        };
+        use crate::domain::indexed_search::IndexedEntryKind;
         assert_eq!(
             children,
             BTreeMap::from([
-                ("Case".to_owned(), Some(IndexedEntryKind::File)),
-                ("a".to_owned(), Some(IndexedEntryKind::Directory)),
-                ("a2".to_owned(), Some(IndexedEntryKind::File)),
-                ("a]".to_owned(), Some(IndexedEntryKind::File)),
-                ("case".to_owned(), Some(IndexedEntryKind::File)),
+                ("Case".to_owned(), child(IndexedEntryKind::File)),
+                ("a".to_owned(), child(IndexedEntryKind::Directory)),
+                ("a2".to_owned(), child(IndexedEntryKind::File)),
+                ("a]".to_owned(), child(IndexedEntryKind::File)),
+                ("case".to_owned(), child(IndexedEntryKind::File)),
                 ("orphan".to_owned(), None),
             ]),
         );

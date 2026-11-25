@@ -149,13 +149,14 @@ export const useModalFocusTrap = ({
     const container = containerRef.current;
     if (!container) return;
 
+    // Making the opener inert can blur it before we get a chance to remember it.
+    previousFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
     const overlayRoot = findOverlayRoot(container);
     modalStack.push(overlayRoot);
     captureBackground(overlayRoot);
     applyBackground(overlayRoot);
-    previousFocusRef.current = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
 
     const focusInitial = () => {
       if (modalStack[modalStack.length - 1] !== overlayRoot) return;

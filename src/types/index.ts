@@ -20,6 +20,7 @@ export type {
   MovedTransferEntry,
   DriveInfo,
   EntryMeta,
+  EntryMetaLookup,
   FileEntry,
   FolderThumbSampleBatchOptions,
   FolderThumbSampleBatchResult,
@@ -30,6 +31,7 @@ export type {
   RestoreRecycleReport,
   TrashReport,
   TransferMode,
+  TransferDestination,
   TransferJobPhase,
   TransferJobKind,
   TransferJobCapabilities,
@@ -80,10 +82,14 @@ export type { ShellAvailability, ShellKind } from "./shells";
 export type { SortDir, SortKey, SortState } from "./sort";
 export type { Tab } from "./tabs";
 export type {
+  RequestScopedThumbnails,
   ThumbnailEvent,
   ThumbnailFormat,
   ThumbnailHit,
+  ThumbnailLookup,
   ThumbnailRequest,
   ThumbnailRequestOptions,
+  ThumbnailScope,
+  ThumbnailView,
 } from "./thumbs";
 export type { RenameCommitReason, ViewMode } from "./view";

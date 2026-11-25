@@ -44,6 +44,9 @@ export const useShellOverlayModel = ({
         : null,
       open: shellView.overlayContext.contextMenuOpen,
       items: shellView.overlayContext.contextMenuItems,
+      focusFirstItem: menuState.contextMenu?.focusFirstItem,
+      scrollable: menuState.contextMenu?.kind === "place-target" ||
+        (menuState.contextMenu?.kind === "actions" && menuState.contextMenu.scrollable),
       onClose: menuState.closeContextMenu,
     },
     quickPreview: {
@@ -58,6 +61,7 @@ export const useShellOverlayModel = ({
       onRequestThumbs: shellView.overlayContext.requestThumbnails,
       thumbResetKey: shellView.overlayContext.thumbnailResetKey,
       onSelectPreview: shellView.overlayContext.handlePreviewSelect,
+      onClose: shellView.overlayContext.closePreview,
       smartTabJump: shellView.overlayContext.smartTabJump,
       smartTabBlocked: shellView.overlayContext.smartTabBlocked,
     },

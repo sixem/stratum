@@ -19,10 +19,13 @@ use super::{
     scan,
     service::IndexedSearchHandle,
     state,
-    work_queue::{normalize_path, Work, WorkQueue},
+    work_queue::{normalize_path, WatchedPath, Work, WorkQueue},
 };
 
 const VOLUME_CHECK_INTERVAL: Duration = Duration::from_secs(15);
+const SIZE_BACKFILL_YIELD_INTERVAL: Duration = Duration::from_millis(50);
+#[cfg(windows)]
+const SIZE_BACKFILL_PUBLISH_INTERVAL: Duration = Duration::from_secs(5);
 
 impl IndexedSearchHandle {
     pub fn request_drive_rebuild(&self, drive_path: String) -> Result<bool, String> {
@@ -83,10 +86,13 @@ impl IndexedSearchHandle {
         let mut status = self.inner.state.lock().expect("indexed search state lock");
         for (drive, path) in paths.iter().filter_map(|path| normalize_path(path)) {
             let key = state::normalize_drive_key(&drive);
+            if !status.includes_drive(&key) {
+                continue;
+            }
             if status.service_status.state == IndexedSearchServiceState::Starting {
                 // Keep early filesystem changes bounded and let the worker
                 // check their mount before acting. They cannot schedule scans.
-                queue.queue_watched_path(&drive, path);
+                queue.queue_watched_path(&drive, path, false);
                 continue;
             }
             if !status
@@ -113,7 +119,11 @@ impl IndexedSearchHandle {
         self.start_worker(&mut queue)
     }
 
-    pub(crate) fn queue_watched_paths(&self, paths: &[&str]) -> Result<(), String> {
+    pub(crate) fn queue_watched_paths(
+        &self,
+        paths: &[&str],
+        size_only: bool,
+    ) -> Result<(), String> {
         let mut queue = self
             .inner
             .work_queue
@@ -123,18 +133,81 @@ impl IndexedSearchHandle {
             return Ok(());
         }
         let state = self.inner.state.lock().expect("indexed search state lock");
+        let now = Instant::now();
+        let mut wake_worker = false;
         for (drive, path) in paths.iter().filter_map(|path| normalize_path(path)) {
             let key = state::normalize_drive_key(&drive);
-            if state.tracks_changes(&key) {
+            if !state.includes_drive(&key) {
+                continue;
+            }
+            if state.has_verified_journal(&key) {
+                wake_worker |= queue.queue_journal_hint(drive, now);
                 continue;
             }
             if state.service_status.state == IndexedSearchServiceState::Starting
                 || state.volumes.verified.contains(&key)
             {
-                queue.queue_watched_path(&drive, path);
+                queue.queue_watched_path(&drive, path, size_only);
+                wake_worker = true;
             }
         }
         drop(state);
+        if wake_worker {
+            self.start_worker(&mut queue)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn nudge_indexed_search(&self) -> Result<(), String> {
+        let mut queue = self
+            .inner
+            .work_queue
+            .lock()
+            .expect("indexed search work queue");
+        if self.is_shutting_down() || !self.is_enabled() || self.catalog_error().is_some() {
+            return Ok(());
+        }
+        let state = self.inner.state.lock().expect("indexed search state lock");
+        let now = Instant::now();
+        let mut wake_worker = false;
+        for mount in state
+            .volumes
+            .verified
+            .iter()
+            .filter(|key| state.has_verified_journal(key))
+            .filter_map(|key| state.volumes.mounted.get(key))
+        {
+            wake_worker |= queue.queue_journal_hint(mount.drive_path.clone(), now);
+        }
+        drop(state);
+        if wake_worker {
+            self.start_worker(&mut queue)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn queue_visited_folder(&self, folder: &str) -> Result<(), String> {
+        let Some((drive, folder)) = normalize_path(folder) else {
+            return Ok(());
+        };
+        let mut queue = self
+            .inner
+            .work_queue
+            .lock()
+            .expect("indexed search work queue");
+        if self.is_shutting_down() || !self.is_enabled() || self.catalog_error().is_some() {
+            return Ok(());
+        }
+        let state = self.inner.state.lock().expect("indexed search state lock");
+        let key = state::normalize_drive_key(&drive);
+        if !state.includes_drive(&key)
+            || (state.service_status.state != IndexedSearchServiceState::Starting
+                && !state.uses_folder_reconciliation(&key))
+        {
+            return Ok(());
+        }
+        drop(state);
+        queue.queue_visited_folder(&drive, folder);
         self.start_worker(&mut queue)
     }
 
@@ -190,6 +263,11 @@ impl IndexedSearchHandle {
         }
 
         let mut next_volume_check = Instant::now() + VOLUME_CHECK_INTERVAL;
+        let mut next_size_backfill = Instant::now();
+        #[cfg(windows)]
+        let mut size_changes_waiting = false;
+        #[cfg(windows)]
+        let mut next_size_publish = Instant::now() + SIZE_BACKFILL_PUBLISH_INTERVAL;
         loop {
             let (work, generation) = {
                 let mut queue = self
@@ -206,7 +284,7 @@ impl IndexedSearchHandle {
                     if now >= next_volume_check {
                         queue.queue_volume_check();
                     }
-                    if let Some(work) = queue.next() {
+                    if let Some(work) = queue.next_ready(now, now >= next_size_backfill) {
                         break work;
                     }
                     {
@@ -220,18 +298,37 @@ impl IndexedSearchHandle {
                             status.update_service_status(IndexedSearchServiceState::Idle, None);
                         }
                     }
+                    let wake_at = if queue.has_size_backfill() {
+                        next_volume_check.min(next_size_backfill)
+                    } else {
+                        next_volume_check
+                    };
+                    let wake_at = queue
+                        .next_journal_hint()
+                        .map_or(wake_at, |due| wake_at.min(due));
                     (queue, _) = self
                         .inner
                         .work_available
-                        .wait_timeout(queue, next_volume_check.saturating_duration_since(now))
+                        .wait_timeout(queue, wake_at.saturating_duration_since(now))
                         .expect("indexed search work queue");
                 };
                 match &work {
                     Work::CheckVolumes
                     | Work::ContinueJournal(_)
                     | Work::ReconcileWatched(_)
+                    | Work::ReconcileVisitedFolder(_)
                     | Work::RefreshDriveCount(_)
                     | Work::BackfillSearch => {}
+                    Work::BackfillFileSizes => {
+                        let mut state = self.inner.state.lock().expect("indexed search state lock");
+                        if matches!(
+                            state.service_status.state,
+                            IndexedSearchServiceState::Starting
+                                | IndexedSearchServiceState::Scanning
+                        ) {
+                            state.update_service_status(IndexedSearchServiceState::Idle, None);
+                        }
+                    }
                     Work::Rebuild(drive) => {
                         let mut state = self.inner.state.lock().expect("indexed search state lock");
                         let existing_index = state
@@ -271,11 +368,30 @@ impl IndexedSearchHandle {
                     next_volume_check = Instant::now() + VOLUME_CHECK_INTERVAL;
                 }
                 Work::BackfillSearch => self.run_search_backfill(generation),
+                Work::BackfillFileSizes => {
+                    #[cfg(windows)]
+                    {
+                        let (changed, reschedule) = self.run_size_backfill(generation);
+                        size_changes_waiting |= changed;
+                        // Each batch is searchable immediately. Coalesce cache
+                        // invalidations and visible result refreshes across batches.
+                        let now = Instant::now();
+                        if size_changes_waiting && (!reschedule || now >= next_size_publish) {
+                            self.bump_catalog_revision();
+                            size_changes_waiting = false;
+                            next_size_publish = now + SIZE_BACKFILL_PUBLISH_INTERVAL;
+                        }
+                    }
+                    next_size_backfill = Instant::now() + SIZE_BACKFILL_YIELD_INTERVAL;
+                }
                 Work::RefreshDriveCount(drive) => self.refresh_drive_count(&drive, generation),
                 Work::ContinueJournal(drive) => self.continue_volume_journal(&drive, generation),
                 Work::Rebuild(drive) => self.run_drive_rebuild(drive, generation),
                 Work::Reconcile(paths) => self.run_reconcile(paths, generation),
                 Work::ReconcileWatched(paths) => self.run_watched_paths(paths, generation),
+                Work::ReconcileVisitedFolder(folder) => {
+                    self.run_visited_folder(&folder, generation)
+                }
             }
         }
     }
@@ -373,6 +489,39 @@ impl IndexedSearchHandle {
         }
     }
 
+    #[cfg(windows)]
+    fn run_size_backfill(&self, generation: u64) -> (bool, bool) {
+        let mounts = self
+            .inner
+            .state
+            .lock()
+            .expect("indexed search state lock")
+            .volumes
+            .verified_mounts();
+        let catalog = self.catalog().expect("queued work has a catalog");
+        let step =
+            catalog.backfill_file_sizes_step(&mounts, &|| self.should_cancel_work(generation));
+        match step {
+            Ok(step) => {
+                if step.reschedule {
+                    let mut queue = self
+                        .inner
+                        .work_queue
+                        .lock()
+                        .expect("indexed search work queue");
+                    if !self.should_cancel_work(generation) {
+                        queue.queue_size_backfill();
+                    }
+                }
+                (step.changed, step.reschedule)
+            }
+            Err(error) => {
+                eprintln!("[indexed-search] {error}");
+                (false, false)
+            }
+        }
+    }
+
     fn run_drive_rebuild(&self, drive: String, generation: u64) {
         let catalog = self.catalog().expect("queued work has a catalog");
         let mount = self
@@ -434,7 +583,7 @@ impl IndexedSearchHandle {
         if self.should_cancel_work(generation) {
             // A disable/re-enable cycle cannot revive the old worker's scan.
             // Queue another attempt so the cancelled work isn't lost.
-            if scanned.is_err() {
+            if scanned.is_err() && status.includes_drive(&mount.key()) {
                 queue.queue_rebuild(drive);
             }
             return;
@@ -448,12 +597,18 @@ impl IndexedSearchHandle {
                     Some(scan::FILESYSTEM_SCAN_SOURCE.to_string()),
                 );
                 if summary.checkpoint.is_some() {
+                    status.volumes.unavailable_journals.remove(&mount.key());
                     status.mark_saved_volume_verified(
                         &mount,
                         Some("Checking changes made during the scan.".to_string()),
                     );
                     queue.queue_volume_check();
                 } else {
+                    if checkpoint.is_err() {
+                        status.volumes.unavailable_journals.insert(mount.key());
+                    } else {
+                        status.volumes.unavailable_journals.remove(&mount.key());
+                    }
                     let warning = checkpoint.err().map(|error| {
                         format!("Live updates unavailable. Showing saved results. {error}")
                     });
@@ -522,9 +677,12 @@ impl IndexedSearchHandle {
             return;
         }
         if self.should_cancel_work(generation) {
+            let mut state = self.inner.state.lock().expect("indexed search state lock");
             for (drive, path) in paths.iter().filter_map(|path| normalize_path(path)) {
-                if queue.queue_path(drive.clone(), path) {
-                    self.transition_drive_state(&drive, IndexedDriveState::Queued, None);
+                if state.includes_drive(&state::normalize_drive_key(&drive))
+                    && queue.queue_path(drive.clone(), path)
+                {
+                    state.transition_drive_state(&drive, IndexedDriveState::Queued, None);
                 }
             }
             return;
@@ -539,15 +697,18 @@ impl IndexedSearchHandle {
         }
     }
 
-    fn run_watched_paths(&self, paths: Vec<String>, generation: u64) {
+    fn run_watched_paths(&self, paths: Vec<WatchedPath>, generation: u64) {
         #[cfg(not(windows))]
         let _ = (paths, generation);
         #[cfg(windows)]
         {
             let catalog = self.catalog().expect("queued work has a catalog");
             let mut changed = false;
-            for path in paths {
+            // A scope change can interrupt a mixed-drive batch. Keep pending
+            // notifications for drives that remain included.
+            for (index, WatchedPath { path, size_only }) in paths.iter().enumerate() {
                 if self.should_cancel_work(generation) {
+                    self.requeue_watched_paths(&paths[index..]);
                     break;
                 }
                 let mount = {
@@ -562,17 +723,94 @@ impl IndexedSearchHandle {
                 let Some(mount) = mount else {
                     continue;
                 };
-                match super::watched_paths::refresh(catalog, &mount, &path, &|| {
-                    self.should_cancel_work(generation)
-                }) {
+                let cancelled = || self.should_cancel_work(generation);
+                let result = if *size_only {
+                    super::watched_paths::refresh_file_size(catalog, &mount, path, &cancelled)
+                } else {
+                    super::watched_paths::refresh(catalog, &mount, path, &cancelled)
+                };
+                match result {
                     Ok(committed) => changed |= committed,
                     Err(error) => {
                         eprintln!("[indexed-search] Folder notification update failed: {error}")
                     }
                 }
+                if self.should_cancel_work(generation) {
+                    // Reprocessing the interrupted notification is harmless
+                    // if it committed just before the scope change.
+                    self.requeue_watched_paths(&paths[index..]);
+                    break;
+                }
             }
             if changed {
                 self.bump_catalog_revision();
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    fn requeue_watched_paths(&self, paths: &[WatchedPath]) {
+        let mut queue = self
+            .inner
+            .work_queue
+            .lock()
+            .expect("indexed search work queue");
+        if self.is_shutting_down() {
+            return;
+        }
+        let state = self.inner.state.lock().expect("indexed search state lock");
+        for WatchedPath { path, size_only } in paths {
+            let drive = &path[..3];
+            if state.includes_drive(&state::normalize_drive_key(drive)) {
+                queue.queue_watched_path(drive, path.clone(), *size_only);
+            }
+        }
+    }
+
+    fn run_visited_folder(&self, folder: &str, generation: u64) {
+        #[cfg(not(windows))]
+        let _ = (folder, generation);
+        #[cfg(windows)]
+        {
+            let drive = &folder[..3];
+            let mount = {
+                let state = self.inner.state.lock().expect("indexed search state lock");
+                if !state.uses_folder_reconciliation(&state::normalize_drive_key(drive)) {
+                    return;
+                }
+                state.volumes.active_mount(drive)
+            };
+            let Some(mount) = mount else {
+                return;
+            };
+            let catalog = self.catalog().expect("queued work has a catalog");
+            match super::watched_paths::refresh_visited_folder(catalog, &mount, folder, &|| {
+                self.should_cancel_work(generation)
+            }) {
+                Ok((true, entry_count)) => {
+                    self.bump_catalog_revision();
+                    if let Some(count) = entry_count {
+                        let mut state = self.inner.state.lock().expect("indexed search state lock");
+                        if let Some(snapshot) = state.volumes.snapshots.get_mut(&mount.key()) {
+                            snapshot.entry_count = Some(count);
+                            let source = snapshot.last_scan_source.clone();
+                            state.set_drive_summary(drive, Some(count as u64), source);
+                        }
+                    }
+                }
+                Ok((false, _)) => {}
+                Err(error) => eprintln!("[indexed-search] Visited folder update failed: {error}"),
+            }
+            if self.should_cancel_work(generation) && !self.is_shutting_down() {
+                let mut queue = self
+                    .inner
+                    .work_queue
+                    .lock()
+                    .expect("indexed search work queue");
+                let state = self.inner.state.lock().expect("indexed search state lock");
+                if state.includes_drive(&mount.key()) {
+                    queue.queue_visited_folder(drive, folder.to_owned());
+                }
             }
         }
     }

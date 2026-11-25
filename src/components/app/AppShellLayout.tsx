@@ -23,7 +23,7 @@ export const AppShellLayout = ({
   const bottomActive = useBottomPaneStore(state => state.open && state.active);
   const focused = bottomActive ? bottom : null;
   const sidebarProps = focused
-    ? { ...content.sidebarProps, activePath: focused.path, recentJumps: focused.recentJumps }
+    ? { ...content.sidebarProps, activePath: focused.path }
     : content.sidebarProps;
   const labels = focused ? {
     countLabel: focused.path ? focused.countLabel : "",

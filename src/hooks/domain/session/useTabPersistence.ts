@@ -1,15 +1,23 @@
 // Keeps tab state synced with the current path and persisted history.
 import { useEffect, useLayoutEffect, useRef } from "react";
-import type { ListDirOptions, SortState, Tab } from "@/types";
+import type { SortState, Tab } from "@/types";
+import type { LoadDirOptions } from "@/hooks/domain/filesystem/fileManager.types";
 import { folderPathKey } from "@/lib";
+import { subscribeToFolderRename } from "@/modules/renamedFolderLocations";
 
 type SetTabs = (next: Tab[] | ((prev: Tab[]) => Tab[])) => void;
 
 type SetRecentJumps = (next: string[] | ((prev: string[]) => string[])) => void;
 
 type PendingNavigation = {
+  tabId: string | null;
   path: string;
+  sort?: SortState;
+  search?: string;
+  revealPath?: string | null;
+  waitForListing?: boolean;
   resetFilter?: { tabId: string; previousSearch: string };
+  notifyLink?: () => void;
 };
 
 type UseTabPersistenceOptions = {
@@ -17,9 +25,10 @@ type UseTabPersistenceOptions = {
   activeTabId: string | null;
   activeTab: Tab | null;
   currentPath: string;
+  loadingPath: string | null;
   sortState: SortState;
   searchValue: string;
-  loadDir: (path: string, options?: ListDirOptions) => Promise<void>;
+  loadDir: (path: string, options?: LoadDirOptions) => Promise<void>;
   clearDir: (options?: { silent?: boolean }) => void;
   restoreRevision: number;
   setTabs: SetTabs;
@@ -64,6 +73,7 @@ export const useTabPersistence = ({
   activeTabId,
   activeTab,
   currentPath,
+  loadingPath,
   sortState,
   searchValue,
   loadDir,
@@ -84,6 +94,21 @@ export const useTabPersistence = ({
   // Hold the target until its listing commits, including any pending filter reset.
   const pendingNavigationRef = useRef<PendingNavigation | null>(null);
 
+  useLayoutEffect(() => subscribeToFolderRename((mapPath) => {
+    const pending = pendingNavigationRef.current;
+    if (pending?.revealPath) pending.revealPath = mapPath(pending.revealPath);
+    const path = pending?.path ?? loadingPath ?? activeTab?.path;
+    if (!path) return;
+    const nextPath = mapPath(path);
+    if (path === nextPath) return;
+    pendingNavigationRef.current = { ...pending, tabId: activeTabId, path: nextPath };
+    void loadDir(nextPath, {
+      sort: pending?.sort ?? sortState,
+      search: pending?.resetFilter ? "" : pending?.search ?? searchValue,
+      force: true,
+    });
+  }), [activeTab?.path, activeTabId, loadDir, loadingPath, searchValue, sortState]);
+
   useLayoutEffect(() => {
     if (appliedRevisionRef.current !== restoreRevision) {
       appliedRevisionRef.current = restoreRevision;
@@ -92,7 +117,7 @@ export const useTabPersistence = ({
       // Invalidate the outgoing request before it can write into the new tabs.
       clearDir({ silent: true });
       const path = activeTab?.path.trim();
-      pendingNavigationRef.current = path ? { path } : null;
+      pendingNavigationRef.current = path ? { path, tabId: activeTabId } : null;
       if (path && activeTab) {
         void loadDir(path, { sort: activeTab.sort, search: activeTab.search });
       } else if (activeTabId) {
@@ -113,6 +138,9 @@ export const useTabPersistence = ({
     }
     const pending = pendingNavigationRef.current;
     if (pending) {
+      // An explicit output reveal can target the current folder, whose
+      // displayed listing may still be missing the newly written entry.
+      if (pending.waitForListing && loadingPath) return;
       const pendingKey = folderPathKey(pending.path);
       const currentKey = folderPathKey(currentPath);
       if (pendingKey && currentKey && pendingKey !== currentKey) {
@@ -124,6 +152,7 @@ export const useTabPersistence = ({
       const index = prev.findIndex((tab) => tab.id === activeTabId);
       if (index === -1) return prev;
       const tab = prev[index];
+      if (tab.terminal) return prev;
       // A search entered during the load belongs to the newly opened folder.
       const reset = pending?.resetFilter;
       const nextSearch =
@@ -138,10 +167,18 @@ export const useTabPersistence = ({
         return prev;
       }
       const next = [...prev];
-      next[index] = { ...tab, path: currentPath, crumbTrailPath: nextTrailPath, search: nextSearch };
+      next[index] = {
+        ...tab,
+        path: currentPath,
+        crumbTrailPath: nextTrailPath,
+        search: nextSearch,
+        // The folder reveal supplies the new offset. Do not restore an offset from the child.
+        scrollTop: pending?.revealPath ? 0 : tab.scrollTop,
+      };
       return next;
     });
-  }, [activeTab, activeTabId, clearDir, currentPath, loadDir, restoreRevision, setTabs, shouldSyncEmptyTab]);
+    pending?.notifyLink?.();
+  }, [activeTab, activeTabId, clearDir, currentPath, loadDir, loadingPath, restoreRevision, setTabs, shouldSyncEmptyTab]);
 
   useEffect(() => {
     // Restore the last active tab path once on startup.
@@ -154,9 +191,9 @@ export const useTabPersistence = ({
       return;
     }
     restoreRequestedRef.current = true;
-    pendingNavigationRef.current = { path: target };
+    pendingNavigationRef.current = { path: target, tabId: activeTabId };
     void loadDir(target, { sort: sortState, search: searchValue });
-  }, [currentPath, loadDir, searchValue, sortState]);
+  }, [activeTabId, currentPath, loadDir, searchValue, sortState]);
 
   useEffect(() => {
     setRecentJumps((prev) => {

@@ -1,20 +1,21 @@
 // Compact work-log status button with a lightweight popover list.
 // Uses a small view-model layer so the UI stays readable.
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { useNowTick } from "@/hooks";
-import { useTransferJobs, useTransferStore } from "@/modules";
+import { useSettingsStore, useTransferJobs, useTransferStore } from "@/modules";
 import { WorkLogClearIcon } from "@/components/icons";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
-import { TransferStatusItem } from "@/components/transfer/TransferStatusItem";
-import {
-  buildTransferSummary,
-  sortTransferJobsByRecent,
-} from "@/components/transfer/transferStatusView";
 import { PressButton } from "@/components/primitives/PressButton";
 import { ToolbarPopover } from "@/components/primitives/ToolbarPopover";
+import type { TransferDestination } from "@/types";
+import { TransferStatusList } from "./TransferStatusList";
+import { buildTransferSummary } from "./transferStatusView";
+import { WorkPillFill } from "./WorkPillFill";
 
-export const TransferStatusButton = () => {
+export const TransferStatusButton = ({
+  onOpenDestination,
+}: { onOpenDestination: (destination: TransferDestination) => void }) => {
   const jobs = useTransferJobs();
+  const showWorkProgressFill = useSettingsStore((state) => state.showWorkProgressFill);
   const clearFinishedJobs = useTransferStore((state) => state.clearFinishedJobs);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -22,13 +23,10 @@ export const TransferStatusButton = () => {
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const popoverId = useId();
   const summary = useMemo(() => buildTransferSummary(jobs), [jobs]);
-  const recentJobs = useMemo(() => sortTransferJobsByRecent(jobs), [jobs]);
   const canClear = summary.hasFinished;
   const clearTooltipText = canClear
     ? `Clear ${summary.finishedCount} finished job${summary.finishedCount === 1 ? "" : "s"}`
     : "No finished jobs to clear";
-  // Keep timing labels fresh when the popover is open or work is running.
-  const now = useNowTick({ enabled: open || summary.hasActive });
 
   useEffect(() => {
     if (jobs.length === 0 && open) {
@@ -76,6 +74,7 @@ export const TransferStatusButton = () => {
         onClick={() => setOpen((prev) => !prev)}
         ref={buttonRef}
       >
+        {showWorkProgressFill ? <WorkPillFill jobs={jobs} /> : null}
         <span
           className={`transfer-indicator${summary.hasActive ? " is-active" : " is-complete"}`}
           aria-hidden="true"
@@ -119,11 +118,13 @@ export const TransferStatusButton = () => {
             </div>
           ) : null}
         >
-          <div className="toolbar-popover-list transfer-list" role="list" data-window-drag-ignore="true">
-            {recentJobs.map((job) => (
-              <TransferStatusItem key={job.id} job={job} now={now} />
-            ))}
-          </div>
+          <TransferStatusList
+            jobs={jobs}
+            onOpenDestination={(destination) => {
+              setOpen(false);
+              onOpenDestination(destination);
+            }}
+          />
         </ToolbarPopover>
       ) : null}
     </div>

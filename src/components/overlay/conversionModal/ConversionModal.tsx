@@ -170,7 +170,6 @@ export const ConversionModal = ({
                 sortedOverrideItems={model.sortedOverrideItems}
                 titleId={titleId}
                 expandedOverridePath={model.expandedOverridePath}
-                overrideItemRefs={model.overrideItemRefs}
                 runInProgress={model.runInProgress}
                 onOverrideToggle={model.handleOverrideTargetSelect}
                 onOverrideFormatChange={model.setItemOverrideFormat}

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef } from 
 
 import { LibraryIcon, TabCloseIcon } from "@/components/icons";
 import { ContextMenu } from "@/components/overlay/ContextMenu";
-import { buildIndexedSearchGallery } from "@/components/overlay/indexedSearchModal/buildIndexedSearchGallery";
+import { createIndexedGalleryLookup } from "@/components/overlay/indexedSearchModal/indexedSearchGallery";
 import { IndexedSearchDriveList } from "@/components/overlay/indexedSearchModal/IndexedSearchDriveList";
 import { IndexedSearchResultsList } from "@/components/overlay/indexedSearchModal/IndexedSearchResultsList";
 import { IndexedSearchSelectionDetail } from "@/components/overlay/indexedSearchModal/IndexedSearchSelectionDetail";
@@ -18,11 +18,12 @@ import { useIndexedSearchStatus } from "@/components/overlay/indexedSearchModal/
 import { OverlayPanelHeader } from "@/components/overlay/OverlayPanelHeader";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PressButton } from "@/components/primitives";
+import { FileFilterHint } from "@/components/primitives/FileFilterHint";
 import { useModalFocusTrap } from "@/hooks";
 import { isPlainEscape, releaseInputFocusOnEscape } from "@/hooks/ui/inputs/inputFocus";
 import type { PreviewGallerySource, PreviewSourceBindings } from "@/hooks/ui/view/useQuickPreview";
 import { formatCount, formatIndexedSearchServiceState, isIndexedDriveActiveState } from "@/lib";
-import { useIndexedSearchUiStore } from "@/modules";
+import { useIndexedSearchUiStore, useSettingsStore } from "@/modules";
 import { DialogCloseButton } from "./DialogCloseButton";
 
 export type IndexedSearchModalProps = {
@@ -34,6 +35,7 @@ export type IndexedSearchModalProps = {
 
 export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGallery }: IndexedSearchModalProps) => {
   const open = useIndexedSearchUiStore((state) => state.open);
+  const includeAudio = useSettingsStore((state) => state.galleryAudio);
   const query = useIndexedSearchUiStore((state) => state.query);
   const setQuery = useIndexedSearchUiStore((state) => state.setQuery);
   const closeModal = useIndexedSearchUiStore((state) => state.closeModal);
@@ -41,6 +43,7 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
   const visible = open && !previewOpen;
 
   const titleId = useId();
+  const filterHintId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
@@ -70,8 +73,14 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
   const catalogPending = !indexUnavailable && !hasSearchableDrive && (checkingIndex || buildingIndex);
   const {
     results,
+    resultIndexes,
     resultsError,
     pageError,
+    refreshError,
+    refreshing,
+    resultsUpdated,
+    refreshResults,
+    scrollRestore,
     hasMore,
     loadingMore,
     loadMore,
@@ -88,6 +97,7 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
     handleOpenSelectedResult,
     handleSearchKeyDown,
     focusSelectedResult,
+    copyPaths,
     registerResultRow,
     selectedDrive,
     selectedResult,
@@ -96,20 +106,29 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
     selectionError,
     selectDrive,
     selectResult,
+    selectResultForCopy,
   } = useIndexedSearchSelection({
     driveStatuses,
     open,
+    visible,
     results,
+    resultIndexes,
+    refreshedAnchorPath: scrollRestore?.path,
+    query: trimmedQuery,
     hasMore,
     loadMore,
     resultsViewportRef,
     onOpenFolder: openFolderInNewTab,
   });
 
-  const gallery = useMemo(() => buildIndexedSearchGallery(results, selectResult), [results, selectResult]);
+  const getGallery = useMemo(
+    () => createIndexedGalleryLookup(results, resultIndexes, selectResult, includeAudio),
+    [includeAudio, results, resultIndexes, selectResult],
+  );
   const openGallery = useCallback((path: string) => {
-    if (gallery.entryByPath.has(path)) onOpenGallery(path, gallery);
-  }, [gallery, onOpenGallery]);
+    const gallery = getGallery(path);
+    if (gallery) onOpenGallery(path, gallery);
+  }, [getGallery, onOpenGallery]);
   const resultMenu = useIndexedSearchResultMenu({
     visible,
     results,
@@ -118,6 +137,8 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
     openResult: handleOpenSelectedResult,
     openGallery,
     selectResult,
+    selectResultForCopy,
+    copyPaths,
   });
   const resultMenuOpen = resultMenu.props.open;
   const selectedPath = selectedResult?.path;
@@ -125,16 +146,16 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
   useLayoutEffect(() => {
     const paneRoot = panelRef.current;
     const filesRoot = resultsViewportRef.current;
-    if (!visible || !paneRoot || !filesRoot || !gallery.items.length) return;
+    if (!visible || !paneRoot || !filesRoot || !results.length) return;
     return preview.registerSource({
-      gallery,
+      getGallery,
       paneRoot,
       filesRoot,
       isCurrent: () => !resultMenuOpen && modalRef.current?.inert === false,
       getSelectedPath: () => selectedPath,
       shortcutInput: inputRef.current ?? undefined,
     });
-  }, [gallery, preview, resultMenuOpen, resultsViewportRef, selectedPath, visible]);
+  }, [getGallery, preview, resultMenuOpen, results.length, resultsViewportRef, selectedPath, visible]);
 
   useModalFocusTrap({
     open: visible,
@@ -220,15 +241,16 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
 
         <div className="indexed-search-field">
           <div className="indexed-search-searchbox">
-            <LibraryIcon className="indexed-search-searchbox-icon" />
+            <FileFilterHint id={filterHintId}><LibraryIcon className="indexed-search-searchbox-icon" /></FileFilterHint>
             <input
               ref={inputRef}
               type="search"
               className="indexed-search-input"
               value={query}
               onChange={(event) => setQuery(event.currentTarget.value)}
-              placeholder="Search files and folders by name…"
-              aria-label="Search indexed files and folders by name"
+              placeholder="Search files and folders…"
+              aria-label="Search indexed files and folders"
+              aria-describedby={filterHintId}
               spellCheck={false}
               autoComplete="off"
               onKeyDown={handleSearchKeyDown}
@@ -263,13 +285,24 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
             onOpenContextMenu={resultMenu.openAt}
             onPreviewPress={preview.onPress}
             onSelectResult={selectResult}
+            onSelectResultForCopy={selectResultForCopy}
             registerResultRow={registerResultRow}
             results={results}
             resultsError={resultsError}
             pageError={pageError}
+            refreshError={refreshError}
+            refreshing={refreshing}
+            resultsUpdated={resultsUpdated}
+            refreshResults={() => {
+              if (refreshing || catalogPending) return;
+              inputRef.current?.focus({ preventScroll: true });
+              refreshResults(selectedResultIndex);
+            }}
+            scrollRestore={scrollRestore}
             resultsViewportRef={resultsViewportRef}
             searching={searching}
             selectedResultIndex={selectedResultIndex}
+            copyPaths={copyPaths}
             trimmedQuery={trimmedQuery}
             visible={visible}
           />

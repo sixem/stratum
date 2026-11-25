@@ -50,7 +50,8 @@
   }
 
   .section-title {
-    @include control.eyebrow-label(var(--font-size-2xs), 0.11em, 700);
+    @include control.eyebrow-label(var(--font-size-xs), 0.09em, 600);
+    padding-inline: 2px;
   }
 
   .places {
@@ -117,36 +118,74 @@
   }
 
   .sidebar-tips {
-    margin-top: 2px;
-    padding-top: 10px;
+    display: grid;
+    gap: 8px;
+    padding-top: 8px;
     border-top: var(--surface-border-width) solid #1c2537;
   }
 
-  .tips {
-    display: grid;
-    gap: 6px;
-    font-size: var(--font-size-xs);
-    color: var(--muted);
-    line-height: 1.4;
-    margin-top: 8px;
-  }
-
   .tip {
+    @include control.control-surface(6px, var(--surface-control-muted));
     appearance: none;
-    border: 0;
-    background: transparent;
-    padding: 8px 6px;
-    margin: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 15px;
+    align-items: start;
+    gap: 7px;
+    padding: 9px;
     text-align: left;
-    color: inherit;
-    font: inherit;
+    color: var(--text);
     cursor: pointer;
-    border-radius: 8px;
   }
 
-  .tip:hover {
+  .tip:is(:hover, :focus-visible) {
+    border-color: var(--dark-hover-stroke, #343e53);
+  }
+
+  .tip:focus-visible {
+    outline: 1px solid var(--muted);
+    outline-offset: 1px;
+  }
+
+  .tip-content {
+    display: grid;
+    justify-items: start;
+    gap: 4px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .tip-title {
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .tip-text {
+    color: var(--muted);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: 1.45;
+  }
+
+  .tip-shortcut {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 4px;
+    padding: 2px 5px;
+    font-family: inherit;
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    line-height: 1.25;
     color: var(--text);
-    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .tip-next-icon {
+    width: 15px;
+    height: 15px;
+    color: var(--muted);
+  }
+
+  .tip:is(:hover, :focus-visible) .tip-next-icon {
+    color: var(--text);
   }
 }
 

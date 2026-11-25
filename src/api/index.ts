@@ -5,21 +5,19 @@ export { finishFileCut, getFileClipboard, setFileClipboard } from "./clipboard";
 export {
   getIndexedSearchCatalogPath,
   getIndexedSearchSnapshot,
+  nudgeIndexedSearch,
   setIndexedSearchEnabled,
   queryIndexedPathPage,
   queryIndexedPaths,
   rebuildIndexedDrive,
 } from "./indexedSearch";
-export {
-  getIndexingLaunchPreferences,
-  setIndexingLaunchPreferences,
-} from "./system";
 export { getShellAvailability, openShell } from "./shells";
 export { showShellContextMenu, type ShellMenuTarget } from "./shellContextMenu";
 export {
   copyEntries,
   createFile,
   createFolder,
+  createTrackedFolder,
   deleteEntries,
   ensureDir,
   cancelTransferJob,
@@ -34,6 +32,7 @@ export {
   parentDir,
   pauseTransferJob,
   planCopyEntries,
+  removeCreatedFolderIfEmpty,
   restoreRecycleItems,
   resumeTransferJob,
   transferEntries,

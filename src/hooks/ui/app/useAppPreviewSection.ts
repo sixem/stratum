@@ -1,13 +1,13 @@
 // Preview section container for App.tsx.
 // Keeps quick-preview state, refs, and derived preview metadata together.
 import { useRef } from "react";
-import type { EntryMeta } from "@/types";
+import type { EntryMetaLookup } from "@/types";
 import { useQuickPreview } from "@/hooks/ui/view/useQuickPreview";
 
 type QuickPreviewOptions = Parameters<typeof useQuickPreview>[0];
 
 type UseAppPreviewSectionOptions = QuickPreviewOptions & {
-  entryMeta: Map<string, EntryMeta>;
+  entryMeta: EntryMetaLookup;
 };
 
 export const useAppPreviewSection = ({

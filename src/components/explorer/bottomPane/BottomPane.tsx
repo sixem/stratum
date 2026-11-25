@@ -1,22 +1,30 @@
 // Secondary workspace with its own tabs, navigation, and file selection.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 import { createPortal } from "react-dom";
 import { useDriveInfo } from "@/hooks/domain/filesystem/useDriveInfo";
 import { useStatusLabels } from "@/hooks/domain/metadata/useStatusLabels";
 import { useScrollRequest } from "@/hooks/perf/scroll";
 import type { ScrollAlignment } from "@/hooks/perf/scroll";
+import { TerminalPane } from "@/components/terminal/TerminalPane";
+import { TerminalDirectoryBar } from "@/components/terminal/TerminalDirectoryBar";
+import { TerminalSplitControls } from "@/components/terminal/TerminalSplitControls";
+import { TerminalSplitView } from "@/components/terminal/TerminalSplitView";
 import { FileView } from "../FileView";
 import { PathCrumbsBar } from "../PathCrumbsBar";
 import { TabsBar } from "@/components/navigation/TabsBar";
 import { ChevronDownIcon, ChevronUpIcon, FilterIcon, GridIcon, ListIcon, NavArrowIcon, TabCloseIcon } from "@/components/icons";
 import { ContextMenu } from "@/components/overlay/ContextMenu";
+import { FileFilterHint } from "@/components/primitives/FileFilterHint";
 import { ToolbarIconButton } from "@/components/primitives/ToolbarIconButton";
 import { useDragOutHandler } from "@/hooks/ui/inputs/useDragOutHandler";
+import { useTabHistoryMenu } from "@/hooks/ui/menus/useTabHistoryMenu";
 import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
 import { useSmartTabJump } from "@/hooks/ui/selection/useSmartTabJump";
 import { useTypeaheadSelection } from "@/hooks/ui/selection/useTypeaheadSelection";
 import type { PanePreviewBindings, PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
+import { useNavigationReveal } from "@/hooks/ui/view/useNavigationReveal";
+import { useTabReveal } from "@/hooks/ui/view/useTabReveal";
 import { useSettingsStore } from "@/modules";
 import { hideBottomPane, setBottomPaneActive, useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { folderPathKey, getNextTrailPath } from "@/lib";
@@ -25,12 +33,12 @@ import type { useFileDrop } from "@/hooks/domain/filesystem/useFileDrop";
 import { bottomPaneKeys } from "./bottomPaneKeys";
 import { useBottomFolder } from "./useBottomFolder";
 import { useBottomPaneActions } from "./useBottomPaneActions";
+import { PaneLinkControls } from "./PaneLinkControls";
 
 export type PaneActions = ReturnType<typeof useFileManager>;
 export type PaneDrop = ReturnType<typeof useFileDrop>;
 export type PaneSummary = {
   path: string;
-  recentJumps: string[];
   countLabel: string;
   selectionLabel: string;
 };
@@ -45,18 +53,22 @@ type Props = {
 };
 
 export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, menu, commandsBlocked }: Props) {
-  const folder = useBottomFolder(upper.currentPath);
+  const folder = useBottomFolder();
   const { dir, meta, tabs, model, selection, viewKey, busy } = folder;
+  const terminal = tabs.activeTab?.terminal;
+  const handleHistoryMenu = useTabHistoryMenu(tabs, menu.openActionMenu);
   const root = useRef<HTMLElement>(null);
   const files = useRef<HTMLDivElement>(null);
   const address = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
+  const filterHintId = useId();
   const [draft, setDraft] = useState(tabs.displayPath);
   const gridColumns = useRef(1);
   const updateGridColumns = useCallback((columns: number) => { gridColumns.current = columns; }, []);
   const { scrollRequest, requestScrollToIndex } = useScrollRequest();
   const tabNumbers = useSettingsStore(state => state.showTabNumbers);
   const fixedWidth = useSettingsStore(state => state.fixedWidthTabs);
+  const animateTabChanges = useSettingsStore(state => state.animateTabChanges);
   const active = useBottomPaneStore(state => state.active);
   const showBreadcrumbs = useBottomPaneStore(state => state.showBreadcrumbs);
   const path = dir.currentPath;
@@ -68,9 +80,17 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     currentDriveInfo, selected: selection.selected, entryMeta: meta.entryMeta,
   });
   useLayoutEffect(() => {
-    onSummary({ path, recentJumps: tabs.recentJumps, countLabel, selectionLabel });
-  }, [onSummary, path, tabs.recentJumps, countLabel, selectionLabel]);
-  const ready = !!path && !busy && !tabs.restoringTabs && folderPathKey(path) === folderPathKey(tabs.activeTab?.path ?? "");
+    onSummary({ path, countLabel, selectionLabel });
+  }, [onSummary, path, countLabel, selectionLabel]);
+  // The listing can commit one render before its tab is updated.
+  const ready = !!path && !busy && !tabs.restoringTabs && folderPathKey(path) === folderPathKey(tabs.displayPath);
+  useTabReveal(files, {
+    tabId: tabs.activeTabId,
+    ready: ready || (!tabs.displayPath && !busy && !tabs.restoringTabs),
+    enabled: animateTabChanges,
+    view: tabs.displayPath ? tabs.viewMode : "lander",
+    pathKey: folderPathKey(tabs.displayPath),
+  });
   const viewVisit = useMemo(() => ({ current: false }), [viewKey, tabs.searchValue]);
   useLayoutEffect(() => {
     viewVisit.current = ready;
@@ -89,7 +109,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   useLayoutEffect(() => {
     if (!ready || !root.current || !files.current) return;
     return registerPreviewSource({
-      gallery: bottomGallery,
+      getGallery: () => bottomGallery,
       paneRoot: root.current,
       filesRoot: files.current,
       isCurrent: () => viewVisit.current,
@@ -117,10 +137,10 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       if (activeTabId && scrollTop.current !== null) setTabScrollTop(activeTabId, scrollTop.current);
     };
   }, [activeTabId, setTabScrollTop]);
-  const closeTab = (id: string) => {
+  const closeTab = (id: string, close = tabs.closeTab) => {
     const outgoing = id === activeTabId ? scrollTop.current ?? undefined : undefined;
     focusFiles();
-    tabs.closeTab(id, outgoing);
+    close(id, outgoing);
   };
   const navigate = (next: string) => { if (next.trim()) tabs.browseTo(next.trim()); };
   const clearSearchAndFocusFiles = () => {
@@ -143,8 +163,17 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   const scrollTo = useCallback((index: number, alignment?: ScrollAlignment) => {
     requestScrollToIndex(index, viewKey, alignment);
   }, [requestScrollToIndex, viewKey]);
+  useNavigationReveal({
+    path: tabs.navigationRevealPath,
+    viewKey,
+    loading: !ready,
+    viewModel: model,
+    setSelection: selectEntry,
+    scrollToIndex: scrollTo,
+  });
   const paneActions = useBottomPaneActions({
     folder, actions, menu, files, ready, viewVisit, browseFromView, openGallery: bottomPreview.open, scrollTo,
+    onCloseAnchoredTab: id => closeTab(id, tabs.closeAnchoredTab),
     hideExtension: upper.gridNameHideExtension,
     clearDragState: drop.clearDragState,
   });
@@ -163,7 +192,8 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     folder, actions, address, files, paths, ready, closeTab, commandsBlocked, gridColumns,
     openContextMenu: paneActions.openKeyboardContextMenu,
     startRename: paneActions.handleRenameStart, clearSelection: paneActions.clearSelectionForVisit,
-    undo: paneActions.undo,
+    undo: paneActions.undo, moveEntries: paneActions.moveEntries,
+    paneFileCommands: paneActions.paneFileCommands,
     scrollTo: (index) => { focusFiles(); scrollTo(index); },
     handleTypeahead, handleTabJump, searchInput, clearSearchAndFocusFiles, browseFromView,
   });
@@ -175,6 +205,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     onPointerDownCapture={event => {
       if (!event.currentTarget.contains(event.target as Node)) return;
       setBottomPaneActive(true);
+      if ((event.target as Element).closest("[data-terminal]")) return;
       if (!(event.target as Element).closest("button, input, [tabindex='0']") ||
           (event.button === 2 && !event.currentTarget.contains(document.activeElement))) {
         focusFiles();
@@ -187,6 +218,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         ariaLabel="Bottom pane back"
         disabled={!tabs.canGoBack}
         onClick={tabs.goBack}
+        onContextMenu={(event) => handleHistoryMenu(event, "back")}
         pressOnPointerDown={false}
       >
         <NavArrowIcon className="nav-arrow is-back" />
@@ -196,6 +228,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         ariaLabel="Bottom pane forward"
         disabled={!tabs.canGoForward}
         onClick={tabs.goForward}
+        onContextMenu={(event) => handleHistoryMenu(event, "forward")}
         pressOnPointerDown={false}
       >
         <NavArrowIcon />
@@ -222,10 +255,11 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         <input ref={address} aria-label="Bottom pane folder" value={draft} placeholder="Folder path" onChange={event => setDraft(event.target.value)} />
       </form>
       <label className="bottom-search">
-        <FilterIcon aria-hidden="true" />
+        <FileFilterHint id={filterHintId}><FilterIcon /></FileFilterHint>
         <input
           ref={searchInput}
           aria-label="Search bottom folder"
+          aria-describedby={filterHintId}
           value={tabs.searchValue}
           onChange={event => tabs.setSearch(event.currentTarget.value)}
           onKeyDown={event => { if (event.key === "Enter") event.preventDefault(); }}
@@ -235,18 +269,17 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
           autoComplete="off"
         />
       </label>
+      {!showBreadcrumbs && tabs.activeTab?.split && <TerminalSplitControls pane="bottom" />}
       <ToolbarIconButton
         label={viewSwitchLabel}
-        onClick={() => {
-          // Keep the last choice as the default for new tabs in any workspace.
-          useBottomPaneStore.setState({ defaultViewMode: nextView });
-          if (tabs.activeTab) tabs.setViewMode(nextView);
-        }}
+        onClick={() => tabs.setViewMode(nextView)}
         pressOnPointerDown={false}
       >
         {nextView === "thumbs" ? <GridIcon /> : <ListIcon />}
       </ToolbarIconButton>
-      <ToolbarIconButton
+      <PaneLinkControls mainPath={upper.loading ? "" : upper.currentPath}
+        bottomPath={ready ? path : ""} bottomTabId={activeTabId} />
+      {!terminal && <ToolbarIconButton
         label={showBreadcrumbs ? "Hide path bar" : "Show path bar"}
         ariaLabel="Bottom pane path bar"
         active={showBreadcrumbs}
@@ -255,25 +288,35 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         pressOnPointerDown={false}
       >
         <ChevronDownIcon className="bottom-path-chevron" />
-      </ToolbarIconButton>
+      </ToolbarIconButton>}
       <ToolbarIconButton label="Hide bottom pane" onClick={hideBottomPane} pressOnPointerDown={false}>
         <TabCloseIcon />
       </ToolbarIconButton>
     </nav>
-    <TabsBar tabs={tabs.tabs} activeId={tabs.activeTabId} showTabNumbers={tabNumbers} fixedWidthTabs={fixedWidth}
-      onSelect={tabs.selectTab} onClose={closeTab} onNew={tabs.newTab} onReorder={tabs.reorderTabs}
+    <TabsBar pane="bottom" tabs={tabs.tabs} activeId={tabs.activeTabId} showTabNumbers={tabNumbers} fixedWidthTabs={fixedWidth}
+      onSelect={tabs.selectTab} onClose={closeTab} onNew={tabs.newTab} onNewPowerShell={tabs.newPowerShellTab} onReorder={tabs.reorderTabs}
+      onMoveTab={(id, receive) => tabs.moveTab(id, receive, id === activeTabId ? scrollTop.current ?? undefined : undefined)}
+      onReceiveTab={(transfer, index) => {
+        if (activeTabId && scrollTop.current !== null) setTabScrollTop(activeTabId, scrollTop.current);
+        if (!tabs.receiveTab(transfer, index)) return false;
+        setBottomPaneActive(true);
+        focusFiles();
+        return true;
+      }}
       onOpenLocation={openLocationTab}
+      onStripContextMenu={menu.openActionMenu}
       onTabContextMenu={paneActions.handlePlaceTargetContextMenu}
       onTabContextMenuDown={paneActions.handlePlaceTargetContextMenuDown}
       dropTargetId={drop.dropTargetTabId} dropTargetPath={drop.dropTargetPath} tabDropSubmenu={drop.tabDropSubmenu}
       dragPoint={drop.dragPoint} onSubmenuHoverTargetChange={drop.setDropTarget} onSubmenuCloseRequest={drop.clearDragState} />
-    {showBreadcrumbs ? (
+    {terminal ? <TerminalDirectoryBar directory={terminal.directory} /> : showBreadcrumbs ? (
       <PathCrumbsBar pane="bottom" path={tabs.displayPath} trailPath={tabs.activeTab?.crumbTrailPath} reserveSpace
         dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null}
         onNavigate={browseFromView} onNavigateNewTab={openLocationTab}
         onCrumbContextMenu={paneActions.handlePlaceTargetContextMenu}
         onCrumbContextMenuDown={paneActions.handlePlaceTargetContextMenuDown} />
     ) : null}
+    <TerminalSplitView pane="bottom" tab={tabs.activeTab} filePaneRef={files} commandsBlocked={commandsBlocked}>
     <div ref={files} className="main bottom-files" tabIndex={-1} aria-busy={busy} data-file-pane="bottom" data-pane-path={ready ? path : ""}
       data-drop-background={drop.backgroundHovered && drop.hoveredPane === "bottom" || undefined}
       onScrollCapture={event => {
@@ -281,11 +324,12 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         if (el.matches(".list-body,.thumb-viewport")) scrollTop.current = el.scrollTop;
       }}>
       {busy && <div className="folder-load-progress" role="progressbar" aria-label="Loading bottom folder" />}
-      {!ready && tabs.displayPath ? <div className="pane-loading">{busy ? "Loading folder…" : <button className="btn ghost" type="button" onClick={() => navigate(tabs.displayPath)}>Retry opening folder</button>}</div> :
+      {terminal ? <TerminalPane terminal={terminal} /> : !ready && tabs.displayPath ? <div className="pane-loading">{busy ? "Loading folder…" : <button className="btn ghost" type="button" onClick={() => navigate(tabs.displayPath)}>Retry opening folder</button>}</div> :
       <FileView {...upper} {...model} pane="bottom" dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null} currentPath={path} viewMode={tabs.viewMode} viewKey={viewKey}
         showLander={!path} recentJumps={tabs.recentJumps} onOpenPlace={navigate} onOpenRecent={navigate} onOpenDrive={navigate}
         onOpenDriveNewTab={openNew} onOpenPlaceNewTab={openNew} onOpenRecentNewTab={openNew}
-        searchQuery={tabs.searchValue} loading={busy} scrollRestoreKey={viewKey} scrollRestoreTop={tabs.activeTab?.scrollTop ?? 0}
+        searchQuery={tabs.searchValue} loading={busy} scrollRestoreKey={viewKey}
+        scrollRestoreTop={tabs.navigationRevealPath ? 0 : tabs.activeTab?.scrollTop ?? 0}
         scrollRequest={scrollRequest} selectedPaths={selection.selected} onSelectItem={paneActions.handleSelectItemWithRename}
         onSetSelection={paneActions.handleSelectionChange} onClearSelection={paneActions.handleClearSelection}
         onOpenDir={browseFromView} onOpenDirNewTab={openNew} onGoUp={() => dir.parentPath && navigate(dir.parentPath)} canGoUp={!!dir.parentPath}
@@ -303,11 +347,15 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         onGridColumnsChange={updateGridColumns}
       />}
     </div>
+    </TerminalSplitView>
     {createPortal(<ContextMenu
       open={paneActions.contextMenuOpen}
       x={menu.contextMenu?.x ?? 0}
       y={menu.contextMenu?.y ?? 0}
       items={paneActions.contextMenuItems}
+      focusFirstItem={menu.contextMenu?.focusFirstItem}
+      scrollable={menu.contextMenu?.kind === "place-target" ||
+        (menu.contextMenu?.kind === "actions" && menu.contextMenu.scrollable)}
       onClose={menu.closeContextMenu}
       onOpenNative={() => paneActions.openKeyboardContextMenu(true)}
     />, document.body)}

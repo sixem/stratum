@@ -9,8 +9,8 @@ use std::{
 use windows_sys::Win32::{
     Foundation::INVALID_HANDLE_VALUE,
     Storage::FileSystem::{
-        FindClose, FindFirstFileW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-        FILE_READ_ATTRIBUTES, FILE_SHARE_READ, WIN32_FIND_DATAW,
+        FindClose, FindFirstFileW, FILE_ATTRIBUTE_DIRECTORY, FILE_FLAG_BACKUP_SEMANTICS,
+        FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_SHARE_READ, WIN32_FIND_DATAW,
     },
 };
 
@@ -20,12 +20,131 @@ use crate::{
 
 use super::{
     catalog::{CatalogEntryRecord, IndexedCatalogStore},
+    resumable_scan::open_frontier,
     scan::{can_descend_into, excluded_path},
     volume_tracking::VolumeMount,
 };
 
 const MAX_WATCH_ENTRIES: usize = 512;
 const MAX_WATCH_DEPTH: usize = 32;
+const MAX_VISITED_CHILDREN: usize = 256;
+
+pub(super) fn refresh_visited_folder(
+    catalog: &IndexedCatalogStore,
+    mount: &VolumeMount,
+    folder: &str,
+    should_cancel: &impl Fn() -> bool,
+) -> Result<(bool, Option<usize>), String> {
+    let logical = Path::new(folder);
+    if should_cancel() || excluded_path(logical, catalog.directory()) || mount.verify().is_err() {
+        return Ok((false, None));
+    }
+    let Some(relative) = folder.strip_prefix(&mount.drive_path) else {
+        return Ok((false, None));
+    };
+    let Some((physical, _pinned, _)) = open_frontier(Path::new(&mount.guid), relative) else {
+        return Ok((false, None));
+    };
+    let Ok(entries) = fs::read_dir(&physical) else {
+        return Ok((false, None));
+    };
+    let mut records = Vec::new();
+    for (index, entry) in entries.enumerate() {
+        if index == MAX_VISITED_CHILDREN || should_cancel() {
+            return Ok((false, None));
+        }
+        let Ok(entry) = entry else {
+            return Ok((false, None));
+        };
+        let name = entry.file_name();
+        if !name.to_str().is_some_and(plain_component) {
+            // An incomplete or ambiguous listing cannot prove a deletion.
+            return Ok((false, None));
+        }
+        let path = logical.join(name);
+        if excluded_path(&path, catalog.directory()) {
+            continue;
+        }
+        let Ok(metadata) = entry.metadata() else {
+            return Ok((false, None));
+        };
+        let Some(record) = CatalogEntryRecord::from_metadata(&path, &metadata) else {
+            return Ok((false, None));
+        };
+        records.push(record);
+    }
+    if should_cancel() {
+        return Ok((false, None));
+    }
+    apply_visited_children(catalog, &mount.drive_path, folder, records, &|| {
+        mount.verify().is_ok() && !should_cancel()
+    })
+}
+
+fn apply_visited_children(
+    catalog: &IndexedCatalogStore,
+    drive: &str,
+    folder: &str,
+    records: Vec<CatalogEntryRecord>,
+    can_commit: &impl Fn() -> bool,
+) -> Result<(bool, Option<usize>), String> {
+    let mut writer = catalog.begin_write()?;
+    let Some(mut existing) = writer.bounded_indexed_children(folder, MAX_VISITED_CHILDREN)? else {
+        return Ok((false, None));
+    };
+    let prefix = format!("{}\\", folder.trim_end_matches('\\'));
+    let mut removals = Vec::new();
+    let mut additions = Vec::new();
+    let mut sizes = Vec::new();
+    for record in records {
+        let name = &record.path[prefix.len()..];
+        let previous = existing.remove(name);
+        if previous
+            .flatten()
+            .is_some_and(|child| child.kind == record.kind)
+        {
+            if record.kind == IndexedEntryKind::File
+                && previous
+                    .flatten()
+                    .is_some_and(|child| child.size_bytes != record.size_bytes)
+            {
+                sizes.push((record.path, record.size_bytes));
+            }
+        } else {
+            // A directory discovered without a catalog row can already have
+            // indexed descendants. Keep them when inserting its missing row.
+            if previous.is_some()
+                && (previous.flatten().is_some() || record.kind == IndexedEntryKind::File)
+            {
+                removals.push(record.path.clone());
+            }
+            additions.push(record);
+        }
+    }
+    removals.extend(existing.into_keys().map(|name| format!("{prefix}{name}")));
+    if removals.is_empty() && additions.is_empty() && sizes.is_empty() {
+        return Ok((false, None));
+    }
+    let Some(removed) = writer.remove_bounded_path_trees(&removals, MAX_WATCH_ENTRIES)? else {
+        return Ok((false, None));
+    };
+    writer.insert_batch(&additions)?;
+    let changed_paths = removed > 0 || !additions.is_empty();
+    let mut changed = changed_paths;
+    for (path, size) in sizes {
+        changed |= writer.update_file_size(&path, size)?;
+    }
+    if !changed || !can_commit() {
+        return Ok((false, None));
+    }
+    let entry_count = if changed_paths {
+        writer.adjust_saved_entry_count(drive, removed)?
+    } else {
+        None
+    };
+    writer.finish()?;
+    Ok((true, entry_count))
+}
 
 pub(super) fn refresh(
     catalog: &IndexedCatalogStore,
@@ -59,6 +178,44 @@ pub(super) fn refresh(
     }
     writer.insert_batch(&scanner.records)?;
     if should_cancel() || mount.verify().is_err() {
+        return Ok(false);
+    }
+    writer.finish()?;
+    Ok(true)
+}
+
+pub(super) fn refresh_file_size(
+    catalog: &IndexedCatalogStore,
+    mount: &VolumeMount,
+    path: &str,
+    should_cancel: &impl Fn() -> bool,
+) -> Result<bool, String> {
+    if should_cancel()
+        || excluded_path(Path::new(path), catalog.directory())
+        || mount.verify().is_err()
+    {
+        return Ok(false);
+    }
+    let Some(relative) = path.strip_prefix(&mount.drive_path) else {
+        return Ok(false);
+    };
+    let (parent, name) = relative.rsplit_once('\\').unwrap_or(("", relative));
+    if !plain_component(name) {
+        return Ok(false);
+    }
+    let size = {
+        let Some((directory, _pinned, _)) = open_frontier(Path::new(&mount.guid), parent) else {
+            return Ok(false);
+        };
+        listed_file_size(&directory.join(name))
+    };
+    // Windows can report directory attribute changes as generic modifications.
+    // Only a positively identified file qualifies, and its subtree is untouched.
+    let Some(size) = size else {
+        return Ok(false);
+    };
+    let mut writer = catalog.begin_write()?;
+    if should_cancel() || mount.verify().is_err() || !writer.update_file_size(path, Some(size))? {
         return Ok(false);
     }
     writer.finish()?;
@@ -120,12 +277,7 @@ impl<F: Fn() -> bool> WatchScan<'_, F> {
             Err(error) if error.kind() == io::ErrorKind::NotFound => return true,
             Err(_) => return false,
         };
-        let kind = if metadata.is_dir() {
-            IndexedEntryKind::Directory
-        } else {
-            IndexedEntryKind::File
-        };
-        let Some(record) = CatalogEntryRecord::from_path(logical, kind) else {
+        let Some(record) = CatalogEntryRecord::from_metadata(logical, &metadata) else {
             return false;
         };
         self.records.push(record);
@@ -163,6 +315,19 @@ pub(super) fn pin_directory(path: &Path) -> io::Result<File> {
 }
 
 pub(super) fn has_exact_name(path: &Path) -> io::Result<bool> {
+    Ok(exact_find_data(path)?.is_some())
+}
+
+pub(super) fn listed_file_size(path: &Path) -> Option<i64> {
+    let data = exact_find_data(path).ok()??;
+    if data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY != 0 {
+        return None;
+    }
+    let size = (u64::from(data.nFileSizeHigh) << 32) | u64::from(data.nFileSizeLow);
+    i64::try_from(size).ok()
+}
+
+fn exact_find_data(path: &Path) -> io::Result<Option<WIN32_FIND_DATAW>> {
     let name = path.file_name().ok_or(io::ErrorKind::InvalidInput)?;
     let wide: Vec<_> = path.as_os_str().encode_wide().chain(Some(0)).collect();
     let mut data: WIN32_FIND_DATAW = unsafe { std::mem::zeroed() };
@@ -172,7 +337,7 @@ pub(super) fn has_exact_name(path: &Path) -> io::Result<bool> {
     }
     unsafe { FindClose(search) };
     let found = data.cFileName.into_iter().take_while(|unit| *unit != 0);
-    Ok(name.encode_wide().eq(found))
+    Ok(name.encode_wide().eq(found).then_some(data))
 }
 
 #[cfg(test)]
@@ -211,6 +376,77 @@ mod tests {
             records: Vec::new(),
             remaining,
         }
+    }
+
+    #[test]
+    fn visited_folder_updates_direct_children_and_keeps_unchanged_subtrees() {
+        use IndexedEntryKind::{Directory, File};
+
+        let fixture = Fixture::new();
+        let catalog = IndexedCatalogStore::open(fixture.0.join("catalog.db")).unwrap();
+        let drive = r"C:\";
+        let folder = r"C:\inbox";
+        let record =
+            |path, kind, size| CatalogEntryRecord::from_path(Path::new(path), kind, size).unwrap();
+        let mut writer = catalog.begin_drive_refresh(drive).unwrap();
+        writer
+            .insert_batch(&[
+                record(folder, Directory, None),
+                record(r"C:\inbox\keep", Directory, None),
+                record(r"C:\inbox\keep\unchanged.txt", File, Some(36)),
+                record(r"C:\inbox\removed", Directory, None),
+                record(r"C:\inbox\removed\gone.txt", File, Some(21)),
+                record(r"C:\inbox\resize.txt", File, Some(12)),
+                record(r"C:\inbox\missing-row\retained.txt", File, Some(38)),
+            ])
+            .unwrap();
+        writer
+            .finish_drive_refresh(drive, "test", 0, "fake-volume", None, || Ok(()))
+            .unwrap();
+
+        let listing = || {
+            vec![
+                record(r"C:\inbox\keep", Directory, None),
+                record(r"C:\inbox\resize.txt", File, Some(241)),
+                record(r"C:\inbox\added.txt", File, Some(241)),
+                record(r"C:\inbox\missing-row", Directory, None),
+            ]
+        };
+        let connection = catalog.connect().unwrap();
+        let row = |path: &str| {
+            let mut statement = connection
+                .prepare_cached("SELECT entry_id, size_bytes FROM indexed_entries WHERE path = ?1")
+                .unwrap();
+            statement
+                .query_row([path], |row| {
+                    Ok((row.get::<_, i64>(0)?, row.get::<_, Option<i64>>(1)?))
+                })
+                .ok()
+        };
+        let resized = row(r"C:\inbox\resize.txt").unwrap();
+        let kept = row(r"C:\inbox\keep\unchanged.txt").unwrap();
+        let retained = row(r"C:\inbox\missing-row\retained.txt").unwrap();
+        assert_eq!(
+            apply_visited_children(&catalog, drive, folder, listing(), &|| false).unwrap(),
+            (false, None)
+        );
+        assert!(row(r"C:\inbox\removed\gone.txt").is_some());
+        assert_eq!(row(r"C:\inbox\resize.txt").unwrap(), resized);
+
+        assert_eq!(
+            apply_visited_children(&catalog, drive, folder, listing(), &|| true).unwrap(),
+            (true, Some(7))
+        );
+        assert_eq!(row(r"C:\inbox\resize.txt"), Some((resized.0, Some(241))));
+        assert_eq!(row(r"C:\inbox\keep\unchanged.txt"), Some(kept));
+        assert_eq!(row(r"C:\inbox\missing-row\retained.txt"), Some(retained));
+        assert!(row(r"C:\inbox\missing-row").is_some());
+        assert!(row(r"C:\inbox\added.txt").is_some());
+        assert!(row(r"C:\inbox\removed\gone.txt").is_none());
+        assert_eq!(
+            apply_visited_children(&catalog, drive, folder, listing(), &|| true).unwrap(),
+            (false, None)
+        );
     }
 
     #[test]

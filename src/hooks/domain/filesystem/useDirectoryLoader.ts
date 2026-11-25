@@ -14,7 +14,8 @@ import type { DirectoryRequest } from "./directoryRequests";
 type UseDirectoryLoaderOptions = {
   pane?: "main" | "bottom";
   loadIdRef: MutableRefObject<number>;
-  primeEntryMeta: (items: FileEntry[]) => void;
+  primeEntryMeta: (items: FileEntry[], folder: string, cached?: boolean) => void;
+  setMetaListingPending: (pending: boolean) => void;
   reportError: (title: string, message: string) => void;
   getRestoreRevision: () => number;
   log: FileManagerDebug;
@@ -28,6 +29,7 @@ export const useDirectoryLoader = ({
   pane = "main",
   loadIdRef,
   primeEntryMeta,
+  setMetaListingPending,
   reportError,
   getRestoreRevision,
   log,
@@ -50,9 +52,9 @@ export const useDirectoryLoader = ({
     return cache.get(buildQueryKey(target, query)) ?? null;
   }, [cache, requests]);
 
-  const showSnapshot = useCallback((request: DirectoryRequest, snapshot: DirCacheEntry) => {
+  const showSnapshot = useCallback((request: DirectoryRequest, snapshot: DirCacheEntry, cached = false) => {
     currentPathRef.current = request.path;
-    primeEntryMeta(snapshot.entries);
+    primeEntryMeta(snapshot.entries, request.path, cached);
     setEntries(snapshot.entries);
     setTotalCount(snapshot.totalCount);
     setCurrentPath(request.path);
@@ -65,19 +67,22 @@ export const useDirectoryLoader = ({
       if (!target) return;
       const query = resolveQuery(options, requests.pending?.query ?? requests.displayed?.query);
       const key = buildQueryKey(target, query);
-      const cached = options?.force ? null : cache.get(key);
+      const linked = options?.linked;
+      // Keep the counterpart's current listing until the linked folder opens.
+      const cached = options?.force || linked ? null : cache.get(key);
       const request = requests.start(target, key, query, Boolean(cached), options);
       if (!request) return;
+      setMetaListingPending(true);
       const restoreRevision = getRestoreRevision();
-      loadIdRef.current += 1;
+      if (!linked) loadIdRef.current += 1;
       const generation = Math.max(Date.now(), lastGeneration[pane] + 1);
       lastGeneration[pane] = generation;
       setFailedPath(null);
-      setLoadingPath(request.foreground ? target : null);
+      setLoadingPath(request.foreground && !linked ? target : null);
       if (cached) {
         cache.remember(key, cached);
         requests.commit(request);
-        showSnapshot(request, cached);
+        showSnapshot(request, cached, true);
       }
 
       log("loadDir start: %s", target);
@@ -87,10 +92,15 @@ export const useDirectoryLoader = ({
         const result = await listDirWithParent(target, {
           ...query,
           fast: options?.fast ?? query.sort.key === "name",
+          includeMeta: options?.includeMeta,
           generation,
           pane,
         });
-        if (restoreRevision !== getRestoreRevision() || !requests.commit(request)) return;
+        if (restoreRevision !== getRestoreRevision() || (linked && !linked.isCurrent()) || !requests.commit(request)) return;
+        if (linked) {
+          loadIdRef.current += 1;
+          linked.onCommit();
+        }
         if (perf.enabled) {
           perf(
             "list_dir_with_parent: %s (%d of %d entries) in %dms",
@@ -102,14 +112,23 @@ export const useDirectoryLoader = ({
         log("loadDir done: %s (%d entries)", target, result.entries.length);
       } catch (error) {
         if (restoreRevision !== getRestoreRevision() || requests.pending !== request) return;
+        if (linked) {
+          linked.onUnavailable();
+          return;
+        }
         setFailedPath(target);
         log("loadDir error: %s (%o)", target, error);
-        reportError("Couldn't open folder", `Failed to open ${target}: ${toMessage(error, "unknown error")}`);
+        if (!options?.suppressError) {
+          reportError("Couldn't open folder", `Failed to open ${target}: ${toMessage(error, "unknown error")}`);
+        }
       } finally {
-        if (requests.finish(request)) setLoadingPath(null);
+        if (requests.finish(request)) {
+          setMetaListingPending(false);
+          setLoadingPath(null);
+        }
       }
     },
-    [cache, pane, loadIdRef, log, perf, reportError, getRestoreRevision, requests, showSnapshot],
+    [cache, pane, loadIdRef, log, perf, reportError, getRestoreRevision, requests, setMetaListingPending, showSnapshot],
   );
 
   const refresh = useCallback(async () => {
@@ -128,14 +147,15 @@ export const useDirectoryLoader = ({
     requests.clear();
     loadIdRef.current += 1;
     currentPathRef.current = "";
-    primeEntryMeta([]);
+    primeEntryMeta([], "");
+    setMetaListingPending(false);
     setEntries([]);
     setTotalCount(0);
     setCurrentPath("");
     setParentPath(null);
     setLoadingPath(null);
     setFailedPath(null);
-  }, [loadIdRef, primeEntryMeta, requests]);
+  }, [loadIdRef, primeEntryMeta, requests, setMetaListingPending]);
 
   return {
     currentPath, parentPath, entries, totalCount, loadingPath, failedPath, currentPathRef,

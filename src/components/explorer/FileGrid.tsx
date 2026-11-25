@@ -1,10 +1,11 @@
 // Virtualized grid view for file entries.
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { shallow } from "zustand/shallow";
 import { useEntryPresence, useScrollToIndex } from "@/hooks";
+import { useThumbnailScope } from "@/hooks/domain/metadata/useThumbnailScope";
 import { useSettingsStore } from "@/modules";
 import { getPaneSessionStore } from "@/modules/sessionStore";
-import { getDefaultTabGridSize } from "@/modules/tabGridSize";
+import { getDefaultTabGridSize, readTabGridSize } from "@/modules/tabGridSize";
 import { EmptyState } from "@/components/primitives/EmptyState";
 import { EntryCard, ParentCard } from "./fileGrid/index";
 import { ThumbViewport } from "./fileGrid/ThumbViewport";
@@ -18,6 +19,7 @@ import { useGridTooltip } from "./fileGrid/useGridTooltip";
 import { useGridVirtual } from "./fileGrid/useGridVirtual";
 import { useGridWheelSize } from "./fileGrid/useGridWheelSize";
 import { useCutEntries } from "./fileView/useCutEntries";
+import { VIEW_INSET } from "./fileView/constants";
 
 const FileGrid = ({
   view,
@@ -35,10 +37,11 @@ const FileGrid = ({
   const isCut = useCutEntries();
   const usePaneSession = getPaneSessionStore(grid.pane);
   const defaultTabGridSize = useSettingsStore(getDefaultTabGridSize);
-  const [tabId, tabGridSize] = usePaneSession(state => [
-    state.activeTabId,
-    defaultTabGridSize ? state.tabs.find(tab => tab.id === state.activeTabId)?.gridSize : undefined,
-  ] as const, shallow);
+  const [tabId, tabGridSize, splitLayout] = usePaneSession(state => {
+    const tab = state.tabs.find(tab => tab.id === state.activeTabId);
+    const layout = tab?.split ? tab.split.stacked ? "stacked" : "side-by-side" : undefined;
+    return [state.activeTabId, readTabGridSize(tab, defaultTabGridSize), layout] as const;
+  }, shallow);
   const {
     isDeletePending,
     isTransferPending,
@@ -69,13 +72,9 @@ const FileGrid = ({
     () =>
       viewItems.map((item) => ({
         path: item.type === "parent" ? item.path : item.entry.path,
-        selectable:
-          item.type !== "parent" &&
-          item.presence !== "removed" &&
-          !isDeletePending(item.entry.path) &&
-          !isTransferPending(item.entry.path),
+        selectable: item.type !== "parent" && item.presence !== "removed",
       })),
-    [isDeletePending, isTransferPending, viewItems],
+    [viewItems],
   );
 
   const {
@@ -83,6 +82,7 @@ const FileGrid = ({
     gridVars,
     gridStyle,
     viewportHeight,
+    layoutReady,
     columnCount,
     columnWidth,
     columnGap,
@@ -92,13 +92,14 @@ const FileGrid = ({
     gridMetaEnabled,
     isResizing,
   } = useGridSizing({
-    gridSize: defaultTabGridSize ? tabGridSize ?? defaultTabGridSize : grid.gridSize,
-    gridAutoColumns: grid.gridAutoColumns,
+    gridSize: typeof tabGridSize === "string" ? tabGridSize : grid.gridSize,
+    gridAutoColumns: typeof tabGridSize === "number" ? tabGridSize : grid.gridAutoColumns,
     gridGap: grid.gridGap,
     gridShowSize: grid.gridShowSize,
     gridShowExtension: grid.gridShowExtension,
     thumbnailFit: thumbs.thumbnailFit,
     resizeDeferred: grid.resizeDeferred,
+    layoutKey: splitLayout,
     viewKey: view.viewKey,
     scrollRestoreKey: view.scrollRestoreKey,
     scrollRestoreTop: view.scrollRestoreTop,
@@ -124,6 +125,17 @@ const FileGrid = ({
     contentHeight,
   });
 
+  const applyScrollRequest = useScrollToIndex(viewportRef, {
+    itemCount: viewItems.length,
+    rowHeight: rowHeight - columnGap,
+    rowGap: columnGap,
+    insetTop: VIEW_INSET,
+    itemsPerRow: columnCount,
+    scrollRequest: view.scrollRequest,
+    scrollKey: view.viewKey,
+    ready: !view.loading && layoutReady,
+  });
+
   const { virtual, visibleItems, startIndex } = useGridVirtual({
     viewportRef,
     viewportHeight,
@@ -132,16 +144,12 @@ const FileGrid = ({
     rowCount,
     rowHeight,
     viewItems,
+    applyScrollRequest,
   });
 
-  useScrollToIndex(viewportRef, {
-    itemCount: viewItems.length,
-    rowHeight,
-    itemsPerRow: columnCount,
-    scrollRequest: view.scrollRequest,
-    scrollKey: view.viewKey,
-  });
-
+  const requestThumbs = useThumbnailScope(
+    grid.pane, view.viewKey, thumbs.thumbnailsEnabled, thumbs.onRequestThumbs,
+  );
   const {
     gridMetaByPath,
     thumbSource,
@@ -158,7 +166,7 @@ const FileGrid = ({
     onRequestMeta: metadata.onRequestMeta,
     thumbnailsEnabled: thumbs.thumbnailsEnabled,
     thumbnails: thumbs.thumbnails,
-    onRequestThumbs: thumbs.onRequestThumbs,
+    onRequestThumbs: requestThumbs,
     thumbResetKey: thumbs.thumbResetKey,
     thumbnailAppIcons: thumbs.thumbnailAppIcons,
     thumbnailFolders: thumbs.thumbnailFolders,
@@ -166,6 +174,9 @@ const FileGrid = ({
     thumbnailSvgs: thumbs.thumbnailSvgs,
     loading: view.loading,
   });
+  const handleThumbError = useCallback((path: string, failedUrl: string) => {
+    if (!view.loading) requestThumbs([{ path, size: null, modified: null, failedUrl }]);
+  }, [requestThumbs, view.loading]);
   useGridTooltip({
     viewportRef,
     entryByPath: view.entryByPath,
@@ -177,6 +188,7 @@ const FileGrid = ({
     viewportRef,
     selectedPaths: selection.selectedPaths,
     selectionItems,
+    canSelectPath: (path) => !isDeletePending(path) && !isTransferPending(path),
     columnCount,
     columnWidth,
     rowHeight,
@@ -194,6 +206,7 @@ const FileGrid = ({
   return (
     <div
       className="thumb-shell"
+      data-tab-content="thumbs"
       {...dragHandlers}
       inert={view.loading}
       data-category-tint={thumbs.categoryTinting ? "true" : "false"}
@@ -242,9 +255,10 @@ const FileGrid = ({
             const isDropTarget = dragDrop.dropTargetPath === item.entry.path;
             const itemMeta = gridMetaByPath.get(item.entry.path);
             const baseIndex = resolvedIndexMap.get(item.entry.path) ?? index;
+            const folderThumb = item.entry.isDir ? folderThumbSource.get(item.entry.path) : undefined;
             const thumbUrl = thumbs.thumbnailsEnabled
               ? item.entry.isDir
-                ? folderThumbSource.get(item.entry.path)
+                ? folderThumb?.url
                 : thumbSource.get(item.entry.path)
               : undefined;
             const appIconUrl =
@@ -261,6 +275,8 @@ const FileGrid = ({
                 extension={itemMeta?.extension ?? null}
                 sizeLabel={itemMeta ? itemMeta.sizeLabel : ""}
                 thumbUrl={thumbUrl}
+                thumbPath={item.entry.isDir ? folderThumb?.path : item.entry.path}
+                onThumbError={handleThumbError}
                 appIconUrl={appIconUrl}
                 executableIconUrl={executableIcons.get(item.entry.path)}
                 appIconsEnabled={thumbs.thumbnailAppIcons}

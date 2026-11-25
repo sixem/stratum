@@ -12,6 +12,8 @@ type ParentRowProps = {
   index: number;
   selected: boolean;
   dropTarget: boolean;
+  showSize: boolean;
+  showModified: boolean;
   onSelect: (event: ReactMouseEvent) => void;
   onOpen: (event: ReactMouseEvent) => void;
   onOpenNewTab?: (event: ReactMouseEvent) => void;
@@ -24,6 +26,8 @@ export const ParentRow = memo(({
   index,
   selected,
   dropTarget,
+  showSize,
+  showModified,
   onSelect,
   onOpen,
   onOpenNewTab,
@@ -85,8 +89,8 @@ export const ParentRow = memo(({
             ..
           </span>
         </span>
-        <span className="size">-</span>
-        <span className="modified">-</span>
+        {showSize && <span className="size">-</span>}
+        {showModified && <span className="modified">-</span>}
       </button>
     </TooltipWrapper>
   );

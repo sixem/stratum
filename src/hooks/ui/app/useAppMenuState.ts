@@ -2,19 +2,21 @@
 import { useCallback, useState } from "react";
 import type {
   Dispatch,
+  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   SetStateAction,
 } from "react";
-import type { EntryContextTarget, PlaceContextTarget } from "@/types";
+import type { ContextMenuItem, EntryContextTarget, PlaceContextTarget } from "@/types";
 
-type ContextMenuPoint = { x: number; y: number };
+type ContextMenuPoint = { x: number; y: number; focusFirstItem?: boolean };
 type ContextMenuEvent = ReactMouseEvent | ReactPointerEvent;
 
 type ContextMenuState =
-  | ({ kind: "sort" } & ContextMenuPoint)
+  | ({ kind: "sort"; listHeader?: boolean } & ContextMenuPoint)
   | ({ kind: "entry"; entry: EntryContextTarget } & ContextMenuPoint)
   | ({ kind: "place-target"; target: PlaceContextTarget } & ContextMenuPoint)
+  | ({ kind: "actions"; items: ContextMenuItem[]; scrollable?: boolean } & ContextMenuPoint)
   | null;
 
 type MenuPane = "main" | "bottom";
@@ -26,9 +28,31 @@ function usePaneMenuState(pane: MenuPane, active: OwnedMenu | null, setActive: D
     setActive({ pane, menu });
   }, [pane, setActive]);
 
+  const openActionMenu = useCallback((
+    event: ReactMouseEvent | ReactKeyboardEvent,
+    items: ContextMenuItem[],
+    scrollable = false,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!items.length) return;
+    // Keyboard context menus use their control as an anchor.
+    const anchor = event.currentTarget.getBoundingClientRect();
+    const hasPoint = "clientX" in event && (event.clientX !== 0 || event.clientY !== 0);
+    openContextMenuAt({
+      kind: "actions",
+      items,
+      scrollable,
+      focusFirstItem: !hasPoint,
+      x: hasPoint ? event.clientX : anchor.left,
+      y: hasPoint ? event.clientY : anchor.bottom,
+    });
+  }, [openContextMenuAt]);
+
   const openSortMenu = useCallback((event: ContextMenuEvent) => {
     event.preventDefault();
-    openContextMenuAt({ kind: "sort", x: event.clientX, y: event.clientY });
+    const listHeader = event.target instanceof Element && Boolean(event.target.closest("[data-list-header]"));
+    openContextMenuAt({ kind: "sort", listHeader, x: event.clientX, y: event.clientY });
   }, [openContextMenuAt]);
 
   const openEntryMenu = useCallback((event: ContextMenuEvent, entry: EntryContextTarget) => {
@@ -61,6 +85,7 @@ function usePaneMenuState(pane: MenuPane, active: OwnedMenu | null, setActive: D
   return {
     contextMenu: active?.pane === pane ? active.menu : null,
     openContextMenuAt,
+    openActionMenu,
     openSortMenu,
     openEntryMenu,
     openPlaceTargetMenu,

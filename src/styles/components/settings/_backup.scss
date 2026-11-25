@@ -1,0 +1,208 @@
+// Backup forms share the Settings type scale and use dividers between groups.
+@use "../control-recipes" as control;
+
+:where(.settings-panel) {
+  .settings-backup-export,
+  .settings-backup-review {
+    min-width: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  .settings-backup-export {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+
+    > :is(.settings-backup-list, .settings-desc) {
+      flex: 1 0 100%;
+    }
+
+    > .settings-actions {
+      margin-inline-start: auto;
+    }
+  }
+
+  .settings-backup-review,
+  .settings-backup-paths {
+    display: grid;
+    gap: 0.625rem;
+    min-width: 0;
+    padding-block-start: 0.75rem;
+    border-block-start: var(--surface-border-width) solid var(--stroke);
+  }
+
+  .settings-backup-heading,
+  .settings-backup-choice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem 0.75rem;
+  }
+
+  .settings-backup-heading,
+  .settings-backup-locations summary {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .settings-backup-export p,
+  .settings-backup-review p {
+    margin: 0;
+  }
+
+  :is(.settings-backup-export, .settings-backup-review) :is(button, summary):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  .settings-backup-list {
+    min-width: 0;
+    max-height: 10rem;
+    overflow: auto;
+    margin: 0;
+    padding: 0;
+    border-block: var(--surface-border-width) solid var(--stroke);
+    list-style: none;
+    overflow-wrap: anywhere;
+
+    > li + li {
+      border-block-start: var(--surface-border-width) solid var(--stroke);
+    }
+
+    .settings-checkbox {
+      padding: 0.375rem;
+    }
+  }
+
+  .settings-backup-preview-row,
+  .settings-backup-mapping {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem 0.75rem;
+    padding: 0.375rem;
+
+    > span {
+      min-width: 0;
+    }
+  }
+
+  .settings-backup-preview-row {
+    flex-wrap: wrap;
+  }
+
+  .settings-backup-mapping .btn {
+    flex-shrink: 0;
+  }
+
+  .settings-backup-restore {
+    display: grid;
+    gap: 0.25rem;
+
+    .settings-desc {
+      margin-inline-start: 1.5rem;
+      margin-block-end: 0.375rem;
+    }
+  }
+
+  .settings-backup-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(11.25rem, 100%), 1fr));
+    gap: 0.5rem;
+
+    > div {
+      display: grid;
+      gap: 0.25rem;
+      min-width: 0;
+    }
+  }
+
+  .settings-backup-replacement {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.375rem;
+  }
+
+  .settings-backup-input {
+    min-width: 0;
+    min-height: 1.875rem;
+    padding: 0.25rem 0.5rem;
+    @include control.control-surface(6px, var(--surface-control));
+    font: inherit;
+    color: var(--text);
+    user-select: text;
+
+    &:focus-visible {
+      @include control.focus-ring(rgba(var(--accent-rgb), 0.5), rgba(var(--accent-rgb), 0.16));
+    }
+  }
+
+  .settings-backup-locations summary {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    color: var(--muted);
+    cursor: pointer;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &:hover {
+      color: var(--text);
+    }
+
+    svg {
+      width: 0.75rem;
+      height: 0.75rem;
+      rotate: -90deg;
+    }
+  }
+
+  .settings-backup-locations[open] {
+    summary {
+      margin-block-end: 0.375rem;
+
+      svg {
+        rotate: 0deg;
+      }
+    }
+  }
+
+  .settings-backup-path {
+    display: block;
+    width: 100%;
+    padding: 0.3125rem 0.375rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(var(--accent-rgb), 0.08);
+    }
+  }
+
+  .settings-backup-example {
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .settings-backup-remap-action,
+  .settings-backup-footer {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .settings-backup-footer {
+    padding-block-start: 0.75rem;
+    border-block-start: var(--surface-border-width) solid var(--stroke);
+  }
+}

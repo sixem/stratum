@@ -51,6 +51,7 @@ impl From<CatalogQueryHit> for IndexedPathMatch {
             drive_path: drive_root_from_catalog_path(&path),
             path,
             kind: hit.kind,
+            size_bytes: hit.size_bytes,
         }
     }
 }

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { TabCloseIcon } from "@/components/icons";
 import { SettingsSearchMatches } from "@/components/settings/SettingsItem";
-import { SettingsVitals } from "@/components/settings/SettingsVitals";
+import { useSettingsGroupNavigation } from "@/components/settings/useSettingsGroupNavigation";
 import { OverlayPanelHeader } from "@/components/overlay/OverlayPanelHeader";
 import { DialogCloseButton } from "./DialogCloseButton";
 import {
@@ -13,6 +13,7 @@ import {
   type SettingsSectionId,
 } from "@/components/settings/settingsSectionRegistry";
 import { PressButton } from "@/components/primitives/PressButton";
+import { APP_VERSION } from "@/constants";
 import { useModalFocusTrap } from "@/hooks";
 import { handleSearchHotkey } from "@/hooks/ui/inputs/useSearchHotkey";
 import { isPlainEscape } from "@/hooks/ui/inputs/inputFocus";
@@ -33,6 +34,7 @@ export const SettingsOverlay = ({
 }: SettingsOverlayProps) => {
   const resetSettings = useSettingsStore((state) => state.resetSettings);
   const autoGrid = useSettingsStore((state) => state.gridSize === "auto");
+  const moveHistoryEnabled = useSettingsStore((state) => state.rememberMoveDestinations);
   const titleId = useId();
   const [activeSectionId, setActiveSectionId] = useState<SettingsSectionId>(
     DEFAULT_SETTINGS_SECTION_ID,
@@ -44,7 +46,7 @@ export const SettingsOverlay = ({
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
-  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const categoryRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const activeSection =
     useMemo(
       () =>
@@ -52,7 +54,10 @@ export const SettingsOverlay = ({
         SETTINGS_SECTION_DEFINITIONS[0],
       [activeSectionId],
     );
-  const searchResults = useMemo(() => searchSettingsSections(searchQuery, autoGrid), [searchQuery, autoGrid]);
+  const searchResults = useMemo(
+    () => searchSettingsSections(searchQuery, autoGrid, moveHistoryEnabled),
+    [searchQuery, autoGrid, moveHistoryEnabled],
+  );
   const searching = searchResults !== null;
   const matchingSections = new Set(searchResults?.map(({ section }) => section.id));
   const renderContext = { open, onCaptureChange: setCaptureActive, onOpenCacheLocation, onClearCache };
@@ -60,6 +65,10 @@ export const SettingsOverlay = ({
   useLayoutEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [activeSectionId, searchQuery]);
+
+  const { groups, currentGroupId, jumpToGroup } = useSettingsGroupNavigation(
+    contentRef, open && !searching ? activeSection.id : null,
+  );
 
   useModalFocusTrap({
     open,
@@ -120,7 +129,7 @@ export const SettingsOverlay = ({
       event.preventDefault();
       const nextSection = SETTINGS_SECTION_DEFINITIONS[nextIndex];
       if (!searching) handleSelectSection(nextSection.id);
-      tabRefs.current[nextIndex]?.focus();
+      categoryRefs.current[nextIndex]?.focus();
     },
     [handleSelectSection, searching],
   );
@@ -172,50 +181,51 @@ export const SettingsOverlay = ({
           subtitleClassName="settings-subtitle"
           title="Settings"
           titleId={titleId}
-          subtitle="Manage app behavior, indexing, flair, thumbnails, and cached previews."
+          subtitle="Manage appearance, navigation, indexing, and storage."
           actions={<DialogCloseButton ref={closeButtonRef} onClose={onClose} />}
         />
         <div className="settings-body">
-          <nav className="settings-sidebar" aria-label="Settings sections">
-            <div className="settings-nav" data-searching={searching} role={searching ? undefined : "tablist"}>
+          <nav className="settings-sidebar" aria-label="Settings categories">
+            <ul className="settings-nav" data-searching={searching}>
               {SETTINGS_SECTION_DEFINITIONS.map((section, index) => {
                 const selected = !searching && section.id === activeSection.id;
                 const matching = matchingSections.has(section.id);
                 return (
-                  <PressButton
-                    key={section.id}
-                    ref={(element) => {
-                      tabRefs.current[index] = element;
-                    }}
-                    type="button"
-                    id={`${section.id}-tab`}
-                    role={searching ? undefined : "tab"}
-                    aria-selected={searching ? undefined : selected}
-                    aria-controls={selected ? `${section.id}-panel` : undefined}
-                    tabIndex={searching || selected ? 0 : -1}
-                    className={`settings-nav-item${selected ? " is-active" : ""}${matching ? " is-search-match" : ""}`}
-                    onClick={() => handleSelectSection(section.id)}
-                    onKeyDown={handleSectionKeyDown(index)}
-                  >
-                    {section.label}
-                  </PressButton>
+                  <li key={section.id}>
+                    <PressButton
+                      ref={(element) => { categoryRefs.current[index] = element; }}
+                      type="button"
+                      id={`${section.id}-category`}
+                      aria-current={selected || undefined}
+                      aria-controls={selected ? `${section.id}-panel` : undefined}
+                      tabIndex={searching || selected ? 0 : -1}
+                      className={`settings-nav-item${selected ? " is-active" : ""}${matching ? " is-search-match" : ""}`}
+                      onClick={() => handleSelectSection(section.id)}
+                      onKeyDown={handleSectionKeyDown(index)}
+                    >
+                      {section.label}
+                    </PressButton>
+                    {selected && groups.length > 0 && (
+                      <ul className="settings-nav-groups" aria-label={`${section.label} sections`}>
+                        {groups.map(({ id, label }) => (
+                          <li key={id}>
+                            <button
+                              type="button"
+                              className="settings-nav-group"
+                              aria-controls={id}
+                              aria-current={id === currentGroupId ? "location" : undefined}
+                              onClick={() => jumpToGroup(id)}
+                            >
+                              {label}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
                 );
               })}
-            </div>
-            <div className="settings-sidebar-actions">
-              <div className="settings-sidebar-title">Actions</div>
-              <PressButton
-                type="button"
-                className="btn settings-reset"
-                onClick={handleResetSettings}
-              >
-                Reset all to defaults
-              </PressButton>
-              <div className="settings-desc">
-                Resets every setting and keybind back to default.
-              </div>
-            </div>
-            <SettingsVitals open={open} />
+            </ul>
           </nav>
           <div className="settings-main">
             <div className="settings-search-field">
@@ -255,9 +265,9 @@ export const SettingsOverlay = ({
                 <div
                   key={activeSection.id}
                   id={`${activeSection.id}-panel`}
-                  role="tabpanel"
-                  aria-labelledby={`${activeSection.id}-tab`}
-                  className="settings-tab-panel"
+                  role="region"
+                  aria-labelledby={`${activeSection.id}-category`}
+                  className="settings-category-panel"
                 >
                   {activeSection.render(renderContext)}
                 </div>
@@ -265,6 +275,12 @@ export const SettingsOverlay = ({
             </div>
           </div>
         </div>
+        <footer className="settings-footer">
+          <span className="tnum">v{APP_VERSION}</span>
+          <PressButton type="button" className="settings-footer-button settings-footer-reset" onClick={handleResetSettings}>
+            Reset settings
+          </PressButton>
+        </footer>
       </div>
     </div>
   );

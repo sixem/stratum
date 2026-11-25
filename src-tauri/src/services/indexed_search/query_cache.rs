@@ -5,11 +5,17 @@
 // keeps that cache policy away from lifecycle and worker code.
 use std::sync::atomic::Ordering;
 
-use crate::domain::indexed_search::{
-    IndexedPathMatch, IndexedPathPage, IndexedPathPageQuery, IndexedPathQuery,
+use crate::domain::{
+    file_search::{FileSearch, FileSearchFilters},
+    indexed_search::{
+        IndexedFolderPageQuery, IndexedPathMatch, IndexedPathPage, IndexedPathPageQuery,
+        IndexedPathQuery,
+    },
 };
 
-use super::{catalog::IndexedCatalogStore, service::IndexedSearchHandle};
+use super::{
+    catalog::IndexedCatalogStore, service::IndexedSearchHandle, state::normalize_drive_key,
+};
 
 const QUERY_CACHE_CAPACITY: usize = 24;
 
@@ -18,10 +24,18 @@ pub(super) struct QueryCache {
 }
 
 struct QueryCacheEntry {
-    key: String,
+    key: QueryCacheKey,
     revision: u64,
     volumes: Vec<(String, String)>,
     page: IndexedPathPage,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct QueryCacheKey {
+    paged: bool,
+    name: String,
+    filters: FileSearchFilters,
+    limit: usize,
 }
 
 impl IndexedSearchHandle {
@@ -46,9 +60,45 @@ impl IndexedSearchHandle {
         self.query_catalog(key, |catalog, volumes| catalog.query_page(query, volumes))
     }
 
+    pub fn query_folder_page(
+        &self,
+        query: IndexedFolderPageQuery,
+    ) -> Result<IndexedPathPage, String> {
+        if query.search.trim().is_empty()
+            || query.scope.scope_roots.as_ref().is_some_and(Vec::is_empty)
+        {
+            return Ok(IndexedPathPage::default());
+        }
+        self.query_catalog(None, |catalog, volumes| {
+            catalog.query_folder_page(query, volumes)
+        })
+    }
+
+    pub fn verify_searchable_drive(&self, drive_path: &str) -> bool {
+        if self.is_shutting_down() || !self.is_enabled() {
+            return false;
+        }
+        let key = normalize_drive_key(drive_path);
+        let mount = {
+            let state = self.inner.state.lock().expect("indexed search state lock");
+            if !state.volumes.verified.contains(&key) {
+                return false;
+            }
+            state.volumes.mounted.get(&key).cloned()
+        };
+        mount.is_some_and(|mount| {
+            if mount.verify().is_err() || self.is_shutting_down() || !self.is_enabled() {
+                return false;
+            }
+            // Physical verification can race a settings change or unmount.
+            let state = self.inner.state.lock().expect("indexed search state lock");
+            state.volumes.verified.contains(&key) && state.volumes.mounted.get(&key) == Some(&mount)
+        })
+    }
+
     fn query_catalog(
         &self,
-        cache_key: Option<String>,
+        cache_key: Option<QueryCacheKey>,
         fetch: impl FnOnce(&IndexedCatalogStore, &[(String, String)]) -> Result<IndexedPathPage, String>,
     ) -> Result<IndexedPathPage, String> {
         if self.is_shutting_down() || !self.is_enabled() {
@@ -75,7 +125,7 @@ impl IndexedSearchHandle {
             return Ok(IndexedPathPage::default());
         }
 
-        let cached = cache_key.as_deref().and_then(|key| {
+        let cached = cache_key.as_ref().and_then(|key| {
             self.inner
                 .query_cache
                 .lock()
@@ -137,10 +187,14 @@ impl IndexedSearchHandle {
     }
 }
 
-fn build_query_cache_key(query: &IndexedPathQuery, paged: bool) -> String {
-    let normalized_query = query.query.trim().to_lowercase();
-    let normalized_limit = query.effective_limit();
-    format!("{paged}\n{normalized_query}\n{normalized_limit}")
+fn build_query_cache_key(query: &IndexedPathQuery, paged: bool) -> QueryCacheKey {
+    let parsed = FileSearch::parse(&query.query);
+    QueryCacheKey {
+        paged,
+        name: parsed.name_query.trim().to_lowercase(),
+        filters: parsed.filters,
+        limit: query.effective_limit(),
+    }
 }
 
 impl QueryCache {
@@ -152,12 +206,12 @@ impl QueryCache {
 
     fn get(
         &mut self,
-        key: &str,
+        key: &QueryCacheKey,
         revision: u64,
         volumes: &[(String, String)],
     ) -> Option<IndexedPathPage> {
         let index = self.entries.iter().position(|entry| {
-            entry.revision == revision && entry.key == key && entry.volumes == volumes
+            entry.revision == revision && &entry.key == key && entry.volumes == volumes
         })?;
         let entry = self.entries.remove(index);
         let page = entry.page.clone();
@@ -167,7 +221,7 @@ impl QueryCache {
 
     fn store(
         &mut self,
-        key: String,
+        key: QueryCacheKey,
         revision: u64,
         volumes: Vec<(String, String)>,
         page: IndexedPathPage,
@@ -213,5 +267,25 @@ mod tests {
         assert_eq!(key(None), key(Some(50)));
         assert_eq!(key(Some(0)), key(Some(1)));
         assert_eq!(key(Some(100)), key(Some(usize::MAX)));
+    }
+
+    #[test]
+    fn query_cache_keys_keep_parsed_size_and_type_criteria() {
+        let key = |query: &str| {
+            build_query_cache_key(
+                &IndexedPathQuery {
+                    query: query.into(),
+                    limit: None,
+                },
+                true,
+            )
+        };
+        assert_eq!(
+            key(">1GB TYPE:VIDEO Concert"),
+            key("concert type:video >1GiB")
+        );
+        assert_ne!(key("concert >1GB"), key("concert >=1GB"));
+        assert_ne!(key("concert type:video"), key("concert type:audio"));
+        assert_ne!(key(">1KB concert"), key(">1KB concert"));
     }
 }

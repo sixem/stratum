@@ -1,6 +1,7 @@
 // Virtualized list view for file entries.
 import { useMemo } from "react";
 import { useEntryPresence, useScrollToIndex } from "@/hooks";
+import { useSettingsStore } from "@/modules";
 import { EmptyState } from "@/components/primitives/EmptyState";
 import { SelectionRect } from "./SelectionRect";
 import { EntryRow, ParentRow } from "./fileList/index";
@@ -28,6 +29,9 @@ const FileList = ({
   creation,
 }: FileListProps) => {
   const isCut = useCutEntries();
+  const density = useSettingsStore((state) => state.listDensity);
+  const showSize = useSettingsStore((state) => state.listShowSize);
+  const showModified = useSettingsStore((state) => state.listShowModified);
   const {
     isDeletePending,
     isTransferPending,
@@ -57,19 +61,27 @@ const FileList = ({
     () =>
       rows.map((row) => ({
         path: row.type === "parent" ? row.path : row.entry.path,
-        selectable:
-          row.presence !== "removed" &&
-          (row.type === "parent" ||
-            (!isDeletePending(row.entry.path) && !isTransferPending(row.entry.path))),
+        selectable: row.presence !== "removed",
       })),
-    [isDeletePending, isTransferPending, rows],
+    [rows],
   );
 
   const { listRef, itemHeight, rowHeight, listVars } = useListLayout({
+    density,
     smoothScroll: view.smoothScroll,
     scrollRestoreKey: view.scrollRestoreKey,
     scrollRestoreTop: view.scrollRestoreTop,
     loading: view.loading,
+  });
+
+  const applyScrollRequest = useScrollToIndex(listRef, {
+    itemCount: rows.length,
+    rowHeight,
+    rowGap: itemHeight - rowHeight,
+    insetTop: VIEW_INSET,
+    scrollRequest: view.scrollRequest,
+    scrollKey: view.viewKey,
+    ready: !view.loading,
   });
 
   const { virtual, visibleRows } = useListVirtual({
@@ -77,16 +89,10 @@ const FileList = ({
     viewKey: view.viewKey,
     itemHeight,
     rows,
+    applyScrollRequest,
   });
-
-  useScrollToIndex(listRef, {
-    itemCount: rows.length,
-    rowHeight,
-    rowGap: itemHeight - rowHeight,
-    insetTop: VIEW_INSET,
-    scrollRequest: view.scrollRequest,
-    scrollKey: view.viewKey,
-  });
+  // The full scroll area must exist on the first layout, before measuring the visible range.
+  const contentHeight = rows.length * itemHeight + VIEW_INSET * 2;
 
   const rowMetaByPath = useListMeta({
     listRef,
@@ -101,6 +107,7 @@ const FileList = ({
     listRef,
     selectedPaths: selection.selectedPaths,
     selectionItems,
+    canSelectPath: (path) => !view.entryByPath.has(path) || (!isDeletePending(path) && !isTransferPending(path)),
     itemHeight,
     rowHeight,
     onSetSelection: selection.onSetSelection,
@@ -114,6 +121,10 @@ const FileList = ({
   return (
     <div
       className="file-list"
+      data-tab-content="list"
+      data-density={density}
+      data-show-size={showSize}
+      data-show-modified={showModified}
       inert={view.loading}
       {...dragHandlers}
       onPointerDown={(event) => {
@@ -130,7 +141,12 @@ const FileList = ({
       }}
       onContextMenu={(event) => event.preventDefault()}
     >
-      <ListHeader sortState={list.sortState} onSortChange={list.onSortChange} />
+      <ListHeader
+        sortState={list.sortState}
+        onSortChange={list.onSortChange}
+        showSize={showSize}
+        showModified={showModified}
+      />
       <div className="list-shell" data-category-tint={list.categoryTinting ? "true" : "false"}>
         <div className="list-body" ref={listRef} style={listVars}>
           <div
@@ -138,7 +154,7 @@ const FileList = ({
             data-ready={contentReady ? "true" : "false"}
             data-animate={viewAnimate ? "true" : "false"}
           >
-            <div className="list-spacer" style={{ height: `${virtual.totalHeight}px` }} />
+            <div className="list-spacer" style={{ height: contentHeight }} />
             <div
               className="list-virtual"
               style={{ transform: `translate3d(0, ${virtual.offsetTop}px, 0)` }}
@@ -155,6 +171,8 @@ const FileList = ({
                       index={baseIndex}
                       selected={selection.selectedPaths.has(row.path)}
                       dropTarget={isDropTarget}
+                      showSize={showSize}
+                      showModified={showModified}
                       onSelect={handleRowSelect}
                       onOpen={handleRowOpen}
                       onOpenNewTab={handleRowOpenNewTab}
@@ -175,6 +193,8 @@ const FileList = ({
                     fileKind={rowMeta?.fileKind ?? "generic"}
                     sizeLabel={rowMeta ? rowMeta.sizeLabel : ""}
                     modifiedLabel={rowMeta ? rowMeta.modifiedLabel : ""}
+                    showSize={showSize}
+                    showModified={showModified}
                     nameEllipsis={list.nameEllipsis}
                     hideExtension={list.hideExtension}
                     selected={selection.selectedPaths.has(row.entry.path)}

@@ -23,6 +23,12 @@ pub fn content_type_for_path(path: &Path) -> Option<&'static str> {
         "flv" => "video/x-flv",
         "3gp" => "video/3gpp",
         "ogv" => "video/ogg",
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "flac" => "audio/flac",
+        "aac" => "audio/aac",
+        "m4a" => "audio/mp4",
+        "ogg" | "oga" | "opus" => "audio/ogg",
         // Keep active document formats, including raw SVG, off the preview origin.
         _ => return None,
     })

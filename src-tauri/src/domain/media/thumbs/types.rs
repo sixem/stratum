@@ -3,6 +3,30 @@ use serde::{Deserialize, Serialize};
 
 use super::ThumbKind;
 
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ThumbView {
+    Main,
+    Bottom,
+    Gallery,
+}
+
+impl ThumbView {
+    pub(super) const COUNT: usize = 3;
+
+    pub(super) fn index(self) -> usize {
+        self as usize
+    }
+}
+
+// A visit to a thumbnail view. The queue issues a new token each time it opens.
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThumbScope {
+    pub view: ThumbView,
+    pub generation: u32,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThumbOptions {

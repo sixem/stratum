@@ -16,6 +16,11 @@ export const THUMBS_SETTINGS_ITEMS = {
     label: "Thumbnail size",
     description: "Max edge size for generated previews.",
   },
+  imageFormat: {
+    label: "Thumbnail format",
+    description: "Choose the image format used to store thumbnails.",
+    keywords: "image format WebP JPEG cache",
+  },
   quality: {
     label: "Quality (JPEG)",
     description: "Balance size against visual detail.",
@@ -120,6 +125,25 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
             {...sizeRange.bind}
           />
           <span className="settings-value">{sizeRange.draft}px</span>
+        </div>
+      </SettingsItem>
+      <SettingsItem
+        item={THUMBS_SETTINGS_ITEMS.imageFormat}
+        className={isThumbsDisabled ? "is-disabled" : undefined}
+      >
+        <div className="settings-pills" role="group" aria-label={THUMBS_SETTINGS_ITEMS.imageFormat.label}>
+          {(["webp", "jpeg"] as const).map((format) => (
+            <PressButton
+              key={format}
+              type="button"
+              aria-pressed={thumbnailFormat === format}
+              className={`settings-pill${thumbnailFormat === format ? " is-active" : ""}`}
+              disabled={isThumbsDisabled}
+              onClick={() => updateSettings({ thumbnailFormat: format })}
+            >
+              {format === "webp" ? "WebP" : "JPEG"}
+            </PressButton>
+          ))}
         </div>
       </SettingsItem>
       <SettingsItem

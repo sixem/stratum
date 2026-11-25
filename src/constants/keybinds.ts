@@ -4,9 +4,17 @@ export type KeybindAction =
   | "newTab"
   | "closeTab"
   | "openIndexedSearch"
+  | "quickMove"
   | "undo"
   | "deleteSelection"
+  | "renameSelection"
   | "duplicateSelection"
+  | "copyToOtherPane"
+  | "moveToOtherPane"
+  | "selectSameExtension"
+  | "invertSelection"
+  | "focusOtherPane"
+  | "focusSplitTerminal"
   | "previewItem"
   | "prevTab"
   | "nextTab";
@@ -52,6 +60,12 @@ export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
     default: "Delete",
   },
   {
+    id: "renameSelection",
+    label: "Rename selection",
+    description: "Rename one item inline or open Batch Rename for multiple items.",
+    default: "F2",
+  },
+  {
     id: "duplicateSelection",
     label: "Duplicate selection",
     description: "Make a copy in the current folder.",
@@ -75,6 +89,48 @@ export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
     description: "Switch to the tab on the right.",
     default: "Control+ArrowRight",
   },
+  {
+    id: "quickMove",
+    label: "Quick Move",
+    description: "Find a destination for the selected items.",
+    default: "Control+Shift+m",
+  },
+  {
+    id: "copyToOtherPane",
+    label: "Copy to other pane",
+    description: "Copy the selected items to the folder open in the other pane.",
+    default: "",
+  },
+  {
+    id: "moveToOtherPane",
+    label: "Move to other pane",
+    description: "Move the selected items to the folder open in the other pane.",
+    default: "",
+  },
+  {
+    id: "selectSameExtension",
+    label: "Select same extension",
+    description: "Select visible files with the same extension as the selected file.",
+    default: "",
+  },
+  {
+    id: "invertSelection",
+    label: "Invert selection",
+    description: "Invert the selection among visible items in the focused pane.",
+    default: "",
+  },
+  {
+    id: "focusOtherPane",
+    label: "Focus other pane",
+    description: "Move keyboard focus to the other pane when it is open.",
+    default: "",
+  },
+  {
+    id: "focusSplitTerminal",
+    label: "Switch focus between folder and PowerShell",
+    description: "Move keyboard focus between the folder and terminal in the active split tab.",
+    default: "",
+  },
 ];
 
 export const DEFAULT_KEYBINDS = KEYBIND_DEFINITIONS.reduce<KeybindMap>((acc, entry) => {
@@ -96,10 +152,13 @@ export const RESERVED_KEYBIND_DEFINITIONS = [
   { combo: "Control+c", label: "Copy" },
   { combo: "Control+x", label: "Cut" },
   { combo: "Control+v", label: "Paste" },
+  { combo: "Control+l", label: "Edit path" },
+  { combo: "Control+Tab", label: "Next pane tab" },
+  { combo: "Control+Shift+Tab", label: "Previous pane tab" },
   { combo: REOPEN_CLOSED_TAB_KEYBIND, label: "Reopen closed tab" },
   { combo: "ContextMenu", label: "Context menu" },
   { combo: "Shift+F10", label: "Windows context menu" },
-  { combo: "F2", label: "Rename" },
+  { combo: "Escape", label: "Cancel" },
   { combo: "Control+r", label: "Refresh" },
   { combo: "F5", label: "Refresh" },
   { combo: "Control+1", label: "Tab 1" },

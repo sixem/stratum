@@ -6,21 +6,22 @@ type PositionedDrag = { position: { x: number; y: number }; canOpenFolderTab?: b
 
 export type NativeFileDrag =
   | (PositionedDrag & { type: "enter" | "over" })
+  | (PositionedDrag & { type: "receiving"; pendingDrop: number })
   | { type: "leave" }
-  | { type: "error"; message: string }
-  | (PositionedDrag & { type: "drop"; paths: string[]; mode: TransferMode; stage: number | null });
+  | { type: "error"; message: string; pendingDrop?: number | null }
+  | (PositionedDrag & { type: "drop"; paths: string[]; mode: TransferMode; stage: number | null; pendingDrop?: number | null });
 
-// Prompts and transfers run in release order. A rejection leaves the queue usable.
+// Conflict prompts run one at a time. The backend schedules the transfers.
 export class FileDropQueue {
   private tail = Promise.resolve();
   private pending = 0;
 
   get busy() { return this.pending > 0; }
 
-  add(run: () => Promise<void>) {
+  add<T>(run: () => T | Promise<T>) {
     this.pending++;
     const result = this.tail.then(run).finally(() => { this.pending--; });
-    this.tail = result.catch(() => {});
+    this.tail = result.then(() => {}, () => {});
     return result;
   }
 }

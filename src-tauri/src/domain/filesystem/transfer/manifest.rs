@@ -2,8 +2,8 @@
 // The executor walks these manifests in order so it can stay predictable and
 // avoid rediscovering path kinds during the hot copy loop.
 use super::common::{
-    check_transfer_control, inspect_path, is_same_directory_copy, unique_destination,
-    TransferEntryKind,
+    check_transfer_control, inspect_path, is_same_directory_copy, transfer_entry_kind,
+    unique_destination, TransferEntryKind,
 };
 use crate::domain::filesystem::TransferControlCallback;
 use std::fs;
@@ -27,6 +27,12 @@ pub(crate) struct TransferManifestRoot {
     pub byte_count: u64,
 }
 
+#[derive(Default)]
+pub(crate) struct TransferManifestWork {
+    pub file_count: usize,
+    pub byte_count: u64,
+}
+
 pub(crate) fn validate_destination(destination: &str) -> Result<PathBuf, String> {
     let target = destination.trim();
     if target.is_empty() {
@@ -37,10 +43,9 @@ pub(crate) fn validate_destination(destination: &str) -> Result<PathBuf, String>
     if !target_path.is_absolute() {
         return Err("Destination must be an absolute path".to_string());
     }
-    if !target_path.exists() {
-        return Err("Destination does not exist".to_string());
-    }
-    if !target_path.is_dir() {
+    let metadata =
+        fs::metadata(&target_path).map_err(|_| "Destination does not exist".to_string())?;
+    if !metadata.is_dir() {
         return Err("Destination is not a folder".to_string());
     }
     Ok(target_path)
@@ -72,104 +77,88 @@ pub(crate) fn build_manifest_root(
     dest: &Path,
     on_control: &mut Option<&mut TransferControlCallback>,
 ) -> Result<TransferManifestRoot, String> {
-    check_transfer_control(on_control)?;
-    let inspection = inspect_path(src)?;
     let mut entries = Vec::new();
-    let mut file_count = 0usize;
-    let mut byte_count = 0u64;
-
-    push_manifest_entry(
+    let (kind, work) = walk_manifest(
         src,
-        dest,
-        inspection.kind,
-        &inspection.metadata,
-        &mut entries,
-        &mut file_count,
-        &mut byte_count,
-    );
-
-    if inspection.kind.is_traversable_directory() {
-        collect_directory_entries(
-            src,
-            dest,
-            &mut entries,
-            &mut file_count,
-            &mut byte_count,
-            on_control,
-        )?;
-    }
+        Some(dest),
+        on_control,
+        |source, destination, kind, bytes_total| {
+            let destination = destination.expect("manifest construction supplies a destination");
+            entries.push(TransferManifestEntry {
+                source: source.to_path_buf(),
+                destination: destination.to_path_buf(),
+                kind,
+                bytes_total,
+            });
+        },
+    )?;
 
     Ok(TransferManifestRoot {
         source: src.to_path_buf(),
         destination: dest.to_path_buf(),
-        kind: inspection.kind,
+        kind,
         entries,
-        file_count,
-        byte_count,
+        file_count: work.file_count,
+        byte_count: work.byte_count,
     })
 }
 
-fn collect_directory_entries(
+pub(crate) fn estimate_manifest_work(
+    source: &Path,
+    on_control: &mut Option<&mut TransferControlCallback>,
+) -> Result<TransferManifestWork, String> {
+    // Planning needs only the totals. Resolve destinations again when executing.
+    walk_manifest(source, None, on_control, |_, _, _, _| {}).map(|(_, work)| work)
+}
+
+fn walk_manifest(
+    source: &Path,
+    destination: Option<&Path>,
+    on_control: &mut Option<&mut TransferControlCallback>,
+    mut visit: impl FnMut(&Path, Option<&Path>, TransferEntryKind, u64),
+) -> Result<(TransferEntryKind, TransferManifestWork), String> {
+    check_transfer_control(on_control)?;
+    let root = inspect_path(source)?;
+    let mut work = TransferManifestWork::default();
+    let mut count_and_visit =
+        |path: &Path, target: Option<&Path>, kind: TransferEntryKind, metadata: &fs::Metadata| {
+            let bytes = kind.byte_count(metadata);
+            if kind.counts_as_file() {
+                work.file_count = work.file_count.saturating_add(1);
+                work.byte_count = work.byte_count.saturating_add(bytes);
+            }
+            visit(path, target, kind, bytes);
+        };
+    count_and_visit(source, destination, root.kind, &root.metadata);
+    if root.kind.is_traversable_directory() {
+        walk_directory_entries(source, destination, &mut count_and_visit, on_control)?;
+    }
+    Ok((root.kind, work))
+}
+
+fn walk_directory_entries(
     src_dir: &Path,
-    dest_dir: &Path,
-    entries: &mut Vec<TransferManifestEntry>,
-    file_count: &mut usize,
-    byte_count: &mut u64,
+    dest_dir: Option<&Path>,
+    visit: &mut impl FnMut(&Path, Option<&Path>, TransferEntryKind, &fs::Metadata),
     on_control: &mut Option<&mut TransferControlCallback>,
 ) -> Result<(), String> {
     for entry in fs::read_dir(src_dir).map_err(|err| err.to_string())? {
         check_transfer_control(on_control)?;
         let entry = entry.map_err(|err| err.to_string())?;
         let child_src = entry.path();
-        let child_dest = dest_dir.join(entry.file_name());
-        let inspection = inspect_path(&child_src)?;
+        let child_dest = dest_dir.map(|dir| dir.join(entry.file_name()));
+        // Windows already supplies attributes and size during enumeration.
+        let metadata = entry.metadata().map_err(|err| err.to_string())?;
+        let kind = transfer_entry_kind(&child_src, &metadata);
 
-        push_manifest_entry(
-            &child_src,
-            &child_dest,
-            inspection.kind,
-            &inspection.metadata,
-            entries,
-            file_count,
-            byte_count,
-        );
+        visit(&child_src, child_dest.as_deref(), kind, &metadata);
 
-        if inspection.kind.is_traversable_directory() {
-            collect_directory_entries(
-                &child_src,
-                &child_dest,
-                entries,
-                file_count,
-                byte_count,
-                on_control,
-            )?;
+        if kind.is_traversable_directory() {
+            walk_directory_entries(&child_src, child_dest.as_deref(), visit, on_control)?;
         }
     }
 
     Ok(())
-}
-
-fn push_manifest_entry(
-    src: &Path,
-    dest: &Path,
-    kind: TransferEntryKind,
-    metadata: &fs::Metadata,
-    entries: &mut Vec<TransferManifestEntry>,
-    file_count: &mut usize,
-    byte_count: &mut u64,
-) {
-    let bytes_total = kind.byte_count(metadata);
-    if kind.counts_as_file() {
-        *file_count = file_count.saturating_add(1);
-        *byte_count = byte_count.saturating_add(bytes_total);
-    }
-
-    entries.push(TransferManifestEntry {
-        source: src.to_path_buf(),
-        destination: dest.to_path_buf(),
-        kind,
-        bytes_total,
-    });
 }
 
 #[cfg(test)]
@@ -266,15 +255,51 @@ mod tests {
         let mut on_control: Option<&mut TransferControlCallback> = None;
         let manifest = build_manifest_root(&source_root, &destination_root, &mut on_control)
             .expect("manifest should build");
+        let estimated = estimate_manifest_work(&source_root, &mut on_control)
+            .expect("work estimate should scan the same entries");
 
         assert_eq!(manifest.kind, TransferEntryKind::Directory);
         assert_eq!(manifest.file_count, 2);
         assert_eq!(manifest.byte_count, 8);
+        assert_eq!(estimated.file_count, manifest.file_count);
+        assert_eq!(estimated.byte_count, manifest.byte_count);
         assert_eq!(manifest.entries.len(), 4);
         assert_eq!(manifest.entries[0].destination, destination_root);
         assert!(manifest
             .entries
             .iter()
-            .any(|entry| entry.destination.ends_with(Path::new("nested\\beta.txt"))));
+            .any(|entry| entry.destination == destination_root.join("nested").join("beta.txt")));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn directory_enumeration_keeps_junctions_as_leaf_entries() {
+        let temp = TestDir::new();
+        let source = temp.path().join("source");
+        let external = temp.path().join("external");
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&external).unwrap();
+        fs::write(source.join("file.txt"), b"abc").unwrap();
+        fs::write(external.join("outside.txt"), b"outside").unwrap();
+        let status = std::process::Command::new("cmd.exe")
+            .current_dir(temp.path())
+            .args(["/d", "/c", "mklink", "/j", r"source\alias", "external"])
+            .output()
+            .unwrap();
+        assert!(status.status.success(), "{status:?}");
+
+        let manifest = build_manifest_root(&source, &temp.path().join("dest"), &mut None).unwrap();
+        let estimate = estimate_manifest_work(&source, &mut None).unwrap();
+        let junction = manifest
+            .entries
+            .iter()
+            .find(|entry| entry.source == source.join("alias"))
+            .unwrap();
+
+        assert_eq!(junction.kind, inspect_path(&junction.source).unwrap().kind);
+        assert_eq!(junction.bytes_total, 0);
+        assert_eq!(manifest.entries.len(), 3);
+        assert_eq!((manifest.file_count, manifest.byte_count), (2, 3));
+        assert_eq!((estimate.file_count, estimate.byte_count), (2, 3));
     }
 }

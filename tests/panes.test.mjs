@@ -27,6 +27,12 @@ test("a drop uses the tab, directory or pane under the pointer", t => {
   assert.equal(hit(), null);
   ancestors.set('[data-drop-kind="tab"][data-drop-path]', tab);
   assert.deepEqual(hit(), { kind: "tab", path: tab.dataset.dropPath, tabId: "inactive" });
+  const submenu = { dataset: { dropSubmenuTabId: "inactive" } };
+  ancestors.set("[data-drop-submenu-tab-id]", submenu);
+  assert.deepEqual(hit(), { kind: "tab-submenu", tabId: "inactive" });
+  const subfolder = { dataset: { dropPath: "E:\\Other\\Child", dropTabId: "inactive" } };
+  ancestors.set('[data-drop-kind="tab-destination"][data-drop-path]', subfolder);
+  assert.deepEqual(hit(), { kind: "tab-destination", path: subfolder.dataset.dropPath, tabId: "inactive" });
 });
 
 test("file dates use a 00–23 clock at midnight and in the afternoon", () => {

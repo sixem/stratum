@@ -2,6 +2,8 @@
 // The frontend consumes these snapshots to render queue state consistently.
 use serde::Serialize;
 
+use super::destination::TransferDestination;
+
 #[derive(Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TransferJobStatus {
@@ -63,14 +65,16 @@ pub struct TransferJobSnapshot {
     pub capabilities: TransferJobCapabilities,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination: Option<TransferDestination>,
     pub work: TransferWorkEstimate,
 }
 
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransferQueueSnapshot {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub active_job: Option<TransferJobSnapshot>,
+    pub revision: u64,
+    pub active_jobs: Vec<TransferJobSnapshot>,
     pub queued_jobs: Vec<TransferJobSnapshot>,
     pub completed_jobs: Vec<TransferJobSnapshot>,
 }

@@ -1,5 +1,6 @@
 // Tauri-backed filesystem API calls.
 import { invoke } from "@tauri-apps/api/core";
+import type { CreatedFolder } from "@/types/fs";
 import type {
   CopyOptions,
   CopyPlan,
@@ -29,6 +30,12 @@ export const getDrives = () => invoke<string[]>("list_drives");
 export const ensureDir = (path: string) => invoke<void>("ensure_dir", { path });
 
 export const createFolder = (path: string) => invoke<void>("create_folder", { path });
+
+export const createTrackedFolder = (parent: string, name: string) =>
+  invoke<CreatedFolder>("create_tracked_folder", { parent, name });
+
+export const removeCreatedFolderIfEmpty = (folder: CreatedFolder) =>
+  invoke<boolean>("remove_created_folder_if_empty", { folder });
 
 export const createFile = (path: string) => invoke<void>("create_file", { path });
 
@@ -67,7 +74,13 @@ export const planCopyEntries = (paths: string[], destination: string) =>
 export const transferEntries = (
   paths: string[],
   destination: string,
-  options?: { mode?: TransferMode; overwrite?: boolean; overwritePaths?: string[] },
+  options?: {
+    mode?: TransferMode;
+    overwrite?: boolean;
+    overwritePaths?: string[];
+    protectedFolder?: CreatedFolder;
+    expectedSources?: Record<string, string>;
+  },
   transferId?: string,
   dropStage?: number,
 ) =>
@@ -100,8 +113,10 @@ export const trashEntries = (paths: string[], transferId?: string) =>
 export const restoreRecycleItems = (receiptId: string) =>
   invoke<RestoreRecycleReport>("restore_recycle_items", { receiptId });
 
-export const renameEntry = (path: string, newName: string) =>
-  invoke<string>("rename_entry", { path, newName });
+export const renameEntry = (path: string, newName: string, expectedIdentity?: string) =>
+  invoke<{ path: string; identity: string | null }>("rename_entry", {
+    path, newName, expectedIdentity,
+  });
 
 export const validateBatchRename = (requests: { path: string; nextName: string }[]) =>
   invoke<(string | null)[]>("validate_batch_rename", { requests });
@@ -113,8 +128,8 @@ const nextWatchGeneration = () => {
   return watchGeneration;
 };
 
-export const startDirWatch = (path: string, pane: "main" | "bottom" = "main") =>
-  invoke<void>("start_dir_watch", { path, pane, generation: nextWatchGeneration() });
+export const startDirWatch = (path: string, pane: "main" | "bottom" = "main", restart?: boolean) =>
+  invoke<void>("start_dir_watch", { path, pane, generation: nextWatchGeneration(), restart });
 
 export const stopDirWatch = (pane: "main" | "bottom" = "main") =>
   invoke<void>("stop_dir_watch", { pane, generation: nextWatchGeneration() });

@@ -5,10 +5,11 @@ use super::shell_items::read_shell_item_path;
 use crate::domain::filesystem::fs_recycle_windows::{
     recycle_source_identity, FileIdentity, MAX_RECYCLED_ITEMS,
 };
-use crate::domain::filesystem::transfer::common::path_is_same_or_within;
+use crate::domain::filesystem::transfer::common::{normalize_path_key, path_is_same_or_within};
 use crate::domain::filesystem::transfer::delete_discovery::DeleteDiscoveryRoot;
 use crate::domain::filesystem::{
-    TransferControlCallback, TransferProgressCallback, TransferProgressUpdate,
+    CompletedTransferItem, TransferControlCallback, TransferProgressCallback,
+    TransferProgressUpdate,
 };
 use std::collections::HashMap;
 use std::path::Path;
@@ -27,6 +28,7 @@ pub(super) struct DeleteOperationState {
     pub on_progress: Option<*mut TransferProgressCallback>,
     pub on_control: Option<*mut TransferControlCallback>,
     pub roots: Vec<DeleteDiscoveryRoot>,
+    pub pending_roots: HashMap<String, String>,
     pub root_failures: HashMap<String, String>,
     pub recycle_source_ids: Option<HashMap<String, FileIdentity>>,
     pub recycled_items: Vec<RecycledItem>,
@@ -40,7 +42,11 @@ pub(super) struct RecycledItem {
 }
 
 impl DeleteOperationState {
-    fn emit_progress(&mut self, current_path: Option<String>) {
+    fn emit_progress(
+        &mut self,
+        current_path: Option<String>,
+        completed_item: Option<CompletedTransferItem>,
+    ) {
         let Some(handler) = self.on_progress else {
             return;
         };
@@ -49,11 +55,8 @@ impl DeleteOperationState {
                 processed: self.processed_items.min(self.total_items),
                 total: self.total_items,
                 current_path,
-                current_bytes: None,
-                current_total_bytes: None,
-                progress_percent: None,
-                status_text: None,
-                rate_text: None,
+                completed_item,
+                ..Default::default()
             });
         }
     }
@@ -71,9 +74,23 @@ impl DeleteOperationState {
         }
     }
 
-    fn mark_processed(&mut self, current_path: Option<String>) {
+    pub(super) fn mark_processed(&mut self, current_path: Option<String>, succeeded: bool) {
         self.processed_items = self.processed_items.saturating_add(1).min(self.total_items);
-        self.emit_progress(current_path);
+        // The Shell may report descendant items as well as the selected root.
+        // Release the selected path once, and confirm it actually disappeared.
+        let completed_item = current_path
+            .as_ref()
+            .and_then(|path| {
+                self.pending_roots
+                    .remove(&normalize_path_key(Path::new(path)))
+            })
+            .map(|path| CompletedTransferItem {
+                source_removed: succeeded
+                    && std::fs::symlink_metadata(&path)
+                        .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound),
+                path,
+            });
+        self.emit_progress(current_path, completed_item);
     }
 
     fn root_for_path(&self, path: &str) -> Option<String> {
@@ -210,7 +227,7 @@ impl IFileOperationProgressSink_Impl for ShellDeleteProgressSink_Impl {
             }
         }
         state.current_path = path.clone();
-        state.emit_progress(path);
+        state.emit_progress(path, None);
         Ok(())
     }
 
@@ -243,7 +260,7 @@ impl IFileOperationProgressSink_Impl for ShellDeleteProgressSink_Impl {
                 });
             }
         }
-        state.mark_processed(path);
+        state.mark_processed(path, hrdelete.is_ok());
         Ok(())
     }
 

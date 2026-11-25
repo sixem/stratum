@@ -4,9 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
-    domain::indexed_search::IndexedEntryKind, platform::windows::file_names::plain_component,
-};
+use crate::platform::windows::file_names::plain_component;
 
 use super::{
     catalog::{
@@ -138,12 +136,7 @@ fn scan_directory(
         let Ok(metadata) = entry.metadata() else {
             continue;
         };
-        let kind = if metadata.is_dir() {
-            IndexedEntryKind::Directory
-        } else {
-            IndexedEntryKind::File
-        };
-        let Some(record) = CatalogEntryRecord::from_path(&path, kind) else {
+        let Some(record) = CatalogEntryRecord::from_metadata(&path, &metadata) else {
             continue;
         };
         records.push(record);
@@ -299,13 +292,9 @@ mod tests {
         // Refreshes of a published index use the other baseline scanner.
         // It should replace the saved rows and still skip the junction target.
         fs::write(source.join("fresh-root.txt"), "").unwrap();
-        let refreshed = super::super::scan::scan_drive_into_catalog(
-            &store,
-            &capture,
-            &|| false,
-            &|| Ok(()),
-        )
-        .unwrap();
+        let refreshed =
+            super::super::scan::scan_drive_into_catalog(&store, &capture, &|| false, &|| Ok(()))
+                .unwrap();
         assert_eq!(refreshed.entries_indexed, 4);
         assert_eq!(search("fresh-root").len(), 1);
         assert!(search("durable-root").is_empty());

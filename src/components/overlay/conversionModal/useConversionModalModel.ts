@@ -3,12 +3,14 @@
 // helpers beside it.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  ConversionItemDraft,
   ConversionMediaKind,
   ConversionModalDraft,
   ConversionModalRequest,
   ConversionOutputMode,
   ConversionRunState,
 } from "@/types";
+import { buildValidationMessage, sortConversionOverrideItems } from "./conversionModalConfig";
 import { buildConversionModalDerivedState } from "./conversionModalDerivedState";
 import {
   setConversionImageQuality,
@@ -23,6 +25,8 @@ import {
   toggleConversionVideoAudio,
 } from "./conversionModalDraftMutators";
 import { useBufferedRangeValue } from "./useBufferedRangeValue";
+
+const EMPTY_OVERRIDE_ITEMS: ConversionItemDraft[] = [];
 
 type UseConversionModalModelParams = {
   open: boolean;
@@ -44,7 +48,6 @@ export const useConversionModalModel = ({
   onClose,
 }: UseConversionModalModelParams) => {
   const draftRef = useRef<ConversionModalDraft | null>(draft);
-  const overrideItemRefs = useRef(new Map<string, HTMLDivElement>());
   const [expandedOverridePath, setExpandedOverridePath] = useState<string | null>(null);
 
   useEffect(() => {
@@ -95,6 +98,19 @@ export const useConversionModalModel = ({
   );
 
   const imageQualityValue = imageQualityControl.value;
+  const draftItems = draft?.items ?? EMPTY_OVERRIDE_ITEMS;
+  const { sortedOverrideItems, imageCount, videoCount } = useMemo(() => {
+    const videoCount = draftItems.filter((item) => item.kind === "video").length;
+    return {
+      sortedOverrideItems: sortConversionOverrideItems(draftItems),
+      imageCount: draftItems.length - videoCount,
+      videoCount,
+    };
+  }, [draftItems]);
+  const validationMessage = useMemo(
+    () => request && draft ? buildValidationMessage(request, draft) : null,
+    [draft, request],
+  );
   const derivedState = useMemo(
     () =>
       buildConversionModalDerivedState({
@@ -103,37 +119,15 @@ export const useConversionModalModel = ({
         runState,
         imageQualityValue,
         videoQualityInputValue: videoQualityControl.value,
+        validationMessage,
       }),
-    [draft, imageQualityValue, request, runState, videoQualityControl.value],
+    [draft, imageQualityValue, request, runState, validationMessage, videoQualityControl.value],
   );
-  const requestKey = request?.paths.join("|") ?? "";
-  const itemPathsKey = derivedState.sortedOverrideItems.map((item) => item.path).join("|");
 
   useEffect(() => {
-    if (!open || !draft) return;
-
-    setExpandedOverridePath((current) => {
-      if (
-        current &&
-        derivedState.sortedOverrideItems.some((item) => item.path === current)
-      ) {
-        return current;
-      }
-      return null;
-    });
-  }, [derivedState.sortedOverrideItems, draft, itemPathsKey, open, requestKey]);
-
-  useEffect(() => {
-    if (!open || !expandedOverridePath) return;
-
-    const frame = window.requestAnimationFrame(() => {
-      overrideItemRefs.current
-        .get(expandedOverridePath)
-        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [expandedOverridePath, open]);
+    if (!open) return;
+    setExpandedOverridePath((current) => current && sortedOverrideItems.some((item) => item.path === current) ? current : null);
+  }, [open, sortedOverrideItems]);
 
   const setOutputMode = useCallback(
     (outputMode: ConversionOutputMode) => {
@@ -220,11 +214,10 @@ export const useConversionModalModel = ({
     hasImageItems: derivedState.hasImageItems,
     hasQuickPrefill: derivedState.hasQuickPrefill,
     hasVideoItems: derivedState.hasVideoItems,
-    imageCount: derivedState.imageCount,
+    imageCount,
     imageQualityControl,
     imageQualityLabel: derivedState.imageQualityLabel,
     imageQualityValue,
-    overrideItemRefs,
     primaryActionDisabled: derivedState.primaryActionDisabled,
     primaryActionLabel: derivedState.primaryActionLabel,
     progressTone: derivedState.progressTone,
@@ -241,11 +234,11 @@ export const useConversionModalModel = ({
     setVideoEncoder,
     setVideoPreset,
     setVideoSpeed,
-    sortedOverrideItems: derivedState.sortedOverrideItems,
+    sortedOverrideItems,
     toggleVideoAudio,
     totalItems: derivedState.totalItems,
     validationMessage: derivedState.validationMessage,
-    videoCount: derivedState.videoCount,
+    videoCount,
     videoEncoderGroups: derivedState.videoEncoderGroups,
     videoQualityControl,
     videoQualityHint: derivedState.videoQualityHint,

@@ -10,24 +10,24 @@ import { useFileViewModel } from "@/hooks/ui/view/useFileViewModel";
 import { folderPathKey, makeDebug } from "@/lib";
 import { usePromptStore, useSettingsStore } from "@/modules";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
-import { useBottomSessionStore } from "@/modules/sessionStore";
+import { useBottomSessionStore, useSessionStore } from "@/modules/sessionStore";
 
 const log = makeDebug("bottom-pane");
 const getRestoreRevision = () => useBottomSessionStore.getState().restoreRevision;
 const reportError = (title: string, content: string) =>
   usePromptStore.getState().showPrompt({ title, content, confirmLabel: "OK", cancelLabel: null });
 
-export function useBottomFolder(upperPath: string) {
+export function useBottomFolder() {
   const loadIdRef = useRef(0);
   const meta = useEntryMetaCache({ loadIdRef, perf: log });
   const dir = useDirectoryLoader({
-    pane: "bottom", loadIdRef, primeEntryMeta: meta.primeEntryMeta, reportError, getRestoreRevision, perf: log, log,
+    pane: "bottom", loadIdRef, primeEntryMeta: meta.primeEntryMeta, setMetaListingPending: meta.setMetaListingPending,
+    reportError, getRestoreRevision, perf: log, log,
   });
-  const defaultViewMode = useBottomPaneStore(state => state.defaultViewMode);
   const keepFilterOnNavigation = useSettingsStore(state => state.keepFilterOnNavigation);
   const tabs = useTabSession({
     useStore: useBottomSessionStore, currentPath: dir.currentPath, loadingPath: dir.loadingPath,
-    loadDir: dir.loadDir, clearDir: dir.clearDir, defaultViewMode, newTabViewMode: defaultViewMode, recentJumpsLimit: 12,
+    loadDir: dir.loadDir, clearDir: dir.clearDir,
     keepFilterOnNavigation,
   });
   const navigation = useBottomPaneStore(state => state.navigation);
@@ -40,10 +40,13 @@ export function useBottomFolder(upperPath: string) {
   }, [navigation, tabs.openInNewTab, tabs.jumpTo]);
 
   const path = dir.currentPath;
+  const watchPath = tabs.activeTab?.path ?? "";
+  const upperWatchPath = useSessionStore(({ activeTabId, tabs }) => tabs.find(({ id }) => id === activeTabId)?.path ?? "");
+  const sharesWatch = Boolean(watchPath && folderPathKey(upperWatchPath) === folderPathKey(watchPath));
   const busy = dir.loadingPath !== null;
   const deferredSearchValue = useDeferredValue(tabs.searchValue);
   useDirectoryFilter({
-    activeTabPath: tabs.activeTab?.path ?? "",
+    activeTabPath: watchPath,
     currentPath: path,
     activeSearch: tabs.searchValue,
     deferredSearchValue,
@@ -51,15 +54,16 @@ export function useBottomFolder(upperPath: string) {
     loading: busy,
     loadDir: dir.loadDir,
   });
+  const showParentEntry = useSettingsStore(state => state.showParentEntry);
+  const showParent = showParentEntry && !tabs.displaySearch.trim() && dir.entries.length > 0;
+  const model = useFileViewModel(dir.entries, showParent ? dir.parentPath : null);
   useDirWatch({
-    pane: "bottom", enabled: "__TAURI_INTERNALS__" in window, sharesWatch: !!path && folderPathKey(upperPath) === folderPathKey(path),
-    activeTabId: tabs.activeTabId, activeTabPath: tabs.activeTab?.path ?? "", currentPath: path, tabs: tabs.tabs,
+    pane: "bottom", enabled: "__TAURI_INTERNALS__" in window, sharesWatch,
+    activeTabId: tabs.activeTabId, activeTabPath: watchPath, currentPath: path, tabs: tabs.tabs,
     sortState: tabs.sortState, searchQuery: tabs.searchValue, loadDir: dir.loadDir,
+    entryByPath: model.entryByPath,
     requestEntryMeta: meta.requestEntryMeta, loading: busy,
   });
-  const showParentEntry = useSettingsStore(state => state.showParentEntry);
-  const showParent = showParentEntry && !tabs.searchValue.trim() && dir.entries.length > 0;
-  const model = useFileViewModel(dir.entries, showParent ? dir.parentPath : null);
   const viewKey = JSON.stringify([tabs.activeTabId, path]);
   const selection = useFileViewSelection({ viewModel: model, resetKey: viewKey });
   return { dir, meta, tabs, model, selection, viewKey, busy, navigation };

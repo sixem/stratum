@@ -1,0 +1,101 @@
+.terminal-split-layout { display: contents; }
+
+.terminal-split-layout[data-paired] {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  grid-template: "folder divider terminal" minmax(0, 1fr) /
+    minmax(0, var(--split-first)) 6px minmax(0, var(--split-second));
+
+  &[data-terminal-first="true"] {
+    grid-template-areas: "terminal divider folder";
+  }
+
+  &[data-stacked="true"] {
+    grid-template:
+      "folder" minmax(0, var(--split-first))
+      "divider" 6px
+      "terminal" minmax(0, var(--split-second)) / minmax(0, 1fr);
+
+    &[data-terminal-first="true"] {
+      grid-template-areas: "terminal" "divider" "folder";
+    }
+  }
+
+  > .main { grid-area: folder; }
+}
+
+.terminal-split-side {
+  grid-area: terminal;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--main-padding);
+
+  .terminal-directory-bar {
+    padding-inline: 8px;
+    border-radius: var(--panel-radius) var(--panel-radius) 0 0;
+  }
+
+  .powershell-surface {
+    border-start-start-radius: 0;
+    border-start-end-radius: 0;
+  }
+}
+
+.terminal-split-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+
+  .view-btn {
+    width: 22px;
+    height: 22px;
+  }
+
+  .view-btn svg { fill: none; }
+
+  &[data-stacked="true"] .lucide-arrow-left-right {
+    transform: rotate(90deg);
+  }
+}
+
+.terminal-split-divider {
+  grid-area: divider;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: stretch center;
+  cursor: col-resize;
+  touch-action: none;
+
+  &::before {
+    content: "";
+    width: var(--surface-border-width);
+    background: var(--stroke);
+    transform: translateX(var(--split-offset, 0));
+  }
+
+  &[aria-orientation="horizontal"] {
+    place-items: center stretch;
+    cursor: row-resize;
+
+    &::before {
+      width: auto;
+      height: var(--surface-border-width);
+      transform: translateY(var(--split-offset, 0));
+    }
+  }
+
+  &:is(:hover, :focus-visible, [data-resizing])::before { background: var(--accent); }
+}
+
+.tabs .tab[data-split-target] {
+  outline: 1px dashed var(--accent);
+  outline-offset: -2px;
+  cursor: pointer;
+  &:is(:hover, :focus-within) { outline-style: solid; background: rgba(var(--accent-rgb), 0.15); }
+}

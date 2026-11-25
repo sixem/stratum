@@ -36,7 +36,7 @@ const isNativeRecycleDeleteEnvironment = () => {
 };
 
 const normalizeDeletePaths = (paths: string[]) =>
-  Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
+  Array.from(new Set(paths.filter((path) => path.trim().length > 0)));
 
 export const useFileManagerDelete = ({
   deleteInFlightRef,
@@ -51,7 +51,7 @@ export const useFileManagerDelete = ({
   // Track overlapping delete requests without blocking the backend queue from
   // showing later jobs immediately in the shared operations log.
   const activeDeleteRequestCountRef = useRef(0);
-  const registerTransferJob = useTransferStore((state) => state.registerJob);
+  const registerTransferJob = useTransferStore((state) => state.registerFileJob);
   const recordTransferJobOutcome = useTransferStore((state) => state.recordJobOutcome);
 
   const driveKeyToRoot = useCallback((driveKey: string) => {
@@ -112,7 +112,7 @@ export const useFileManagerDelete = ({
 
   const registerManagedDeleteJob = useCallback(
     (label: string, items: string[]) => {
-      const job = registerTransferJob({ label, items });
+      const job = registerTransferJob({ label, items, kind: "delete" });
       const recordOutcome = (patch: {
         moved?: number;
         skipped?: number;
@@ -120,7 +120,7 @@ export const useFileManagerDelete = ({
       }) => {
         recordTransferJobOutcome(job.id, patch);
       };
-      return { jobId: job.id, recordOutcome };
+      return { jobId: job.id, finish: job.finish, recordOutcome };
     },
     [recordTransferJobOutcome, registerTransferJob],
   );
@@ -140,6 +140,8 @@ export const useFileManagerDelete = ({
           managedJob.recordOutcome({ failures: 1 });
         }
         throw error;
+      } finally {
+        managedJob.finish();
       }
     },
     [registerManagedDeleteJob],
@@ -160,6 +162,8 @@ export const useFileManagerDelete = ({
           managedJob.recordOutcome({ failures: 1 });
         }
         throw error;
+      } finally {
+        managedJob.finish();
       }
     },
     [registerManagedDeleteJob],
@@ -189,6 +193,8 @@ export const useFileManagerDelete = ({
           managedJob.recordOutcome({ failures: 1 });
         }
         throw error;
+      } finally {
+        managedJob.finish();
       }
     },
     [registerManagedDeleteJob],

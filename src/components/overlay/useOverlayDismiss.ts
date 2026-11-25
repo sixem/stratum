@@ -11,7 +11,7 @@ type UseOverlayDismissOptions = {
   onEscape?: (event: KeyboardEvent) => void;
   onPointerDown?: () => void;
   onPointerDownOutside?: () => void;
-  onScroll?: () => void;
+  onScroll?: (event: Event) => void;
   onResize?: () => void;
   keydownCapture?: boolean;
   pointerDownCapture?: boolean;

@@ -3,7 +3,7 @@ import type { CSSProperties, RefObject } from "react";
 import { useEffect, useMemo, useRef } from "react";
 import { useScrollRestore, useWheelSnap } from "@/hooks";
 import { makeDebug } from "@/lib";
-import { GRID_AUTO_COLUMNS_MAX, GRID_AUTO_COLUMNS_MIN } from "@/modules";
+import { clampAutoColumns } from "@/modules/tabGridSize";
 import type { GridSize, ThumbnailFit } from "@/modules";
 import { VIEW_INSET } from "../fileView/constants";
 import { getFileViewLayoutMetrics } from "../fileViewLayoutMetrics";
@@ -61,11 +61,6 @@ const getGridMetaHeight = (
   );
 };
 
-// Keep auto grid columns within the supported range for readability.
-const clampAutoColumns = (value: number) => {
-  return Math.min(GRID_AUTO_COLUMNS_MAX, Math.max(GRID_AUTO_COLUMNS_MIN, Math.round(value)));
-};
-
 // Compute a preset that fits a fixed column count into the available width.
 const buildAutoPreset = (
   base: GridPreset,
@@ -113,6 +108,7 @@ type UseGridSizingOptions = {
   gridShowExtension: boolean;
   thumbnailFit: ThumbnailFit;
   resizeDeferred?: boolean;
+  layoutKey?: string;
   viewKey: string;
   scrollRestoreKey: string;
   scrollRestoreTop: number;
@@ -129,6 +125,7 @@ export type GridSizingState = {
   gridVars: CSSProperties;
   gridStyle: CSSProperties;
   viewportHeight: number;
+  layoutReady: boolean;
   columnCount: number;
   columnWidth: number;
   columnGap: number;
@@ -147,6 +144,7 @@ export const useGridSizing = ({
   gridShowExtension,
   thumbnailFit,
   resizeDeferred,
+  layoutKey,
   viewKey,
   scrollRestoreKey,
   scrollRestoreTop,
@@ -169,6 +167,7 @@ export const useGridSizing = ({
     gridSize,
     autoViewportWidth,
     resizeDeferred,
+    layoutKey,
     viewKey,
     onAutoViewportWidthChange,
   });
@@ -232,7 +231,7 @@ export const useGridSizing = ({
   const rowHeight = gridSizing.rowHeight + gridSizing.gap;
   // The last virtual row already includes the grid gap as its bottom padding.
   const contentHeight = rowCount * rowHeight + VIEW_INSET;
-  const layoutReady = viewportWidth > 0;
+  const layoutReady = viewportWidth > 0 && layoutViewportWidth > 0;
 
   useEffect(() => {
     if (!perf.enabled) return;
@@ -308,6 +307,7 @@ export const useGridSizing = ({
     gridVars,
     gridStyle,
     viewportHeight,
+    layoutReady,
     columnCount,
     columnWidth: gridSizing.column,
     columnGap,

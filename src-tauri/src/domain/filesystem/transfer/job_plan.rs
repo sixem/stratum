@@ -1,17 +1,15 @@
 // Backend planning for managed transfer jobs.
-// The queue uses these manifests to compute stable work estimates before
+// The queue scans manifests for stable work estimates before
 // execution starts, without following Windows reparse points by accident.
 use super::common::check_transfer_control;
 use super::delete_discovery::{
     discover_delete_plan, DeleteDiscoveryPlan, DeleteDiscoveryProgressCallback,
 };
-use super::manifest::{
-    build_copy_destination, build_manifest_root, requested_roots, validate_destination,
-};
+use super::manifest::{estimate_manifest_work, requested_roots, validate_destination};
 use super::strategy::classify_transfer_root;
 use super::types::TransferWorkEstimate;
 use crate::domain::filesystem::{CopyOptions, TransferControlCallback, TransferOptions};
-use std::path::PathBuf;
+use std::path::Path;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TransferProgressKind {
@@ -47,7 +45,7 @@ pub(crate) fn plan_copy_job(
     _options: Option<&CopyOptions>,
     mut on_control: Option<&mut TransferControlCallback>,
 ) -> Result<PlannedTransferJob, String> {
-    let target_path = validate_destination(destination)?;
+    validate_destination(destination)?;
     let roots_total = requested_roots(paths);
     let mut files_total = 0usize;
     let mut bytes_total = 0u64;
@@ -59,14 +57,13 @@ pub(crate) fn plan_copy_job(
             continue;
         }
 
-        let source = PathBuf::from(trimmed);
-        let destination = match build_copy_destination(&source, &target_path) {
-            Some(destination) => destination,
-            None => continue,
-        };
-        let manifest = build_manifest_root(&source, &destination, &mut on_control)?;
-        files_total = files_total.saturating_add(manifest.file_count);
-        bytes_total = bytes_total.saturating_add(manifest.byte_count);
+        let source = Path::new(trimmed);
+        if source.file_name().is_none() {
+            continue;
+        }
+        let work = estimate_manifest_work(source, &mut on_control)?;
+        files_total = files_total.saturating_add(work.file_count);
+        bytes_total = bytes_total.saturating_add(work.byte_count);
     }
 
     Ok(PlannedTransferJob {
@@ -90,6 +87,11 @@ pub(crate) fn plan_transfer_job(
     mut on_control: Option<&mut TransferControlCallback>,
 ) -> Result<PlannedTransferJob, String> {
     let target_path = validate_destination(destination)?;
+    // Undo validates each item just before the move. An item that went away
+    // must fail its own receipt without blocking the rest of the batch.
+    if options.is_some_and(|options| options.expected_sources.is_some()) {
+        return Ok(plan_root_only_job(paths));
+    }
     let roots_total = requested_roots(paths);
     let mut files_total = 0usize;
     let mut bytes_total = 0u64;
@@ -106,11 +108,10 @@ pub(crate) fn plan_transfer_job(
             continue;
         }
 
-        let manifest =
-            build_manifest_root(&strategy.source, &strategy.destination, &mut on_control)?;
+        let work = estimate_manifest_work(&strategy.source, &mut on_control)?;
         used_manifest_fallback = true;
-        files_total = files_total.saturating_add(manifest.file_count);
-        bytes_total = bytes_total.saturating_add(manifest.byte_count);
+        files_total = files_total.saturating_add(work.file_count);
+        bytes_total = bytes_total.saturating_add(work.byte_count);
     }
 
     let progress_kind = if used_manifest_fallback {

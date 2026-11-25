@@ -2,6 +2,7 @@
 // Keeps formatting and per-job calculations in one place for readability.
 import { formatBytes, getPathName } from "@/lib";
 import type { TransferJob, TransferStatus } from "@/modules/transferStore";
+import { isActiveStatus } from "@/modules/transferStore/shared";
 
 export type TransferSummary = {
   activeCount: number;
@@ -35,13 +36,21 @@ const getTransferJobRecentAt = (job: TransferJob) => {
   return job.activityAt ?? job.finishedAt ?? job.startedAt;
 };
 
-export const sortTransferJobsByRecent = (jobs: TransferJob[]) => {
-  return [...jobs].sort((left, right) => {
-    const recentDelta = getTransferJobRecentAt(right) - getTransferJobRecentAt(left);
-    if (recentDelta !== 0) return recentDelta;
-    return right.startedAt - left.startedAt;
-  });
+const compareTransferJobsByRecent = (left: TransferJob, right: TransferJob): number => {
+  const recentDelta = getTransferJobRecentAt(right) - getTransferJobRecentAt(left);
+  if (recentDelta !== 0) return recentDelta;
+  return right.startedAt - left.startedAt;
 };
+
+export const sortWorkListJobs = (jobs: readonly TransferJob[]): TransferJob[] =>
+  [...jobs].sort((left, right) => {
+    const leftActive = isActiveStatus(left.status);
+    const rightActive = isActiveStatus(right.status);
+    if (leftActive !== rightActive) return leftActive ? -1 : 1;
+    if (!leftActive) return compareTransferJobsByRecent(left, right);
+    // Progress and queued-to-running transitions can change the other timestamps.
+    return left.addedAt - right.addedAt || left.id.localeCompare(right.id);
+  });
 
 const formatDuration = (elapsedMs: number) => {
   if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return "0s";
@@ -103,23 +112,32 @@ const buildRecentThroughputLabel = (job: TransferJob, now: number) => {
 };
 
 export const buildTransferSummary = (jobs: TransferJob[]): TransferSummary => {
-  const recentJobs = sortTransferJobsByRecent(jobs);
-  const active = jobs.filter(
-    (job) => job.status === "running" || job.status === "paused",
-  );
-  const queued = jobs.filter((job) => job.status === "queued");
-  const finished = jobs.filter(
-    (job) =>
-      job.status === "completed" ||
-      job.status === "failed" ||
-      job.status === "cancelled",
-  );
-  const activeCount = active.length;
-  const queuedCount = queued.length;
-  const finishedCount = finished.length;
+  let activeCount = 0;
+  let queuedCount = 0;
+  let finishedCount = 0;
+  let latestJob: TransferJob | null = null;
+  // The pill needs the leading job and counts. Only the visible log needs the full ordering.
+  for (const job of jobs) {
+    switch (job.status) {
+      case "running":
+      case "paused":
+        activeCount += 1;
+        break;
+      case "queued":
+        queuedCount += 1;
+        break;
+      case "completed":
+      case "failed":
+      case "cancelled":
+        finishedCount += 1;
+        break;
+    }
+    if (!latestJob || compareTransferJobsByRecent(job, latestJob) < 0) {
+      latestJob = job;
+    }
+  }
   const hasActive = activeCount > 0 || queuedCount > 0;
   const hasFinished = finishedCount > 0;
-  const latestJob = recentJobs[0] ?? null;
   const countLabel = hasActive
     ? activeCount > 0 && queuedCount > 0
       ? `${activeCount} active, ${queuedCount} queued`
@@ -156,7 +174,7 @@ export const buildTransferItemView = (
   const total = job.total || 0;
   const processed = job.processed || 0;
   const isQueued = job.status === "queued";
-  const isPlanning = job.phase === "planning" && job.status !== "completed";
+  const isPlanning = job.phase === "planning" && job.status === "running";
   const isReadyToExecute = isQueued && job.phase === "ready";
   const hasByteProgress =
     !isQueued &&
@@ -198,11 +216,7 @@ export const buildTransferItemView = (
   const recentRate = buildRecentThroughputLabel(job, now);
   const statusLabel =
     job.status === "queued"
-      ? isReadyToExecute
-        ? "Ready to start"
-        : isPlanning
-          ? job.statusText ?? "Planning..."
-          : "Queued"
+      ? "Queued"
       : job.status === "paused"
         ? "Paused"
       : job.status === "completed"
@@ -241,7 +255,7 @@ export const buildTransferItemView = (
     : isReadyToExecute
       ? total > 0
         ? `${total.toLocaleString()} items ready`
-        : "Ready to start"
+        : "Queued"
     : total > 0
       ? `${processed}/${total} items`
       : `${processed} items`;

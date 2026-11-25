@@ -2,11 +2,16 @@
 import { lazy, Suspense, useState } from "react";
 import type { CSSProperties, ComponentProps, RefObject } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { TerminalPane } from "@/components/terminal/TerminalPane";
+import { TerminalSplitView } from "@/components/terminal/TerminalSplitView";
+import { useSessionStore } from "@/modules/sessionStore";
 import { FileView, PerfProfiler, Sidebar } from "@/components";
 import { SidebarDivider } from "@/components/navigation/SidebarDivider";
 import { useSettingsStore } from "@/modules";
 import { focusFilePaneBackground } from "@/hooks/ui/inputs/inputFocus";
 import type { PanePreviewBindings } from "@/hooks/ui/view/useQuickPreview";
+import { useTabReveal } from "@/hooks/ui/view/useTabReveal";
+import { folderPathKey } from "@/lib/paths";
 import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
 
 import {
@@ -27,10 +32,11 @@ type AppContentProps = {
   onRetryFolder: () => void;
   sidebarOpen: boolean;
   sidebarProps: ComponentProps<typeof Sidebar>;
+  activeTabId: string | null;
   mainRef: RefObject<HTMLElement | null>;
   fileViewProps: ComponentProps<typeof FileView>;
   bottomMenu: BottomMenuBindings;
-  bottomCommandsBlocked: boolean;
+  paneCommandsBlocked: boolean;
   bottomPreview: PanePreviewBindings;
   onContextMenu?: (event: ReactPointerEvent) => void;
   onContextMenuDown?: (event: ReactPointerEvent) => void;
@@ -46,18 +52,29 @@ export const AppContent = ({
   onRetryFolder,
   sidebarOpen,
   sidebarProps,
+  activeTabId,
   mainRef,
   fileViewProps,
   bottomMenu,
-  bottomCommandsBlocked,
+  paneCommandsBlocked,
   bottomPreview,
   onContextMenu,
   onContextMenuDown,
 }: AppContentProps) => {
+  const activeTab = useSessionStore(state => state.tabs.find(tab => tab.id === activeTabId));
+  const terminal = activeTab?.terminal;
   const split = useBottomPaneStore(state => state.open);
   const bottomHeight = useBottomPaneStore(state => `${state.height}${state.heightUnit}`);
   const bottomActive = useBottomPaneStore(state => state.open && state.active);
   const sidebarWidth = useSettingsStore(state => state.sidebarWidth);
+  const animateTabChanges = useSettingsStore(state => state.animateTabChanges);
+  useTabReveal(mainRef, {
+    tabId: activeTabId,
+    ready: !folderBusy && !folderFailed && !fileViewProps.loading,
+    enabled: animateTabChanges,
+    view: fileViewProps.showLander ? "lander" : fileViewProps.viewMode,
+    pathKey: folderPathKey(fileViewProps.currentPath),
+  });
   const [sidebarResizing, setSidebarResizing] = useState(false);
   const paneViewProps = { ...fileViewProps, gridResizeDeferred: sidebarResizing };
   const upperPath = fileViewProps.loading || fileViewProps.showLander ? "" : fileViewProps.currentPath;
@@ -94,18 +111,20 @@ export const AppContent = ({
           </PerfProfiler>
         ) : null}
         <div className="pane-stack" data-split={split}>
-        <main className="main upper-files" data-file-pane="main" data-pane-path={upperPath}
+        <TerminalSplitView pane="main" tab={activeTab} filePaneRef={mainRef} commandsBlocked={paneCommandsBlocked}>
+        <main className="main upper-files" data-file-pane="main" data-pane-path={terminal ? "" : upperPath}
+          data-start-view={fileViewProps.showLander || undefined}
           data-drop-background={fileDrop.backgroundHovered && fileDrop.hoveredPane === "main" || undefined}
           onPointerDownCapture={event => {
             setBottomPaneActive(false);
-            focusFilePaneBackground(event);
+            if (!terminal) focusFilePaneBackground(event);
           }}
           onFocusCapture={() => setBottomPaneActive(false)} ref={mainRef} tabIndex={-1} aria-busy={folderBusy}>
-          {folderBusy && (
+          {!terminal && folderBusy && (
             <div className="folder-load-progress" role="progressbar" aria-label="Loading folder" />
           )}
           <PerfProfiler id="file-view">
-            {folderFailed ? (
+            {terminal ? <TerminalPane terminal={terminal} /> : folderFailed ? (
               <div className="pane-loading">
                 <button className="btn ghost" type="button" onClick={onRetryFolder}>Retry opening folder</button>
               </div>
@@ -114,10 +133,11 @@ export const AppContent = ({
             )}
           </PerfProfiler>
         </main>
+        </TerminalSplitView>
         {split && <>
           <PaneDivider />
           <Suspense fallback={<div className="pane-loading">Opening bottom pane…</div>}>
-            <BottomPane upper={paneViewProps} actions={paneActions} drop={fileDrop} menu={bottomMenu} commandsBlocked={bottomCommandsBlocked}
+            <BottomPane upper={paneViewProps} actions={paneActions} drop={fileDrop} menu={bottomMenu} commandsBlocked={paneCommandsBlocked}
               onSummary={onBottomSummary} bottomPreview={bottomPreview} />
           </Suspense>
         </>}

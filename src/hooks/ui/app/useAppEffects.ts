@@ -15,6 +15,7 @@ import {
   useTransferProgress,
 } from "@/hooks";
 import type { UseAppEffectsOptions } from "@/hooks/ui/app/effects";
+import { useWindowsMenuWarmup } from "./effects/useWindowsMenuWarmup";
 
 export const useAppEffects = ({
   isTauriEnv,
@@ -49,6 +50,7 @@ export const useAppEffects = ({
     sidebarOpen,
     deferredSearchValue,
     sortState,
+    entryByPath,
     tabs,
     contextMenuOpen,
   } = view;
@@ -67,6 +69,7 @@ export const useAppEffects = ({
   } = actions;
 
   useSearchHotkey(searchInputRef, clearSearchAndFocusView);
+  useWindowsMenuWarmup(isTauriEnv);
   useCloseConfirm({
     enabled: isTauriEnv,
     confirmClose,
@@ -81,6 +84,7 @@ export const useAppEffects = ({
     currentPath,
     tabs,
     sortState,
+    entryByPath,
     searchQuery: activeSearch,
     loadDir,
     requestEntryMeta,

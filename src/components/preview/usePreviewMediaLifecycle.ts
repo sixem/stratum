@@ -12,12 +12,10 @@ type UsePreviewMediaLifecycleOptions = {
   open: boolean;
   path: string | null;
   src: string;
-  isVideo: boolean;
   previewSessionKey: string;
-  videoRef: RefObject<HTMLVideoElement | null>;
+  mediaRef: RefObject<HTMLMediaElement | null>;
   resetViewport: () => void;
   fitMediaToViewport: (width: number, height: number) => void;
-  videoVolume: number;
   canUseExternalActions: boolean;
 };
 
@@ -25,12 +23,10 @@ export const usePreviewMediaLifecycle = ({
   open,
   path,
   src,
-  isVideo,
   previewSessionKey,
-  videoRef,
+  mediaRef,
   resetViewport,
   fitMediaToViewport,
-  videoVolume,
   canUseExternalActions,
 }: UsePreviewMediaLifecycleOptions) => {
   const previewSessionRef = useRef("");
@@ -40,17 +36,13 @@ export const usePreviewMediaLifecycle = ({
   const [mediaSize, setMediaSize] = useState<{ width: number; height: number } | null>(
     null,
   );
-  const [videoPaused, setVideoPaused] = useState(true);
+  const [mediaPaused, setMediaPaused] = useState(true);
   const [externalActionError, setExternalActionError] = useState<string | null>(null);
 
   const setLoadStateIfChanged = useCallback((next: QuickPreviewLoadState) => {
     if (loadStateRef.current === next) return;
     loadStateRef.current = next;
     setLoadState(next);
-  }, []);
-
-  const setVideoPausedIfChanged = useCallback((next: boolean) => {
-    setVideoPaused((prev) => (prev === next ? prev : next));
   }, []);
 
   const setMediaSizeIfChanged = useCallback(
@@ -74,7 +66,7 @@ export const usePreviewMediaLifecycle = ({
     resetViewport();
     setLoadStateIfChanged("loading");
     setMediaSizeIfChanged(null);
-    setVideoPausedIfChanged(true);
+    setMediaPaused(true);
     loadedSrcRef.current = null;
     setExternalActionError((prev) => (prev == null ? prev : null));
   }, [
@@ -83,42 +75,21 @@ export const usePreviewMediaLifecycle = ({
     resetViewport,
     setLoadStateIfChanged,
     setMediaSizeIfChanged,
-    setVideoPausedIfChanged,
   ]);
 
-  useEffect(() => {
-    if (!open || !isVideo) return;
-    const video = videoRef.current;
-    if (!video) return;
-    if (Math.abs(video.volume - videoVolume) > 0.001) {
-      video.volume = videoVolume;
-    }
-  }, [isVideo, open, src, videoRef, videoVolume]);
+  const handlePlaybackPlay = useCallback(() => setMediaPaused(false), []);
 
-  useEffect(() => {
-    if (!open || !isVideo) return;
-    const video = videoRef.current;
-    if (!video || !video.paused) return;
-    void video.play().catch(() => {});
-  }, [isVideo, open, src, videoRef]);
-
-  const handleVideoPlay = useCallback(() => {
-    setVideoPausedIfChanged(false);
-  }, [setVideoPausedIfChanged]);
-
-  const handleVideoPause = useCallback(() => {
-    setVideoPausedIfChanged(true);
-  }, [setVideoPausedIfChanged]);
+  const handlePlaybackPause = useCallback(() => setMediaPaused(true), []);
 
   const handleTogglePlayback = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused) {
-      void video.play().catch(() => {});
+    const media = mediaRef.current;
+    if (!media) return;
+    if (media.paused) {
+      void media.play().catch(() => {});
     } else {
-      video.pause();
+      media.pause();
     }
-  }, [videoRef]);
+  }, [mediaRef]);
 
   const handleImageLoad = useCallback(
     (event: ReactSyntheticEvent<HTMLImageElement>) => {
@@ -135,16 +106,13 @@ export const usePreviewMediaLifecycle = ({
     [fitMediaToViewport, setLoadStateIfChanged, setMediaSizeIfChanged, src],
   );
 
-  const syncVideoMetadata = useCallback(
-    (video: HTMLVideoElement) => {
-      const naturalWidth = video.videoWidth;
-      const naturalHeight = video.videoHeight;
-      if (naturalWidth > 0 && naturalHeight > 0) {
-        fitMediaToViewport(naturalWidth, naturalHeight);
-        setMediaSizeIfChanged({ width: naturalWidth, height: naturalHeight });
+  const syncPlaybackMetadata = useCallback(
+    (media: HTMLMediaElement) => {
+      if (media instanceof HTMLVideoElement && media.videoWidth > 0 && media.videoHeight > 0) {
+        fitMediaToViewport(media.videoWidth, media.videoHeight);
+        setMediaSizeIfChanged({ width: media.videoWidth, height: media.videoHeight });
       }
-      video.volume = videoVolume;
-      setVideoPausedIfChanged(video.paused);
+      setMediaPaused(media.paused);
       loadedSrcRef.current = src || null;
       setLoadStateIfChanged("ready");
     },
@@ -152,31 +120,28 @@ export const usePreviewMediaLifecycle = ({
       fitMediaToViewport,
       setLoadStateIfChanged,
       setMediaSizeIfChanged,
-      setVideoPausedIfChanged,
       src,
-      videoVolume,
     ],
   );
 
   // If metadata was already available before React observed loadedmetadata,
   // synchronize state from the current element to avoid a stuck loading mask.
   useEffect(() => {
-    if (!open || !isVideo || !src) return;
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.readyState < HTMLMediaElement.HAVE_METADATA) return;
-    syncVideoMetadata(video);
-  }, [isVideo, open, src, syncVideoMetadata, videoRef]);
+    if (!open || !src) return;
+    const media = mediaRef.current;
+    if (media && media.readyState >= HTMLMediaElement.HAVE_METADATA) syncPlaybackMetadata(media);
+  }, [mediaRef, open, src, syncPlaybackMetadata]);
 
-  const handleVideoMetadata = useCallback(
-    (event: ReactSyntheticEvent<HTMLVideoElement>) => {
-      syncVideoMetadata(event.currentTarget);
+  const handlePlaybackMetadata = useCallback(
+    (event: ReactSyntheticEvent<HTMLMediaElement>) => {
+      syncPlaybackMetadata(event.currentTarget);
     },
-    [syncVideoMetadata],
+    [syncPlaybackMetadata],
   );
 
   const handleMediaError = useCallback(() => {
     loadedSrcRef.current = null;
+    setMediaPaused(true);
     setLoadStateIfChanged("error");
   }, [setLoadStateIfChanged]);
 
@@ -204,13 +169,13 @@ export const usePreviewMediaLifecycle = ({
     loadState,
     loadedSrc: loadedSrcRef.current,
     mediaSize,
-    videoPaused,
+    mediaPaused,
     externalActionError,
-    handleVideoPlay,
-    handleVideoPause,
+    handlePlaybackPlay,
+    handlePlaybackPause,
     handleTogglePlayback,
     handleImageLoad,
-    handleVideoMetadata,
+    handlePlaybackMetadata,
     handleMediaError,
     handleOpenExternal,
     handleRevealExternal,

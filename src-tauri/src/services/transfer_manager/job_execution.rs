@@ -237,6 +237,7 @@ where
         plan.progress_kind,
         event_emitter.clone(),
     )));
+    let progress_task = TransferProgressDispatcher::start_flush_task(&dispatcher);
     let callback_dispatcher = Arc::clone(&dispatcher);
     let mut callback = move |update: fs::TransferProgressUpdate| {
         if let Ok(mut dispatcher) = callback_dispatcher.lock() {
@@ -246,6 +247,7 @@ where
 
     let outcome = run(&mut callback);
 
+    progress_task.abort();
     if let Ok(mut dispatcher) = dispatcher.lock() {
         dispatcher.flush_all();
     }

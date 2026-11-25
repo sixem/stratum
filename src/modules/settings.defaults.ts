@@ -6,6 +6,7 @@ import {
 } from "@/constants";
 import { DEFAULT_KEYBINDS } from "./keybinds";
 import type { Settings, SidebarSectionId } from "./settings.types";
+import { DEFAULT_TERMINAL_THEME } from "./terminalThemes";
 
 export const SIDEBAR_SECTION_DEFINITIONS: { id: SidebarSectionId; label: string }[] = [
   { id: "places", label: "Places" },
@@ -17,6 +18,7 @@ export const DEFAULT_SIDEBAR_SECTION_ORDER = SIDEBAR_SECTION_DEFINITIONS.map(
   (item) => item.id,
 );
 export const DEFAULT_SIDEBAR_HIDDEN_SECTIONS: SidebarSectionId[] = [];
+export const DEFAULT_VIEW_MODE = "thumbs";
 
 export const DEFAULT_SETTINGS: Settings = {
   sidebarOpen: true,
@@ -24,17 +26,28 @@ export const DEFAULT_SETTINGS: Settings = {
   sidebarRecentLimit: 10,
   sidebarSectionOrder: DEFAULT_SIDEBAR_SECTION_ORDER,
   sidebarHiddenSections: DEFAULT_SIDEBAR_HIDDEN_SECTIONS,
-  defaultViewMode: "thumbs",
+  defaultViewMode: DEFAULT_VIEW_MODE,
+  lastUsedViewMode: null,
+  startupMode: "resume",
+  startupWorkspaceId: null,
+  newTabSort: null,
+  rememberRecentLocations: true,
   showTabNumbers: false,
   fixedWidthTabs: false,
+  animateTabChanges: false,
+  wrapTabNavigation: true,
   tabDropSubfolders: false,
+  tabDropParentFolder: false,
   showRecycleBinButton: false,
   showDriveToggle: true,
   collapseDrivePickerOnBlur: false,
   showTopbarFolderChevrons: true,
+  showWorkProgressFill: true,
   smoothScroll: false,
   smartTabJump: true,
   accentTheme: "red",
+  terminalTheme: DEFAULT_TERMINAL_THEME,
+  terminalFontFamily: null,
   darkMode: false,
   categoryTinting: false,
   showParentEntry: true,
@@ -42,11 +55,12 @@ export const DEFAULT_SETTINGS: Settings = {
   confirmDelete: true,
   confirmClose: true,
   warnOnUnsavedWorkspaces: true,
-  ambientBackground: true,
+  ambientBackground: false,
   blurOverlays: true,
+  showTooltips: true,
   keybinds: DEFAULT_KEYBINDS,
   gridSize: "auto",
-  rememberTabGridSize: false,
+  rememberTabGridSize: true,
   gridAutoColumns: GRID_AUTO_COLUMNS_DEFAULT,
   gridGap: GRID_GAP_DEFAULT,
   gridRounded: true,
@@ -55,10 +69,21 @@ export const DEFAULT_SETTINGS: Settings = {
   gridShowExtension: true,
   gridNameEllipsis: "middle",
   gridNameHideExtension: false,
+  listDensity: "comfortable",
+  listShowSize: true,
+  listShowModified: true,
+  menuUseWindowsForItems: false,
   menuOpenPwsh: true,
   menuOpenWsl: false,
   menuShowConvert: true,
+  menuPaneTransfers: false,
+  menuSelectionActions: false,
+  menuOpenBackgroundTab: false,
+  hiddenContextMenuActions: [],
+  rememberMoveDestinations: false,
+  recentMoveLimit: 8,
   indexedSearchEnabled: false,
+  excludedIndexedDrives: [],
   thumbnailsEnabled: true,
   thumbnailSize: 224,
   thumbnailQuality: 80,
@@ -69,5 +94,7 @@ export const DEFAULT_SETTINGS: Settings = {
   thumbnailCacheMb: 512,
   thumbnailFit: "contain",
   thumbnailAppIcons: true,
+  videoAutoplay: true,
+  galleryAudio: false,
   ffmpegPath: "",
 };

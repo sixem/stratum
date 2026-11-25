@@ -6,7 +6,8 @@ import {
   openPathWithDialog,
   openPathWithHandler,
 } from "@/api";
-import { useClipboardStore, usePromptStore } from "@/modules";
+import { useClipboardStore, usePromptStore, useSettingsStore } from "@/modules";
+import { clearMoveDestinations, useRecentMoveDestinations } from "@/modules/recentMoveStore";
 import type {
   ContextMenuItem,
   ConversionModalRequest,
@@ -16,11 +17,15 @@ import type {
 import { buildEntryConvertItems } from "./entryMenu/buildEntryConvertItems";
 import { buildEntryCopyItems } from "./entryMenu/buildEntryCopyItems";
 import { buildEntryDeleteItems } from "./entryMenu/buildEntryDeleteItems";
+import { buildEntryMoveItems } from "./entryMenu/buildEntryMoveItems";
+import { showFolderWithSelectionPrompt, type CreateFolderWithSelection } from "./entryMenu/showFolderWithSelectionPrompt";
+import { folderPathKey, getParentPath } from "@/lib/paths";
 import { buildEntryOpenItems } from "./entryMenu/buildEntryOpenItems";
 import { buildEntryOpenWithItems } from "./entryMenu/buildEntryOpenWithItems";
 import { buildEntryPasteItems } from "./entryMenu/buildEntryPasteItems";
 import { buildEntryPropertiesItems } from "./entryMenu/buildEntryPropertiesItems";
 import { buildEntryRenameItems } from "./entryMenu/buildEntryRenameItems";
+import { buildPaneTransferItems, type PaneTransfer } from "./entryMenu/buildPaneTransferItems";
 import { resolveGalleryStartPath } from "../view/previewGallerySource";
 import { resolveActionError, resolveContextTargets } from "./entryMenu/shared";
 import { summarizeEntrySelection } from "./entryMenu/summarizeEntrySelection";
@@ -36,14 +41,20 @@ type UseEntryMenuItemsOptions = {
   onOpenGallery?: (path: string) => void;
   onOpenDir: (path: string) => void;
   onOpenDirNewTab?: (path: string) => void;
+  onOpenDirInBackgroundTab?: (path: string) => void;
   otherPane?: Parameters<typeof buildEntryOpenItems>[0]["otherPane"];
   extraOpenItems?: ContextMenuItem[];
   showClipboardShortcuts?: boolean;
+  textCopyTargets?: Parameters<typeof buildEntryCopyItems>[0]["textCopyTargets"];
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   confirmDelete: boolean;
   onClearSelection?: () => void;
   onRenameEntry?: (target: EntryContextTarget) => void;
   onPasteEntries?: (destination: string) => Promise<unknown> | void;
+  onMoveEntries?: (paths: string[], destination: string) => void;
+  paneTransfer?: PaneTransfer;
+  onQuickMove?: (paths: string[]) => void;
+  onCreateFolderWithSelection?: CreateFolderWithSelection;
   onOpenConvertModal: (request: ConversionModalRequest) => void;
   onQuickConvertImages: (request: ConversionModalRequest, targetFormat: string) => void;
   menuShowConvert: boolean;
@@ -62,20 +73,29 @@ export const useEntryMenuItems = ({
   onOpenGallery,
   onOpenDir,
   onOpenDirNewTab,
+  onOpenDirInBackgroundTab,
   otherPane,
   extraOpenItems,
   showClipboardShortcuts = true,
+  textCopyTargets,
   onDeleteEntries,
   confirmDelete,
   onClearSelection,
   onRenameEntry,
   onPasteEntries,
+  onMoveEntries,
+  paneTransfer,
+  onQuickMove,
+  onCreateFolderWithSelection,
   onOpenConvertModal,
   onQuickConvertImages,
   menuShowConvert,
 }: UseEntryMenuItemsOptions) => {
   const clipboard = useClipboardStore((state) => state.clipboard);
-  const openWithMenuState = useOpenWithMenuState(target);
+  const { workspaceId, destinations } = useRecentMoveDestinations();
+  const showOpenWith = useSettingsStore((state) => !state.hiddenContextMenuActions.includes("open-with"));
+  const includeAudio = useSettingsStore((state) => state.galleryAudio);
+  const openWithMenuState = useOpenWithMenuState(showOpenWith ? target : null);
 
   return useMemo<ContextMenuItem[]>(() => {
     if (!target) return [];
@@ -84,6 +104,9 @@ export const useEntryMenuItems = ({
     const actionTargets = resolveContextTargets(target, selected, parentPath);
     const selectionSummary = summarizeEntrySelection(actionTargets, target, entryByPath);
     const hasTargets = actionTargets.length > 0;
+    const currentFolderKey = folderPathKey(currentPath);
+    const canGroupSelection = hasTargets && currentFolderKey && actionTargets.every((path) =>
+      folderPathKey(getParentPath(path) ?? "") === currentFolderKey);
     const pasteTarget = (target.isDir ? target.path : currentPath).trim();
     const canPaste = Boolean(clipboard?.paths.length && pasteTarget);
 
@@ -140,9 +163,10 @@ export const useEntryMenuItems = ({
         targetCount: actionTargets.length,
         onOpenEntry,
         onOpenGallery,
-        galleryPath: onOpenGallery && resolveGalleryStartPath(target, actionTargets, entryByPath),
+        galleryPath: onOpenGallery && resolveGalleryStartPath(target, actionTargets, entryByPath, includeAudio),
         onOpenDir,
         onOpenDirNewTab,
+        onOpenDirInBackgroundTab,
         otherPane,
       }),
       ...(extraOpenItems ?? []),
@@ -162,7 +186,26 @@ export const useEntryMenuItems = ({
         actionTargets,
         hasTargets,
         showShortcuts: showClipboardShortcuts,
+        target,
+        entryByPath,
+        textCopyTargets,
       }),
+      ...(paneTransfer && entryByPath.has(target.path)
+        ? buildPaneTransferItems(actionTargets.filter((path) => entryByPath.has(path)), paneTransfer)
+        : []),
+      ...(onMoveEntries ? buildEntryMoveItems({
+        destinations,
+        actionTargets,
+        onMoveEntries,
+        onQuickMove,
+        onClear: () => clearMoveDestinations(workspaceId),
+      }) : []),
+      ...(onCreateFolderWithSelection && canGroupSelection ? [{
+        id: "entry-new-folder-with-selection",
+        label: "New folder with selection…",
+        icon: "new-folder" as const,
+        onSelect: () => showFolderWithSelectionPrompt(actionTargets, currentPath, onCreateFolderWithSelection),
+      }] : []),
       ...(onRenameEntry ? buildEntryRenameItems({
         target,
         hasTargets,
@@ -192,8 +235,10 @@ export const useEntryMenuItems = ({
   }, [
     clipboard,
     currentPath,
+    destinations,
     entryByPath,
     extraOpenItems,
+    includeAudio,
     menuShowConvert,
     onClearSelection,
     onDeleteEntries,
@@ -202,15 +247,22 @@ export const useEntryMenuItems = ({
     onOpenDir,
     otherPane,
     onOpenDirNewTab,
+    onOpenDirInBackgroundTab,
     onOpenEntry,
     onOpenGallery,
+    onMoveEntries,
+    onQuickMove,
+    onCreateFolderWithSelection,
     onPasteEntries,
     onQuickConvertImages,
     onRenameEntry,
     openWithMenuState,
     parentPath,
+    paneTransfer,
     selected,
     showClipboardShortcuts,
     target,
+    textCopyTargets,
+    workspaceId,
   ]);
 };

@@ -6,17 +6,13 @@ import { usePinnedPlaceDragDrop } from "@/hooks";
 import { useLocationDrag } from "@/hooks/ui/inputs/useLocationDrag";
 import { folderPathKey, handleMiddleClick, tabLabel } from "@/lib";
 import type { SidebarSectionId } from "@/modules";
-import {
-  getSessionHint,
-  normalizeSidebarHiddenSections,
-  normalizeSidebarSectionOrder,
-  refreshSessionHint,
-} from "@/modules";
+import { normalizeSidebarHiddenSections, normalizeSidebarSectionOrder } from "@/modules";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PinIcon } from "@/components/icons";
 import { PressButton } from "@/components/primitives/PressButton";
 import { ScrollArea } from "@/components/primitives/ScrollArea";
 import { SidebarSection } from "./SidebarSection";
+import { SidebarTips, type SidebarTipsProps } from "./SidebarTips";
 import type { Place, PlaceContextTarget } from "@/types";
 
 type SidebarProps = {
@@ -34,6 +30,7 @@ type SidebarProps = {
   onPlaceContextMenuDown?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
   onRecentContextMenu?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
   onRecentContextMenuDown?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
+  onOpenTipsMenu: SidebarTipsProps["onOpenMenu"];
 };
 
 type SidebarItemProps = {
@@ -146,6 +143,7 @@ export const Sidebar = ({
   onPlaceContextMenuDown,
   onRecentContextMenu,
   onRecentContextMenuDown,
+  onOpenTipsMenu,
 }: SidebarProps) => {
   const [placesOpen, setPlacesOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
@@ -155,7 +153,6 @@ export const Sidebar = ({
   const orderedSections = normalizeSidebarSectionOrder(sectionOrder);
   const hiddenSectionIds = normalizeSidebarHiddenSections(hiddenSections);
   const hiddenSectionSet = new Set(hiddenSectionIds);
-  const [hint, setHint] = useState(() => getSessionHint());
   const locationDrag = useLocationDrag();
   const { draggingPath, dropTarget, handlePointerDown, handleSuppressClick } =
     usePinnedPlaceDragDrop({
@@ -240,21 +237,7 @@ export const Sidebar = ({
           </SidebarSection>
         );
       case "tips":
-        return (
-          <div className="sidebar-tips">
-            <div className="section-title">Tips</div>
-            <div className="tips">
-              <PressButton
-                type="button"
-                className="tip"
-                onClick={() => setHint(refreshSessionHint())}
-                aria-label="Show a new tip"
-              >
-                {hint.text}
-              </PressButton>
-            </div>
-          </div>
-        );
+        return <SidebarTips onOpenMenu={onOpenTipsMenu} />;
       default:
         return null;
     }

@@ -4,6 +4,7 @@ use crate::services::indexed_search;
 use crate::services::transfer_manager;
 use crate::services::watch;
 use std::path::Path;
+use tauri::Manager;
 
 fn queue_indexed_search_reconcile(
     indexed_search: indexed_search::IndexedSearchHandle,
@@ -202,6 +203,39 @@ pub async fn create_folder(
         vec![reconcile_path],
         "create_folder",
         move || fs::create_folder(path),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn create_tracked_folder(
+    indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
+    parent: String,
+    name: String,
+) -> Result<fs::CreatedFolder, String> {
+    let path = std::path::Path::new(parent.trim())
+        .join(&name)
+        .to_string_lossy()
+        .into_owned();
+    run_reconcile_after_create_command(
+        indexed_search.inner().clone(),
+        vec![path],
+        "create_tracked_folder",
+        move || fs::create_tracked_folder(parent, name),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn remove_created_folder_if_empty(
+    indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
+    folder: fs::CreatedFolder,
+) -> Result<bool, String> {
+    run_reconcile_after_delete_command(
+        indexed_search.inner().clone(),
+        vec![folder.path.clone()],
+        "remove_created_folder_if_empty",
+        move || fs::remove_created_folder_if_empty(folder),
     )
     .await
 }
@@ -472,19 +506,22 @@ pub async fn rename_entry(
     indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
     path: String,
     new_name: String,
-) -> Result<String, String> {
+    expected_identity: Option<fs::EntryIdentity>,
+) -> Result<fs::RenamedEntry, String> {
     let indexed_search = indexed_search.inner().clone();
     let reconcile_source = path.clone();
-    let next_path = tauri::async_runtime::spawn_blocking(move || fs::rename_entry(path, new_name))
+    let renamed = tauri::async_runtime::spawn_blocking(move || {
+        fs::rename_entry(path, new_name, expected_identity)
+    })
         .await
         .map_err(|err| err.to_string())??;
     queue_reconcile_after_move_paths(
         indexed_search,
         vec![reconcile_source],
-        vec![next_path.clone()],
+        vec![renamed.path.clone()],
         "rename_entry",
     );
-    Ok(next_path)
+    Ok(renamed)
 }
 
 #[tauri::command]
@@ -493,11 +530,20 @@ pub async fn start_dir_watch(
     path: String,
     pane: Option<fs::FilePane>,
     generation: Option<u64>,
+    restart: Option<bool>,
     state: tauri::State<'_, watch::DirWatchHandle>,
 ) -> Result<(), String> {
     let path = path.trim();
     let target = (!path.is_empty()).then(|| path.to_string());
-    update_dir_watch(app, state.inner().clone(), target, pane, generation).await
+    update_dir_watch(
+        app,
+        state.inner().clone(),
+        target,
+        pane,
+        generation,
+        restart.unwrap_or(false),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -507,7 +553,7 @@ pub async fn stop_dir_watch(
     generation: Option<u64>,
     state: tauri::State<'_, watch::DirWatchHandle>,
 ) -> Result<(), String> {
-    update_dir_watch(app, state.inner().clone(), None, pane, generation).await
+    update_dir_watch(app, state.inner().clone(), None, pane, generation, false).await
 }
 
 async fn update_dir_watch(
@@ -516,11 +562,25 @@ async fn update_dir_watch(
     target: Option<String>,
     pane: Option<fs::FilePane>,
     generation: Option<u64>,
+    restart: bool,
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        state.set_target(pane.unwrap_or_default(), target, generation, |path| {
-            watch::open_dir_watch(app, path)
-        })
+        let target = target.as_deref();
+        let installed = state.set_target(
+            pane.unwrap_or_default(),
+            target,
+            generation,
+            restart,
+            |path, active| watch::open_dir_watch(app.clone(), path, active),
+        )?;
+        if let Some(path) = target.filter(|_| installed) {
+            if let Some(index) = app.try_state::<indexed_search::IndexedSearchHandle>() {
+                if let Err(error) = index.queue_visited_folder(path) {
+                    eprintln!("[indexed-search] Could not queue a visited folder: {error}");
+                }
+            }
+        }
+        Ok(())
     })
     .await
     .map_err(|err| err.to_string())?

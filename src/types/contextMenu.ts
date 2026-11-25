@@ -29,16 +29,23 @@ export type ContextMenuIcon =
   | "paste"
   | "paste-into-folder"
   | "terminal"
+  | "anchor"
+  | "split-tab"
+  | "separate-tabs"
   | "pin"
   | "unpin"
   | "add"
   | "remove"
+  | "hide"
+  | "refresh"
   | "convert"
   | "quick-convert"
   | "cut"
   | "copy"
   | "delete"
   | "rename"
+  | "select-same-extension"
+  | "invert-selection"
   | "properties"
   | "more-options";
 
@@ -49,7 +56,9 @@ export type ContextMenuItem =
       label: string;
       onSelect: () => void;
       active?: boolean;
+      checked?: boolean;
       hint?: string;
+      tooltip?: string;
       disabled?: boolean;
       icon?: ContextMenuIcon;
       iconUrl?: string;
@@ -59,6 +68,7 @@ export type ContextMenuItem =
       id: string;
       label: string;
       items: ContextMenuItem[];
+      wide?: boolean;
       hint?: string;
       disabled?: boolean;
       icon?: ContextMenuIcon;

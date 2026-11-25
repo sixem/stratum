@@ -23,6 +23,32 @@
     opacity: 0.5;
   }
 
+  .settings-terminal-theme-select {
+    inline-size: 10rem;
+    max-inline-size: 100%;
+  }
+
+  .settings-terminal-font-select {
+    inline-size: 13rem;
+    max-inline-size: 100%;
+  }
+
+  .settings-terminal-preview {
+    grid-column: 1 / -1;
+    min-width: 0;
+    padding: 6px 9px;
+    border: var(--surface-border-width) solid var(--stroke);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    line-height: 1.45;
+
+    > div {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: pre;
+    }
+  }
+
   .settings-label {
     font-weight: 600;
     font-size: var(--font-size-md);
@@ -57,11 +83,12 @@
 
   .settings-mono {
     margin-top: 6px;
-    font-size: var(--font-size-2xs);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
     line-height: 1.45;
-    color: var(--muted);
+    color: var(--text);
     font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-    word-break: break-all;
+    overflow-wrap: anywhere;
   }
 
   .settings-toggle {
@@ -265,6 +292,68 @@
 
   .settings-check input:disabled {
     opacity: 0.5;
+  }
+
+  .settings-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    min-width: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: 1.4;
+    cursor: pointer;
+
+    &:has(input:disabled) {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+  }
+
+  .settings-checkbox-control {
+    display: grid;
+    place-items: center;
+    flex: 0 0 1rem;
+
+    input,
+    svg {
+      grid-area: 1 / 1;
+    }
+
+    input {
+      appearance: none;
+      width: 1rem;
+      height: 1rem;
+      margin: 0;
+      @include control.control-surface(4px, var(--surface-control));
+      cursor: inherit;
+
+      &:checked {
+        border-color: rgba(var(--accent-rgb), 0.6);
+        background: rgba(var(--accent-rgb), 0.16);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+    }
+
+    svg {
+      width: 0.75rem;
+      height: 0.75rem;
+      color: var(--text);
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    input:checked + svg {
+      visibility: visible;
+    }
+  }
+
+  .settings-checkbox:hover input:not(:disabled, :focus-visible) {
+    border-color: color-mix(in srgb, var(--stroke), var(--text) 28%);
   }
 
   .settings-pill {

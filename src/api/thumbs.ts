@@ -1,13 +1,24 @@
 // Thumbnail generation and cache access helpers.
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import type { ThumbnailHit, ThumbnailRequest, ThumbnailRequestOptions } from "@/types";
+import type {
+  ThumbnailHit, ThumbnailRequest, ThumbnailRequestOptions, ThumbnailScope, ThumbnailView,
+} from "@/types";
 
 export const requestThumbnails = (
   requests: ThumbnailRequest[],
   options: ThumbnailRequestOptions,
   key: string,
+  scope: ThumbnailScope,
 ) => {
-  return invoke<ThumbnailHit[]>("request_thumbnails", { requests, options, key });
+  return invoke<ThumbnailHit[]>("request_thumbnails", { requests, options, key, scope });
+};
+
+export const openThumbnailScope = (view: ThumbnailView) => {
+  return invoke<ThumbnailScope>("open_thumbnail_scope", { view });
+};
+
+export const closeThumbnailScope = (scope: ThumbnailScope) => {
+  return invoke<void>("close_thumbnail_scope", { scope });
 };
 
 export const getThumbCacheDir = () => {

@@ -3,7 +3,7 @@
 // Writers wrap explicit SQLite transactions. Dropping an unfinished writer
 // rolls the transaction back, which lets cancellation and errors leave the
 // catalog in its previous coherent state.
-use std::path::Path;
+use std::{fs::Metadata, path::Path};
 
 #[cfg(windows)]
 use rusqlite::OptionalExtension;
@@ -11,6 +11,8 @@ use rusqlite::{params, Connection};
 
 use crate::domain::indexed_search::IndexedEntryKind;
 
+#[cfg(windows)]
+use super::CatalogChild;
 use super::{
     recursive_build, schema, CatalogEntryRecord, IndexedCatalogStore, IndexedCatalogWriter,
     JournalCheckpoint,
@@ -118,8 +120,29 @@ impl IndexedCatalogWriter {
     pub(in crate::services::indexed_search) fn indexed_children(
         &self,
         parent: &str,
-    ) -> Result<std::collections::BTreeMap<String, Option<IndexedEntryKind>>, String> {
+    ) -> Result<std::collections::BTreeMap<String, Option<CatalogChild>>, String> {
         paths::indexed_children(&self.connection, parent)
+    }
+
+    #[cfg(windows)]
+    pub(in crate::services::indexed_search) fn bounded_indexed_children(
+        &self,
+        parent: &str,
+        limit: usize,
+    ) -> Result<Option<std::collections::BTreeMap<String, Option<CatalogChild>>>, String> {
+        if !paths::contains_exact_directory(&self.connection, parent)? {
+            return Ok(None);
+        }
+        paths::bounded_indexed_children(&self.connection, parent, limit)
+    }
+
+    #[cfg(windows)]
+    pub(in crate::services::indexed_search) fn update_file_size(
+        &mut self,
+        path: &str,
+        size_bytes: Option<i64>,
+    ) -> Result<bool, String> {
+        paths::update_file_size(&self.connection, path, size_bytes)
     }
 
     #[cfg(windows)]
@@ -155,7 +178,7 @@ impl IndexedCatalogWriter {
         &mut self,
         paths: &[String],
     ) -> Result<bool, String> {
-        paths::remove_path_trees(&self.connection, paths, None)
+        paths::remove_path_trees(&self.connection, paths, None).map(|removed| removed.is_some())
     }
 
     pub(in crate::services::indexed_search) fn remove_watched_path_trees(
@@ -163,6 +186,15 @@ impl IndexedCatalogWriter {
         paths: &[String],
         limit: usize,
     ) -> Result<bool, String> {
+        self.remove_bounded_path_trees(paths, limit)
+            .map(|removed| removed.is_some())
+    }
+
+    pub(in crate::services::indexed_search) fn remove_bounded_path_trees(
+        &mut self,
+        paths: &[String],
+        limit: usize,
+    ) -> Result<Option<usize>, String> {
         paths::remove_path_trees(&self.connection, paths, Some(limit))
     }
 
@@ -181,8 +213,9 @@ impl IndexedCatalogWriter {
                 "INSERT INTO indexed_entries (
                     path,
                     normalized_name,
-                    kind
-                ) VALUES (?1, ?2, ?3)",
+                    kind,
+                    size_bytes
+                ) VALUES (?1, ?2, ?3, ?4)",
             )
             .map_err(|error| format!("Failed to prepare indexed-search insert: {error}"))?;
         for entry in entries {
@@ -191,6 +224,7 @@ impl IndexedCatalogWriter {
                     &entry.path,
                     &entry.normalized_name,
                     kind_to_int(entry.kind),
+                    entry.size_bytes,
                 ])
                 .map_err(|error| format!("Failed to insert indexed-search entry: {error}"))?;
         }
@@ -292,6 +326,12 @@ impl IndexedCatalogWriter {
             })?;
         recursive_build::retire(&self.connection, drive_path)
             .map_err(|error| format!("Failed to retire recursive index progress: {error}"))?;
+        self.connection
+            .execute(
+                "DELETE FROM indexed_size_backfills WHERE drive_path = ?1",
+                [drive_path],
+            )
+            .map_err(|error| format!("Failed to retire indexed-search size backfill: {error}"))?;
         before_commit()?;
         self.commit()
     }
@@ -324,23 +364,41 @@ impl CatalogEntryRecord {
             normalized_name,
             path,
             kind,
+            size_bytes: None,
         }
+    }
+
+    pub(in crate::services::indexed_search) fn from_metadata(
+        path: &Path,
+        metadata: &Metadata,
+    ) -> Option<Self> {
+        let (kind, size_bytes) = if metadata.is_dir() {
+            (IndexedEntryKind::Directory, None)
+        } else {
+            (IndexedEntryKind::File, i64::try_from(metadata.len()).ok())
+        };
+        Self::from_path(path, kind, size_bytes)
     }
 
     pub(in crate::services::indexed_search) fn from_path(
         path: &Path,
         kind: IndexedEntryKind,
+        size_bytes: Option<i64>,
     ) -> Option<Self> {
         let name = path.file_name()?.to_string_lossy().trim().to_string();
         if name.is_empty() {
             return None;
         }
 
-        Some(Self::new(
+        let mut record = Self::new(
             path.to_string_lossy().to_string(),
             name.to_lowercase(),
             kind,
-        ))
+        );
+        if kind == IndexedEntryKind::File {
+            record.size_bytes = size_bytes.filter(|size| *size >= 0);
+        }
+        Some(record)
     }
 }
 

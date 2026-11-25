@@ -20,12 +20,14 @@ type Options = {
   hideExtension: boolean;
   browseFromView: (path: string) => void;
   openGallery: (path: string) => void;
+  onCloseAnchoredTab: (id: string) => void;
   scrollTo: (index: number) => void;
   clearDragState: () => void;
 };
 
 export function useBottomPaneActions({
-  folder, actions, menu, files, ready, viewVisit, hideExtension, browseFromView, openGallery, scrollTo, clearDragState,
+  folder, actions, menu, files, ready, viewVisit, hideExtension, browseFromView, openGallery, onCloseAnchoredTab,
+  scrollTo, clearDragState,
 }: Options) {
   const { dir, tabs, model, selection, viewKey } = folder;
   const { closeContextMenu } = menu;
@@ -36,8 +38,8 @@ export function useBottomPaneActions({
     selected: selection.selected,
     viewParentPath: dir.parentPath,
     gridNameHideExtension: hideExtension,
-    renameEntry: async (path, nextName) => {
-      const result = await actions.renameEntry(path, nextName);
+    renameEntry: async (path, nextName, options) => {
+      const result = await actions.renameEntry(path, nextName, options);
       if (result && viewVisit.current) await dir.refreshAfterChange();
       return result;
     },
@@ -70,6 +72,10 @@ export function useBottomPaneActions({
   const undo = async () => {
     if (await actions.undo() && viewVisit.current) await dir.refreshAfterChange();
   };
+  const moveEntries = async (paths: string[], destination: string) => {
+    const report = await actions.moveEntries(paths, destination);
+    if (report?.moved && viewVisit.current) await dir.refreshAfterChange();
+  };
   const { queueCreateSelection } = usePendingCreateSelection({
     viewKey,
     viewPathKey: folderPathKey(dir.currentPath),
@@ -99,7 +105,8 @@ export function useBottomPaneActions({
     ...menu,
     pane: "bottom",
     mainRef: files,
-    contextMenu: ready || menu.contextMenu?.kind === "place-target" ? menu.contextMenu : null,
+    contextMenu: ready || menu.contextMenu?.kind === "place-target" || menu.contextMenu?.kind === "actions"
+      ? menu.contextMenu : null,
     onShellCommand: () => {
       void refreshFileClipboard().catch(() => {});
       if (viewVisit.current) void dir.refreshAfterChange();
@@ -118,12 +125,31 @@ export function useBottomPaneActions({
     onOpenGallery: openGallery,
     onOpenDir: browseFromView,
     onOpenDirNewTab: tabs.openInNewTab,
+    onOpenDirInBackgroundTab: tabs.openInBackgroundTab,
+    onSelectTab: tabs.selectTab,
+    onCloseAnchoredTab,
+    terminalTabs: tabs,
+    onRenameFolder: async (path, name) => {
+      const result = await actions.renameEntry(path, name, { updateFolderLocations: true });
+      if (result && viewVisit.current) await dir.refreshAfterChange();
+    },
     onDeleteEntries: actions.deleteEntries,
     onClearSelection: clearSelectionForVisit,
     onRenameEntry: selectionHandlers.handleRenameStart,
     onPasteEntries: actions.pasteEntries,
+    onCopyEntries: actions.copyEntries,
+    onMoveEntries: moveEntries,
+    onRefreshTransferDestination: dir.refreshAfterChange,
+    onCreateFolderWithSelection: async (paths, parent, name, onCreated) => {
+      const created = await actions.createFolderWithSelection(paths, parent, name, onCreated);
+      if (created && viewVisit.current) {
+        tabs.setSearch("");
+        queueCreateSelection(created, parent);
+        await dir.refreshAfterChange();
+      }
+    },
     onRemoveRecentJump: tabs.removeRecentJump,
   });
 
-  return { ...rename, ...selectionHandlers, ...context, createFile, createFolder, createFolderAndGo, changeSort, clearSelectionForVisit, undo };
+  return { ...rename, ...selectionHandlers, ...context, createFile, createFolder, createFolderAndGo, changeSort, clearSelectionForVisit, undo, moveEntries };
 }

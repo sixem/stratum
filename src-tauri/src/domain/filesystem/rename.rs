@@ -1,11 +1,15 @@
 // Plan and validate same-directory renames before updating the filesystem.
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::{staging, transfer::normalize_path_key};
+use super::{
+    file_identity::{rename_verified, EntryIdentity, ObservedEntry},
+    staging,
+    transfer::normalize_path_key,
+};
 
 const OCCUPIED_NAME: &str = "A file or folder with that name already exists.";
 
@@ -140,70 +144,53 @@ fn mark_duplicate(
     }
 }
 
-pub fn rename_entry(path: String, new_name: String) -> Result<String, String> {
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenamedEntry {
+    pub path: String,
+    pub identity: Option<EntryIdentity>,
+}
+
+pub fn rename_entry(
+    path: String,
+    new_name: String,
+    expected: Option<EntryIdentity>,
+) -> Result<RenamedEntry, String> {
     let paths = rename_paths(&path, &new_name)?;
     check_source(&paths.source)?;
 
     let source = paths.source.to_string_lossy();
     let destination = paths.destination.to_string_lossy();
-    if source == destination || (cfg!(windows) && source.eq_ignore_ascii_case(&destination)) {
-        return Ok(source.into_owned());
+    if source == destination {
+        return Ok(RenamedEntry {
+            path: source.into_owned(),
+            identity: None,
+        });
     }
 
-    // Recheck at apply time and rely on the native no-replace move if the
-    // destination becomes occupied between this check and the operation.
-    check_destination(&paths.destination)?;
-    apply_rename(&paths.source, &paths.destination).map_err(rename_failure)?;
-    Ok(destination.into_owned())
-}
-
-fn apply_rename(source: &Path, destination: &Path) -> io::Result<()> {
-    let result = staging::rename_new(source, destination);
-    #[cfg(windows)]
-    if result
-        .as_ref()
-        .is_err_and(|error| staging::is_sharing_violation(error))
-    {
-        return retry_rename(source, destination, result);
-    }
-    result
-}
-
-#[cfg(windows)]
-fn retry_rename(source: &Path, destination: &Path, result: io::Result<()>) -> io::Result<()> {
-    use super::file_identity::file_id;
-
-    // Keep the original object alive so a replacement at the same path
-    // cannot reuse its ID while we wait for the sharing conflict to clear.
-    let Ok(original) = open_rename_source(source) else {
-        return result;
+    // Windows resolves both spellings of a case-only rename to the same item.
+    // Let the no-replace operation distinguish that case from an occupied name.
+    let identity = if let Some(expected) = expected {
+        staging::retry_sharing(|| rename_verified(&paths.source, &paths.destination, &expected))
+            .map_err(rename_failure)?;
+        None
+    } else {
+        let original = ObservedEntry::capture(&paths.source);
+        let result = staging::rename_new(&paths.source, &paths.destination);
+        #[cfg(windows)]
+        let result = match &original {
+            Some(original) => staging::retry_after_sharing(result, || {
+                rename_verified(&paths.source, &paths.destination, original.identity())
+            }),
+            None => result,
+        };
+        result.map_err(rename_failure)?;
+        original.and_then(|entry| entry.published(&paths.destination))
     };
-    let Ok(expected_id) = file_id(&original) else {
-        return result;
-    };
-    staging::retry_after_sharing(result, || {
-        let current = open_rename_source(source)?;
-        if file_id(&current)? != expected_id {
-            return Err(io::Error::other(
-                "The source changed while waiting to rename it.",
-            ));
-        }
-        staging::rename_new(source, destination)
+    Ok(RenamedEntry {
+        path: destination.into_owned(),
+        identity,
     })
-}
-
-#[cfg(windows)]
-fn open_rename_source(path: &Path) -> io::Result<fs::File> {
-    use std::os::windows::fs::OpenOptionsExt;
-    use windows_sys::Win32::Storage::FileSystem::{
-        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-    };
-
-    // Query identity without reading file data or following a link.
-    fs::File::options()
-        .access_mode(0)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
-        .open(path)
 }
 
 fn rename_failure(error: io::Error) -> String {

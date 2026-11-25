@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { shallow } from "zustand/shallow";
 import { createWithEqualityFn } from "zustand/traditional";
+import { normalizePath } from "@/lib/paths";
 import type {
   TransferJobsSnapshotEvent,
   TransferProgressEvent,
@@ -22,7 +23,11 @@ import {
   updateLocalJobProgressTransition,
 } from "./transferStore.reducers";
 import { mergeVisibleJobs } from "./transferStore.selectors";
+import { collectPendingFilePaths, removeSettledFilePaths } from "./transferStore/pendingFileJobs";
+import type { SettledFilePaths } from "./transferStore/pendingFileJobs";
 import type {
+  FileJobKind,
+  FileJobRegistration,
   TransferJob,
   TransferJobMetadata,
   TransferJobRegistration,
@@ -30,6 +35,7 @@ import type {
 } from "./transferStore.types";
 
 export type {
+  FileJobRegistration,
   TransferJob,
   TransferJobMetadata,
   TransferJobRegistration,
@@ -57,6 +63,8 @@ type TransferStore = TransferStoreState & {
   completeJob: (id: string, patch?: Partial<TransferJob>) => void;
   failJob: (id: string, patch?: Partial<TransferJob>) => void;
   registerJob: (input: { label: string; items?: string[] }) => TransferJobRegistration;
+  registerFileJob: (input: { label: string; items: string[]; kind: FileJobKind }) => FileJobRegistration;
+  settleFilePaths: (settled: SettledFilePaths) => void;
   updateJobLabel: (id: string, label: string) => void;
   recordJobOutcome: (
     id: string,
@@ -72,10 +80,12 @@ const createTransferId = () => {
 };
 
 const DEFAULT_TRANSFER_STORE_STATE: TransferStoreState = {
+  snapshotRevision: -1,
   backendJobs: [],
   localJobs: [],
   jobMetadata: {},
   dismissedJobIds: {},
+  pendingFileJobs: {},
 };
 
 export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
@@ -108,6 +118,27 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
     set((state) => registerJobMetadataTransition(state, id, { label, items }));
     return { id };
   },
+  registerFileJob: ({ label, items, kind }) => {
+    const id = createTransferId();
+    const paths = new Set(items.map(normalizePath).filter(Boolean));
+    set((state) => ({
+      ...registerJobMetadataTransition(state, id, { label, items }),
+      pendingFileJobs: { ...state.pendingFileJobs, [id]: { kind, paths } },
+    }));
+    return {
+      id,
+      finish: () => set((state) => {
+        if (!state.pendingFileJobs[id]) return state;
+        const pendingFileJobs = { ...state.pendingFileJobs };
+        delete pendingFileJobs[id];
+        return { pendingFileJobs };
+      }),
+    };
+  },
+  settleFilePaths: (settled) => set((state) => {
+    const pendingFileJobs = removeSettledFilePaths(state.pendingFileJobs, settled);
+    return pendingFileJobs === state.pendingFileJobs ? state : { pendingFileJobs };
+  }),
   updateJobLabel: (id, label) =>
     set((state) => updateJobLabelTransition(state, id, label)),
   recordJobOutcome: (id, patch) =>
@@ -130,4 +161,9 @@ export const useTransferJobs = () => {
   );
 
   return useMemo(() => mergeVisibleJobs(backendJobs, localJobs), [backendJobs, localJobs]);
+};
+
+export const usePendingFilePaths = () => {
+  const jobs = useTransferStore((state) => state.pendingFileJobs);
+  return useMemo(() => collectPendingFilePaths(jobs), [jobs]);
 };

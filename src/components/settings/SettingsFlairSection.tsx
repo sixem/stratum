@@ -1,12 +1,13 @@
 // Visual flair toggles for the palette, accent, and ambient effects.
 import { useId } from "react";
 import { shallow } from "zustand/shallow";
-import type { AccentTheme } from "@/modules";
+import { ACCENT_THEMES } from "@/constants/settings";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useSettingsStore } from "@/modules";
 
-import { SettingsItem } from "./SettingsItem";
+import { SettingsItem, SettingsToggleItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
+import { SettingsTerminalAppearance, TERMINAL_APPEARANCE_ITEMS } from "./SettingsTerminalAppearance";
 
 export const FLAIR_SETTINGS_ITEMS = {
   darkMode: {
@@ -19,6 +20,7 @@ export const FLAIR_SETTINGS_ITEMS = {
     description: "Tint highlights and accents.",
     keywords: "theme appearance",
   },
+  ...TERMINAL_APPEARANCE_ITEMS,
   categoryTints: {
     label: "Category tints",
     description: "Subtle color cues for file types in grid and list views.",
@@ -29,25 +31,21 @@ export const FLAIR_SETTINGS_ITEMS = {
   },
   blurOverlays: {
     label: "Blur overlays",
-    description: "Backdrop blur for dialogs, menus, and tooltips.",
+    description: "Soften the background behind dialogs and menus.",
+  },
+  showTooltips: {
+    label: "Show tooltips",
+    description: "Show hints for controls and file items on hover or keyboard focus.",
+    keywords: "tool tips disable hide hover hints help popups",
   },
 } satisfies Record<string, SettingsItemText>;
 
 type SettingsFlairSectionProps = {
   sectionId: string;
+  open: boolean;
 };
 
-const ACCENT_THEMES: { id: AccentTheme; label: string }[] = [
-  { id: "red", label: "Red" },
-  { id: "purple", label: "Purple" },
-  { id: "green", label: "Green" },
-  { id: "yellow", label: "Yellow" },
-  { id: "orange", label: "Orange" },
-  { id: "teal", label: "Teal" },
-  { id: "white", label: "White" },
-];
-
-export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) => {
+export const SettingsFlairSection = ({ sectionId, open }: SettingsFlairSectionProps) => {
   const darkModeId = useId();
   const darkModeDescriptionId = `${darkModeId}-description`;
   const {
@@ -56,6 +54,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
     categoryTinting,
     ambientBackground,
     blurOverlays,
+    showTooltips,
     updateSettings,
   } = useSettingsStore(
     (state) => ({
@@ -64,6 +63,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
       categoryTinting: state.categoryTinting,
       ambientBackground: state.ambientBackground,
       blurOverlays: state.blurOverlays,
+      showTooltips: state.showTooltips,
       updateSettings: state.updateSettings,
     }),
     shallow,
@@ -71,7 +71,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
 
   return (
     <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Flair</div>
+      <div className="settings-section-title">Appearance</div>
       <SettingsItem
         item={FLAIR_SETTINGS_ITEMS.darkMode}
         labelFor={darkModeId}
@@ -105,6 +105,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
           ))}
         </div>
       </SettingsItem>
+      <SettingsTerminalAppearance open={open} />
       <SettingsItem item={FLAIR_SETTINGS_ITEMS.categoryTints}>
         <label className="settings-toggle">
           <input
@@ -139,6 +140,8 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
           <span />
         </label>
       </SettingsItem>
+      <SettingsToggleItem item={FLAIR_SETTINGS_ITEMS.showTooltips} checked={showTooltips}
+        onChange={(checked) => updateSettings({ showTooltips: checked })} />
     </section>
   );
 };

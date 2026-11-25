@@ -6,20 +6,22 @@ import type {
   WheelEvent as ReactWheelEvent,
 } from "react";
 import { FILE_TOOLTIP_DELAY_MS } from "@/constants";
-import type { EntryMeta, FileEntry, ThumbnailRequest } from "@/types";
-import { formatBytes, formatDate, getFileKind, normalizePath, splitNameExtension } from "@/lib";
+import type { EntryMeta, EntryMetaLookup, FileEntry, RequestScopedThumbnails, ThumbnailLookup, ThumbnailRequest } from "@/types";
+import { formatBytes, formatDate, getFileKind, splitNameExtension } from "@/lib";
 import { useEntryMetaRequest, useThumbnailRequest, useVirtualRange } from "@/hooks";
+import { useThumbnailScope } from "@/hooks/domain/metadata/useThumbnailScope";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
+import { FileTypeIcon } from "@/components/icons";
 
 type QuickPreviewStripProps = {
   open: boolean;
   items: FileEntry[];
-  activePath: string | null;
-  entryMeta: Map<string, EntryMeta>;
-  thumbnails: Map<string, string>;
+  activeIndex: number;
+  entryMeta: EntryMetaLookup;
+  thumbnails: ThumbnailLookup;
   thumbnailsEnabled: boolean;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
-  onRequestThumbs: (requests: ThumbnailRequest[]) => void;
+  onRequestThumbs: RequestScopedThumbnails;
   thumbResetKey?: string;
   onSelect: (path: string) => void;
   stripRef?: MutableRefObject<HTMLDivElement | null>;
@@ -53,7 +55,7 @@ const clamp = (value: number, min: number, max: number) => {
 export const QuickPreviewStrip = ({
   open,
   items,
-  activePath,
+  activeIndex,
   entryMeta,
   thumbnails,
   thumbnailsEnabled,
@@ -85,20 +87,6 @@ export const QuickPreviewStrip = ({
     () => items.slice(virtual.startIndex, virtual.endIndex),
     [items, virtual.endIndex, virtual.startIndex],
   );
-  const activePathKey = useMemo(
-    () => (activePath ? normalizePath(activePath) : ""),
-    [activePath],
-  );
-  const activeIndex = useMemo(
-    () => {
-      if (!activePath) return -1;
-      const strictIndex = items.findIndex((entry) => entry.path === activePath);
-      if (strictIndex >= 0) return strictIndex;
-      if (!activePathKey) return -1;
-      return items.findIndex((entry) => normalizePath(entry.path) === activePathKey);
-    },
-    [activePath, activePathKey, items],
-  );
 
   const markStripActive = useCallback(() => {
     if (!open) return;
@@ -124,7 +112,7 @@ export const QuickPreviewStrip = ({
   useEffect(() => {
     if (!open) return;
     markStripActive();
-  }, [activePath, markStripActive, open]);
+  }, [activeIndex, markStripActive, open]);
 
   const clearScrollRetry = useCallback(() => {
     scrollRetryCountRef.current = 0;
@@ -194,6 +182,8 @@ export const QuickPreviewStrip = ({
     const nextThumbs: ThumbnailRequest[] = [];
     visibleItems.forEach((entry) => {
       const path = entry.path;
+      // Audio uses the file glyph, so it needs no thumbnail or nearby metadata lookup.
+      if (getFileKind(entry.name) === "audio") return;
       nextMeta.push(path);
       const meta = entryMeta.get(path);
       nextThumbs.push({
@@ -208,7 +198,11 @@ export const QuickPreviewStrip = ({
   const requestLoading = !open;
   useEntryMetaRequest(requestLoading, metaPaths, onRequestMeta);
   const canRequestThumbs = thumbnailsEnabled && open;
-  useThumbnailRequest(requestLoading, canRequestThumbs, thumbRequests, onRequestThumbs, thumbResetKey);
+  const requestThumbs = useThumbnailScope("gallery", "strip", canRequestThumbs, onRequestThumbs);
+  useThumbnailRequest(
+    requestLoading, canRequestThumbs, thumbRequests, requestThumbs,
+    `${thumbResetKey ?? ""}:${canRequestThumbs}`,
+  );
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -306,25 +300,25 @@ export const QuickPreviewStrip = ({
       >
         {visibleItems.map((entry, index) => {
           const absoluteIndex = virtual.startIndex + index;
-          const isActive =
-            entry.path === activePath ||
-            (activePathKey !== "" && normalizePath(entry.path) === activePathKey);
+          const isActive = absoluteIndex === activeIndex;
           const distance = activeIndex >= 0 ? Math.abs(absoluteIndex - activeIndex) : 0;
           const opacity =
             isActive || activeIndex < 0 ? 1 : clamp(1 - distance * 0.08, 0.25, 0.9);
-          const thumbUrl = thumbnails.get(entry.path);
+          const kind = getFileKind(entry.name);
+          const thumbUrl = kind === "audio" ? undefined : thumbnails.get(entry.path);
           const thumbReadyKey = thumbUrl ? `${entry.path}|${thumbUrl}` : "";
           const thumbKnownReady = thumbReadyKey
             ? stripThumbReadyCache.has(thumbReadyKey)
             : false;
           const extension = splitNameExtension(entry.name).extension;
-          const kind = getFileKind(entry.name);
           const fallbackLabel =
             extension ? extension.toUpperCase() : kind === "video" ? "VID" : "IMG";
           const meta = entryMeta.get(entry.path);
           const sizeLabel = formatBytes(meta?.size ?? null);
           const modifiedLabel = formatDate(meta?.modified ?? null);
-          const tooltipText = `${entry.name}\nSize: (${sizeLabel})\nModified: ${modifiedLabel}`;
+          const tooltipText = kind === "audio" && !meta
+            ? entry.name
+            : `${entry.name}\nSize: (${sizeLabel})\nModified: ${modifiedLabel}`;
           return (
             <TooltipWrapper
               key={entry.path}
@@ -358,6 +352,8 @@ export const QuickPreviewStrip = ({
                       event.currentTarget.dataset.ready = "false";
                     }}
                   />
+                ) : kind === "audio" ? (
+                  <FileTypeIcon className="quick-preview-strip-audio-icon" fileKind="audio" extension={extension || null} isDir={false} />
                 ) : (
                   <div className="quick-preview-strip-fallback">{fallbackLabel}</div>
                 )}

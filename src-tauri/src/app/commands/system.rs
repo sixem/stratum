@@ -1,9 +1,8 @@
 // System-level command handlers (clipboard, shell, drag, open).
 use crate::platform::drag;
-use crate::services::{clipboard, opener, shells};
+use crate::services::{clipboard, opener, shells, transfer_manager};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
 use tauri::Manager;
 #[cfg(target_os = "windows")]
 use windows::core::w;
@@ -12,10 +11,37 @@ use windows::Win32::Foundation::WIN32_ERROR;
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IndexingLaunchPreferences {
     pub indexed_search_enabled: bool,
+}
+
+#[tauri::command]
+pub fn begin_transfer_shutdown(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
+    mode: transfer_manager::TransferShutdownMode,
+) -> Result<Option<u64>, String> {
+    transfer_manager.begin_shutdown(mode)
+}
+
+#[tauri::command]
+pub async fn wait_for_transfer_shutdown(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
+    ticket: u64,
+) -> Result<bool, String> {
+    let manager = transfer_manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager.wait_for_shutdown(ticket))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn reopen_transfer_queue(
+    transfer_manager: tauri::State<'_, transfer_manager::TransferManagerHandle>,
+    ticket: u64,
+) -> Result<bool, String> {
+    transfer_manager.reopen_queue(ticket)
 }
 
 #[tauri::command]
@@ -26,6 +52,15 @@ pub async fn set_clipboard_paths(
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         clipboard::set_clipboard_paths(clipboard_owner(&window)?, paths, mode.unwrap_or_default())
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn set_clipboard_text(window: tauri::Window, text: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        clipboard::set_clipboard_text(clipboard_owner(&window)?, text)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -230,19 +265,6 @@ pub fn is_windows_11() -> bool {
     }
 }
 
-#[tauri::command]
-pub fn get_indexing_launch_preferences(app: tauri::AppHandle) -> IndexingLaunchPreferences {
-    read_indexing_launch_preferences(&app).unwrap_or_default()
-}
-
-#[tauri::command]
-pub fn set_indexing_launch_preferences(
-    app: tauri::AppHandle,
-    preferences: IndexingLaunchPreferences,
-) -> Result<(), String> {
-    write_indexing_launch_preferences(&app, &preferences)
-}
-
 #[cfg(target_os = "windows")]
 fn query_windows_build_number() -> Option<u32> {
     let mut buffer = [0u16; 32];
@@ -269,15 +291,20 @@ fn query_windows_build_number() -> Option<u32> {
         .ok()
 }
 
-fn read_indexing_launch_preferences(
-    app: &tauri::AppHandle,
-) -> Result<IndexingLaunchPreferences, String> {
-    let path = indexing_launch_preferences_path(app)?;
+// Read the old preference for profiles that do not have an explicit saved setting yet.
+#[tauri::command]
+pub fn get_indexing_launch_preferences(
+    app: tauri::AppHandle,
+) -> Result<Option<IndexingLaunchPreferences>, String> {
+    let path = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| format!("Failed to resolve the app data directory: {error}"))?
+        .join("settings")
+        .join("indexing-launch.json");
     let raw = match fs::read_to_string(&path) {
         Ok(value) => value,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(IndexingLaunchPreferences::default())
-        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => {
             return Err(format!(
                 "Failed to read indexing launch preferences {}: {error}",
@@ -286,41 +313,10 @@ fn read_indexing_launch_preferences(
         }
     };
 
-    serde_json::from_str::<IndexingLaunchPreferences>(&raw).map_err(|error| {
+    serde_json::from_str(&raw).map(Some).map_err(|error| {
         format!(
             "Failed to parse indexing launch preferences {}: {error}",
             path.display()
         )
     })
-}
-
-fn write_indexing_launch_preferences(
-    app: &tauri::AppHandle,
-    preferences: &IndexingLaunchPreferences,
-) -> Result<(), String> {
-    let path = indexing_launch_preferences_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            format!(
-                "Failed to create indexing launch preferences directory {}: {error}",
-                parent.display()
-            )
-        })?;
-    }
-
-    let payload = serde_json::to_string_pretty(preferences)
-        .map_err(|error| format!("Failed to serialize indexing launch preferences: {error}"))?;
-    fs::write(&path, payload).map_err(|error| {
-        format!(
-            "Failed to write indexing launch preferences {}: {error}",
-            path.display()
-        )
-    })
-}
-
-fn indexing_launch_preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .app_local_data_dir()
-        .map(|path| path.join("settings").join("indexing-launch.json"))
-        .map_err(|error| format!("Failed to resolve the app data directory: {error}"))
 }

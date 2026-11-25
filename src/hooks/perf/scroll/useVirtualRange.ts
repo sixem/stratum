@@ -12,6 +12,7 @@ type VirtualRange = {
 type UseVirtualRangeOptions = {
   viewportHeight?: number;
   observeContainerResize?: boolean;
+  beforeLayoutMeasure?: () => void;
 };
 
 export function useVirtualRange(
@@ -22,7 +23,7 @@ export function useVirtualRange(
   // Extra scrollable padding before/after the virtualized content.
   insetTop = 0,
   insetBottom = 0,
-  { viewportHeight, observeContainerResize = true }: UseVirtualRangeOptions = {},
+  { viewportHeight, observeContainerResize = true, beforeLayoutMeasure }: UseVirtualRangeOptions = {},
 ): VirtualRange {
   const rafRef = useRef<number | null>(null);
   const rangeRef = useRef<VirtualRange>({
@@ -96,8 +97,9 @@ export function useVirtualRange(
   }, [containerRef, itemCount, itemHeight, insetBottom, insetTop, overscan, viewportHeight]);
 
   useLayoutEffect(() => {
+    beforeLayoutMeasure?.();
     updateRange();
-  }, [updateRange]);
+  }, [beforeLayoutMeasure, updateRange]);
 
   useEffect(() => {
     const element = containerRef.current;

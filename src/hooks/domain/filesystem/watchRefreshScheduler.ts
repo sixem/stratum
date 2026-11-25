@@ -1,5 +1,5 @@
 // Pure scheduler transitions for directory-watch refresh state.
-import { normalizePath } from "@/lib";
+import { folderPathKey } from "../../../lib/paths.ts";
 import type { Tab } from "@/types";
 
 export type WatchRefreshSchedulerState = {
@@ -29,6 +29,7 @@ export type EvaluateRefreshResult =
       suppressPresence: boolean;
     }
   | { kind: "queue" }
+  | { kind: "defer"; delayMs: number }
   | { kind: "mark-dirty"; tabId: string }
   | { kind: "noop" };
 
@@ -54,22 +55,23 @@ export const evaluateActiveRefresh = (
     return { kind: "queue" };
   }
 
-  const viewKey = normalizePath(viewPath);
-  const currentKey = normalizePath(context.currentPath);
+  const viewKey = folderPathKey(viewPath);
+  const currentKey = folderPathKey(context.currentPath);
   if (!viewKey || viewKey !== currentKey) {
     state.dirtyTabIds.add(tabId);
     return { kind: "mark-dirty", tabId };
   }
 
-  const lastRefresh = state.lastRefreshByTabId.get(tabId) ?? 0;
-  if (context.now - lastRefresh < context.refreshCooldownMs) {
+  if (state.refreshInFlight) {
     state.refreshQueued = true;
     return { kind: "queue" };
   }
 
-  if (state.refreshInFlight) {
-    state.refreshQueued = true;
-    return { kind: "queue" };
+  const lastRefresh = state.lastRefreshByTabId.get(tabId) ?? 0;
+  const delayMs = lastRefresh + context.refreshCooldownMs - context.now;
+  if (delayMs > 0) {
+    state.dirtyTabIds.add(tabId);
+    return { kind: "defer", delayMs };
   }
 
   state.refreshInFlight = true;
@@ -116,22 +118,22 @@ export const consumePendingChanges = (
 ): PendingChangeResult => {
   const renameKeys = new Set<string>();
   context.renamePaths.forEach((path) => {
-    const key = normalizePath(path);
+    const key = folderPathKey(path);
     if (key) {
       renameKeys.add(key);
     }
   });
 
-  const activeKey = normalizePath(context.activeTabPath);
+  const activeKey = folderPathKey(context.activeTabPath);
   let shouldRefreshActive = false;
   let shouldSuppressActive = false;
 
   context.pendingPaths.forEach((rawPath) => {
-    const key = normalizePath(rawPath);
+    const key = folderPathKey(rawPath);
     if (!key) return;
     const isRename = renameKeys.has(key);
     context.tabs.forEach((tab) => {
-      const tabKey = normalizePath(tab.path);
+      const tabKey = folderPathKey(tab.path);
       if (!tabKey || tabKey !== key) return;
       if (tab.id === context.activeTabId && activeKey === key) {
         shouldRefreshActive = true;
@@ -184,8 +186,8 @@ export const markActiveTabSynced = (
   now: number,
 ) => {
   if (!activeTabId) return;
-  const viewKey = normalizePath(activeTabPath);
-  const currentKey = normalizePath(currentPath);
+  const viewKey = folderPathKey(activeTabPath);
+  const currentKey = folderPathKey(currentPath);
   if (!viewKey || viewKey !== currentKey) return;
   state.dirtyTabIds.delete(activeTabId);
   state.renameDirtyTabIds.delete(activeTabId);

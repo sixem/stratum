@@ -1,7 +1,7 @@
 // Poll the catalog revision and drive status while indexed search is open.
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { getIndexedSearchSnapshot, listDriveInfo, rebuildIndexedDrive } from "@/api";
+import { getIndexedSearchSnapshot, listDriveInfo, nudgeIndexedSearch, rebuildIndexedDrive } from "@/api";
 import { toMessage } from "@/lib";
 import type {
   DriveInfo,
@@ -51,6 +51,10 @@ export const useIndexedSearchStatus = (open: boolean) => {
       `${drivePath}:${filesystem ?? ""}:${startedAt ?? 0}:${state}`,
     )
     .join("\n");
+
+  useEffect(() => {
+    if (open) void nudgeIndexedSearch().catch(() => {});
+  }, [open]);
 
   useEffect(() => {
     if (open) return;

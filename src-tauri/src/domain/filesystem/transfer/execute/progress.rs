@@ -3,25 +3,28 @@
 // to scan and keeps the hot loops focused on filesystem work.
 use super::super::common::emit_transfer_progress;
 use super::super::manifest::TransferManifestEntry;
-use crate::domain::filesystem::{TransferProgressCallback, TransferProgressUpdate};
+use crate::domain::filesystem::{
+    CompletedFileWork, CompletedTransferItem, TransferProgressCallback, TransferProgressUpdate,
+};
 use std::path::Path;
 
 pub(super) fn emit_root_completion(
-    on_progress: &mut Option<&mut TransferProgressCallback>,
+    path: String,
+    source_removed: bool,
     processed: usize,
     total: usize,
+    on_progress: &mut Option<&mut TransferProgressCallback>,
 ) {
     emit_transfer_progress(
         on_progress,
         TransferProgressUpdate {
             processed,
             total,
-            current_path: None,
-            current_bytes: None,
-            current_total_bytes: None,
-            progress_percent: None,
-            status_text: None,
-            rate_text: None,
+            completed_item: Some(CompletedTransferItem {
+                path,
+                source_removed,
+            }),
+            ..Default::default()
         },
     );
 }
@@ -38,11 +41,7 @@ pub(super) fn emit_path_progress(
             processed,
             total,
             current_path: Some(source.to_string_lossy().into_owned()),
-            current_bytes: None,
-            current_total_bytes: None,
-            progress_percent: None,
-            status_text: None,
-            rate_text: None,
+            ..Default::default()
         },
     );
 }
@@ -61,9 +60,7 @@ pub(super) fn emit_file_start(
             current_path: Some(entry.source.to_string_lossy().to_string()),
             current_bytes: Some(0),
             current_total_bytes: Some(entry.bytes_total),
-            progress_percent: None,
-            status_text: None,
-            rate_text: None,
+            ..Default::default()
         },
     );
 }
@@ -73,6 +70,7 @@ pub(super) fn emit_file_bytes(
     total: usize,
     current_bytes: u64,
     current_total_bytes: u64,
+    completed_file_work: Option<CompletedFileWork>,
     on_progress: &mut Option<&mut TransferProgressCallback>,
 ) {
     emit_transfer_progress(
@@ -80,12 +78,30 @@ pub(super) fn emit_file_bytes(
         TransferProgressUpdate {
             processed,
             total,
-            current_path: None,
             current_bytes: Some(current_bytes),
             current_total_bytes: Some(current_total_bytes),
-            progress_percent: None,
-            status_text: None,
-            rate_text: None,
+            completed_file_work,
+            ..Default::default()
+        },
+    );
+}
+
+pub(super) fn emit_manifest_move_completion(
+    root: &super::super::manifest::TransferManifestRoot,
+    processed: usize,
+    total: usize,
+    on_progress: &mut Option<&mut TransferProgressCallback>,
+) {
+    emit_transfer_progress(
+        on_progress,
+        TransferProgressUpdate {
+            processed,
+            total,
+            completed_file_work: Some(CompletedFileWork {
+                files: root.file_count,
+                bytes: root.byte_count,
+            }),
+            ..Default::default()
         },
     );
 }

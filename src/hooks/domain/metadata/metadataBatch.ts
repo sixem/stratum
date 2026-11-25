@@ -1,10 +1,10 @@
 // Walk each row once, skipping metadata already supplied by the listing or cache.
-import type { EntryMeta, FileEntry } from "@/types";
+import type { EntryMetaLookup, FileEntry } from "@/types";
 
 export const nextMetadataBatch = (
   entries: FileEntry[],
   cursor: number,
-  known: ReadonlyMap<string, EntryMeta>,
+  known: EntryMetaLookup,
   limit: number,
 ) => {
   const paths: string[] = [];

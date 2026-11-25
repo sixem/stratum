@@ -19,7 +19,7 @@ type UseSelectionShortcutsOptions = {
   contextMenuOpen: boolean;
   loading: boolean;
   settingsOpen: boolean;
-  indexedSearchOpen: boolean;
+  searchOverlayOpen: boolean;
   smartTabBlocked: boolean;
   viewMode: ViewMode;
   smartTabJump: boolean;
@@ -44,7 +44,7 @@ export const useSelectionShortcuts = ({
   contextMenuOpen,
   loading,
   settingsOpen,
-  indexedSearchOpen,
+  searchOverlayOpen,
   smartTabBlocked,
   viewMode,
   smartTabJump,
@@ -64,7 +64,7 @@ export const useSelectionShortcuts = ({
     const handleArrow = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       if (useBottomPaneStore.getState().active) return;
-      if (settingsOpen || contextMenuOpen || indexedSearchOpen) return;
+      if (settingsOpen || contextMenuOpen || searchOverlayOpen) return;
       if (previewOpen) return;
       if (loading || blockReveal) return;
 
@@ -102,18 +102,17 @@ export const useSelectionShortcuts = ({
     selectItem,
     selectionItems,
     settingsOpen,
-    indexedSearchOpen,
+    searchOverlayOpen,
     viewMode,
   ]);
 
   useEffect(() => {
     if (!smartTabJump) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (settingsOpen || contextMenuOpen || indexedSearchOpen || smartTabBlocked) return;
+      if (settingsOpen || contextMenuOpen || searchOverlayOpen || smartTabBlocked) return;
       if (previewOpen || loading || blockReveal || useBottomPaneStore.getState().active) return;
       if (!handleTabJump(event)) return;
 
-      // Suppress normal focus traversal so double-tap stays scoped to the view.
       event.preventDefault();
       event.stopPropagation();
     };
@@ -127,7 +126,7 @@ export const useSelectionShortcuts = ({
     handleTabJump,
     previewOpen,
     settingsOpen,
-    indexedSearchOpen,
+    searchOverlayOpen,
     smartTabBlocked,
     smartTabJump,
   ]);
@@ -139,7 +138,7 @@ export const useSelectionShortcuts = ({
       if (useBottomPaneStore.getState().active) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.repeat || event.isComposing) return;
-      if (settingsOpen || contextMenuOpen || indexedSearchOpen) return;
+      if (settingsOpen || contextMenuOpen || searchOverlayOpen) return;
       if (previewOpen) return;
       if (loading) return;
 
@@ -176,6 +175,6 @@ export const useSelectionShortcuts = ({
     onOpenEntry,
     previewOpen,
     settingsOpen,
-    indexedSearchOpen,
+    searchOverlayOpen,
   ]);
 };

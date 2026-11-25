@@ -36,6 +36,7 @@ pub enum IndexedDriveState {
     Scanning,
     Ready,
     Saved,
+    Excluded,
     Unsupported,
     Unavailable,
     Stale,
@@ -50,6 +51,7 @@ pub struct IndexedDriveStatus {
     pub filesystem: Option<String>,
     pub state: IndexedDriveState,
     pub indexable: bool,
+    pub searchable: bool,
     // Tracks when the current coarse state began so future UI can derive
     // durations without needing to redesign the contract.
     pub started_at: Option<u64>,
@@ -74,6 +76,7 @@ pub struct IndexedPathMatch {
     pub parent_path: Option<String>,
     pub drive_path: Option<String>,
     pub kind: IndexedEntryKind,
+    pub size_bytes: Option<u64>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -89,6 +92,25 @@ pub struct IndexedPathPageQuery {
     #[serde(flatten)]
     pub search: IndexedPathQuery,
     pub cursor: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexedFolderPageQuery {
+    #[serde(default)]
+    pub search: String,
+    pub limit: Option<usize>,
+    pub cursor: Option<String>,
+    #[serde(flatten)]
+    pub scope: IndexedFolderScope,
+}
+
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexedFolderScope {
+    // None searches all verified drives. An empty allowlist searches none.
+    pub scope_roots: Option<Vec<String>>,
+    pub max_depth: Option<usize>,
 }
 
 #[derive(Clone, Default, Serialize)]

@@ -41,14 +41,31 @@ pub async fn request_thumbnails(
     requests: Vec<thumbs::ThumbRequest>,
     options: thumbs::ThumbOptions,
     key: String,
+    scope: thumbs::ThumbScope,
     state: tauri::State<'_, thumbs::ThumbnailHandle>,
 ) -> Result<Vec<thumbs::ThumbHit>, String> {
     let handle = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        thumbs::request_thumbnails(handle.as_ref(), requests, options, key)
+        thumbs::request_thumbnails(handle.as_ref(), requests, options, key, scope)
     })
     .await
     .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub fn open_thumbnail_scope(
+    view: thumbs::ThumbView,
+    state: tauri::State<'_, thumbs::ThumbnailHandle>,
+) -> thumbs::ThumbScope {
+    thumbs::open_scope(state.inner().as_ref(), view)
+}
+
+#[tauri::command]
+pub fn close_thumbnail_scope(
+    scope: thumbs::ThumbScope,
+    state: tauri::State<'_, thumbs::ThumbnailHandle>,
+) {
+    thumbs::close_scope(state.inner().as_ref(), scope);
 }
 
 #[tauri::command]

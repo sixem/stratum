@@ -2,6 +2,7 @@
 // These modules keep planning, conflict checks, and execution concerns separate.
 mod common;
 pub(crate) mod delete_discovery;
+pub(crate) mod destination;
 mod execute;
 pub(crate) mod job_plan;
 mod manifest;

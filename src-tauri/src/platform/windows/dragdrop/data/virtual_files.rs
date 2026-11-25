@@ -61,12 +61,11 @@ pub(super) fn materialize(
     else {
         return Ok(None);
     };
-    materialize_selection(
-        DropStage::new(slots)?,
-        descriptors,
-        StagingBudget::new(),
-        |item, file, budget| write_contents(data, item, file, budget),
-    )
+    let stage = DropStage::new(slots)?;
+    let budget = StagingBudget::for_directory(stage.path())?;
+    materialize_selection(stage, descriptors, budget, |item, file, budget| {
+        write_contents(data, item, file, budget)
+    })
     .map(Some)
 }
 
@@ -163,7 +162,7 @@ fn materialize_selection(
         if let Some(size) = item.size.filter(|_| !item.directory) {
             declared_bytes_left = declared_bytes_left
                 .checked_sub(size)
-                .ok_or(DropDataError::TooLarge)?;
+                .ok_or(DropDataError::InsufficientSpace)?;
         }
     }
 
@@ -186,14 +185,14 @@ fn materialize_selection(
                 (destination, ()) = create_unique(&mut suffixes, &destination, name, |path| {
                     fs::create_dir(path)
                 })
-                .map_err(|_| DropDataError::StagingFailed)?;
+                .map_err(DropDataError::from_staging_io)?;
                 directories.insert(original.clone(), destination.clone());
             } else {
                 budget.reserve_entry()?;
                 let (path, mut file) = create_unique(&mut suffixes, &destination, name, |path| {
                     File::create_new(path)
                 })
-                .map_err(|_| DropDataError::StagingFailed)?;
+                .map_err(DropDataError::from_staging_io)?;
                 if item.size != Some(0) {
                     write(&item, &mut file, &mut budget)?;
                 }
@@ -279,7 +278,7 @@ fn write_contents(
         with_bytes(unsafe { medium.u.hGlobal }, |bytes| {
             // GlobalSize can include allocator padding past the descriptor's file size.
             let length = match item.size {
-                Some(size) => usize::try_from(size).map_err(|_| DropDataError::TooLarge)?,
+                Some(size) => usize::try_from(size).map_err(|_| DropDataError::InvalidSource)?,
                 None => bytes.len(),
             };
             let contents = bytes.get(..length).ok_or(DropDataError::InvalidSource)?;

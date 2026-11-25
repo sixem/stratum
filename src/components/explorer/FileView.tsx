@@ -9,11 +9,13 @@ import type { EntryItem } from "@/lib";
 import type { ScrollRequest } from "@/hooks";
 import type {
   EntryMeta,
+  EntryMetaLookup,
   FileEntry,
   DriveInfo,
   RenameCommitReason,
   SortState,
-  ThumbnailRequest,
+  RequestScopedThumbnails,
+  ThumbnailLookup,
   ViewMode,
   Place,
 } from "@/types";
@@ -40,6 +42,7 @@ type FileViewProps = {
   onOpenRecentNewTab?: (path: string) => void;
   drives: string[];
   drivesLoaded?: boolean;
+  driveInfoLoaded?: boolean;
   driveInfo: DriveInfo[];
   onOpenDrive: (path: string) => void;
   onOpenDriveNewTab?: (path: string) => void;
@@ -73,11 +76,11 @@ type FileViewProps = {
   onRenameChange: (value: string) => void;
   onRenameCommit: (reason: RenameCommitReason) => void;
   onRenameCancel: () => void;
-  entryMeta: Map<string, EntryMeta>;
+  entryMeta: EntryMetaLookup;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
-  thumbnails: Map<string, string>;
-  onRequestThumbs: (requests: ThumbnailRequest[]) => void;
+  thumbnails: ThumbnailLookup;
+  onRequestThumbs: RequestScopedThumbnails;
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;
   thumbnailFolders: boolean;
@@ -121,6 +124,7 @@ export const FileView = ({
   onOpenRecentNewTab,
   drives,
   drivesLoaded,
+  driveInfoLoaded,
   driveInfo,
   onOpenDrive,
   onOpenDriveNewTab,
@@ -187,6 +191,7 @@ export const FileView = ({
         onOpenRecentNewTab={onOpenRecentNewTab}
         drives={drives}
         drivesLoaded={drivesLoaded}
+        driveInfoLoaded={driveInfoLoaded}
         driveInfo={driveInfo}
         onOpenDrive={onOpenDrive}
         onOpenDriveNewTab={onOpenDriveNewTab}

@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import type { AccentTheme } from "@/modules";
-import type { EntryContextTarget, SortState, Tab, ViewMode } from "@/types";
+import type { EntryContextTarget, FileEntry, SortState, Tab, ViewMode } from "@/types";
+import type { MetaRequestOptions } from "@/hooks/domain/filesystem/fileManager.types";
 
 // Shared effect contracts for the app-shell side-effect composers.
 // Keeping these in one file makes the focused effect hooks easier to scan.
@@ -32,6 +33,7 @@ export type AppEffectView = {
   sidebarOpen: boolean;
   deferredSearchValue: string;
   sortState: SortState;
+  entryByPath: ReadonlyMap<string, FileEntry>;
   tabs: Tab[];
   contextMenuOpen: boolean;
 };
@@ -46,7 +48,7 @@ export type AppEffectActions = {
   ) => Promise<void>;
   requestEntryMeta: (
     paths: string[],
-    options?: { force?: boolean; defer?: boolean },
+    options?: MetaRequestOptions,
   ) => Promise<unknown>;
   clearDir: (options?: { silent?: boolean }) => void;
   setRenameTarget: (value: EntryContextTarget | null) => void;

@@ -10,7 +10,9 @@ import type { ConversionModalProps } from "@/components/overlay/conversionModal"
 import type { SettingsOverlayProps } from "@/components/overlay/SettingsOverlay";
 import type { QuickPreviewOverlayProps } from "@/components/preview/QuickPreviewOverlay";
 import { useBatchRenameStore } from "@/modules/batchRenameStore";
+import { usePromptStore } from "@/modules/promptStore";
 import type { ComponentProps } from "react";
+import { QuickMoveOverlay } from "./QuickMoveOverlay";
 
 const LazyConversionModal = lazy(async () => {
   const module = await import("@/components/overlay/conversionModal");
@@ -20,11 +22,6 @@ const LazyConversionModal = lazy(async () => {
 const LazySettingsOverlay = lazy(async () => {
   const module = await import("@/components/overlay/SettingsOverlay");
   return { default: module.SettingsOverlay };
-});
-
-const LazyQuickPreviewOverlay = lazy(async () => {
-  const module = await import("@/components/preview/QuickPreviewOverlay");
-  return { default: module.QuickPreviewOverlay };
 });
 
 const useDeferredMount = (open: boolean, prewarmOnIdle = false) => {
@@ -76,8 +73,38 @@ const useDeferredMount = (open: boolean, prewarmOnIdle = false) => {
     };
   }, [mounted, open, prewarmOnIdle]);
 
-  return mounted;
+  // An early open starts the same lazy import immediately, even before the idle callback.
+  return open || mounted;
 };
+
+type GalleryModule = typeof import("@/components/preview/QuickPreviewOverlay");
+
+function usePrewarmedGallery(open: boolean, close: () => void) {
+  const load = useDeferredMount(open, true);
+  const [gallery, setGallery] = useState<GalleryModule | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const shouldLoad = load && !gallery && (open || !loadFailed);
+
+  useEffect(() => {
+    if (!shouldLoad) return;
+    let active = true;
+    // Render as soon as the module arrives. Suspending on the first click can
+    // keep the fallback visible for hundreds of milliseconds, even on a local disk.
+    void import("@/components/preview/QuickPreviewOverlay").then(
+      module => { if (active) setGallery(module); },
+      () => {
+        if (!active) return;
+        setLoadFailed(true);
+        if (!open) return;
+        close();
+        usePromptStore.getState().showPrompt({ title: "Gallery unavailable", content: "Could not load the gallery." });
+      },
+    );
+    return () => { active = false; };
+  }, [shouldLoad, open, close]);
+
+  return gallery?.QuickPreviewOverlay;
+}
 
 type AppOverlaysProps = {
   about: ComponentProps<typeof AboutModal>;
@@ -99,7 +126,7 @@ export const AppOverlays = ({
   // Load heavyweight overlays on first use, then keep them mounted.
   const conversionMounted = useDeferredMount(conversion.open, true);
   const settingsMounted = useDeferredMount(settings.open, true);
-  const quickPreviewMounted = useDeferredMount(quickPreview.open, true);
+  const Gallery = usePrewarmedGallery(quickPreview.open, quickPreview.onClose);
   const batchRename = useBatchRenameStore((state) => state.session);
 
   return (
@@ -125,12 +152,9 @@ export const AppOverlays = ({
         </Suspense>
       ) : null}
       <IndexedSearchModal {...indexedSearch} previewOpen={quickPreview.open} />
+      <QuickMoveOverlay />
       <TooltipDisplay />
-      {quickPreviewMounted ? (
-        <Suspense fallback={null}>
-          <LazyQuickPreviewOverlay {...quickPreview} />
-        </Suspense>
-      ) : null}
+      {Gallery && quickPreview.open ? <Gallery {...quickPreview} /> : null}
     </>
   );
 };

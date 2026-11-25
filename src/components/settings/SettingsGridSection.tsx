@@ -11,7 +11,7 @@ import type { GridNameEllipsis, GridSize } from "@/modules";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useDeferredRange } from "./useDeferredRange";
 
-import { SettingsItem } from "./SettingsItem";
+import { SettingsGroup, SettingsItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
 
 export const GRID_SETTINGS_ITEMS = {
@@ -21,14 +21,14 @@ export const GRID_SETTINGS_ITEMS = {
     keywords: "auto columns",
   },
   rememberTabSize: {
-    label: "Remember thumbnail size per tab",
-    description: "Ctrl + scroll resizes the tab under the pointer. The preset applies to new tabs.",
-    keywords: "fixed grid size workspace",
-    requiresAutoGrid: false,
+    label: "Remember grid size per tab",
+    description: "Save Ctrl + scroll adjustments in each tab.",
+    keywords: "thumbnail preset auto columns workspace",
   },
   autoColumns: {
     label: "Auto columns",
-    description: "Pick how many columns the grid should fit across the view.",
+    description: "With per-tab sizing, this sets the default column count for new tabs.",
+    keywords: "grid auto-fit",
     requiresAutoGrid: true,
   },
   gap: {
@@ -38,6 +38,11 @@ export const GRID_SETTINGS_ITEMS = {
   corners: {
     label: "Grid corners",
     description: "Rounded cards or straight edges.",
+  },
+  centerGridItems: {
+    label: "Center grid items",
+    description: "Center cards within the pane when using a fixed grid size.",
+    keywords: "alignment",
   },
   details: {
     label: "Grid details",
@@ -75,6 +80,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
     rememberTabGridSize,
     gridAutoColumns,
     gridGap,
+    gridCentered,
     gridRounded,
     gridShowSize,
     gridShowExtension,
@@ -87,6 +93,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
       rememberTabGridSize: state.rememberTabGridSize,
       gridAutoColumns: state.gridAutoColumns,
       gridGap: state.gridGap,
+      gridCentered: state.gridCentered,
       gridRounded: state.gridRounded,
       gridShowSize: state.gridShowSize,
       gridShowExtension: state.gridShowExtension,
@@ -106,8 +113,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
   });
 
   return (
-    <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Grid</div>
+    <SettingsGroup id={sectionId} title="Grid" items={Object.values(GRID_SETTINGS_ITEMS)}>
       <SettingsItem item={GRID_SETTINGS_ITEMS.size}>
         <div className="settings-pills" role="group" aria-label="Grid size">
           {GRID_SIZES.map((size) => (
@@ -129,6 +135,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
             <input
               type="range"
               className="ui-range"
+              aria-label={GRID_SETTINGS_ITEMS.autoColumns.label}
               min={GRID_AUTO_COLUMNS_MIN}
               max={GRID_AUTO_COLUMNS_MAX}
               step={1}
@@ -137,19 +144,18 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
             <span className="settings-value">{autoColumnsRange.draft}</span>
           </div>
         </SettingsItem>
-      ) : (
-        <SettingsItem item={GRID_SETTINGS_ITEMS.rememberTabSize}>
-          <label className="settings-toggle">
-            <input
-              type="checkbox"
-              aria-label={GRID_SETTINGS_ITEMS.rememberTabSize.label}
-              checked={rememberTabGridSize}
-              onChange={(event) => updateSettings({ rememberTabGridSize: event.currentTarget.checked })}
-            />
-            <span />
-          </label>
-        </SettingsItem>
-      )}
+      ) : null}
+      <SettingsItem item={GRID_SETTINGS_ITEMS.rememberTabSize}>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            aria-label={GRID_SETTINGS_ITEMS.rememberTabSize.label}
+            checked={rememberTabGridSize}
+            onChange={(event) => updateSettings({ rememberTabGridSize: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
+      </SettingsItem>
       <SettingsItem item={GRID_SETTINGS_ITEMS.gap}>
         <div className="settings-range">
           <input
@@ -162,6 +168,17 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
           />
           <span className="settings-value">{gridGapRange.draft}px</span>
         </div>
+      </SettingsItem>
+      <SettingsItem item={GRID_SETTINGS_ITEMS.centerGridItems}>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            aria-label={GRID_SETTINGS_ITEMS.centerGridItems.label}
+            checked={gridCentered}
+            onChange={(event) => updateSettings({ gridCentered: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
       </SettingsItem>
       <SettingsItem item={GRID_SETTINGS_ITEMS.corners}>
         <div className="settings-pills" role="group" aria-label="Grid corners">
@@ -237,6 +254,6 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
           ))}
         </div>
       </SettingsItem>
-    </section>
+    </SettingsGroup>
   );
 };

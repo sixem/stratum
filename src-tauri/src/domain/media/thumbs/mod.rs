@@ -2,13 +2,13 @@
 // and cache management. The public API stays small so the rest of the app can
 // treat thumbnails as one service while the internals stay split by concern.
 mod cache;
+mod queue;
 mod render;
 mod request;
 mod types;
 #[cfg(target_os = "windows")]
 mod windows;
 
-use std::collections::{HashSet, VecDeque};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
@@ -19,7 +19,10 @@ use tauri::{AppHandle, Emitter};
 #[cfg(target_os = "windows")]
 use crate::platform::windows::com::StaComGuard;
 
-pub use types::{ThumbFormat, ThumbHit, ThumbOptions, ThumbReady, ThumbRequest};
+use queue::ThumbQueue;
+pub use types::{
+    ThumbFormat, ThumbHit, ThumbOptions, ThumbReady, ThumbRequest, ThumbScope, ThumbView,
+};
 
 #[derive(Clone, Copy)]
 enum ThumbKind {
@@ -43,12 +46,6 @@ struct ThumbMeta {
     modified: Option<u64>,
 }
 
-struct ThumbQueue {
-    items: VecDeque<ThumbJob>,
-    in_flight: HashSet<String>,
-    paused: bool,
-}
-
 struct CacheTrimState {
     last_trim: Option<SystemTime>,
     approx_total_bytes: Option<u64>,
@@ -68,9 +65,6 @@ pub struct ThumbnailState {
     trim_state: Mutex<CacheTrimState>,
     // Serialize trimming and clearing without holding the growth accounting lock during I/O.
     cache_maintenance: Mutex<()>,
-    // Keep a lightweight in-memory view of generated files so scroll-driven
-    // batches do not need to hit the filesystem for every cache lookup.
-    cache_index: Mutex<HashSet<String>>,
 }
 
 pub type ThumbnailHandle = Arc<ThumbnailState>;
@@ -89,12 +83,8 @@ pub fn init(app_handle: AppHandle) -> ThumbnailHandle {
 
     let state = Arc::new(ThumbnailState {
         app_handle,
-        cache_dir: cache_dir.clone(),
-        queue: Mutex::new(ThumbQueue {
-            items: VecDeque::new(),
-            in_flight: HashSet::new(),
-            paused: false,
-        }),
+        cache_dir,
+        queue: Mutex::new(ThumbQueue::default()),
         condvar: Condvar::new(),
         trim_state: Mutex::new(CacheTrimState {
             last_trim: None,
@@ -102,7 +92,6 @@ pub fn init(app_handle: AppHandle) -> ThumbnailHandle {
             pending_growth_bytes: 0,
         }),
         cache_maintenance: Mutex::new(()),
-        cache_index: Mutex::new(cache::load_cache_index(&cache_dir)),
     });
 
     // Leave room for UI threads by keeping the worker pool intentionally small.
@@ -125,8 +114,25 @@ pub fn request_thumbnails(
     requests: Vec<ThumbRequest>,
     options: ThumbOptions,
     key: String,
+    scope: ThumbScope,
 ) -> Vec<ThumbHit> {
-    request::request_thumbnails(state, requests, options, key)
+    request::request_thumbnails(state, requests, options, key, scope)
+}
+
+pub fn open_scope(state: &ThumbnailState, view: ThumbView) -> ThumbScope {
+    state
+        .queue
+        .lock()
+        .expect("thumb queue lock")
+        .open_scope(view)
+}
+
+pub fn close_scope(state: &ThumbnailState, scope: ThumbScope) {
+    state
+        .queue
+        .lock()
+        .expect("thumb queue lock")
+        .close_scope(scope);
 }
 
 pub fn set_paused(state: &ThumbnailState, paused: bool) {
@@ -177,12 +183,10 @@ fn worker_loop(state: ThumbnailHandle) {
 
         {
             let mut queue = state.queue.lock().expect("thumb queue lock");
-            queue.in_flight.remove(&job.id);
+            queue.finish(&job);
         }
 
         if let Ok(output) = result {
-            cache::mark_cache_entry(&state, &job.id);
-            cache::maybe_trim_cache(state.as_ref(), job.options.cache_mb, output.added_bytes);
             let payload = ThumbReady {
                 path: job.path.to_string_lossy().to_string(),
                 thumb_path: output.path.to_string_lossy().to_string(),
@@ -190,6 +194,7 @@ fn worker_loop(state: ThumbnailHandle) {
                 signature: job.signature,
             };
             let _ = state.app_handle.emit("thumb_ready", payload);
+            cache::maybe_trim_cache(state.as_ref(), job.options.cache_mb, output.added_bytes);
         }
     }
 }

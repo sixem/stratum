@@ -1,4 +1,4 @@
-// Reserve one full per-drop budget before creating any temporary output.
+// Limit the number of pending stages that can hold temporary output.
 use super::{data::DropDataError, staging::StageDirectory};
 use std::sync::{Arc, Mutex};
 

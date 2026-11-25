@@ -26,8 +26,13 @@ export const getIndexedSearchSnapshot = () => {
   return pendingSnapshot;
 };
 
-export const setIndexedSearchEnabled = (enabled: boolean) =>
-  invoke<void>("set_indexed_search_enabled", { enabled });
+export const setIndexedSearchEnabled = (enabled: boolean, excludedDriveRoots: string[]) =>
+  invoke<void>("set_indexed_search_enabled", { enabled, excludedDriveRoots });
+
+export const listIndexableDriveRoots = () =>
+  invoke<string[]>("list_indexable_drive_roots");
+
+export const nudgeIndexedSearch = () => invoke<void>("nudge_indexed_search");
 
 export const getIndexedSearchCatalogPath = () =>
   invoke<string>("get_indexed_search_catalog_path");

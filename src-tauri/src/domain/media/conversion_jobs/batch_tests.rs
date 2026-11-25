@@ -82,6 +82,35 @@ fn colliding_batch_is_rejected_before_changing_either_input() {
     assert_eq!(fs::read(b).unwrap(), b"second original");
 }
 
+#[test]
+fn destination_reports_only_successful_batch_outputs() {
+    let files = Fixture::new();
+    let valid = files.0.join("valid.png");
+    let corrupt = files.0.join("corrupt.png");
+    let valid_output = files.0.join("valid.jpg");
+    let corrupt_output = files.0.join("corrupt.jpg");
+    image::RgbImage::new(2, 2).save(&valid).unwrap();
+    fs::write(&corrupt, b"corrupt image").unwrap();
+
+    let item = |source: &Path, output: &Path| {
+        serde_json::from_value(json!({
+            "kind": "image", "sourcePath": source, "destinationPath": output,
+            "deleteSourceAfterSuccess": false, "options": { "format": "jpeg" }
+        }))
+        .unwrap()
+    };
+    let report = convert_items(
+        vec![item(&valid, &valid_output), item(&corrupt, &corrupt_output)],
+        None,
+        None,
+    )
+    .unwrap();
+    assert_eq!((report.converted, report.failed), (1, 1));
+    let destination = report.destination.target().unwrap();
+    assert_eq!(destination.folder_path, files.0);
+    assert_eq!(destination.entry_path, Some(valid_output));
+}
+
 fn run(command: &mut Command) -> Vec<u8> {
     let result = command.output().expect("start FFmpeg test tool");
     assert!(

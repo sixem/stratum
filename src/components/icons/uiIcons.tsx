@@ -1,6 +1,15 @@
 // UI SVG icons used across navigation, controls, and toolbars.
 import type { IconProps } from "./types";
 
+export const LinkPanesIcon = ({ className, paused = false }: IconProps & { paused?: boolean }) => (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
+    <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13l4-4m-8 2-1 1a4.2 4.2 0 0 0 6 6l2-2m-2-8 2-2a4.2 4.2 0 0 1 6 6l-1 1" />
+      {paused && <path d="M18 16v4m3-4v4" />}
+    </g>
+  </svg>
+);
+
 export const DocumentIcon = ({ className }: IconProps) => {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
@@ -170,6 +179,14 @@ export const HourglassIcon = ({ className }: IconProps) => {
   );
 };
 
+export const SaveIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12l4 4v12a2 2 0 0 1-2 2Z" />
+    <path d="M7 3v6h9M7 21v-7h10v7" />
+  </svg>
+);
+
 // Compact checkmark icon for success states and confirmations.
 export const CheckmarkIcon = ({ className }: IconProps) => {
   return (
@@ -237,6 +254,19 @@ export const NavArrowIcon = ({ className }: IconProps) => {
     </svg>
   );
 };
+
+export const PlayIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+    <path d="M8 5.5v13l11-6.5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+  </svg>
+);
+
+export const PauseIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+    <rect x="6" y="5" width="4" height="14" rx="1" />
+    <rect x="14" y="5" width="4" height="14" rx="1" />
+  </svg>
+);
 
 // Parent-folder "up/back" icon.
 export const ParentUpIcon = ({ className }: IconProps) => {

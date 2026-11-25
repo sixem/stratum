@@ -13,6 +13,7 @@ pub(crate) fn staged_path_spelling_supported(path: &str) -> bool {
 #[derive(Default)]
 pub struct IncomingDrops {
     pub(super) staging_slots: StageSlots,
+    pub(super) async_slots: StageSlots,
     state: Mutex<DropRegistry>,
 }
 

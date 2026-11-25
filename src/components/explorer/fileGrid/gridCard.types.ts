@@ -12,6 +12,7 @@ export type ThumbnailIconProps = {
   fileKind: FileKind;
   extension: string | null;
   thumbUrl?: string;
+  onThumbError?: (url: string) => void;
   appIconUrl?: string | null;
   executableIconUrl?: string | null;
   appIconsEnabled?: boolean;
@@ -20,6 +21,7 @@ export type ThumbnailIconProps = {
 export type ThumbnailPreviewProps = {
   src: string;
   onReadyChange?: (ready: boolean) => void;
+  onLoadError?: (url: string) => void;
 };
 
 export type ParentCardProps = {
@@ -41,6 +43,8 @@ export type EntryCardProps = {
   extension: string | null;
   sizeLabel: string | null;
   thumbUrl?: string;
+  thumbPath?: string;
+  onThumbError?: (path: string, url: string) => void;
   appIconUrl?: string | null;
   executableIconUrl?: string | null;
   appIconsEnabled: boolean;

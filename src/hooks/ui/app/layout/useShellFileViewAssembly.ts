@@ -1,6 +1,7 @@
 // Translates the shell data + interaction models into the render-facing slices
 // consumed by AppContent, status UI, and overlay builders.
 import { useStatusLabels } from "@/hooks/domain/metadata";
+import { usePendingFilePaths } from "@/modules/transferStore";
 import type { FileEntry } from "@/types";
 import { useAppFileViewController } from "../useAppFileViewController";
 import type { UseShellViewModelOptions } from "./shellViewModel.types";
@@ -38,6 +39,7 @@ export const useShellFileViewAssembly = ({
   dataPipeline,
   interactionModel,
 }: UseShellFileViewAssemblyOptions) => {
+  const { pendingDeletePaths, pendingTransferPaths } = usePendingFilePaths();
   const { countLabel, selectionLabel } = useStatusLabels({
     isFiltered: dataPipeline.isFiltered,
     visibleCount: dataPipeline.visibleCount,
@@ -68,8 +70,8 @@ export const useShellFileViewAssembly = ({
           scrollRestoreTop: resolvedView.scrollRestoreTop,
           scrollRequest: scrollState.scrollRequest,
           smoothScroll: settings.smoothScroll,
-          pendingDeletePaths: fileManager.pendingDeletePaths,
-          pendingTransferPaths: fileDrop.pendingTransferPaths,
+          pendingDeletePaths,
+          pendingTransferPaths,
           sortState: resolvedView.sortState,
           canGoUp: resolvedView.canGoUp,
         },
@@ -79,6 +81,7 @@ export const useShellFileViewAssembly = ({
           onOpenRecentNewTab: navigationController.handleOpenInNewTab,
           drives: fileManager.drives,
           drivesLoaded: fileManager.drivesLoaded,
+          driveInfoLoaded: fileManager.driveInfoLoaded,
           driveInfo: fileManager.driveInfo,
           onOpenDrive: navigationController.handleSelectDrive,
           onOpenDriveNewTab: navigationController.handleOpenInNewTab,
@@ -162,11 +165,12 @@ export const useShellFileViewAssembly = ({
       folderFailed: resolvedView.viewLoading && fileManager.failedPath === resolvedView.viewPath,
       onRetryFolder: interactionModel.handleManualRefresh,
       mainRef: viewState.mainRef,
+      activeTabId: resolvedView.activeTabId,
       onContextMenu: layoutContextMenu,
       onContextMenuDown: layoutContextMenuDown,
       fileViewProps,
       bottomMenu: interactionModel.bottomMenu,
-      bottomCommandsBlocked: dataPipeline.smartTabBlocked || interactionModel.previewOpen,
+      paneCommandsBlocked: dataPipeline.smartTabBlocked || interactionModel.previewOpen,
       bottomPreview: interactionModel.bottomPreview,
     },
     selection: {
@@ -200,6 +204,7 @@ export const useShellFileViewAssembly = ({
       requestThumbnails: dataPipeline.requestThumbnails,
       thumbnailResetKey: dataPipeline.thumbnailResetKey,
       handlePreviewSelect: interactionModel.handlePreviewSelect,
+      closePreview: interactionModel.closePreviewIfOpen,
       smartTabJump: settings.smartTabJump,
       smartTabBlocked: dataPipeline.smartTabBlocked,
       handleOpenThumbCache: interactionModel.handleOpenThumbCache,

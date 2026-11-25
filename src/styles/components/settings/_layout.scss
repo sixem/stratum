@@ -13,10 +13,7 @@
   }
 
   .settings-subtitle {
-    font-size: var(--font-size-sm);
-    color: var(--muted);
     max-width: 520px;
-    line-height: 1.4;
   }
 
   .settings-body {
@@ -24,7 +21,7 @@
     grid-template-columns: 160px minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
     gap: 18px;
-    padding: 16px 18px 20px;
+    padding: 16px 18px 12px;
     align-items: stretch;
     flex: 1;
     min-height: 0;
@@ -43,23 +40,42 @@
 
   .settings-nav {
     display: grid;
+    align-content: start;
     gap: 6px;
     min-height: 0;
     overflow: auto;
-    padding-right: 4px;
+    margin: 0;
+    padding: 0 4px 0 0;
+    list-style: none;
   }
 
-  .settings-sidebar-actions {
+  .settings-footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 18px;
     border-top: var(--surface-border-width) solid var(--stroke);
-    padding-top: 12px;
-    display: grid;
-    gap: 8px;
+    @include control.footer-text();
   }
 
-  .settings-reset {
-    width: 100%;
-    text-align: center;
-    justify-content: center;
+  .settings-footer-button {
+    padding: 5px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--text);
+    }
+  }
+
+  .settings-footer-reset {
+    margin-inline-start: auto;
   }
 
   .btn {
@@ -80,6 +96,7 @@
   }
 
   .settings-nav-item {
+    width: 100%;
     padding: 6px 10px;
     @include control.panel-card(8px, var(--surface-nav));
     font-size: var(--font-size-sm);
@@ -113,58 +130,86 @@
     border-color: color-mix(in srgb, var(--stroke), var(--accent) 18%);
   }
 
-  .settings-sidebar-footer {
-    margin-top: auto;
-    padding-top: 12px;
-    border-top: var(--surface-border-width) solid var(--stroke);
+  .settings-nav-groups {
     display: grid;
-    gap: 8px;
+    gap: 2px;
+    margin: 4px 0 2px 11px;
+    padding: 0 0 0 7px;
+    border-inline-start: var(--surface-border-width) solid var(--stroke);
+    list-style: none;
   }
 
-  .settings-vitals-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .settings-vitals-actions .btn {
+  .settings-nav-group {
     width: 100%;
-    justify-content: center;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: color-mix(in srgb, var(--text) 72%, var(--muted));
+    font-family: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    text-align: start;
+    cursor: pointer;
+
+    &:hover,
+    &[aria-current="location"] {
+      background: rgba(var(--accent-rgb), 0.09);
+      color: var(--text);
+    }
+
+    &:focus-visible {
+      outline: 2px solid rgba(var(--accent-rgb), 0.56);
+      outline-offset: -2px;
+    }
   }
 
-  .settings-stat .settings-stat-value.is-ok {
-    color: #6fe08a;
+  .settings-diagnostics {
+    border-top: var(--surface-border-width) solid var(--stroke);
+    margin-top: 4px;
+    padding-top: 12px;
+
+    summary {
+      color: var(--text);
+      font-size: var(--font-size-md);
+      font-weight: 600;
+      cursor: pointer;
+    }
   }
 
-  .settings-stat .settings-stat-value.is-missing {
-    color: #f28b8b;
-  }
+  .settings-media-status {
+    display: inline-block;
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: var(--font-size-xs);
 
-  .settings-sidebar-title {
-    @include control.eyebrow-label(var(--font-size-2xs), 0.16em);
+    &.is-ok { color: #6fe08a; }
+    &.is-missing { color: #f28b8b; }
   }
 
   .settings-stats {
     display: grid;
-    gap: 6px;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px 12px;
+    margin: 12px 0 2px;
   }
 
   .settings-stat {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    font-size: var(--font-size-xs);
-    color: var(--muted);
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: color-mix(in srgb, var(--text) 50%, var(--muted));
   }
 
-  .settings-stat span:last-child {
+  .settings-stat dd {
+    margin: 0;
     color: var(--text);
     font-variant-numeric: tabular-nums;
-    text-align: right;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 120px;
   }
 
   .settings-main {
@@ -234,7 +279,7 @@
     scrollbar-gutter: stable;
   }
 
-  .settings-search-results {
+  :is(.settings-search-results, .settings-category-panel) {
     display: grid;
     gap: 12px;
   }
@@ -252,7 +297,7 @@
     font-size: var(--font-size-sm);
   }
 
-  .settings-tab-panel {
+  .settings-category-panel {
     min-height: 0;
   }
 

@@ -5,16 +5,12 @@ use std::path::Path;
 
 use image::io::Reader as ImageReader;
 
-use super::{ThumbFormat, ThumbJob, ThumbKind, ThumbRenderOutput, MAX_THUMB_SIZE};
+use super::{cache, ThumbFormat, ThumbJob, ThumbKind, ThumbRenderOutput, MAX_THUMB_SIZE};
 
 mod svg;
 
 pub(super) fn render_thumbnail(job: &ThumbJob) -> Result<ThumbRenderOutput, String> {
-    if job
-        .thumb_path
-        .metadata()
-        .is_ok_and(|metadata| metadata.is_file() && metadata.len() > 0)
-    {
+    if cache::has_thumbnail(&job.thumb_path) {
         return Ok(ThumbRenderOutput {
             path: job.thumb_path.clone(),
             added_bytes: 0,
@@ -103,8 +99,7 @@ fn render_video_thumbnail(_path: &Path, _size: u32) -> Result<image::DynamicImag
 mod tests {
     use super::*;
 
-    #[test]
-    fn failed_thumbnail_encoding_leaves_no_cache_file() {
+    fn test_directory() -> std::path::PathBuf {
         let mut nonce = [0; 8];
         getrandom::fill(&mut nonce).unwrap();
         let dir = std::env::temp_dir().join(format!(
@@ -112,6 +107,12 @@ mod tests {
             u64::from_le_bytes(nonce)
         ));
         fs::create_dir(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn failed_thumbnail_encoding_leaves_no_cache_file() {
+        let dir = test_directory();
         let target = dir.join("test.webp");
 
         let failed = publish_thumbnail(&target, |file| {
@@ -127,5 +128,40 @@ mod tests {
         assert_eq!(count_after_failure, 0);
         assert_eq!(succeeded.unwrap(), 8);
         assert_eq!(contents.unwrap(), b"complete");
+    }
+
+    #[test]
+    fn deleted_cached_thumbnail_is_regenerated_on_request() {
+        let dir = test_directory();
+        let source = dir.join("source.png");
+        image::RgbImage::from_pixel(5, 5, image::Rgb([11, 23, 37]))
+            .save(&source)
+            .unwrap();
+        let job = ThumbJob {
+            id: "generated.webp".into(),
+            path: source,
+            thumb_path: dir.join("cache").join("generated.webp"),
+            key: String::new(),
+            signature: String::new(),
+            options: super::super::ThumbOptions {
+                size: 4,
+                quality: 80,
+                format: ThumbFormat::Webp,
+                allow_videos: false,
+                allow_svgs: false,
+                dark_svg_previews: false,
+                cache_mb: 32,
+            },
+            kind: ThumbKind::Image,
+        };
+        assert!(render_thumbnail(&job).unwrap().added_bytes > 0);
+        assert!(cache::has_thumbnail(&job.thumb_path));
+        assert_eq!(render_thumbnail(&job).unwrap().added_bytes, 0);
+
+        fs::remove_file(&job.thumb_path).unwrap();
+        assert!(!cache::has_thumbnail(&job.thumb_path));
+        assert!(render_thumbnail(&job).unwrap().added_bytes > 0);
+        assert!(cache::has_thumbnail(&job.thumb_path));
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

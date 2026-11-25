@@ -3,14 +3,16 @@ import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { renameEntry } from "@/api";
 import { UNDO_STACK_LIMIT } from "@/constants";
-import { getParentPath, normalizePath, tabLabel, toMessage } from "@/lib";
+import { getParentPath, tabLabel, toMessage } from "@/lib";
 import { bumpDirectoryChildVersions, usePromptStore } from "@/modules";
+import { updateRenamedFolderLocations } from "@/modules/renamedFolderLocations";
 import { useFileManagerCopy } from "./fileManagerCopy";
 import { useFileManagerCreate } from "./fileManagerCreate";
 import { useFileManagerDelete } from "./fileManagerDelete";
 import { useFileManagerUndo } from "./fileManagerUndo";
 import type { BeginFileActivity } from "./useFileActivity";
-import type { UndoAction, UndoMoveEntry } from "./fileManagerUndo";
+import type { UndoAction, UndoMoveEntry, UndoRenameEntry } from "./fileManagerUndo";
+import type { CreatedFolder } from "@/types/fs";
 import type {
   FileManagerDebug,
   RenameBatchResult,
@@ -44,15 +46,6 @@ export const useFileMutations = ({
   const homeDriveKeyRef = useRef<string | null>(null);
   // Suppress add/remove presence animation while undoing rename so entries stay in-place.
   const [suppressUndoPresence, setSuppressUndoPresence] = useState(false);
-  // Tracks entries currently being deleted so views can show immediate progress feedback.
-  const [pendingDeletePaths, setPendingDeletePaths] = useState<Set<string>>(new Set());
-
-  const toPathKey = useCallback((path: string) => {
-    const trimmed = path.trim();
-    if (!trimmed) return "";
-    return normalizePath(trimmed) ?? trimmed;
-  }, []);
-
   const pushUndo = useCallback((action: UndoAction) => {
     const stack = undoStackRef.current;
     stack.push(action);
@@ -62,10 +55,10 @@ export const useFileMutations = ({
   }, []);
 
   const canUndo = useCallback(() => undoStackRef.current.length > 0, []);
-  const recordMoveUndo = useCallback((entries: UndoMoveEntry[]) => {
+  const recordMoveUndo = useCallback((entries: UndoMoveEntry[], createdFolder?: CreatedFolder) => {
     const filtered = entries.filter((entry) => entry.from.trim() && entry.to.trim());
     if (filtered.length === 0) return;
-    pushUndo({ type: "move", entries: filtered });
+    pushUndo({ type: "move", entries: filtered, createdFolder });
   }, [pushUndo]);
   const setTransferInFlight = useCallback((active: boolean) => {
     transferInFlightRef.current = active;
@@ -82,7 +75,7 @@ export const useFileMutations = ({
     onDirectoryChildrenChanged: notifyDirectoryChildrenChanged,
   });
 
-  const { duplicateEntriesInView, pasteEntriesInView } = useFileManagerCopy({
+  const { copyEntriesToFolder, duplicateEntriesInView, moveEntriesInView, createFolderWithSelection, pasteEntriesInView } = useFileManagerCopy({
     beginFileActivity,
     currentPathRef,
     copyInFlightRef,
@@ -92,7 +85,7 @@ export const useFileMutations = ({
     log,
   });
 
-  const { deleteEntriesInView: runDeleteEntriesInView } = useFileManagerDelete({
+  const { deleteEntriesInView } = useFileManagerDelete({
     deleteInFlightRef,
     trashRootRef,
     homePathRef,
@@ -102,36 +95,6 @@ export const useFileMutations = ({
     onDirectoryChildrenChanged: notifyDirectoryChildrenChanged,
     log,
   });
-
-  const deleteEntriesInView = useCallback(
-    async (paths: string[]) => {
-      const nextPending = new Set(
-        paths
-          .map((path) => toPathKey(path))
-          .filter(Boolean),
-      );
-      if (nextPending.size === 0) return null;
-
-      setPendingDeletePaths((previous) => {
-        if (previous.size === 0) return new Set(nextPending);
-        const merged = new Set(previous);
-        nextPending.forEach((path) => merged.add(path));
-        return merged;
-      });
-
-      try {
-        return await runDeleteEntriesInView(paths);
-      } finally {
-        setPendingDeletePaths((previous) => {
-          if (previous.size === 0) return previous;
-          const next = new Set(previous);
-          nextPending.forEach((path) => next.delete(path));
-          return next;
-        });
-      }
-    },
-    [runDeleteEntriesInView, toPathKey],
-  );
 
   const performRenameRequests = useCallback(
     async (
@@ -147,7 +110,7 @@ export const useFileMutations = ({
         if (!path.trim() || !nextName.trim()) return;
         if (seen.has(path)) return;
         seen.add(path);
-        nextRenames.push({ path, nextName });
+        nextRenames.push(item);
       });
       if (nextRenames.length === 0) return null;
       renameInFlightRef.current = true;
@@ -156,12 +119,22 @@ export const useFileMutations = ({
         : `Renaming ${nextRenames.length} items`);
       const failures: RenameFailure[] = [];
       const renamed = new Map<string, string>();
+      const undoEntries: UndoRenameEntry[] = [];
       try {
         for (const item of nextRenames) {
           try {
-            const nextPath = await renameEntry(item.path, item.nextName);
-            if (nextPath) {
-              renamed.set(item.path, nextPath);
+            const result = await renameEntry(item.path, item.nextName, item.expectedIdentity);
+            if (result.path) {
+              renamed.set(item.path, result.path);
+              if (item.updateFolderLocations) updateRenamedFolderLocations(item.path, result.path);
+              if (options?.recordUndo !== false && result.identity) {
+                undoEntries.push({
+                  from: item.path,
+                  to: result.path,
+                  identity: result.identity,
+                  updateFolderLocations: item.updateFolderLocations,
+                });
+              }
             }
           } catch (error) {
             failures.push({
@@ -196,11 +169,7 @@ export const useFileMutations = ({
               getParentPath(to) ?? "",
             ]),
           );
-          if (options?.recordUndo !== false) {
-            const undoEntries = Array.from(renamed).map(([from, to]) => ({
-              from,
-              to,
-            }));
+          if (undoEntries.length > 0) {
             pushUndo({ type: "rename", entries: undoEntries });
           }
         }
@@ -214,8 +183,8 @@ export const useFileMutations = ({
   );
 
   const renameEntryInView = useCallback(
-    async (path: string, newName: string) => {
-      const result = await performRenameRequests([{ path, nextName: newName }]);
+    async (path: string, newName: string, options?: Pick<RenameRequest, "updateFolderLocations">) => {
+      const result = await performRenameRequests([{ path, nextName: newName, ...options }]);
       if (!result) return null;
       return result.renamed.get(path) ?? null;
     },
@@ -243,9 +212,11 @@ export const useFileMutations = ({
 
   return {
     suppressUndoPresence,
-    pendingDeletePaths,
     deleteEntriesInView,
+    copyEntriesToFolder,
     duplicateEntriesInView,
+    moveEntriesInView,
+    createFolderWithSelection,
     pasteEntriesInView,
     createFolderInView,
     createFileInView,

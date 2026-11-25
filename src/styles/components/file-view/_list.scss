@@ -11,10 +11,28 @@
   min-height: 0;
   flex: 1;
   padding: 0;
-  --list-columns: 1fr 90px 150px;
+  --list-columns: minmax(0, 1fr);
+  --list-size-column: 90px;
+  --list-modified-column: 150px;
   --list-inset-end: 4px;
   --list-scrollbar-gap: 8px;
   --list-row-inline-padding: 10px;
+
+  &[data-show-size="true"] {
+    --list-columns: minmax(0, 1fr) var(--list-size-column);
+  }
+
+  &[data-show-modified="true"] {
+    --list-columns: minmax(0, 1fr) var(--list-modified-column);
+  }
+
+  &[data-show-size="true"][data-show-modified="true"] {
+    --list-columns: minmax(0, 1fr) var(--list-size-column) var(--list-modified-column);
+  }
+
+  &[data-density="compact"] .row {
+    padding-block: 2px;
+  }
 }
 
 // Scope list internals to the list container.
@@ -388,11 +406,7 @@
 
 @media (max-width: 720px) {
   :where(.file-list) {
-    --list-columns: 1fr;
-  }
-
-  :where(.file-list) .row .size,
-  :where(.file-list) .row .modified {
-    text-align: left;
+    --list-size-column: 72px;
+    --list-modified-column: 130px;
   }
 }

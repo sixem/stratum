@@ -6,12 +6,14 @@ import { showEntryRenamePrompt } from "@/hooks/ui/menus/showEntryRenamePrompt";
 import { useEntryMenuItems } from "@/hooks/ui/menus/useEntryMenuItems";
 import { useWindowsContextMenu } from "@/hooks/ui/menus/useWindowsContextMenu";
 import { getParentPath, isPreviewableEntry } from "@/lib";
+import { applyContextMenuVisibility } from "@/lib/contextMenuVisibility";
+import { useSettingsStore } from "@/modules";
 import { showBottomPane } from "@/modules/bottomPaneStore";
 import type { ContextMenuItem, EntryContextTarget, IndexedPathMatch } from "@/types";
 
 export type IndexedSearchMenuActions = Pick<Parameters<typeof useEntryMenuItems>[0],
   "confirmDelete" | "menuShowConvert" | "onDeleteEntries" | "onPasteEntries" |
-  "onOpenConvertModal" | "onQuickConvertImages"
+  "onMoveEntries" | "onOpenConvertModal" | "onQuickConvertImages"
 > & {
   windowsMenuEnabled: boolean;
   beginFileActivity: BeginFileActivity;
@@ -21,7 +23,7 @@ export type IndexedSearchMenuActions = Pick<Parameters<typeof useEntryMenuItems>
   onRename: (path: string, name: string) => Promise<unknown>;
 };
 
-type MenuPoint = { x: number; y: number };
+type MenuPoint = { x: number; y: number; focusFirstItem?: boolean };
 type MenuRequest = MenuPoint & { path: string };
 
 type Options = {
@@ -32,6 +34,8 @@ type Options = {
   openResult: (result: IndexedPathMatch) => void;
   openGallery: (path: string) => void;
   selectResult: (result: IndexedPathMatch) => void;
+  selectResultForCopy: (result: IndexedPathMatch) => void;
+  copyPaths: ReadonlySet<string> | null;
 };
 
 const toTarget = (result: IndexedPathMatch): EntryContextTarget => ({
@@ -41,11 +45,18 @@ const toTarget = (result: IndexedPathMatch): EntryContextTarget => ({
 });
 
 export const useIndexedSearchResultMenu = ({
-  visible, results, actions, closeSearch, openResult, openGallery, selectResult,
+  visible, results, actions, closeSearch, openResult, openGallery, selectResult, selectResultForCopy, copyPaths,
 }: Options) => {
+  const menuUseWindowsForItems = useSettingsStore((state) => state.menuUseWindowsForItems);
+  const includeAudio = useSettingsStore((state) => state.galleryAudio);
+  const hiddenMenuActions = useSettingsStore((state) => state.hiddenContextMenuActions);
   const [request, setRequest] = useState<MenuRequest | null>(null);
   const result = visible && request ? results.find(({ path }) => path === request.path) : undefined;
   const target = useMemo(() => result ? toTarget(result) : null, [result]);
+  const textCopyTargets = useMemo(
+    () => result && copyPaths?.has(result.path) ? results.filter(({ path }) => copyPaths.has(path)) : undefined,
+    [copyPaths, result, results],
+  );
   const close = useCallback(() => setRequest(null), []);
   const openWindowsMenu = useWindowsContextMenu({
     enabled: actions.windowsMenuEnabled,
@@ -60,11 +71,12 @@ export const useIndexedSearchResultMenu = ({
 
   const openNativeMenu = (entry: EntryContextTarget, point: MenuPoint, extended: boolean) =>
     openWindowsMenu({ paths: [entry.path] }, point, extended,
-      isPreviewableEntry(entry) ? () => openGallery(entry.path) : undefined);
+      isPreviewableEntry(entry, includeAudio) ? () => openGallery(entry.path) : undefined);
 
-  const openAt = (match: IndexedPathMatch, point: MenuPoint, native: boolean) => {
-    selectResult(match);
-    if (native && openNativeMenu(toTarget(match), point, true)) return;
+  const openAt = (match: IndexedPathMatch, point: MenuPoint, extended: boolean) => {
+    if (copyPaths?.has(match.path)) selectResult(match);
+    else selectResultForCopy(match);
+    if ((extended || menuUseWindowsForItems) && openNativeMenu(toTarget(match), point, extended)) return;
     setRequest({ path: match.path, ...point });
   };
 
@@ -98,12 +110,14 @@ export const useIndexedSearchResultMenu = ({
     onRenameEntry: (entry) => showEntryRenamePrompt(entry, actions.onRename),
     otherPane: { label: "Open in bottom pane", open: (path) => { closeSearch(); showBottomPane(path); } },
     showClipboardShortcuts: false,
+    textCopyTargets,
   });
 
   const onOpenNative = () => Boolean(target && request && openNativeMenu(target, request, false));
-  const menuItems = target && actions.windowsMenuEnabled
+  const withNativeMenu = target && actions.windowsMenuEnabled
     ? appendWindowsMenuItem(items, onOpenNative)
     : items;
+  const menuItems = applyContextMenuVisibility(withNativeMenu, hiddenMenuActions);
 
   return {
     openAt,
@@ -112,6 +126,7 @@ export const useIndexedSearchResultMenu = ({
       items: menuItems,
       x: request?.x ?? 0,
       y: request?.y ?? 0,
+      focusFirstItem: request?.focusFirstItem,
       onClose: close,
       onOpenNative,
     },

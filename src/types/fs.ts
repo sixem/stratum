@@ -13,6 +13,7 @@ export type ListDirOptions = {
   sort?: SortState;
   search?: string;
   fast?: boolean;
+  includeMeta?: boolean;
   // Optional request generation so the backend can cancel stale scans.
   generation?: number;
   pane?: "main" | "bottom";
@@ -41,6 +42,8 @@ export type EntryMeta = {
   size: number | null;
   modified: number | null;
 };
+
+export type EntryMetaLookup = Pick<ReadonlyMap<string, EntryMeta>, "get" | "has">;
 
 export type FolderThumbSampleBatchOptions = {
   allowVideos: boolean;
@@ -93,7 +96,10 @@ export type TransferMode = "copy" | "move" | "auto";
 export type MovedTransferEntry = {
   sourcePath: string;
   destinationPath: string;
+  identity: string | null;
 };
+
+export type CreatedFolder = { path: string; identity: string };
 
 export type TransferReport = {
   copied: number;
@@ -136,6 +142,11 @@ export type TransferWorkEstimate = {
   bytesCompleted: number;
 };
 
+export type TransferDestination = {
+  folderPath: string;
+  entryPath?: string;
+};
+
 export type TransferJobSnapshot = {
   id: string;
   kind: TransferJobKind;
@@ -143,11 +154,13 @@ export type TransferJobSnapshot = {
   phase: TransferJobPhase;
   capabilities: TransferJobCapabilities;
   currentPath?: string | null;
+  destination?: TransferDestination;
   work: TransferWorkEstimate;
 };
 
 export type TransferQueueSnapshot = {
-  activeJob?: TransferJobSnapshot | null;
+  revision: number;
+  activeJobs: TransferJobSnapshot[];
   queuedJobs: TransferJobSnapshot[];
   completedJobs: TransferJobSnapshot[];
 };
@@ -163,6 +176,7 @@ export type TransferProgressEvent = {
   progressPercent?: number | null;
   statusText?: string | null;
   rateText?: string | null;
+  completedItems?: { path: string; sourceRemoved: boolean }[];
 };
 
 export type TransferJobsSnapshotEvent = TransferQueueSnapshot;
@@ -194,6 +208,9 @@ export type DirChangedEvent = {
   path: string;
   // Paths reported by the native watcher (when available).
   paths?: string[];
+  rescan?: boolean;
+  watchFailed?: boolean;
+  writing?: boolean;
 };
 
 // Emitted when the native watcher detects a rename in a watched directory.

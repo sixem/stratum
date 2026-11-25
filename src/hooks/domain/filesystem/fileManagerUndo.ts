@@ -1,36 +1,33 @@
 // Handles undo stack operations for delete, rename, and move actions.
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { RefObject } from "react";
-import { restoreRecycleItems, statEntries, transferEntries } from "@/api";
+import { removeCreatedFolderIfEmpty, restoreRecycleItems, statEntries, transferEntries } from "@/api";
+import type { CreatedFolder } from "@/types/fs";
 import { entryExists, formatFailures, getParentPath, toMessage } from "@/lib";
 import { usePromptStore } from "@/modules";
+import type { RenameRequest } from "./fileManager.types";
 import { isTransferCancelledError } from "./transferJobErrors";
 
-export type UndoRenameEntry = {
+type UndoFileEntry = {
   from: string;
   to: string;
+  identity: string;
 };
+
+export type UndoRenameEntry = UndoFileEntry & { updateFolderLocations?: boolean };
+export type UndoMoveEntry = UndoFileEntry;
 
 export type UndoTrashEntry = {
   originalPath: string;
   trashPath: string;
-};
-
-export type UndoMoveEntry = {
-  from: string;
-  to: string;
+  identity: string;
 };
 
 export type UndoAction =
   | { type: "rename"; entries: UndoRenameEntry[] }
-  | { type: "move"; entries: UndoMoveEntry[] }
+  | { type: "move"; entries: UndoMoveEntry[]; createdFolder?: CreatedFolder }
   | { type: "trash"; entries: UndoTrashEntry[] }
   | { type: "recycle"; receiptId: string };
-
-type RenameRequest = {
-  path: string;
-  nextName: string;
-};
 
 type RenameBatchResult = {
   renamed: Map<string, string>;
@@ -51,14 +48,18 @@ type UseFileManagerUndoOptions = {
   refreshAfterChange: () => Promise<void>;
 };
 
-// Stop the whole Undo on cancellation, keeping earlier groups' committed restores.
-const restoreGroups = async (grouped: Map<string, string[]>, failures: string[]) => {
+type RestoreGroup = { path: string; identity: string }[];
+
+// Stop on cancellation and keep earlier groups' committed restores on any failure.
+const restoreGroups = async (grouped: Map<string, RestoreGroup>, failures: string[], protectedFolder?: CreatedFolder) => {
   const restoredPaths = new Set<string>();
-  for (const [destination, paths] of grouped) {
+  for (const [destination, entries] of grouped) {
     try {
-      const report = await transferEntries(paths, destination, {
+      const report = await transferEntries(entries.map((entry) => entry.path), destination, {
         mode: "move",
         overwrite: false,
+        protectedFolder,
+        expectedSources: Object.fromEntries(entries.map((entry) => [entry.path, entry.identity])),
       });
       for (const entry of report.movedEntries) restoredPaths.add(entry.sourcePath);
       failures.push(...report.failures);
@@ -66,7 +67,7 @@ const restoreGroups = async (grouped: Map<string, string[]>, failures: string[])
     } catch (error) {
       // Queued and planning jobs can be cancelled before an execution report exists.
       if (isTransferCancelledError(error)) break;
-      throw error;
+      failures.push(`${destination}: ${toMessage(error, "Unable to restore the moved items.")}`);
     }
   }
   return restoredPaths;
@@ -83,8 +84,9 @@ export const useFileManagerUndo = ({
   performRenameRequests,
   refreshAfterChange,
 }: UseFileManagerUndoOptions) => {
+  const undoInFlight = useRef(false);
   const restoreMovedEntries = useCallback(
-    async (entries: UndoMoveEntry[]) => {
+    async (entries: UndoMoveEntry[], createdFolder?: CreatedFolder) => {
       if (entries.length === 0) {
         return { restored: 0, remaining: [] as UndoMoveEntry[] };
       }
@@ -92,7 +94,7 @@ export const useFileManagerUndo = ({
       const currentPaths = entries.map((entry) => entry.to);
       const currentMeta = await statEntries(currentPaths);
       const existingDestinations = await statEntries(entries.map((entry) => entry.from));
-      const grouped = new Map<string, string[]>();
+      const grouped = new Map<string, RestoreGroup>();
       const failures: string[] = [];
 
       entries.forEach((entry, index) => {
@@ -111,17 +113,17 @@ export const useFileManagerUndo = ({
           return;
         }
         const list = grouped.get(destination) ?? [];
-        list.push(entry.to);
+        list.push({ path: entry.to, identity: entry.identity });
         grouped.set(destination, list);
       });
 
-      const restoredPaths = await restoreGroups(grouped, failures);
+      const restoredPaths = await restoreGroups(grouped, failures, createdFolder);
       const restored = restoredPaths.size;
 
-      // A new file at a completed move's old path must not be queued for Undo.
-      const pending = entries.filter((entry) => !restoredPaths.has(entry.to));
-      const remainingMeta = await statEntries(pending.map((entry) => entry.to));
-      const remaining = pending.filter((_, index) => entryExists(remainingMeta[index]));
+      // Keep requests that might be retried without re-reading paths already settled.
+      const remaining = entries.filter((entry, index) =>
+        !restoredPaths.has(entry.to) && entryExists(currentMeta[index]),
+      );
 
       if (failures.length > 0) {
         usePromptStore.getState().showPrompt({
@@ -133,7 +135,7 @@ export const useFileManagerUndo = ({
       }
 
       if (restored > 0) {
-        await refreshAfterChange();
+        if (!createdFolder) await refreshAfterChange();
         onDirectoryChildrenChanged?.(
           entries
             .flatMap((entry) => [getParentPath(entry.from) ?? "", getParentPath(entry.to) ?? ""])
@@ -160,7 +162,7 @@ export const useFileManagerUndo = ({
         }
       });
 
-      const grouped = new Map<string, string[]>();
+      const grouped = new Map<string, RestoreGroup>();
       const failures: string[] = [];
       entries.forEach((entry) => {
         if (!entry.originalPath || !entry.trashPath) return;
@@ -174,7 +176,7 @@ export const useFileManagerUndo = ({
           return;
         }
         const list = grouped.get(parent) ?? [];
-        list.push(entry.trashPath);
+        list.push({ path: entry.trashPath, identity: entry.identity });
         grouped.set(parent, list);
       });
 
@@ -239,7 +241,7 @@ export const useFileManagerUndo = ({
     [onDirectoryChildrenChanged, refreshAfterChange],
   );
 
-  const undoLastAction = useCallback(async () => {
+  const runUndo = useCallback(async () => {
     if (
       renameInFlightRef.current ||
       deleteInFlightRef.current ||
@@ -258,6 +260,8 @@ export const useFileManagerUndo = ({
           path: entry.to,
           // Keep the original basename exactly, including legal Unicode whitespace.
           nextName: entry.from.split(/[\\/]/).pop() ?? "",
+          expectedIdentity: entry.identity,
+          updateFolderLocations: entry.updateFolderLocations,
         }))
         .filter((item) => item.path && item.nextName);
       // Keep rename undo visually in-place by temporarily disabling
@@ -302,11 +306,35 @@ export const useFileManagerUndo = ({
     }
 
     if (action.type === "move") {
-      const { restored, remaining } = await restoreMovedEntries(action.entries);
-      if (remaining.length > 0) {
-        undoStackRef.current.push({ type: "move", entries: remaining });
+      let restored: number;
+      let remaining: UndoMoveEntry[];
+      try {
+        ({ restored, remaining } = await restoreMovedEntries(action.entries, action.createdFolder));
+      } catch (error) {
+        undoStackRef.current.push(action);
+        usePromptStore.getState().showPrompt({
+          title: "Undo failed", content: toMessage(error, "Unable to restore the moved items."),
+          confirmLabel: "OK", cancelLabel: null,
+        });
+        return false;
       }
-      return restored > 0;
+      let removed = false;
+      if (remaining.length > 0) {
+        undoStackRef.current.push({ ...action, entries: remaining });
+      } else if (action.createdFolder) {
+        try {
+          removed = await removeCreatedFolderIfEmpty(action.createdFolder);
+          if (removed) onDirectoryChildrenChanged?.([getParentPath(action.createdFolder.path) ?? ""]);
+        } catch (error) {
+          undoStackRef.current.push({ ...action, entries: [] });
+          usePromptStore.getState().showPrompt({
+            title: "Couldn't remove the empty folder", content: toMessage(error, "The folder was left in place."),
+            confirmLabel: "OK", cancelLabel: null,
+          });
+        }
+      }
+      if (action.createdFolder && (restored > 0 || removed)) await refreshAfterChange();
+      return restored > 0 || removed;
     }
 
     if (action.type === "recycle") {
@@ -324,6 +352,7 @@ export const useFileManagerUndo = ({
     onDirectoryChildrenChanged,
     onRenameUndoPresence,
     performRenameRequests,
+    refreshAfterChange,
     renameInFlightRef,
     restoreRecycledItems,
     restoreMovedEntries,
@@ -331,6 +360,16 @@ export const useFileManagerUndo = ({
     transferInFlightRef,
     undoStackRef,
   ]);
+
+  const undoLastAction = useCallback(async () => {
+    if (undoInFlight.current) return false;
+    undoInFlight.current = true;
+    try {
+      return await runUndo();
+    } finally {
+      undoInFlight.current = false;
+    }
+  }, [runUndo]);
 
   return { undoLastAction };
 };

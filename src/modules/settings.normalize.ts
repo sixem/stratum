@@ -1,10 +1,13 @@
 // Normalizes persisted settings payloads into safe, typed values.
 import type { ViewMode } from "@/types";
+import { coerceHiddenContextMenuActions } from "@/lib/contextMenuVisibility";
 import {
   GRID_AUTO_COLUMNS_MAX,
   GRID_AUTO_COLUMNS_MIN,
   GRID_GAP_MAX,
   GRID_GAP_MIN,
+  RECENT_MOVE_LIMIT_MAX,
+  RECENT_MOVE_LIMIT_MIN,
   SETTINGS_STORAGE_VERSION,
   SIDEBAR_RECENT_LIMIT_MAX,
   SIDEBAR_RECENT_LIMIT_MIN,
@@ -12,9 +15,12 @@ import {
   SIDEBAR_WIDTH_MIN,
 } from "@/constants";
 import { coerceKeybinds } from "./keybinds";
+import { coerceTerminalTheme } from "./terminalThemes";
+import { coerceTerminalFont } from "./terminalFonts";
 import {
   DEFAULT_SETTINGS,
   DEFAULT_SIDEBAR_HIDDEN_SECTIONS,
+  DEFAULT_VIEW_MODE,
   SIDEBAR_SECTION_DEFINITIONS,
 } from "./settings.defaults";
 import type {
@@ -36,12 +42,29 @@ const coerceFormat = (value: unknown): ThumbnailFormat => {
   return value === "jpeg" ? "jpeg" : "webp";
 };
 
+const coerceExcludedIndexedDrives = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  const roots = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const root = item.trim().replace(/[\\/]+$/, "");
+    if (/^[a-z]:$/i.test(root)) roots.add(root.toUpperCase() + "\\");
+  }
+  return [...roots].sort();
+};
+
 const coerceThumbnailFit = (value: unknown): ThumbnailFit => {
   return value === "contain" ? "contain" : "cover";
 };
 
-const coerceViewMode = (value: unknown): ViewMode => {
-  return value === "list" ? "list" : "thumbs";
+export const coerceRememberedViewMode = (value: unknown): ViewMode | null =>
+  value === "list" || value === "thumbs" ? value : null;
+
+const coerceNewTabSort = (value: unknown): Settings["newTabSort"] => {
+  if (!value || typeof value !== "object") return null;
+  const { key, dir } = value as Partial<NonNullable<Settings["newTabSort"]>>;
+  if (key !== "name" && key !== "modified" && key !== "size") return null;
+  return dir === "asc" || dir === "desc" ? { key, dir } : null;
 };
 
 const coerceAccentTheme = (value: unknown): AccentTheme => {
@@ -136,7 +159,16 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
     sidebarRecentLimit: coerceSidebarRecentLimit(value?.sidebarRecentLimit),
     sidebarSectionOrder: normalizeSidebarSectionOrder(value?.sidebarSectionOrder),
     sidebarHiddenSections: normalizeSidebarHiddenSections(value?.sidebarHiddenSections),
-    defaultViewMode: coerceViewMode(value?.defaultViewMode),
+    defaultViewMode: value?.defaultViewMode === "last"
+      ? "last" : coerceRememberedViewMode(value?.defaultViewMode) ?? DEFAULT_VIEW_MODE,
+    lastUsedViewMode: coerceRememberedViewMode(value?.lastUsedViewMode),
+    startupMode: value?.startupMode === "workspace" || value?.startupMode === "start"
+      ? value.startupMode : DEFAULT_SETTINGS.startupMode,
+    startupWorkspaceId: typeof value?.startupWorkspaceId === "string" && value.startupWorkspaceId.length
+      ? value.startupWorkspaceId : DEFAULT_SETTINGS.startupWorkspaceId,
+    newTabSort: coerceNewTabSort(value?.newTabSort),
+    rememberRecentLocations: typeof value?.rememberRecentLocations === "boolean"
+      ? value.rememberRecentLocations : DEFAULT_SETTINGS.rememberRecentLocations,
     showTabNumbers:
       typeof value?.showTabNumbers === "boolean"
         ? value.showTabNumbers
@@ -145,10 +177,19 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.fixedWidthTabs === "boolean"
         ? value.fixedWidthTabs
         : DEFAULT_SETTINGS.fixedWidthTabs,
+    animateTabChanges:
+      typeof value?.animateTabChanges === "boolean"
+        ? value.animateTabChanges
+        : DEFAULT_SETTINGS.animateTabChanges,
+    wrapTabNavigation: value?.wrapTabNavigation !== false,
     tabDropSubfolders:
       typeof value?.tabDropSubfolders === "boolean"
         ? value.tabDropSubfolders
         : DEFAULT_SETTINGS.tabDropSubfolders,
+    tabDropParentFolder:
+      typeof value?.tabDropParentFolder === "boolean"
+        ? value.tabDropParentFolder
+        : DEFAULT_SETTINGS.tabDropParentFolder,
     showRecycleBinButton:
       typeof value?.showRecycleBinButton === "boolean"
         ? value.showRecycleBinButton
@@ -165,6 +206,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.showTopbarFolderChevrons === "boolean"
         ? value.showTopbarFolderChevrons
         : DEFAULT_SETTINGS.showTopbarFolderChevrons,
+    showWorkProgressFill: value?.showWorkProgressFill !== false,
     smoothScroll:
       typeof value?.smoothScroll === "boolean"
         ? value.smoothScroll
@@ -174,6 +216,8 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
         ? value.smartTabJump
         : DEFAULT_SETTINGS.smartTabJump,
     accentTheme: coerceAccentTheme(value?.accentTheme),
+    terminalTheme: coerceTerminalTheme(value?.terminalTheme),
+    terminalFontFamily: coerceTerminalFont(value?.terminalFontFamily),
     darkMode:
       typeof value?.darkMode === "boolean" ? value.darkMode : DEFAULT_SETTINGS.darkMode,
     categoryTinting:
@@ -208,8 +252,10 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.blurOverlays === "boolean"
         ? value.blurOverlays
         : DEFAULT_SETTINGS.blurOverlays,
+    showTooltips: value?.showTooltips !== false,
     keybinds: coerceKeybinds(value?.keybinds),
     gridSize: coerceGridSize(value?.gridSize),
+    // Profiles saved before this setting used shared sizing.
     rememberTabGridSize: value?.rememberTabGridSize === true,
     gridAutoColumns: coerceGridAutoColumns(value?.gridAutoColumns),
     gridGap: coerceGridGap(value?.gridGap),
@@ -234,6 +280,10 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.gridNameHideExtension === "boolean"
         ? value.gridNameHideExtension
         : DEFAULT_SETTINGS.gridNameHideExtension,
+    listDensity: value?.listDensity === "compact" ? "compact" : DEFAULT_SETTINGS.listDensity,
+    listShowSize: value?.listShowSize !== false,
+    listShowModified: value?.listShowModified !== false,
+    menuUseWindowsForItems: value?.menuUseWindowsForItems === true,
     menuOpenPwsh:
       typeof value?.menuOpenPwsh === "boolean"
         ? value.menuOpenPwsh
@@ -246,10 +296,19 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.menuShowConvert === "boolean"
         ? value.menuShowConvert
         : DEFAULT_SETTINGS.menuShowConvert,
+    menuPaneTransfers: value?.menuPaneTransfers === true,
+    menuSelectionActions: value?.menuSelectionActions === true,
+    menuOpenBackgroundTab: value?.menuOpenBackgroundTab === true,
+    hiddenContextMenuActions: coerceHiddenContextMenuActions(value?.hiddenContextMenuActions),
+    rememberMoveDestinations: value?.rememberMoveDestinations === true,
+    recentMoveLimit: clampNumber(
+      value?.recentMoveLimit, DEFAULT_SETTINGS.recentMoveLimit, RECENT_MOVE_LIMIT_MIN, RECENT_MOVE_LIMIT_MAX,
+    ),
     indexedSearchEnabled:
       typeof value?.indexedSearchEnabled === "boolean"
         ? value.indexedSearchEnabled
         : DEFAULT_SETTINGS.indexedSearchEnabled,
+    excludedIndexedDrives: coerceExcludedIndexedDrives(value?.excludedIndexedDrives),
     thumbnailsEnabled:
       typeof value?.thumbnailsEnabled === "boolean"
         ? value.thumbnailsEnabled
@@ -285,6 +344,8 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.thumbnailAppIcons === "boolean"
         ? value.thumbnailAppIcons
         : DEFAULT_SETTINGS.thumbnailAppIcons,
+    videoAutoplay: typeof value?.videoAutoplay === "boolean" ? value.videoAutoplay : DEFAULT_SETTINGS.videoAutoplay,
+    galleryAudio: typeof value?.galleryAudio === "boolean" ? value.galleryAudio : DEFAULT_SETTINGS.galleryAudio,
     ffmpegPath:
       typeof value?.ffmpegPath === "string" ? value.ffmpegPath : DEFAULT_SETTINGS.ffmpegPath,
   };
@@ -297,11 +358,13 @@ export const normalizeLegacySettings = (
 ): Partial<Settings> => {
   if (version != null && version >= SETTINGS_STORAGE_VERSION) return settings;
   let next = settings;
-  const legacyGridSize = next.gridSize as string | undefined;
-  if (legacyGridSize === "large") {
-    next = { ...next, gridSize: "normal" };
-  } else if (legacyGridSize === "compact") {
-    next = { ...next, gridSize: "small" };
+  if (version == null || version < 11) {
+    const legacyGridSize = next.gridSize as string | undefined;
+    if (legacyGridSize === "large") {
+      next = { ...next, gridSize: "normal" };
+    } else if (legacyGridSize === "compact") {
+      next = { ...next, gridSize: "small" };
+    }
   }
   if (!("sidebarHiddenSections" in next)) {
     const showTips =

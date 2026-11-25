@@ -241,7 +241,7 @@ export const computeDragSelectionGeometry = ({
   };
 };
 
-const selectFromListLayout = (layout: ListLayoutSnapshot, rect: ContentRect) => {
+const selectFromListLayout = (layout: ListLayoutSnapshot, rect: ContentRect, canSelectPath: (path: string) => boolean) => {
   const orderedPaths: string[] = [];
   const { items, itemHeight, rowHeight, insetTop } = layout;
   if (items.length === 0 || itemHeight <= 0 || rowHeight <= 0) {
@@ -261,14 +261,14 @@ const selectFromListLayout = (layout: ListLayoutSnapshot, rect: ContentRect) => 
     const rowBottom = rowTop + rowHeight;
     if (rowBottom < top || rowTop > bottom) continue;
     const item = items[index];
-    if (!item || !item.selectable) continue;
+    if (!item?.selectable || !canSelectPath(item.path)) continue;
     orderedPaths.push(item.path);
   }
 
   return orderedPaths;
 };
 
-const selectFromGridLayout = (layout: GridLayoutSnapshot, rect: ContentRect) => {
+const selectFromGridLayout = (layout: GridLayoutSnapshot, rect: ContentRect, canSelectPath: (path: string) => boolean) => {
   const orderedPaths: string[] = [];
   const {
     items,
@@ -320,7 +320,7 @@ const selectFromGridLayout = (layout: GridLayoutSnapshot, rect: ContentRect) => 
       const index = rowIndex + col;
       if (index >= items.length) continue;
       const item = items[index];
-      if (!item.selectable) continue;
+      if (!item.selectable || !canSelectPath(item.path)) continue;
       orderedPaths.push(item.path);
     }
   }
@@ -331,14 +331,16 @@ const selectFromGridLayout = (layout: GridLayoutSnapshot, rect: ContentRect) => 
 export const selectPathsFromLayoutSnapshot = (
   layout: LayoutSnapshot,
   rect: ContentRect,
+  canSelectPath: (path: string) => boolean,
 ) =>
   layout.kind === "list"
-    ? selectFromListLayout(layout, rect)
-    : selectFromGridLayout(layout, rect);
+    ? selectFromListLayout(layout, rect, canSelectPath)
+    : selectFromGridLayout(layout, rect, canSelectPath);
 
 export const selectPathsFromDomRects = (
   items: CachedSelectionItem[],
   rect: ViewportRect,
+  canSelectPath: (path: string) => boolean,
 ) => {
   const orderedPaths: string[] = [];
 
@@ -347,7 +349,8 @@ export const selectPathsFromDomRects = (
       item.rect.right < rect.left ||
       item.rect.left > rect.right ||
       item.rect.bottom < rect.top ||
-      item.rect.top > rect.bottom
+      item.rect.top > rect.bottom ||
+      !canSelectPath(item.path)
     ) {
       return;
     }

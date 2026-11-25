@@ -1,5 +1,7 @@
-// Presentational controls for video quick preview playback and volume.
-import type { ChangeEvent as ReactChangeEvent, CSSProperties, RefObject } from "react";
+// Shared playback controls for audio and video previews.
+import type { ChangeEvent as ReactChangeEvent, CSSProperties, PointerEvent as ReactPointerEvent, RefObject } from "react";
+import { PauseIcon, PlayIcon } from "@/components/icons";
+import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PressButton } from "@/components/primitives/PressButton";
 import { QuickPreviewTimeline } from "./QuickPreviewTimeline";
 
@@ -7,13 +9,13 @@ type PreviewControlsProps = {
   open: boolean;
   visible: boolean;
   disabled: boolean;
-  videoRef: RefObject<HTMLVideoElement | null>;
-  videoPaused: boolean;
+  mediaRef: RefObject<HTMLMediaElement | null>;
+  mediaKey: string;
+  mediaPaused: boolean;
   volumePickerOpen: boolean;
   volumeLabel: string;
-  videoVolume: number;
+  mediaVolume: number;
   volumeStyle: CSSProperties;
-  volumeButtonRef: RefObject<HTMLButtonElement | null>;
   volumeRangeRef: RefObject<HTMLInputElement | null>;
   onTogglePlayback: () => void;
   onToggleVolumePicker: () => void;
@@ -21,7 +23,7 @@ type PreviewControlsProps = {
   onVolumeHoverEnd: () => void;
   onVolumeChange: (event: ReactChangeEvent<HTMLInputElement>) => void;
   onVolumePointerDown: () => void;
-  onVolumePointerUp: () => void;
+  onVolumePointerUp: (event: ReactPointerEvent<HTMLInputElement>) => void;
   onVolumeBlur: () => void;
 };
 
@@ -29,13 +31,13 @@ export const PreviewControls = ({
   open,
   visible,
   disabled,
-  videoRef,
-  videoPaused,
+  mediaRef,
+  mediaKey,
+  mediaPaused,
   volumePickerOpen,
   volumeLabel,
-  videoVolume,
+  mediaVolume,
   volumeStyle,
-  volumeButtonRef,
   volumeRangeRef,
   onTogglePlayback,
   onToggleVolumePicker,
@@ -47,15 +49,22 @@ export const PreviewControls = ({
   onVolumeBlur,
 }: PreviewControlsProps) => {
   if (!visible) return null;
+  const playbackLabel = mediaPaused ? "Play" : "Pause";
+  const PlaybackIcon = mediaPaused ? PlayIcon : PauseIcon;
   return (
     <div className="quick-preview-controls">
-      <PressButton
-        type="button"
-        className="quick-preview-control-button quick-preview-control-button--playback"
-        onClick={onTogglePlayback}
-      >
-        {videoPaused ? "Play" : "Pause"}
-      </PressButton>
+      <TooltipWrapper text={playbackLabel} disabled={disabled}>
+        <PressButton
+          type="button"
+          className="quick-preview-control-button quick-preview-control-button--playback"
+          aria-label={playbackLabel}
+          disabled={disabled}
+          onClick={onTogglePlayback}
+        >
+          <PlaybackIcon className="quick-preview-playback-icon" />
+        </PressButton>
+      </TooltipWrapper>
+      <QuickPreviewTimeline mediaRef={mediaRef} mediaKey={mediaKey} open={open} disabled={disabled} />
       <div
         className="quick-preview-control-volume"
         data-open={volumePickerOpen ? "true" : "false"}
@@ -66,7 +75,6 @@ export const PreviewControls = ({
           type="button"
           className="quick-preview-control-button quick-preview-control-volume-button tnum"
           onClick={onToggleVolumePicker}
-          ref={volumeButtonRef}
           aria-expanded={volumePickerOpen ? "true" : "false"}
           aria-controls="quick-preview-volume-range"
           aria-label={`Preview volume ${volumeLabel}`}
@@ -77,12 +85,12 @@ export const PreviewControls = ({
           <input
             ref={volumeRangeRef}
             id="quick-preview-volume-range"
-            className="ui-range quick-preview-control-range"
+            className="quick-preview-control-range"
             type="range"
             min={0}
             max={1}
             step={0.01}
-            value={videoVolume}
+            value={mediaVolume}
             onChange={onVolumeChange}
             onPointerDown={onVolumePointerDown}
             onPointerUp={onVolumePointerUp}
@@ -93,7 +101,6 @@ export const PreviewControls = ({
           />
         </div>
       </div>
-      <QuickPreviewTimeline videoRef={videoRef} open={open} disabled={disabled} />
     </div>
   );
 };

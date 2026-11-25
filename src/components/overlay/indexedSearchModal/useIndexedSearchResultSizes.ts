@@ -1,4 +1,4 @@
-// Batch size lookups for the result window after scrolling settles.
+// Look up sizes missing from the catalog after scrolling settles.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { statEntries } from "@/api/fs";
 import type { IndexedPathMatch } from "@/types";
@@ -9,7 +9,9 @@ const SIZE_REQUEST_DELAY_MS = 90;
 export const useIndexedSearchResultSizes = (visible: boolean, results: IndexedPathMatch[]) => {
   const [sizes, setSizes] = useState(() => new Map<string, number | null>());
   const runningRef = useRef(false);
-  const paths = useMemo(() => results.filter(({ kind }) => kind === "file").map(({ path }) => path), [results]);
+  const paths = useMemo(() => results
+    .filter(({ kind, sizeBytes }) => kind === "file" && sizeBytes == null)
+    .map(({ path }) => path), [results]);
 
   useEffect(() => {
     if (!visible || runningRef.current) return;

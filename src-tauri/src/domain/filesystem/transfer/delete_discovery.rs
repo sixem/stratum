@@ -4,7 +4,7 @@
 use super::common::{check_transfer_control, inspect_path};
 use crate::domain::filesystem::TransferControlCallback;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct DeleteDiscoveryRoot {
@@ -38,19 +38,18 @@ pub(crate) fn discover_delete_plan(
 
     for raw_path in paths {
         check_transfer_control(&mut on_control)?;
-        let trimmed = raw_path.trim();
-        if trimmed.is_empty() {
+        if raw_path.trim().is_empty() {
             continue;
         }
 
-        let target = PathBuf::from(trimmed);
+        let target = Path::new(raw_path);
         let mut root = DeleteDiscoveryRoot {
-            path: trimmed.to_string(),
+            path: raw_path.clone(),
             item_count: 1,
             byte_count: 0,
         };
 
-        if let Ok(inspection) = inspect_path(&target) {
+        if let Ok(inspection) = inspect_path(target) {
             root.byte_count = root
                 .byte_count
                 .saturating_add(inspection.kind.byte_count(&inspection.metadata));
@@ -58,12 +57,12 @@ pub(crate) fn discover_delete_plan(
                 &mut on_progress,
                 plan.item_count.saturating_add(root.item_count),
                 plan.byte_count.saturating_add(root.byte_count),
-                Some(trimmed.to_string()),
+                Some(raw_path.clone()),
             );
 
             if inspection.kind.is_traversable_directory() {
                 collect_delete_directory(
-                    &target,
+                    target,
                     plan.item_count,
                     plan.byte_count,
                     &mut root,
@@ -76,7 +75,7 @@ pub(crate) fn discover_delete_plan(
                 &mut on_progress,
                 plan.item_count.saturating_add(root.item_count),
                 plan.byte_count.saturating_add(root.byte_count),
-                Some(trimmed.to_string()),
+                Some(raw_path.clone()),
             );
         }
 
@@ -170,7 +169,7 @@ fn emit_progress(
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -199,6 +198,19 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[test]
+    fn preserves_whitespace_in_selected_names() {
+        let temp = TestDir::new();
+        let sibling = temp.path().join("notes.txt");
+        let selected = temp.path().join("notes.txt\u{a0}");
+        fs::write(sibling, b"unselected").unwrap();
+        fs::write(&selected, b"one").unwrap();
+        let path = selected.to_str().unwrap().to_owned();
+        let plan = discover_delete_plan(std::slice::from_ref(&path), None, None).unwrap();
+        assert_eq!(plan.roots[0].path, path);
+        assert_eq!(plan.byte_count, 3);
     }
 
     #[test]

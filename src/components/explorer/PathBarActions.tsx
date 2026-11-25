@@ -6,7 +6,7 @@ import { PATHBAR_TOOLTIP_DELAY_MS } from "@/constants";
 import { TransferStatusButton } from "@/components/transfer/TransferStatusButton";
 import { ToolbarIconButton } from "@/components/primitives/ToolbarIconButton";
 import { GridIcon, ListIcon, RecycleBinIcon, SettingsIcon } from "@/components/icons";
-import type { ViewMode } from "@/types";
+import type { TransferDestination, ViewMode } from "@/types";
 
 const RECYCLE_BIN_LOADER_DELAY_MS = 1000;
 
@@ -17,6 +17,7 @@ type PathBarActionsProps = {
   onViewChange: (mode: ViewMode) => void;
   onToggleSettings: () => void;
   onOpenRecycleBin: () => Promise<void>;
+  onOpenJobDestination: (destination: TransferDestination) => void;
 };
 
 export const PathBarActions = ({
@@ -26,6 +27,7 @@ export const PathBarActions = ({
   onViewChange,
   onToggleSettings,
   onOpenRecycleBin,
+  onOpenJobDestination,
 }: PathBarActionsProps) => {
   const split = useBottomPaneStore(state => state.open);
   const [recycleBinState, setRecycleBinState] = useState<"idle" | "pending" | "loading">("idle");
@@ -58,7 +60,7 @@ export const PathBarActions = ({
 
   return (
     <div className="pathbar-actions">
-      <TransferStatusButton />
+      <TransferStatusButton onOpenDestination={onOpenJobDestination} />
       <div className="view-switch">
         <ToolbarIconButton
           label={split ? "Hide bottom pane" : "Show bottom pane"}

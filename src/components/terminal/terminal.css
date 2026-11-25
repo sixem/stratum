@@ -1,0 +1,25 @@
+.powershell-host, .powershell-surface, .powershell-viewport {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.powershell-surface {
+  overflow: hidden;
+  background: var(--terminal-background, var(--bg));
+  color: var(--terminal-foreground, var(--text));
+  padding: 8px;
+  border-radius: var(--panel-radius);
+}
+.powershell-viewport .xterm { height: 100%; }
+.powershell-viewport, .powershell-viewport .xterm-viewport { overflow: clip; }
+/* xterm manages scrollback in its buffer. Keep wheel and keyboard scrolling. */
+.powershell-viewport .xterm-scrollable-element > .scrollbar { display: none; }
+.powershell-status:empty { display: none; }
+.powershell-status {
+  border-top: var(--surface-border-width) solid color-mix(in srgb, currentColor 30%, transparent);
+  padding: 6px 4px 0;
+  color: var(--terminal-muted, var(--muted));
+  font-size: var(--font-size-sm);
+}

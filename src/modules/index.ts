@@ -45,7 +45,7 @@ export {
   SIDEBAR_RECENT_LIMIT_MAX,
   SIDEBAR_RECENT_LIMIT_MIN,
 } from "@/constants";
-export { HINTS, getSessionHint, pickRandomHint, refreshSessionHint } from "./hints";
+export { HINTS, getSessionHint, refreshSessionHint } from "./hints";
 export type {
   AccentTheme,
   GridNameEllipsis,

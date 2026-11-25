@@ -8,6 +8,7 @@ import { handleMiddleClick, resolvePathCrumbs } from "@/lib";
 import { useHorizontalWheelScroll } from "@/hooks";
 import { useLocationDrag } from "@/hooks/ui/inputs/useLocationDrag";
 import { PressButton } from "@/components/primitives/PressButton";
+import { TerminalSplitControls } from "@/components/terminal/TerminalSplitControls";
 import type { PlaceContextTarget } from "@/types";
 
 type PathCrumbsBarProps = {
@@ -110,6 +111,7 @@ export const PathCrumbsBar = ({
           </Fragment>
         ))}
       </div>
+      <TerminalSplitControls pane={pane} />
     </div>
   );
 };

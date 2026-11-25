@@ -5,10 +5,14 @@ use crate::platform::ShellMenuOutcome;
 use serde::{Deserialize, Serialize};
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::os::windows::process::CommandExt;
+use std::path::{Component, Path, Prefix};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use windows::core::PCWSTR;
 use windows::Win32::Foundation::{HWND, POINT};
 use windows::Win32::Graphics::Gdi::ClientToScreen;
+use windows::Win32::Storage::FileSystem::GetDriveTypeW;
 use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 use windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow;
 
@@ -30,6 +34,13 @@ struct Request {
     offer_gallery: bool,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum Message {
+    Show(Request),
+    Warm { warm_folder: String },
+}
+
 pub(crate) fn run_if_requested() -> bool {
     if std::env::args_os().nth(1).as_deref() != Some(std::ffi::OsStr::new(HOST_SWITCH)) {
         return false;
@@ -41,7 +52,24 @@ pub(crate) fn run_if_requested() -> bool {
 }
 
 #[derive(Default)]
-pub(crate) struct MenuHost(Mutex<Option<Connection>>);
+pub(crate) struct MenuHost {
+    connection: Mutex<Option<Connection>>,
+    warmed: Mutex<Option<Connection>>,
+    warmup_attempted: AtomicBool,
+    menu_requested: AtomicBool,
+}
+
+fn fixed_dos_path(path: &Path) -> bool {
+    let Some(Component::Prefix(prefix)) = path.components().next() else {
+        return false;
+    };
+    let Prefix::Disk(drive) = prefix.kind() else {
+        return false;
+    };
+    const DRIVE_FIXED: u32 = 3;
+    let root = [u16::from(drive), b':' as u16, b'\\' as u16, 0];
+    path.is_absolute() && unsafe { GetDriveTypeW(PCWSTR(root.as_ptr())) } == DRIVE_FIXED
+}
 
 struct Connection {
     child: Child,
@@ -65,12 +93,7 @@ impl Connection {
         })
     }
 
-    fn exchange(&mut self, request: &Request) -> io::Result<Reply> {
-        // The helper owns the popup so Windows can deliver the extension's menu
-        // messages there. Grant activation for this user-initiated request.
-        unsafe {
-            let _ = AllowSetForegroundWindow(self.child.id());
-        }
+    fn exchange(&mut self, request: &Message) -> io::Result<Reply> {
         serde_json::to_writer(&mut self.input, request)?;
         self.input.write_all(b"\n")?;
         self.input.flush()?;
@@ -86,6 +109,37 @@ impl Connection {
 }
 
 impl MenuHost {
+    pub(crate) fn warm(&self) {
+        if self.menu_requested.load(Ordering::Relaxed)
+            || self.warmup_attempted.swap(true, Ordering::Relaxed)
+        {
+            return;
+        }
+        // Use a local system folder without reading anything from the user's active view.
+        let Some(folder) =
+            std::env::var_os("SystemRoot").filter(|path| fixed_dos_path(Path::new(path)))
+        else {
+            return;
+        };
+        let Ok(mut candidate) = Connection::start() else {
+            return;
+        };
+        if !matches!(
+            candidate.exchange(&Message::Warm {
+                warm_folder: folder.to_string_lossy().into_owned()
+            }),
+            Ok(Ok(ShellMenuOutcome::Dismissed))
+        ) {
+            return;
+        }
+        // Publish only after the Shell finishes. A click can start its own helper immediately.
+        if let Ok(mut warmed) = self.warmed.lock() {
+            if !self.menu_requested.load(Ordering::Relaxed) {
+                *warmed = Some(candidate);
+            }
+        }
+    }
+
     pub(crate) fn show(
         &self,
         window: HWND,
@@ -108,10 +162,14 @@ impl MenuHost {
             offer_gallery,
         };
         // A second click must not enqueue an unexpected popup behind the first.
+        self.menu_requested.store(true, Ordering::Relaxed);
         let mut slot = self
-            .0
+            .connection
             .try_lock()
             .map_err(|_| "A Windows context menu is already open.")?;
+        if slot.is_none() {
+            *slot = self.warmed.lock().ok().and_then(|mut warmed| warmed.take());
+        }
         if let Some(connection) = slot.as_mut() {
             if connection
                 .child
@@ -126,7 +184,11 @@ impl MenuHost {
             Some(connection) => connection,
             None => slot.insert(Connection::start().map_err(|e| e.to_string())?),
         };
-        match connection.exchange(&request) {
+        // The helper owns the popup. Grant activation only for a real menu request.
+        unsafe {
+            let _ = AllowSetForegroundWindow(connection.child.id());
+        }
+        match connection.exchange(&Message::Show(request)) {
             Ok(reply) => reply,
             Err(error) => {
                 // A handler may have already run. Retry only on the next user request.
@@ -142,6 +204,17 @@ impl MenuHost {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn warmup_message_only_carries_the_folder_to_prepare() {
+        let msg = Message::Warm {
+            warm_folder: "C:\\Windows".into(),
+        };
+        let wire = serde_json::to_value(&msg).unwrap();
+        assert_eq!(wire, serde_json::json!({ "warm_folder": "C:\\Windows" }));
+        let received = serde_json::from_value::<Message>(wire).unwrap();
+        assert!(matches!(received, Message::Warm { warm_folder } if warm_folder == "C:\\Windows"));
+    }
 
     #[test]
     fn menu_host_protocol_carries_gallery_and_distinguishes_all_outcomes() {

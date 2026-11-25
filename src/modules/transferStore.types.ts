@@ -1,6 +1,6 @@
 // Shared transfer store types.
 // Keeping the shapes in one small module lets reducers and selectors stay pure.
-import type { TransferJobCapabilities, TransferJobKind, TransferJobPhase } from "@/types";
+import type { TransferDestination, TransferJobCapabilities, TransferJobKind, TransferJobPhase } from "@/types";
 
 export type TransferStatus =
   | "queued"
@@ -31,11 +31,13 @@ export type TransferJob = {
   phase: TransferJobPhase;
   total: number;
   processed: number;
+  addedAt: number;
   startedAt: number;
   activityAt: number;
   finishedAt?: number;
   items?: string[];
   currentPath?: string;
+  destination?: TransferDestination;
   currentBytes?: number;
   currentTotalBytes?: number;
   progressPercent?: number;
@@ -55,6 +57,17 @@ export type TransferJobRegistration = {
   id: string;
 };
 
+export type FileJobKind = "transfer" | "delete";
+
+export type FileJobRegistration = TransferJobRegistration & {
+  finish: () => void;
+};
+
+export type PendingFileJob = {
+  kind: FileJobKind;
+  paths: Set<string>;
+};
+
 export type TransferJobMetadata = {
   label: string;
   items?: string[];
@@ -65,8 +78,10 @@ export type TransferJobMetadata = {
 };
 
 export type TransferStoreState = {
+  snapshotRevision: number;
   backendJobs: TransferJob[];
   localJobs: TransferJob[];
   jobMetadata: Record<string, TransferJobMetadata>;
   dismissedJobIds: Record<string, true>;
+  pendingFileJobs: Record<string, PendingFileJob>;
 };

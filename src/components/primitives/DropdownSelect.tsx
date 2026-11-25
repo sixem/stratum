@@ -34,18 +34,18 @@ type DropdownSelectProps = {
   menuClassName?: string;
 };
 
-type FlattenedOption = DropdownOption & {
-  groupId: string;
+type MenuOption = Omit<DropdownOption, "value"> & {
+  value: string | null;
+  index: number;
 };
 
-const isSameValue = (left: string | null, right: string | null) => left === right;
 const MENU_EDGE = 8;
 const MENU_GAP = 6;
 const MENU_MIN_HEIGHT = 120;
 const POSITION_EPSILON_PX = 0.5;
 
 const getNextEnabledIndex = (
-  options: FlattenedOption[],
+  options: readonly MenuOption[],
   startIndex: number,
   direction: 1 | -1,
 ): number => {
@@ -63,7 +63,7 @@ const getNextEnabledIndex = (
 export const DropdownSelect = ({
   value,
   groups,
-  placeholder = "Select",
+  placeholder,
   onChange,
   ariaLabel,
   disabled = false,
@@ -79,7 +79,7 @@ export const DropdownSelect = ({
   const followupPositionFrameRef = useRef<number | null>(null);
   const [open, setOpen] = useState(false);
   const [menuReady, setMenuReady] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
+  const [highlight, setHighlight] = useState<{ option: MenuOption; keyboard: boolean } | null>(null);
   const [menuPosition, setMenuPosition] = useState<{
     top: number;
     left: number;
@@ -94,33 +94,27 @@ export const DropdownSelect = ({
     dropUp: false,
   });
 
-  const flattenedOptions = useMemo<FlattenedOption[]>(
-    () =>
-      groups.flatMap((group) =>
-        group.options.map((option) => ({
-          ...option,
-          groupId: group.id,
-        })),
-      ),
-    [groups],
-  );
-
-  const optionIndexByKey = useMemo(() => {
-    const map = new Map<string, number>();
-    flattenedOptions.forEach((option, index) => {
-      map.set(`${option.groupId}\u0000${option.value}`, index);
-    });
-    return map;
-  }, [flattenedOptions]);
-
-  const selectedOption = useMemo(
-    () => flattenedOptions.find((option) => option.value === value) ?? null,
-    [flattenedOptions, value],
-  );
-
-  const clearOptionId = `${listId}-clear`;
-  const activeDescendantId =
-    open && activeIndex >= 0 ? `${listId}-option-${activeIndex}` : open ? clearOptionId : undefined;
+  const { options, menuGroups, clearOption } = useMemo(() => {
+    const options: MenuOption[] = [];
+    // A caller-provided placeholder labels the selectable empty value.
+    const clearOption = placeholder === undefined ? null : { value: null, label: placeholder, index: 0 };
+    if (clearOption) options.push(clearOption);
+    const menuGroups = groups.map((group) => ({
+      ...group,
+      options: group.options.map((option) => {
+        const entry = { ...option, index: options.length };
+        options.push(entry);
+        return entry;
+      }),
+    }));
+    return { options, menuGroups, clearOption };
+  }, [groups, placeholder]);
+  const selectedOption = options.find((option) => option.value === value);
+  const highlightedOption = highlight && options[highlight.option.index] === highlight.option
+    ? highlight.option : null;
+  const activeOption = highlightedOption ?? (selectedOption && !selectedOption.disabled
+    ? selectedOption : options.find((option) => !option.disabled));
+  const activeDescendantId = open && activeOption ? `${listId}-option-${activeOption.index}` : undefined;
 
   const openMenu = useCallback(() => {
     setMenuReady(false);
@@ -130,7 +124,7 @@ export const DropdownSelect = ({
   const closeMenu = useCallback(() => {
     setOpen(false);
     setMenuReady(false);
-    setActiveIndex(-1);
+    setHighlight(null);
   }, []);
 
   const dismissOnEscape = useCallback((event: KeyboardEvent) => {
@@ -227,7 +221,7 @@ export const DropdownSelect = ({
     schedulePositionRefresh();
   }, [
     cancelScheduledPositionRefresh,
-    flattenedOptions.length,
+    options.length,
     menuReady,
     open,
     schedulePositionRefresh,
@@ -243,15 +237,10 @@ export const DropdownSelect = ({
 
   useEffect(() => cancelScheduledPositionRefresh, [cancelScheduledPositionRefresh]);
 
-  useEffect(() => {
-    if (!open) return;
-    const selectedIndex = flattenedOptions.findIndex((option) => option.value === value);
-    if (selectedIndex >= 0 && !flattenedOptions[selectedIndex]?.disabled) {
-      setActiveIndex(selectedIndex);
-      return;
-    }
-    setActiveIndex(getNextEnabledIndex(flattenedOptions, -1, 1));
-  }, [flattenedOptions, open, value]);
+  useLayoutEffect(() => {
+    if (!menuReady || !activeDescendantId || (highlightedOption && !highlight?.keyboard)) return;
+    document.getElementById(activeDescendantId)?.scrollIntoView({ block: "nearest" });
+  }, [activeDescendantId, highlight?.keyboard, highlightedOption, menuReady]);
 
   useEffect(() => {
     if (!disabled || !open) return;
@@ -264,93 +253,57 @@ export const DropdownSelect = ({
     triggerRef.current?.focus({ preventScroll: true });
   };
 
-  const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-    if (disabled) return;
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      if (!open) {
-        openMenu();
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement | HTMLDivElement>) => {
+    if (disabled || event.defaultPrevented || event.nativeEvent.isComposing) return;
+    switch (event.key) {
+      case "Tab":
+        if (open) closeMenu();
         return;
-      }
-      const direction = event.key === "ArrowDown" ? 1 : -1;
-      setActiveIndex((current) => getNextEnabledIndex(flattenedOptions, current, direction));
-      return;
-    }
-    if (event.key === "Home") {
-      event.preventDefault();
-      if (!open) {
-        openMenu();
-      }
-      setActiveIndex(getNextEnabledIndex(flattenedOptions, -1, 1));
-      return;
-    }
-    if (event.key === "End") {
-      event.preventDefault();
-      if (!open) {
-        openMenu();
-      }
-      setActiveIndex(getNextEnabledIndex(flattenedOptions, 0, -1));
-      return;
-    }
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      if (open && event.key === "Enter") {
-        if (activeIndex < 0) {
-          commitValue(null);
-          return;
-        }
-        const active = flattenedOptions[activeIndex];
-        if (active && !active.disabled) {
-          commitValue(active.value);
-          return;
-        }
-      }
-      if (open) {
-        closeMenu();
+      case "Enter":
+      case " ":
+        event.preventDefault();
+        if (event.repeat) return;
+        if (!open) openMenu();
+        else if (activeOption) commitValue(activeOption.value);
         return;
+      case "ArrowDown":
+      case "ArrowUp":
+      case "Home":
+      case "End": {
+        event.preventDefault();
+        const direction = event.key === "ArrowDown" || event.key === "Home" ? 1 : -1;
+        const edge = event.key === "Home" || event.key === "End";
+        if (!open) {
+          openMenu();
+          if (!edge) return;
+        }
+        const start = edge ? (direction === 1 ? -1 : 0) : activeOption?.index ?? -1;
+        const option = options[getNextEnabledIndex(options, start, direction)];
+        if (option) setHighlight({ option, keyboard: true });
       }
-      openMenu();
     }
   };
 
-  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Tab") {
-      closeMenu();
-      return;
-    }
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setActiveIndex((current) => getNextEnabledIndex(flattenedOptions, current, 1));
-      return;
-    }
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setActiveIndex((current) => getNextEnabledIndex(flattenedOptions, current, -1));
-      return;
-    }
-    if (event.key === "Enter") {
-      event.preventDefault();
-      if (activeIndex < 0) return;
-      const active = flattenedOptions[activeIndex];
-      if (!active || active.disabled) return;
-      commitValue(active.value);
-      return;
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeMenu();
-      return;
-    }
-    if (event.key === "Home") {
-      event.preventDefault();
-      setActiveIndex(getNextEnabledIndex(flattenedOptions, -1, 1));
-      return;
-    }
-    if (event.key === "End") {
-      event.preventDefault();
-      setActiveIndex(getNextEnabledIndex(flattenedOptions, 0, -1));
-    }
-  };
+  const renderOption = (option: MenuOption) => (
+    <PressButton
+      key={option.index}
+      id={`${listId}-option-${option.index}`}
+      type="button"
+      className={`ui-select-option${option.value === value ? " is-selected" : ""}${option === activeOption ? " is-active" : ""}`}
+      role="option"
+      aria-selected={option.value === value}
+      tabIndex={-1}
+      pressOnPointerDown={false}
+      onMouseDown={(event) => event.preventDefault()}
+      disabled={option.disabled}
+      onPointerMove={() => {
+        if (!option.disabled && activeOption !== option) setHighlight({ option, keyboard: false });
+      }}
+      onClick={() => commitValue(option.value)}
+    >
+      {option.label}
+    </PressButton>
+  );
 
   return (
     <div
@@ -369,7 +322,7 @@ export const DropdownSelect = ({
         aria-controls={listId}
         aria-activedescendant={activeDescendantId}
         aria-label={ariaLabel}
-        onKeyDown={handleTriggerKeyDown}
+        onKeyDown={handleKeyDown}
         onClick={() => {
           if (disabled) return;
           if (open) {
@@ -380,8 +333,8 @@ export const DropdownSelect = ({
         }}
         disabled={disabled}
       >
-        <span className={`ui-select-value${selectedOption ? "" : " is-placeholder"}`}>
-          {selectedOption?.label ?? placeholder}
+        <span className={`ui-select-value${selectedOption?.value != null ? "" : " is-placeholder"}`}>
+          {selectedOption?.label ?? placeholder ?? "Select"}
         </span>
         <ChevronDownIcon className="ui-select-caret" />
       </PressButton>
@@ -393,7 +346,7 @@ export const DropdownSelect = ({
               id={listId}
               className={`ui-select-menu${menuClassName ? ` ${menuClassName}` : ""}`}
               role="listbox"
-              onKeyDown={handleMenuKeyDown}
+              onKeyDown={handleKeyDown}
               style={{
                 top: `${menuPosition.top}px`,
                 left: `${menuPosition.left}px`,
@@ -403,51 +356,11 @@ export const DropdownSelect = ({
                 pointerEvents: menuReady ? "auto" : "none",
               }}
             >
-              <PressButton
-                type="button"
-                className={`ui-select-option${
-                  isSameValue(value, null) ? " is-selected" : ""
-                }${activeIndex === -1 ? " is-active" : ""}`}
-                id={clearOptionId}
-                role="option"
-                aria-selected={isSameValue(value, null)}
-                pressOnPointerDown={false}
-                onMouseDown={(event) => event.preventDefault()}
-                onPointerEnter={() => setActiveIndex(-1)}
-                onClick={() => commitValue(null)}
-              >
-                {placeholder}
-              </PressButton>
-              {groups.map((group) => (
+              {clearOption && renderOption(clearOption)}
+              {menuGroups.map((group) => (
                 <div key={group.id} className="ui-select-group">
                   {group.label ? <div className="ui-select-group-label">{group.label}</div> : null}
-                  {group.options.map((option) => {
-                    const index = optionIndexByKey.get(`${group.id}\u0000${option.value}`) ?? -1;
-                    const isSelected = option.value === value;
-                    const isActive = index === activeIndex;
-                    return (
-                      <PressButton
-                        key={`${group.id}-${option.value}`}
-                        id={index >= 0 ? `${listId}-option-${index}` : undefined}
-                        type="button"
-                        className={`ui-select-option${isSelected ? " is-selected" : ""}${
-                          isActive ? " is-active" : ""
-                        }`}
-                        role="option"
-                        aria-selected={isSelected}
-                        pressOnPointerDown={false}
-                        onMouseDown={(event) => event.preventDefault()}
-                        disabled={option.disabled}
-                        onPointerEnter={() => setActiveIndex(index)}
-                        onClick={() => {
-                          if (option.disabled) return;
-                          commitValue(option.value);
-                        }}
-                      >
-                        {option.label}
-                      </PressButton>
-                    );
-                  })}
+                  {group.options.map(renderOption)}
                 </div>
               ))}
             </div>,

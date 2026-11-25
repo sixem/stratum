@@ -8,7 +8,7 @@ import type {
 import type { EntryItem } from "@/lib";
 import type { ScrollRequest } from "@/hooks";
 import type { GridNameEllipsis } from "@/modules";
-import type { EntryMeta, FileEntry, RenameCommitReason, SortState } from "@/types";
+import type { EntryMeta, EntryMetaLookup, FileEntry, RenameCommitReason, SortState } from "@/types";
 
 export type FileListEntryContextTarget = {
   name: string;
@@ -56,7 +56,7 @@ export type FileListRenameProps = {
 };
 
 export type FileListMetadataProps = {
-  entryMeta: Map<string, EntryMeta>;
+  entryMeta: EntryMetaLookup;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
 };
 

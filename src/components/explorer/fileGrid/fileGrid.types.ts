@@ -8,7 +8,7 @@ import type {
 import type { EntryItem } from "@/lib";
 import type { ScrollRequest } from "@/hooks";
 import type { GridNameEllipsis, GridSize, ThumbnailFit } from "@/modules";
-import type { EntryMeta, FileEntry, RenameCommitReason, ThumbnailRequest } from "@/types";
+import type { EntryMeta, EntryMetaLookup, FileEntry, RenameCommitReason, RequestScopedThumbnails, ThumbnailLookup } from "@/types";
 
 export type FileGridEntryContextTarget = {
   name: string;
@@ -56,14 +56,14 @@ export type FileGridRenameProps = {
 };
 
 export type FileGridMetadataProps = {
-  entryMeta: Map<string, EntryMeta>;
+  entryMeta: EntryMetaLookup;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
 };
 
 export type FileGridThumbProps = {
   thumbnailsEnabled: boolean;
-  thumbnails: Map<string, string>;
-  onRequestThumbs: (requests: ThumbnailRequest[]) => void;
+  thumbnails: ThumbnailLookup;
+  onRequestThumbs: RequestScopedThumbnails;
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;
   thumbnailFolders: boolean;

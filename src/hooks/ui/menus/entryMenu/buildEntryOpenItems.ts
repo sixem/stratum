@@ -10,6 +10,7 @@ type BuildEntryOpenItemsOptions = {
   galleryPath?: string;
   onOpenDir: (path: string) => void;
   onOpenDirNewTab?: (path: string) => void;
+  onOpenDirInBackgroundTab?: (path: string) => void;
   otherPane?: { label: string; open: (path: string) => void };
 };
 
@@ -21,6 +22,7 @@ export const buildEntryOpenItems = ({
   galleryPath,
   onOpenDir,
   onOpenDirNewTab,
+  onOpenDirInBackgroundTab,
   otherPane,
 }: BuildEntryOpenItemsOptions): ContextMenuItem[] => {
   const hasTargets = targetCount > 0;
@@ -58,6 +60,17 @@ export const buildEntryOpenItems = ({
       onSelect: () => {
         if (!hasTargets) return;
         onOpenDirNewTab(target.path);
+      },
+      disabled: !hasTargets,
+    });
+  }
+  if (target.isDir && onOpenDirInBackgroundTab) {
+    items.push({
+      id: "entry-open-background-tab",
+      label: "Open in background tab",
+      icon: "open-new-tab",
+      onSelect: () => {
+        if (hasTargets) onOpenDirInBackgroundTab(target.path);
       },
       disabled: !hasTargets,
     });

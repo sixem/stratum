@@ -216,12 +216,7 @@ fn move_cleanup_keeps_a_replacement_junction_and_its_target() {
 }
 
 #[cfg(windows)]
-#[test]
-#[ignore = "requires STRATUM_TEST_MOVE_DESTINATION on a second volume"]
-fn cross_volume_move_retains_new_source_files() {
-    use crate::domain::filesystem::transfer::execute::transfer_entries;
-    use crate::domain::filesystem::{TransferMode, TransferOptions, TransferProgressUpdate};
-
+fn cross_volume_test_dirs() -> (TestDir, TestDir) {
     let parent =
         std::env::var_os("STRATUM_TEST_MOVE_DESTINATION").expect("set a parent on a second volume");
     let target = TestDir::new(Path::new(&parent));
@@ -238,6 +233,17 @@ fn cross_volume_move_retains_new_source_files() {
         volume_id(&target),
         "supply two different volumes"
     );
+    (temp, target)
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires STRATUM_TEST_MOVE_DESTINATION on a second volume"]
+fn cross_volume_move_retains_new_source_files() {
+    use crate::domain::filesystem::transfer::execute::transfer_entries;
+    use crate::domain::filesystem::{TransferMode, TransferOptions, TransferProgressUpdate};
+
+    let (temp, target) = cross_volume_test_dirs();
     let source = temp.0.join("source");
     fs::create_dir(&source).unwrap();
     let original = source.join("original.txt");
@@ -298,4 +304,64 @@ fn cross_volume_move_retains_new_source_files() {
         fs::read(target.0.join("unchanged/file.txt")).unwrap(),
         b"unchanged"
     );
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires STRATUM_TEST_MOVE_DESTINATION on a second volume"]
+fn cross_volume_undo_checks_the_published_copy_and_restores_it() {
+    use crate::domain::filesystem::transfer::execute::transfer_entries;
+    use crate::domain::filesystem::{TransferMode, TransferOptions};
+
+    let (temp, target) = cross_volume_test_dirs();
+    let source = temp.0.join("undo");
+    fs::create_dir(&source).unwrap();
+    fs::write(source.join("child"), b"original").unwrap();
+    let options = TransferOptions {
+        mode: Some(TransferMode::Move),
+        ..Default::default()
+    };
+    let mut forward = transfer_entries(
+        vec![source.to_string_lossy().into_owned()],
+        target.0.to_string_lossy().into_owned(),
+        Some(options.clone()),
+        None,
+        None,
+    )
+    .unwrap();
+    assert_eq!(forward.moved, 1, "{:?}", forward.failures);
+    let entry = forward.moved_entries.pop().unwrap();
+    let destination = PathBuf::from(entry.destination_path);
+    let undo = || {
+        let path = destination.to_string_lossy().into_owned();
+        transfer_entries(
+            vec![path.clone()],
+            temp.0.to_string_lossy().into_owned(),
+            Some(TransferOptions {
+                expected_sources: Some([(path, entry.identity.clone().unwrap())].into()),
+                ..options.clone()
+            }),
+            None,
+            None,
+        )
+        .unwrap()
+    };
+
+    let kept = target.0.join("kept");
+    fs::rename(&destination, &kept).unwrap();
+    fs::create_dir(&destination).unwrap();
+    fs::write(destination.join("child"), b"replacement").unwrap();
+    let rejected = undo();
+    assert_eq!(rejected.moved, 0);
+    assert_eq!(rejected.copied, 0);
+    assert!(rejected.failures[0].contains("original item has been replaced"));
+    assert_eq!(fs::read(destination.join("child")).unwrap(), b"replacement");
+    assert!(!source.exists());
+
+    fs::remove_dir_all(&destination).unwrap();
+    fs::rename(kept, &destination).unwrap();
+    let restored = undo();
+    assert_eq!(restored.moved, 1, "{:?}", restored.failures);
+    assert_eq!(fs::read(source.join("child")).unwrap(), b"original");
+    assert!(!destination.exists());
 }

@@ -1,8 +1,10 @@
 // Handles preview-stage interaction: zoom, pan, pointer drag, and keyboard shortcuts.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { FileEntry } from "@/types";
-import { isEditableElement, isPreviewableEntry, normalizePath } from "@/lib";
+import { isEditableElement } from "@/lib";
+import { useModalFocusTrap } from "@/hooks/ui/app/useModalFocusTrap";
+import { previewSeekTime, seekPreviewMedia } from "./previewSeek";
 
 type DragState = {
   active: boolean;
@@ -15,9 +17,10 @@ type DragState = {
 
 type UseQuickPreviewInputOptions = {
   open: boolean;
-  isVideo: boolean;
+  playable: boolean;
   stripOpen: boolean;
-  items: FileEntry[];
+  previewItems: FileEntry[];
+  activeIndex: number;
   activePath: string;
   onSelectPreview: (path: string) => void;
   smartTabJump: boolean;
@@ -28,7 +31,7 @@ const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 8;
 const ZOOM_SPEED = 0.0014;
 const TAB_DOUBLE_TAP_MS = 280;
-const VIDEO_SHORT_SEEK_SECONDS = 5;
+const SHORT_SEEK_SECONDS = 5;
 const WHEEL_TRANSFORM_SETTLE_MS = 140;
 
 const clamp = (value: number, min: number, max: number) => {
@@ -39,9 +42,10 @@ const clamp = (value: number, min: number, max: number) => {
 
 export const useQuickPreviewInput = ({
   open,
-  isVideo,
+  playable,
   stripOpen,
-  items,
+  previewItems,
+  activeIndex,
   activePath,
   onSelectPreview,
   smartTabJump,
@@ -50,7 +54,7 @@ export const useQuickPreviewInput = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaRef = useRef<HTMLMediaElement | null>(null);
   const dragRef = useRef<DragState>({
     active: false,
     pointerId: null,
@@ -62,27 +66,14 @@ export const useQuickPreviewInput = ({
   const frameRef = useRef<number | null>(null);
   const wheelTransformTimerRef = useRef<number | null>(null);
   const fitSizeRef = useRef<{ width: number; height: number } | null>(null);
+  const minZoomRef = useRef(MIN_ZOOM);
   const offsetRef = useRef({ x: 0, y: 0 });
   const lastTabTapRef = useRef(0);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const [transforming, setTransforming] = useState(false);
-  const previewItems = useMemo(
-    () => items.filter(isPreviewableEntry),
-    [items],
-  );
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    const previous = document.activeElement;
-    containerRef.current?.focus({ preventScroll: true });
-    return () => {
-      if (previous instanceof HTMLElement && previous.isConnected) {
-        previous.focus({ preventScroll: true });
-      }
-    };
-  }, [open]);
+  useModalFocusTrap({ open, containerRef, initialFocusRef: containerRef });
 
   const scheduleOffset = (next: { x: number; y: number }) => {
     offsetRef.current = next;
@@ -95,6 +86,7 @@ export const useQuickPreviewInput = ({
 
   const resetViewport = useCallback(() => {
     fitSizeRef.current = null;
+    minZoomRef.current = MIN_ZOOM;
     setZoom(1);
     setOffset({ x: 0, y: 0 });
     offsetRef.current = { x: 0, y: 0 };
@@ -106,19 +98,25 @@ export const useQuickPreviewInput = ({
     if (!container) return;
     if (width <= 0 || height <= 0) return;
     const bounds = container.getBoundingClientRect();
-    const fitZoom = Math.min(bounds.width / width, bounds.height / height, 1);
-    const nextZoom = clamp(fitZoom, MIN_ZOOM, MAX_ZOOM);
     fitSizeRef.current = { width, height };
-    setZoom(nextZoom);
+    if (!bounds.width || !bounds.height) return;
+    const fitZoom = Math.min(bounds.width / width, bounds.height / height, 1);
+    minZoomRef.current = Math.min(fitZoom, MIN_ZOOM);
+    setZoom(fitZoom);
     setOffset({ x: 0, y: 0 });
     offsetRef.current = { x: 0, y: 0 };
   }, []);
 
   useLayoutEffect(() => {
-    // Refit to the new stage width only while the media is in its automatic view.
-    const size = fitSizeRef.current;
-    if (size) fitMediaToViewport(size.width, size.height);
-  }, [fitMediaToViewport, stripOpen]);
+    const stage = stageRef.current;
+    if (!open || !stage) return;
+    const observer = new ResizeObserver(() => {
+      const size = fitSizeRef.current;
+      if (size) fitMediaToViewport(size.width, size.height);
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [fitMediaToViewport, open]);
 
   useEffect(() => {
     return () => {
@@ -145,8 +143,8 @@ export const useQuickPreviewInput = ({
 
   // Keep timeline shortcuts intentionally minimal: Shift+Arrow seeks by +/-5s.
   useEffect(() => {
-    if (!open || !isVideo) return;
-    const handleVideoSeekKey = (event: KeyboardEvent) => {
+    if (!open || !playable) return;
+    const handleSeekKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.isComposing || event.repeat) return;
@@ -160,27 +158,18 @@ export const useQuickPreviewInput = ({
       event.preventDefault();
       event.stopPropagation();
 
-      const video = videoRef.current;
-      if (!video) return;
-      const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+      const media = mediaRef.current;
+      if (!media) return;
+      const duration = Number.isFinite(media.duration) && media.duration > 0 ? media.duration : 0;
       if (duration <= 0) return;
 
-      const delta = event.key === "ArrowLeft" ? -VIDEO_SHORT_SEEK_SECONDS : VIDEO_SHORT_SEEK_SECONDS;
-      const target = clamp(video.currentTime + delta, 0, duration);
-      if (typeof video.fastSeek === "function") {
-        try {
-          video.fastSeek(target);
-        } catch {
-          video.currentTime = target;
-        }
-      } else {
-        video.currentTime = target;
-      }
+      const delta = event.key === "ArrowLeft" ? -SHORT_SEEK_SECONDS : SHORT_SEEK_SECONDS;
+      seekPreviewMedia(media, clamp(previewSeekTime(media) + delta, 0, duration));
     };
 
-    window.addEventListener("keydown", handleVideoSeekKey);
-    return () => window.removeEventListener("keydown", handleVideoSeekKey);
-  }, [isVideo, open]);
+    window.addEventListener("keydown", handleSeekKey);
+    return () => window.removeEventListener("keydown", handleSeekKey);
+  }, [open, playable]);
 
   // Non-shift arrows navigate adjacent media items in the right strip.
   useEffect(() => {
@@ -196,13 +185,6 @@ export const useQuickPreviewInput = ({
       if (isEditableElement(active)) return;
       if (!document.hasFocus()) return;
 
-      if (!activePath || previewItems.length === 0) return;
-      const activePathKey = normalizePath(activePath);
-      const activeIndex = previewItems.findIndex(
-        (entry) =>
-          entry.path === activePath ||
-          (activePathKey !== "" && normalizePath(entry.path) === activePathKey),
-      );
       if (activeIndex < 0) return;
 
       const delta = event.key === "ArrowRight" ? 1 : -1;
@@ -218,38 +200,7 @@ export const useQuickPreviewInput = ({
 
     window.addEventListener("keydown", handleStripArrowNav);
     return () => window.removeEventListener("keydown", handleStripArrowNav);
-  }, [activePath, onSelectPreview, open, previewItems]);
-
-  // Space is reserved for video playback in preview mode.
-  useEffect(() => {
-    if (!open || !isVideo) return;
-    const handleSpace = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.isComposing || event.repeat) return;
-
-      const isSpace = event.key === " " || event.key === "Spacebar" || event.code === "Space";
-      if (!isSpace) return;
-
-      const active = document.activeElement;
-      if (isEditableElement(active)) return;
-      if (!document.hasFocus()) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      const video = videoRef.current;
-      if (!video) return;
-      if (video.paused) {
-        void video.play().catch(() => {});
-      } else {
-        video.pause();
-      }
-    };
-
-    window.addEventListener("keydown", handleSpace);
-    return () => window.removeEventListener("keydown", handleSpace);
-  }, [isVideo, open]);
+  }, [activeIndex, activePath, onSelectPreview, open, previewItems]);
 
   // Smart Tab jump also works in preview mode to jump the right-hand strip.
   useEffect(() => {
@@ -267,6 +218,8 @@ export const useQuickPreviewInput = ({
       if (!document.hasFocus()) return;
       const strip = stripRef.current;
       if (!strip) return;
+      // Let keyboard focus advance normally between playback and window controls.
+      if (active !== containerRef.current && !strip.contains(active)) return;
       const maxScrollTop = strip.scrollHeight - strip.clientHeight;
       if (maxScrollTop <= 0) return;
 
@@ -293,7 +246,7 @@ export const useQuickPreviewInput = ({
     setTransforming(true);
     scheduleWheelTransformSettle();
     const factor = Math.exp(-event.deltaY * ZOOM_SPEED);
-    setZoom((value) => clamp(value * factor, MIN_ZOOM, MAX_ZOOM));
+    setZoom((value) => clamp(value * factor, minZoomRef.current, MAX_ZOOM));
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -363,7 +316,7 @@ export const useQuickPreviewInput = ({
     containerRef,
     stageRef,
     stripRef,
-    videoRef,
+    mediaRef,
     zoom,
     offset,
     dragging,

@@ -73,7 +73,7 @@
     min-width: 0;
   }
 
-  // Keep the open list anchored when the trigger's drive letter or status changes.
+  // Measure the widest drive letter without moving the visible label.
   .drive-picker-button-label {
     display: inline-grid;
     text-align: start;
@@ -83,8 +83,7 @@
     }
   }
 
-  .drive-picker-label-spacer,
-  .drive-picker-status:not([data-state]) {
+  .drive-picker-label-spacer {
     visibility: hidden;
   }
 

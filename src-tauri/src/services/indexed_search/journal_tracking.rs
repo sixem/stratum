@@ -1,4 +1,6 @@
 // Verify mounted volumes and maintain the standard user's saved index.
+use std::time::Instant;
+
 use crate::domain::indexed_search::{IndexedDriveState, IndexedSearchServiceState};
 
 use super::{
@@ -103,6 +105,7 @@ impl IndexedSearchHandle {
             drop(state);
             if changed || newly_verified {
                 self.bump_catalog_revision();
+                queue.queue_size_backfill();
             }
             mounts_to_check
         };
@@ -121,6 +124,9 @@ impl IndexedSearchHandle {
             let Some(mount) = state.volumes.active_mount(drive) else {
                 return;
             };
+            if !state.has_verified_journal(&mount.key()) {
+                return;
+            }
             let Some(snapshot) = state.volumes.matching_snapshot(&mount) else {
                 return;
             };
@@ -135,6 +141,11 @@ impl IndexedSearchHandle {
         previous: Option<JournalCheckpoint>,
         generation: u64,
     ) {
+        self.inner
+            .work_queue
+            .lock()
+            .expect("indexed search work queue")
+            .note_journal_check(&mount.drive_path, Instant::now());
         let Some(previous) = previous else {
             // Jumping to the current cursor would miss changes made between
             // the saved scan and this launch. Capture a cursor before rescanning.
@@ -276,6 +287,9 @@ impl IndexedSearchHandle {
         }
         if warning.is_none() {
             state.volumes.journal_rebuilds.remove(&key);
+            state.volumes.unavailable_journals.remove(&key);
+        } else {
+            state.volumes.unavailable_journals.insert(key);
         }
         let changed = if has_checkpoint {
             state.mark_volume_verified(mount, warning)
@@ -361,6 +375,7 @@ mod tests {
                 filesystem: Some("NTFS".into()),
                 state: IndexedDriveState::Queued,
                 indexable: true,
+                searchable: false,
                 started_at: None,
                 last_updated_at: 0,
                 entry_count: None,
@@ -405,11 +420,26 @@ mod tests {
         assert!(saved.state == IndexedDriveState::Stale);
         assert_eq!(saved.entry_count, Some(25));
         assert_eq!(saved.message.as_deref(), Some("Checking the saved index."));
+        assert!(!state
+            .drive_statuses_snapshot(true)
+            .iter()
+            .any(|drive| drive.searchable));
         assert!(expose_saved_volumes(&mut state, &mut queue, &checks));
         assert!(!expose_saved_volumes(&mut state, &mut queue, &checks));
         let saved = &state.drive_statuses[&mount.key()];
         assert!(saved.state == IndexedDriveState::Stale);
         assert_eq!(state.volumes.verified_mounts(), [mount]);
+        let searchable = state
+            .drive_statuses_snapshot(true)
+            .into_iter()
+            .filter(|drive| drive.searchable)
+            .map(|drive| drive.drive_path)
+            .collect::<Vec<_>>();
+        assert_eq!(searchable, [r"C:\"]);
+        assert!(!state
+            .drive_statuses_snapshot(false)
+            .iter()
+            .any(|drive| drive.searchable));
         assert_eq!(saved.entry_count, Some(25));
         assert_eq!(queue.next(), Some(Work::Rebuild(r"D:\".into())));
         assert_eq!(queue.next(), Some(Work::Rebuild(r"E:\".into())));
@@ -445,5 +475,69 @@ mod tests {
         assert!(!expose_saved_volumes(&mut state, &mut queue, &checks));
         assert!(state.drive_statuses[&key].state == IndexedDriveState::RescanRequired);
         assert!(state.volumes.verified.contains(&key));
+    }
+
+    #[test]
+    fn excluded_drive_stays_dormant_and_resumes_its_saved_checkpoint() {
+        let mut state = IndexedSearchState::new();
+        let drive = r"C:\";
+        let included = r"E:\";
+        let checkpoint = JournalCheckpoint {
+            journal_id: 7,
+            next_usn: 11,
+        };
+        let mut snapshot = saved_snapshot(drive, "saved");
+        snapshot.journal_checkpoint = Some(checkpoint);
+        state
+            .volumes
+            .load_snapshots(vec![snapshot, saved_snapshot(included, "other")]);
+        let discover = || {
+            vec![
+                discovered_drive(drive, "saved"),
+                discovered_drive(included, "other"),
+            ]
+        };
+        state.update_mounts(discover());
+        let mut queue = WorkQueue::default();
+        let checks = prepare_volume_checks(&state, &mut queue);
+        assert!(expose_saved_volumes(&mut state, &mut queue, &checks));
+        assert_eq!(state.volumes.verified_mounts().len(), 2);
+        for root in [drive, included] {
+            queue.queue_path(root.to_string(), format!("{root}entry.txt"));
+            queue.queue_journal_continuation(root.to_string());
+        }
+
+        state.set_excluded_drives(super::super::state::normalize_excluded_drives(vec![
+            r" c:/ ".into(),
+            r"X:\Nested".into(),
+        ]));
+        queue.discard_out_of_scope(|root| {
+            state.includes_drive(&super::super::state::normalize_drive_key(root))
+        });
+        assert_eq!(
+            queue.next(),
+            Some(Work::Reconcile(vec![format!("{included}entry.txt")]))
+        );
+        assert_eq!(queue.next(), Some(Work::ContinueJournal(included.into())));
+        assert!(queue.is_empty());
+        assert_eq!(state.volumes.verified_mounts().len(), 1);
+
+        for _ in 0..2 {
+            state.update_mounts(discover());
+            let checks = prepare_volume_checks(&state, &mut queue);
+            assert!(checks.iter().all(|(mount, _)| mount.drive_path == included));
+            assert!(queue.is_empty());
+            let excluded = state.drive_statuses_snapshot(true).remove(0);
+            assert!(excluded.state == IndexedDriveState::Excluded);
+            assert!(!excluded.searchable);
+        }
+
+        state.set_excluded_drives(Default::default());
+        state.update_mounts(discover());
+        let restored = state.volumes.active_mount(drive).unwrap();
+        let checks = prepare_volume_checks(&state, &mut queue);
+        assert!(checks.contains(&(restored, Some(checkpoint))));
+        assert!(expose_saved_volumes(&mut state, &mut queue, &checks));
+        assert_eq!(state.volumes.verified_mounts().len(), 2);
     }
 }

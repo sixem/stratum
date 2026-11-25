@@ -11,6 +11,8 @@ import { useAppCommands } from "../useAppCommands";
 import { useAppContextMenuSection } from "../useAppContextMenuSection";
 import type { ContextMenuServices } from "../useAppContextMenus";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
+import type { PlaceContextTarget } from "@/types";
+import { isSidebarPlaceTarget } from "../../menus/placeTargetMenuItems";
 import { useAppPreviewSection } from "../useAppPreviewSection";
 import { useAppRenameFlow } from "../useAppRenameFlow";
 import { useAppSelectionHandlers } from "../useAppSelectionHandlers";
@@ -116,6 +118,7 @@ export const useShellViewInteractions = ({
     viewModel,
     activeTabId: resolvedView.activeTabId,
     currentPath: resolvedView.viewPath,
+    navigationRevealPath: tabSession.navigationRevealPath,
     deferredSearchValue: viewState.deferredSearchValue,
     viewMode: resolvedView.viewMode,
     previewOpenRef,
@@ -148,7 +151,7 @@ export const useShellViewInteractions = ({
     if (!root || mainLoading) return;
     currentMainGallery.current = mainGallery;
     const unregister = registerMainPreview({
-      gallery: mainGallery,
+      getGallery: () => mainGallery,
       paneRoot: root,
       filesRoot: root,
       isCurrent: () => viewVisit.current,
@@ -293,7 +296,11 @@ export const useShellViewInteractions = ({
     onUnpinPlace: unpinPlace,
     onRemovePlace: removePlace,
   };
+  // Sidebar actions follow pane focus even though the sidebar sits outside both panes.
+  const getPlaceMenuOwner = (target: PlaceContextTarget) =>
+    isSidebarPlaceTarget(target) && useBottomPaneStore.getState().active ? menuState.bottomMenu : menuState;
   const {
+    paneFileCommands,
     openKeyboardContextMenu,
     contextMenuItems,
     contextMenuOpen,
@@ -308,14 +315,13 @@ export const useShellViewInteractions = ({
     onShellCommand,
     mainRef: viewState.mainRef,
     contextMenu: menuState.contextMenu,
-    openContextMenuAt: menuState.openContextMenuAt,
+    openContextMenuAt: (menu) => {
+      const owner = menu.kind === "place-target" ? getPlaceMenuOwner(menu.target) : menuState;
+      owner.openContextMenuAt(menu);
+    },
     openSortMenu: menuState.openSortMenu,
     openEntryMenu: menuState.openEntryMenu,
-    openPlaceTargetMenu: (event, target) => {
-      const fromSidebar = target.source === "sidebar-place" || target.source === "sidebar-recent";
-      const owner = fromSidebar && useBottomPaneStore.getState().active ? menuState.bottomMenu : menuState;
-      owner.openPlaceTargetMenu(event, target);
-    },
+    openPlaceTargetMenu: (event, target) => getPlaceMenuOwner(target).openPlaceTargetMenu(event, target),
     closeContextMenu: menuState.closeContextMenu,
     selected,
     entryByPath: viewModel.entryByPath,
@@ -331,10 +337,27 @@ export const useShellViewInteractions = ({
     onOpenGallery: mainPreview.open,
     onOpenDir: viewState.browseFromView,
     onOpenDirNewTab: navigationController.handleOpenInNewTab,
+    onOpenDirInBackgroundTab: tabSession.openInBackgroundTab,
+    onSelectTab: navigationController.handleSelectTab,
+    onCloseAnchoredTab: (id) => {
+      if (id === tabSession.activeTabId) navigationController.stashActiveScroll();
+      tabSession.closeAnchoredTab(id);
+    },
+    terminalTabs: tabSession,
+    onRenameFolder: (path, name) => fileManager.renameEntry(path, name, { updateFolderLocations: true }),
     onDeleteEntries: fileManager.deleteEntries,
     onClearSelection: handleClearSelection,
     onRenameEntry: handleRenameStart,
     onPasteEntries: fileManager.pasteEntries,
+    onCopyEntries: fileManager.copyEntries,
+    onMoveEntries: fileManager.moveEntries,
+    onCreateFolderWithSelection: async (paths, parent, name, onCreated) => {
+      const created = await fileManager.createFolderWithSelection(paths, parent, name, onCreated);
+      if (created && viewVisit.current) {
+        tabSession.setSearch("");
+        queueCreateSelection(created, parent);
+      }
+    },
     onRemoveRecentJump: tabSession.removeRecentJump,
   });
 
@@ -361,6 +384,7 @@ export const useShellViewInteractions = ({
         onRename: fileManager.renameEntry,
         onDeleteEntries: fileManager.deleteEntries,
         onPasteEntries: fileManager.pasteEntries,
+        onMoveEntries: fileManager.moveEntries,
         onOpenConvertModal: dataPipeline.openConversionModal,
         onQuickConvertImages: dataPipeline.handleQuickConvertImages,
       },
@@ -389,6 +413,7 @@ export const useShellViewInteractions = ({
     handleSelectItemWithRename,
     handleManualRefresh,
     handleSelectAll,
+    paneFileCommands,
     handleRenameSelection,
     handleCreateFile,
     handleCreateFolder,

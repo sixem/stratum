@@ -1,16 +1,16 @@
 // Opens, captures, and manages saved layouts from the main tab strip.
 import { useCallback, useId, useRef, useState } from "react";
-import { ChevronDownIcon, PlusIcon } from "@/components/icons";
-import { ContextMoreOptionsIcon } from "@/components/icons/contextMenuIcons";
+import { CheckmarkIcon, ChevronDownIcon, PlusIcon, SaveIcon } from "@/components/icons";
 import { useOverlayDismiss } from "@/components/overlay/useOverlayDismiss";
 import { ToolbarPopover } from "@/components/primitives/ToolbarPopover";
 import { captureWorkspaceLayout } from "@/lib/captureWorkspaceLayout";
 import { usePromptStore } from "@/modules";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { useSessionStore } from "@/modules/sessionStore";
-import { createFreshWorkspace, removeWorkspace, saveWorkspace, switchWorkspace, useWorkspaceStore } from "@/modules/workspaceStore";
-import type { Workspace, WorkspaceLayout } from "@/modules/workspaceStore";
+import { createFreshWorkspace, getWorkspaceChanges, losesPreviousShells, removeWorkspace, saveWorkspace, switchWorkspace, useWorkspaceStore } from "@/modules/workspaceStore";
+import type { Workspace, WorkspaceSession } from "@/modules/workspaceStore";
 import { promptWorkspaceName, runWorkspaceAction } from "./workspaceDialogs";
+import { WorkspaceList } from "./WorkspaceList";
 
 const focusRestoredPane = () => {
   const revision = useSessionStore.getState().restoreRevision;
@@ -26,16 +26,18 @@ export const WorkspacePicker = () => {
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const activeId = useWorkspaceStore((state) => state.activeId);
   const previous = useWorkspaceStore((state) => state.previous);
-  const name = workspaces.find((item) => item.id === activeId)?.name;
+  const activeWorkspace = workspaces.find((item) => item.id === activeId);
+  const name = activeWorkspace?.name;
   const [open, setOpen] = useState(false);
-  const [actionsFor, setActionsFor] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [changedIds, setChangedIds] = useState<ReadonlySet<string>>(() => new Set());
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
 
   const close = useCallback(() => {
     setOpen(false);
-    setActionsFor(null);
+    setSaved(false);
   }, []);
   const closeAndFocus = () => {
     close();
@@ -53,12 +55,22 @@ export const WorkspacePicker = () => {
     },
   });
 
-  const load = (target: { id: string | null; layout: WorkspaceLayout }) => {
+  const changeWorkspace = (action: () => void, target?: WorkspaceSession) => {
+    if (!losesPreviousShells(target)) return action();
+    usePromptStore.getState().showPrompt({
+      title: "Close PowerShell in the previous session?",
+      content: "Switching will close that session and stop its running commands.",
+      confirmLabel: "Close and switch", cancelLabel: "Cancel",
+      onConfirm: () => runWorkspaceAction(action),
+    });
+  };
+
+  const load = (target: WorkspaceSession) => {
     closeAndFocus();
-    runWorkspaceAction(() => {
+    runWorkspaceAction(() => changeWorkspace(() => {
       switchWorkspace(target, captureWorkspaceLayout());
       focusRestoredPane();
-    });
+    }, target));
   };
 
   const loadNamed = (workspace: Workspace) => {
@@ -72,14 +84,26 @@ export const WorkspacePicker = () => {
 
   const create = () => {
     closeAndFocus();
-    promptWorkspaceName("New workspace", "Create", "", (name) => {
+    promptWorkspaceName("New workspace", "Create", "", (name) => changeWorkspace(() => {
       createFreshWorkspace(name, captureWorkspaceLayout());
       focusRestoredPane();
-    });
+    }));
   };
-  const save = () => {
+  const saveAs = () => {
     closeAndFocus();
-    promptWorkspaceName("Save workspace", "Save", "", (name) => saveWorkspace(name, captureWorkspaceLayout()));
+    promptWorkspaceName("Save workspace as", "Save", "", (name) => saveWorkspace(name, captureWorkspaceLayout()));
+  };
+  const saveCurrent = () => {
+    if (!activeWorkspace) return;
+    runWorkspaceAction(() => {
+      saveWorkspace(activeWorkspace.name, captureWorkspaceLayout(), activeWorkspace.id);
+      setChangedIds((ids) => {
+        const next = new Set(ids);
+        next.delete(activeWorkspace.id);
+        return next;
+      });
+      setSaved(true);
+    });
   };
 
   const rename = (workspace: Workspace) => {
@@ -115,6 +139,15 @@ export const WorkspacePicker = () => {
     });
   };
 
+  const toggle = () => {
+    if (open) {
+      close();
+      return;
+    }
+    setChangedIds(new Set(getWorkspaceChanges(captureWorkspaceLayout()).map(({ id }) => id)));
+    setOpen(true);
+  };
+
   return (
     <div
       ref={root}
@@ -134,7 +167,7 @@ export const WorkspacePicker = () => {
         aria-label={name ? `Workspaces, ${name}` : "Workspaces"}
         aria-expanded={open}
         aria-controls={open ? id : undefined}
-        onClick={() => { if (open) close(); else setOpen(true); }}
+        onClick={toggle}
       >
         <span>{name ?? "Workspaces"}</span>
         <ChevronDownIcon />
@@ -146,47 +179,38 @@ export const WorkspacePicker = () => {
           role="region"
           aria-label="Workspaces"
           heading="Workspaces"
+          headerAction={(
+            <button type="button" className="workspace-command" onClick={create}><PlusIcon />New workspace</button>
+          )}
           footer={(
             <>
-              {previous ? <button type="button" onClick={() => load(previous)}>Previous session</button> : null}
+              {previous ? (
+                <button type="button" className="workspace-command" onClick={() => load(previous)}>Previous session</button>
+              ) : null}
               <div className="workspace-save-actions">
-                <button type="button" onClick={create}><PlusIcon />New workspace…</button>
-                <button type="button" onClick={save}>Save current as…</button>
+                {activeWorkspace ? (
+                  <button type="button" className="workspace-command workspace-save" onClick={saveCurrent}>
+                    {saved ? <CheckmarkIcon /> : <SaveIcon />}
+                    <span aria-live="polite">{saved ? "Saved" : "Save"}</span>
+                  </button>
+                ) : null}
+                <button type="button" className="workspace-command" onClick={saveAs}>
+                  {activeWorkspace ? "Save as…" : <><SaveIcon />Save workspace…</>}
+                </button>
               </div>
             </>
           )}
         >
-          {workspaces.length ? (
-            <ul className="toolbar-popover-list workspace-list">
-              {workspaces.map((workspace) => (
-                <li key={workspace.id}>
-                  <div className="workspace-row">
-                    <button type="button" className="workspace-name" onClick={() => loadNamed(workspace)}
-                      aria-current={workspace.id === activeId ? "true" : undefined}>
-                      {workspace.name}
-                    </button>
-                    <button
-                      type="button"
-                      className="workspace-more"
-                      aria-label={`Actions for ${workspace.name}`}
-                      aria-expanded={actionsFor === workspace.id}
-                      onClick={() => setActionsFor(actionsFor === workspace.id ? null : workspace.id)}
-                    >
-                      <ContextMoreOptionsIcon />
-                    </button>
-                  </div>
-                  {actionsFor === workspace.id ? (
-                    <div className="workspace-actions">
-                      <button type="button" onClick={() => rename(workspace)}>Rename</button>
-                      <button type="button" onClick={() => replace(workspace)}>Replace with current</button>
-                      <button type="button" onClick={() => duplicate(workspace)}>Duplicate</button>
-                      <button type="button" onClick={() => remove(workspace)}>Delete</button>
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          ) : null}
+          <WorkspaceList
+            workspaces={workspaces}
+            activeId={activeId}
+            changedIds={changedIds}
+            onLoad={loadNamed}
+            onRename={rename}
+            onDuplicate={duplicate}
+            onReplace={replace}
+            onRemove={remove}
+          />
         </ToolbarPopover>
       ) : null}
     </div>

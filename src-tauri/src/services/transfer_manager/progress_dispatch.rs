@@ -3,22 +3,23 @@
 use super::job_state_updates::{apply_planning_progress, apply_running_progress};
 use super::manager_events::TransferEventEmitter;
 use super::manager_state::TransferManagerInner;
+use super::progress_batch::TransferProgressBatch;
 use crate::domain::filesystem as fs;
 use crate::domain::filesystem::transfer::delete_discovery::DeleteDiscoveryProgress;
 use crate::domain::filesystem::transfer::job_plan::TransferProgressKind;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 const PROGRESS_EMIT_INTERVAL: Duration = Duration::from_millis(125);
 const SNAPSHOT_EMIT_INTERVAL: Duration = Duration::from_millis(350);
+const MAX_COMPLETED_ITEMS_PER_BATCH: usize = 128;
 
 pub(super) struct TransferProgressDispatcher {
     inner: Arc<TransferManagerInner>,
     job_id: String,
     progress_kind: TransferProgressKind,
     event_emitter: TransferEventEmitter,
-    pending_update: Option<fs::TransferProgressUpdate>,
-    last_progress_emit: Option<Instant>,
+    pending_batch: Option<TransferProgressBatch>,
     last_snapshot_emit: Option<Instant>,
 }
 
@@ -44,56 +45,68 @@ impl TransferProgressDispatcher {
             job_id,
             progress_kind,
             event_emitter,
-            pending_update: None,
-            last_progress_emit: None,
+            pending_batch: None,
             last_snapshot_emit: None,
         }
     }
 
     pub(super) fn handle_update(&mut self, update: fs::TransferProgressUpdate) {
-        let force_progress = is_immediate_progress_event(&update);
-        let force_snapshot = is_root_completion_update(&update);
-        self.pending_update = Some(update);
-        self.flush_pending(force_progress, force_snapshot);
+        let batch = self
+            .pending_batch
+            .get_or_insert_with(TransferProgressBatch::default);
+        batch.push(update);
+        if batch.completed_items.len() >= MAX_COMPLETED_ITEMS_PER_BATCH {
+            self.flush_pending(false);
+        }
+    }
+
+    pub(super) fn start_flush_task(
+        dispatcher: &Arc<Mutex<Self>>,
+    ) -> tauri::async_runtime::JoinHandle<()> {
+        let dispatcher = Arc::downgrade(dispatcher);
+        tauri::async_runtime::spawn(async move {
+            // A completed source must be released promptly even when the next
+            // operation stalls before it can report progress.
+            let mut interval = tokio::time::interval(PROGRESS_EMIT_INTERVAL);
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                let Some(dispatcher) = dispatcher.upgrade() else {
+                    break;
+                };
+                let Ok(mut dispatcher) = dispatcher.lock() else {
+                    break;
+                };
+                dispatcher.flush_pending(false);
+            }
+        })
     }
 
     pub(super) fn flush_all(&mut self) {
-        self.flush_pending(true, true);
+        self.flush_pending(true);
     }
 
-    fn flush_pending(&mut self, force_progress: bool, force_snapshot: bool) {
-        if self.pending_update.is_none() {
+    fn flush_pending(&mut self, force_snapshot: bool) {
+        let Some(batch) = self.pending_batch.take() else {
             return;
-        }
+        };
 
         let now = Instant::now();
-        let progress_due = force_progress
-            || self
-                .last_progress_emit
-                .map(|last| now.duration_since(last) >= PROGRESS_EMIT_INTERVAL)
-                .unwrap_or(true);
-        if !progress_due {
-            return;
-        }
         let snapshot_due = force_snapshot
             || self
                 .last_snapshot_emit
                 .map(|last| now.duration_since(last) >= SNAPSHOT_EMIT_INTERVAL)
                 .unwrap_or(true);
 
-        let update = self
-            .pending_update
-            .take()
-            .expect("pending update should exist");
         let snapshot = apply_running_progress(
             &self.inner,
             &self.job_id,
             self.progress_kind,
-            &update,
+            &batch,
             snapshot_due,
         );
-        self.event_emitter.emit(&update);
-        self.last_progress_emit = Some(now);
+        self.event_emitter
+            .emit(&batch.latest, batch.completed_items);
 
         if snapshot_due {
             if let Some(snapshot) = snapshot {
@@ -161,23 +174,24 @@ impl PlanningProgressDispatcher {
             .take()
             .expect("pending planning update should exist");
         let snapshot = apply_planning_progress(&self.inner, &self.job_id, &update, snapshot_due);
-        self.event_emitter.emit(&fs::TransferProgressUpdate {
-            processed: 0,
-            total: update.discovered_items,
-            current_path: update.current_path.clone(),
-            current_bytes: None,
-            current_total_bytes: None,
-            progress_percent: None,
-            status_text: Some(build_discovery_status_text(
-                self.operation_label,
-                update.discovered_items,
-                update.discovered_bytes,
-            )),
-            rate_text: update
-                .current_path
-                .as_ref()
-                .map(|path| format!("Scanning {path}")),
-        });
+        self.event_emitter.emit(
+            &fs::TransferProgressUpdate {
+                processed: 0,
+                total: update.discovered_items,
+                current_path: update.current_path.clone(),
+                status_text: Some(build_discovery_status_text(
+                    self.operation_label,
+                    update.discovered_items,
+                    update.discovered_bytes,
+                )),
+                rate_text: update
+                    .current_path
+                    .as_ref()
+                    .map(|path| format!("Scanning {path}")),
+                ..Default::default()
+            },
+            Vec::new(),
+        );
         self.last_progress_emit = Some(now);
 
         if snapshot_due {
@@ -187,25 +201,6 @@ impl PlanningProgressDispatcher {
             self.last_snapshot_emit = Some(now);
         }
     }
-}
-
-fn is_root_completion_update(update: &fs::TransferProgressUpdate) -> bool {
-    update.current_path.is_none()
-        && update.current_bytes.is_none()
-        && update.current_total_bytes.is_none()
-}
-
-fn is_file_completion_update(update: &fs::TransferProgressUpdate) -> bool {
-    matches!(
-        (update.current_bytes, update.current_total_bytes),
-        (Some(current), Some(total)) if current >= total
-    )
-}
-
-fn is_immediate_progress_event(update: &fs::TransferProgressUpdate) -> bool {
-    update.current_path.is_some()
-        || is_file_completion_update(update)
-        || is_root_completion_update(update)
 }
 
 fn build_discovery_status_text(operation_label: &str, items: usize, bytes: u64) -> String {
@@ -250,5 +245,48 @@ fn format_bytes(bytes: u64) -> String {
         format!("{value:.0} {}", UNITS[unit_index])
     } else {
         format!("{value:.1} {}", UNITS[unit_index])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pending_item_completions_flush_during_a_pause_in_callbacks() {
+        tauri::async_runtime::block_on(async {
+            let inner = Arc::new(TransferManagerInner {
+                state: Default::default(),
+                queue_signal: Default::default(),
+                next_job_id: Default::default(),
+            });
+            let dispatcher = Arc::new(Mutex::new(TransferProgressDispatcher::new(
+                inner,
+                "copy".into(),
+                TransferProgressKind::Roots,
+                TransferEventEmitter::silent(),
+            )));
+            dispatcher
+                .lock()
+                .unwrap()
+                .handle_update(fs::TransferProgressUpdate {
+                    completed_item: Some(fs::CompletedTransferItem {
+                        path: "first.txt".into(),
+                        source_removed: false,
+                    }),
+                    ..Default::default()
+                });
+            assert!(dispatcher.lock().unwrap().pending_batch.is_some());
+
+            let task = TransferProgressDispatcher::start_flush_task(&dispatcher);
+            let drained = tokio::time::timeout(Duration::from_secs(2), async {
+                while dispatcher.lock().unwrap().pending_batch.is_some() {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            })
+            .await;
+            task.abort();
+            assert!(drained.is_ok());
+        });
     }
 }

@@ -6,6 +6,7 @@ import { PathInputsBar } from "@/components/explorer/PathInputsBar";
 import { PathCrumbsBar } from "@/components/explorer/PathCrumbsBar";
 import { TabsBar } from "@/components/navigation/TabsBar";
 import { WorkspacePicker } from "@/components/navigation/WorkspacePicker";
+import { TerminalDirectoryBar } from "@/components/terminal/TerminalDirectoryBar";
 
 type AppTopstackProps = {
   pathBar: ComponentProps<typeof PathBar>;
@@ -21,6 +22,7 @@ export const AppTopstack = ({
   crumbsBar,
 }: AppTopstackProps) => {
   const split = useBottomPaneStore((state) => state.open);
+  const terminal = tabsBar.tabs.find(tab => tab.id === tabsBar.activeId)?.terminal;
   const focusMain = (event: { target: EventTarget }) => {
     if (event.target instanceof Element && event.target.closest("[data-workspace-picker]")) return;
     setBottomPaneActive(false);
@@ -34,7 +36,7 @@ export const AppTopstack = ({
           <TabsBar {...tabsBar} leading={<WorkspacePicker />} />
         </div>
       </div>
-      <PathCrumbsBar {...crumbsBar} reserveSpace={split} />
+      {terminal ? <TerminalDirectoryBar directory={terminal.directory} /> : <PathCrumbsBar {...crumbsBar} reserveSpace={split} />}
     </div>
   );
 };

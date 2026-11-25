@@ -1,2 +1,16 @@
 // Loads bundled web fonts.
 @import "../../assets/fonts/Inter/web/inter.css";
+
+// Keep text metrics with the selected monospace face. Chromium loads each
+// private-use range only when a preceding font cannot render the character.
+@font-face {
+  font-family: "Stratum Terminal Symbols";
+  src: url("../../assets/fonts/terminal-symbols/core.woff2") format("woff2");
+  unicode-range: U+E000-F8FF;
+}
+
+@font-face {
+  font-family: "Stratum Terminal Symbols";
+  src: url("../../assets/fonts/terminal-symbols/material.woff2") format("woff2");
+  unicode-range: U+F0001-F1AF0;
+}

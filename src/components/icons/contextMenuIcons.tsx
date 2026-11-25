@@ -22,6 +22,15 @@ const ContextGlyph = ({ name, className, children }: ContextGlyphProps) => (
   </svg>
 );
 
+export const AnchorIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="anchor" className={className}>
+    <path d="M12 6v16" />
+    <path d="m19 13 2-1a9 9 0 0 1-18 0l2 1" />
+    <path d="M9 11h6" />
+    <circle cx="12" cy="4" r="2" />
+  </ContextGlyph>
+);
+
 export const ContextOpenIcon = ({ className }: IconProps) => (
   <ContextGlyph name="external-link" className={className}>
     <path d="M15 3h6v6" />
@@ -33,6 +42,13 @@ export const ContextOpenIcon = ({ className }: IconProps) => (
 export const ContextOpenFolderIcon = ({ className }: IconProps) => (
   <ContextGlyph name="folder-open" className={className}>
     <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
+  </ContextGlyph>
+);
+
+export const FolderSymlinkIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="folder-symlink" className={className}>
+    <path d="M2 9.35V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h7" />
+    <path d="m8 16 3-3-3-3" />
   </ContextGlyph>
 );
 
@@ -92,6 +108,73 @@ export const ContextPinIcon = ({ className }: IconProps) => (
   </ContextGlyph>
 );
 
+export const ContextUnlinkIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="unlink" className={className}>
+    <path d="m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71" />
+    <path d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71" />
+    <line x1="8" x2="8" y1="2" y2="5" /><line x1="2" x2="5" y1="8" y2="8" />
+    <line x1="16" x2="16" y1="19" y2="22" /><line x1="19" x2="22" y1="16" y2="16" />
+  </ContextGlyph>
+);
+
+export const Link2Icon = ({ className }: IconProps) => (
+  <ContextGlyph name="link-2" className={className}>
+    <path d="M9 17H7A5 5 0 0 1 7 7h2" />
+    <path d="M15 7h2a5 5 0 1 1 0 10h-2" />
+    <line x1="8" x2="16" y1="12" y2="12" />
+  </ContextGlyph>
+);
+
+export const LinkIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="link" className={className}>
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </ContextGlyph>
+);
+
+export const SwapSidesIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="arrow-left-right" className={className}>
+    <path d="M8 3 4 7l4 4M4 7h16M16 21l4-4-4-4m4 4H4" />
+  </ContextGlyph>
+);
+
+export const PanelBottomIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="panel-bottom" className={className}>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M3 15h18" />
+  </ContextGlyph>
+);
+
+export const PanelRightIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="panel-right" className={className}>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M15 3v18" />
+  </ContextGlyph>
+);
+
+export const PanelRightCloseIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="panel-right-close" className={className}>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M15 3v18" />
+    <path d="m8 9 3 3-3 3" />
+  </ContextGlyph>
+);
+
+export const PanelRightOpenIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="panel-right-open" className={className}>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M15 3v18" />
+    <path d="m10 15-3-3 3-3" />
+  </ContextGlyph>
+);
+
+export const ReturnIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="undo-2" className={className}>
+    <path d="M9 14 4 9l5-5" />
+    <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" />
+  </ContextGlyph>
+);
+
 export const ContextUnpinIcon = ({ className }: IconProps) => (
   <ContextGlyph name="pin-off" className={className}>
     <path d="M12 17v5" />
@@ -123,6 +206,24 @@ export const ContextRenameIcon = ({ className }: IconProps) => (
   <ContextGlyph name="pencil" className={className}>
     <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
     <path d="m15 5 4 4" />
+  </ContextGlyph>
+);
+
+export const ContextSelectSameExtensionIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="file-scan" className={className}>
+    <path d="M20 10V8a2.4 2.4 0 0 0-.706-1.704l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.35" />
+    <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+    <path d="M16 14a2 2 0 0 0-2 2" />
+    <path d="M16 22a2 2 0 0 1-2-2" />
+    <path d="M20 14a2 2 0 0 1 2 2" />
+    <path d="M20 22a2 2 0 0 0 2-2" />
+  </ContextGlyph>
+);
+
+export const ContextInvertSelectionIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="squares-exclude" className={className}>
+    <path d="M16 12v2a2 2 0 0 1-2 2H9a1 1 0 0 0-1 1v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h0" />
+    <path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3a1 1 0 0 1-1 1h-5a2 2 0 0 0-2 2v2" />
   </ContextGlyph>
 );
 

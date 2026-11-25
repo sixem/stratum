@@ -27,6 +27,7 @@ export const useFsBootstrap = ({
   const [placesLoaded, setPlacesLoaded] = useState(false);
   const [listedDrives, setListedDrives] = useState<string[] | null>(null);
   const [driveMetadata, setDriveMetadata] = useState<DriveInfo[] | null>(null);
+  const [initialDriveInfoSettled, setInitialDriveInfoSettled] = useState(false);
   const [indexedDrives, setIndexedDrives] = useState<IndexedDriveStatus[]>([]);
   const [indexedSearchStatus, setIndexedSearchStatus] =
     useState<IndexedSearchServiceStatus | null>(null);
@@ -78,7 +79,8 @@ export const useFsBootstrap = ({
     );
     void listDriveInfo().then((info) => {
       if (active) setDriveMetadata((current) => current ?? info);
-    }).catch(() => { /* Drive letters remain available. */ });
+    }).catch(() => { /* Drive letters remain available. */ })
+      .finally(() => { if (active) setInitialDriveInfoSettled(true); });
     void getIndexedSearchSnapshot().then((snapshot) => {
       if (active) applyIndexSnapshot(snapshot);
     }).catch(() => { /* Index reporting can retry independently of drives. */ });
@@ -117,6 +119,7 @@ export const useFsBootstrap = ({
     placesLoaded,
     drives,
     drivesLoaded: listedDrives !== null || driveMetadata !== null,
+    driveInfoLoaded: driveMetadata !== null || initialDriveInfoSettled,
     driveInfo,
     indexedSearchStatus,
     refreshDriveInfo,

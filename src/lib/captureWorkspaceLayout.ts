@@ -6,7 +6,8 @@ import type { SessionState } from "@/modules/sessionStore";
 import type { WorkspaceLayout } from "@/modules/workspaceStore";
 import { folderPathKey } from "./paths";
 
-const captureSession = ({ tabs, activeTabId, recentJumps }: SessionState, pane: "main" | "bottom"): SessionState => {
+const captureSession = (session: SessionState, pane: "main" | "bottom"): SessionState => {
+  const { tabs, activeTabId, recentJumps } = session;
   const files = document.querySelector<HTMLElement>(`[data-file-pane="${pane}"]`);
   const viewport = files?.querySelector<HTMLElement>(".list-body, .thumb-viewport");
   const displayedPath = folderPathKey(files?.dataset.panePath ?? "");
@@ -23,12 +24,12 @@ const captureSession = ({ tabs, activeTabId, recentJumps }: SessionState, pane: 
 };
 
 export const captureWorkspaceLayout = (): WorkspaceLayout => {
-  const { open, height, heightUnit, active } = useBottomPaneStore.getState();
+  const { open, height, heightUnit, active, link } = useBottomPaneStore.getState();
   const { initialized, places } = usePlacesStore.getState();
   return {
     main: captureSession(useSessionStore.getState(), "main"),
     bottom: captureSession(useBottomSessionStore.getState(), "bottom"),
-    pane: { open, height, heightUnit, active: open && active },
+    pane: { open, height, heightUnit, active: open && active, link },
     places: { initialized, places: places.map((place) => ({ ...place })) },
   };
 };

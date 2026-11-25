@@ -58,6 +58,12 @@ pub(super) struct UserJournalChange {
     pub(super) is_dir: bool,
 }
 
+impl UserJournalChange {
+    pub(super) fn is_size_only(&self) -> bool {
+        self.reason & records::NAMESPACE_REASONS == 0
+    }
+}
+
 pub(super) fn snapshot(volume_guid: &str) -> Result<JournalSnapshot, String> {
     let root = open_root(volume_guid).map_err(describe_journal_error)?;
     let snapshot = query_journal(root.raw()).map_err(describe_journal_error)?;

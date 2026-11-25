@@ -1,6 +1,4 @@
-// Cache helpers: resolve the cache location, keep an in-memory index in sync,
-// and trim old files when the cache grows beyond the configured budget.
-use std::collections::HashSet;
+// Resolve individual cache files on demand and trim old thumbnails in the background.
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -26,36 +24,10 @@ pub(super) fn resolve_cache_dir(app_handle: &AppHandle) -> PathBuf {
         .join("thumbs")
 }
 
-pub(super) fn load_cache_index(cache_dir: &Path) -> HashSet<String> {
-    let mut index = HashSet::new();
-    visit_cache_files(cache_dir, |entry, metadata| {
-        if !metadata.is_file() || metadata.len() == 0 {
-            return;
-        }
-        if let Ok(file_name) = entry.file_name().into_string() {
-            // A write interrupted by app exit can leave an unpublished staging file.
-            if file_name.ends_with(".jpg") || file_name.ends_with(".webp") {
-                index.insert(file_name);
-            }
-        }
-    });
-    index
-}
-
-pub(super) fn has_cache_entry(state: &ThumbnailState, id: &str) -> bool {
-    state
-        .cache_index
-        .lock()
-        .expect("thumb cache index lock")
-        .contains(id)
-}
-
-pub(super) fn mark_cache_entry(state: &ThumbnailState, id: &str) {
-    state
-        .cache_index
-        .lock()
-        .expect("thumb cache index lock")
-        .insert(id.to_string());
+pub(super) fn has_thumbnail(path: &Path) -> bool {
+    // Look up the final path, so interrupted writes and evicted files are cache misses.
+    path.metadata()
+        .is_ok_and(|metadata| metadata.is_file() && metadata.len() > 0)
 }
 
 pub(super) fn maybe_trim_cache(state: &ThumbnailState, limit_mb: u32, added_bytes: u64) {
@@ -125,7 +97,6 @@ pub(super) fn maybe_trim_cache(state: &ThumbnailState, limit_mb: u32, added_byte
         return;
     }
 
-    let mut removed_ids = Vec::new();
     entries.sort_by_key(|entry| entry.modified);
     for entry in entries {
         if total <= limit_bytes {
@@ -133,16 +104,6 @@ pub(super) fn maybe_trim_cache(state: &ThumbnailState, limit_mb: u32, added_byte
         }
         if fs::remove_file(&entry.path).is_ok() {
             total = total.saturating_sub(entry.size);
-            if let Some(file_name) = entry.path.file_name().and_then(|value| value.to_str()) {
-                removed_ids.push(file_name.to_string());
-            }
-        }
-    }
-
-    if !removed_ids.is_empty() {
-        let mut cache_index = state.cache_index.lock().expect("thumb cache index lock");
-        for id in removed_ids {
-            cache_index.remove(&id);
         }
     }
 
@@ -167,7 +128,6 @@ pub(super) fn clear_cache(state: &ThumbnailState) -> Result<(), String> {
     }
     fs::create_dir_all(&state.cache_dir).map_err(|err| err.to_string())?;
 
-    *state.cache_index.lock().expect("thumb cache index lock") = HashSet::new();
     reset_trim_state(&state.trim_state);
     Ok(())
 }

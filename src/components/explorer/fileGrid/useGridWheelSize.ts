@@ -1,28 +1,29 @@
 // Handle Ctrl+wheel over the thumbnail grid using the existing sizing settings.
 import { useEffect } from "react";
 import type { RefObject } from "react";
-import { GRID_AUTO_COLUMNS_MAX, GRID_AUTO_COLUMNS_MIN } from "@/constants";
 import { useSettingsStore } from "@/modules";
 import type { useSessionStore } from "@/modules/sessionStore";
-import { FIXED_GRID_SIZES, getDefaultTabGridSize } from "@/modules/tabGridSize";
+import { clampAutoColumns, FIXED_GRID_SIZES } from "@/modules/tabGridSize";
 
 const WHEEL_GESTURE_GAP_MS = 200;
 
 const resizeGrid = (steps: number, store: typeof useSessionStore, tabId: string | null) => {
   const settings = useSettingsStore.getState();
-  const { gridSize, gridAutoColumns, updateSettings } = settings;
+  const { gridSize, gridAutoColumns, rememberTabGridSize, updateSettings } = settings;
+  const session = store.getState();
+  const tab = rememberTabGridSize && session.activeTabId === tabId ? session.tabs.find(item => item.id === tabId) : undefined;
+  // A wheel event from an outgoing grid must not resize the incoming tab.
+  if (rememberTabGridSize && !tab) return;
+
   if (gridSize === "auto") {
     // Fewer columns make the cards larger while preserving the auto layout.
-    const columns = Math.min(GRID_AUTO_COLUMNS_MAX, Math.max(GRID_AUTO_COLUMNS_MIN, gridAutoColumns - steps));
-    if (columns !== gridAutoColumns) updateSettings({ gridAutoColumns: columns });
+    const current = tab?.gridAutoColumns ?? gridAutoColumns;
+    const columns = clampAutoColumns(current - steps);
+    if (columns === current) return;
+    if (tab) session.setTabGridSize(tab.id, columns);
+    else updateSettings({ gridAutoColumns: columns });
     return;
   }
-
-  const tabDefault = getDefaultTabGridSize(settings);
-  const session = store.getState();
-  const tab = tabDefault && session.activeTabId === tabId ? session.tabs.find(item => item.id === tabId) : undefined;
-  // A wheel event from an outgoing grid must not resize the incoming tab.
-  if (tabDefault && !tab) return;
 
   const index = FIXED_GRID_SIZES.indexOf(tab?.gridSize ?? gridSize);
   const nextIndex = Math.min(FIXED_GRID_SIZES.length - 1, Math.max(0, index + steps));

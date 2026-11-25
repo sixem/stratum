@@ -13,20 +13,21 @@ import { getExtension, makeDebug } from "@/lib";
 import type { EntryItem } from "@/lib";
 import { THUMB_INTERACTION_COOLDOWN_MS, THUMB_TYPING_PAUSE_MS } from "@/constants";
 import { useDirectoryChildStateRevision } from "@/modules";
-import type { EntryMeta, ThumbnailRequest } from "@/types";
+import type { EntryMeta, EntryMetaLookup, ThumbnailLookup, ThumbnailRequest } from "@/types";
 import { useGridDisplayMeta } from "./useGridDisplayMeta";
 import type { GridDisplayMeta } from "./useGridDisplayMeta";
 import { useGridFolderSamples } from "./useGridFolderSamples";
+import type { FolderThumbnail } from "./useGridFolderSamples";
 
 type UseGridThumbRequestsOptions = {
   viewportRef: RefObject<HTMLDivElement | null>;
   viewKey: string;
   visibleItems: EntryItem[];
   isResizing: boolean;
-  entryMeta: Map<string, EntryMeta>;
+  entryMeta: EntryMetaLookup;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
-  thumbnails: Map<string, string>;
+  thumbnails: ThumbnailLookup;
   onRequestThumbs: (requests: ThumbnailRequest[]) => void;
   thumbResetKey?: string;
   thumbnailAppIcons: boolean;
@@ -38,8 +39,8 @@ type UseGridThumbRequestsOptions = {
 
 type GridThumbRequestsState = {
   gridMetaByPath: Map<string, GridDisplayMeta>;
-  thumbSource: Map<string, string>;
-  folderThumbSource: Map<string, string>;
+  thumbSource: ThumbnailLookup;
+  folderThumbSource: Map<string, FolderThumbnail>;
   fileIcons: Map<string, string | null>;
   executableIcons: Map<string, string | null>;
   scrolling: boolean;
@@ -71,7 +72,7 @@ export const useGridThumbRequests = ({
   // Treat resize like scroll/typing so enrichment yields while layout is hot.
   const interactionActive = scrolling || typingActive || isResizing;
   const [thumbsSuppressed, setThumbsSuppressed] = useState(false);
-  const thumbSnapshotRef = useRef<Map<string, string>>(new Map());
+  const thumbSnapshotRef = useRef(thumbnails);
   const lastSuppressedRef = useRef(false);
   const lastPipelineLogRef = useRef("");
 
@@ -127,8 +128,8 @@ export const useGridThumbRequests = ({
       if (thumbnailAppIcons && getExtension(item.entry.name) === "exe") {
         nextExecutables.push({
           path,
-          size: item.entry.size ?? resolvedSize,
-          modified: item.entry.modified ?? resolvedModified,
+          size: resolvedSize,
+          modified: resolvedModified,
         });
       }
     }
@@ -151,10 +152,11 @@ export const useGridThumbRequests = ({
     canRequestThumbs,
     thumbRequests,
     onRequestThumbs,
-    thumbResetKey,
+    `${viewKey}:${thumbResetKey ?? ""}:${thumbnailsEnabled}`,
   );
 
   const { folderThumbRequestCount, folderThumbSource } = useGridFolderSamples({
+    viewKey,
     directoryChildRevision,
     folderPaths,
     interactionActive,

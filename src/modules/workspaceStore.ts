@@ -1,16 +1,19 @@
 // Named workspaces are explicit snapshots. Keep a draft when leaving a changed workspace.
 import { createWithEqualityFn } from "zustand/traditional";
 import { folderPathKey } from "@/lib/paths";
+import { coercePaneLink } from "@/lib/paneLink";
 import type { Place } from "@/types";
+import { writeBackupRecords } from "./backup/persistence";
+import type { BackupStorageRecord } from "./backup/persistence";
 import { coerceBottomPaneHeight, DEFAULT_BOTTOM_PANE_LAYOUT, useBottomPaneStore } from "./bottomPaneStore";
-import type { BottomPaneLayout } from "./bottomPaneStore";
+import type { BottomPaneLayout, BottomPanePreferences } from "./bottomPaneStore";
 import { coercePlacesState, DEFAULT_PLACES_STATE, usePlacesStore } from "./placesStore";
 import type { PlacesState } from "./placesStore";
-import { coerceSession, createSessionTab, useBottomSessionStore, useSessionStore } from "./sessionStore";
+import { coerceSession, createSessionTab, prepareSessionRestore, serializePaneSession, useBottomSessionStore, useSessionStore } from "./sessionStore";
 import type { SessionState } from "./sessionStore";
 import { useSettingsStore } from "./settings.store";
-import type { FixedGridSize } from "./settings.types";
-import { fillTabGridSizes, getDefaultTabGridSize, getTabGridSizeOnEnable } from "./tabGridSize";
+import { hasUnreachableShells, parkWorkspaceShells, parkedWorkspaceShells, retainWorkspaceShells, type WorkspaceShells } from "./workspaceTerminals";
+import { fillTabGridSizes, getDefaultTabGridSize, getTabGridSizeOnEnable, type TabGridSize } from "./tabGridSize";
 
 export type WorkspaceLayout = {
   main: SessionState;
@@ -25,7 +28,7 @@ export type Workspace = {
   layout: WorkspaceLayout;
 };
 
-type WorkspaceSession = { id: string | null; layout: WorkspaceLayout };
+export type WorkspaceSession = { id: string | null; layout: WorkspaceLayout };
 type WorkspaceDraft = Pick<Workspace, "id" | "layout">;
 type WorkspaceState = {
   workspaces: Workspace[];
@@ -48,18 +51,25 @@ const readLayout = (value: Partial<WorkspaceLayout> | undefined): WorkspaceLayou
   if (!value || !Array.isArray(value.main?.tabs) || !Array.isArray(value.bottom?.tabs)) return null;
   const pane = value.pane;
   const open = pane?.open === true;
+  const link = coercePaneLink(pane?.link);
+  const main = coerceSession({ ...value.main, recentJumps: value.main.recentJumps ?? useSessionStore.getState().recentJumps });
+  const bottom = coerceSession({ ...value.bottom, recentJumps: value.bottom.recentJumps ?? useBottomSessionStore.getState().recentJumps });
   // Older snapshots shared the live sidebar. Capture it before the first switch can replace it.
   return {
-    main: coerceSession({ ...value.main, recentJumps: value.main.recentJumps ?? useSessionStore.getState().recentJumps }),
-    bottom: coerceSession({ ...value.bottom, recentJumps: value.bottom.recentJumps ?? useBottomSessionStore.getState().recentJumps }),
+    main,
+    bottom,
     places: coercePlacesState(value.places ?? usePlacesStore.getState()),
     pane: {
       open,
       ...coerceBottomPaneHeight(pane),
       active: open && pane?.active === true,
+      link: link && main.tabs.some((tab) => tab.id === link.mainTabId)
+        && bottom.tabs.some((tab) => tab.id === link.bottomTabId) ? link : null,
     },
   };
 };
+
+export { readLayout as readWorkspaceLayout };
 
 const readWorkspaces = (): WorkspaceState => {
   try {
@@ -101,19 +111,50 @@ const readWorkspaces = (): WorkspaceState => {
 
 export const useWorkspaceStore = createWithEqualityFn<WorkspaceState>(readWorkspaces);
 
-const persist = (next: WorkspaceState) => {
+function resumableWorkspace(state: WorkspaceState, id: string | null) {
+  return state.drafts.find(draft => draft.id === id) ?? state.workspaces.find(workspace => workspace.id === id);
+}
+
+// Workspace persistence and backup import both publish through this store.
+useWorkspaceStore.subscribe(state => {
+  function* inactiveSessions() {
+    if (state.previous) yield state.previous;
+    for (const workspace of state.workspaces) {
+      if (workspace.id !== state.activeId) yield state.drafts.find(draft => draft.id === workspace.id) ?? workspace;
+    }
+  }
+  retainWorkspaceShells(inactiveSessions());
+});
+
+export function parkPreviousWorkspace(next: WorkspaceState) {
+  if (next.previous) parkWorkspaceShells(next.previous, resumableWorkspace(next, next.previous.id)?.layout);
+}
+
+export function losesPreviousShells(target?: WorkspaceSession) {
+  const state = useWorkspaceStore.getState();
+  const previous = state.previous;
+  if (!previous || previous.layout === target?.layout) return false;
+  // A named workspace is also reachable from the picker. An unnamed session
+  // may have only the Previous session entry, which this switch will replace.
+  return hasUnreachableShells(previous, resumableWorkspace(state, previous.id)?.layout);
+}
+
+export const serializeWorkspaceState = (next: WorkspaceState) =>
+  [STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, ...next })] as const;
+
+const persist = (next: WorkspaceState, switching = false) => {
   try {
-    globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, ...next }));
+    globalThis.localStorage.setItem(...serializeWorkspaceState(next));
   } catch {
     throw new Error("Couldn't save workspaces to local storage.");
   }
+  if (switching) parkPreviousWorkspace(next);
   useWorkspaceStore.setState(next);
 };
 
 // Saved layouts must keep their baseline even when the preset changes while they are inactive.
-const fillWorkspaceGridSizes = (gridSize: FixedGridSize | undefined) => {
-  if (!gridSize) return;
-  const state = useWorkspaceStore.getState();
+export const fillWorkspaceStateGridSizes = (state: WorkspaceState, gridSize: TabGridSize | undefined): WorkspaceState => {
+  if (gridSize === undefined) return state;
   const fillLayout = <T extends { layout: WorkspaceLayout }>(entry: T): T => {
     const { layout } = entry;
     const main = fillTabGridSizes(layout.main.tabs, gridSize);
@@ -125,9 +166,15 @@ const fillWorkspaceGridSizes = (gridSize: FixedGridSize | undefined) => {
   const drafts = state.drafts.map(fillLayout);
   const previousLayout = state.previous && fillLayout(state.previous);
   if (previousLayout === state.previous && workspaces.every((item, index) => item === state.workspaces[index]) &&
-      drafts.every((item, index) => item === state.drafts[index])) return;
+      drafts.every((item, index) => item === state.drafts[index])) return state;
 
-  const updated = { ...state, workspaces, drafts, previous: previousLayout };
+  return { ...state, workspaces, drafts, previous: previousLayout };
+};
+
+const fillWorkspaceGridSizes = (gridSize: TabGridSize | undefined) => {
+  const state = useWorkspaceStore.getState();
+  const updated = fillWorkspaceStateGridSizes(state, gridSize);
+  if (updated === state) return;
   try {
     persist(updated);
   } catch {
@@ -154,23 +201,52 @@ const sameTabs = (saved: SessionState, current: SessionState) =>
   saved.tabs.length === current.tabs.length && saved.tabs.every((tab, index) => {
     const other = current.tabs[index];
     const samePath = tab.path === other.path || folderPathKey(tab.path) === folderPathKey(other.path);
-    return samePath && tab.viewMode === other.viewMode && tab.gridSize === other.gridSize && tab.search === other.search &&
+    const split = tab.split;
+    const otherSplit = other.split;
+    const sameSplit = split && otherSplit
+      ? split.terminal.directory === otherSplit.terminal.directory && split.folderPercent === otherSplit.folderPercent &&
+        Boolean(split.linkDirectory) === Boolean(otherSplit.linkDirectory) &&
+        Boolean(split.terminalFirst) === Boolean(otherSplit.terminalFirst) && Boolean(split.stacked) === Boolean(otherSplit.stacked)
+      : !split && !otherSplit;
+    return samePath && tab.kind === other.kind && tab.anchored === other.anchored && sameSplit &&
+      tab.terminal?.directory === other.terminal?.directory &&
+      tab.viewMode === other.viewMode && tab.gridSize === other.gridSize &&
+      tab.gridAutoColumns === other.gridAutoColumns && tab.search === other.search &&
       tab.sort.key === other.sort.key && tab.sort.dir === other.sort.dir;
   });
+
+const sameLink = (saved: WorkspaceLayout, current: WorkspaceLayout) => {
+  const left = saved.pane.link;
+  const right = current.pane.link;
+  if (!left || !right) return !left && !right;
+  return folderPathKey(left.mainRootPath) === folderPathKey(right.mainRootPath) &&
+    folderPathKey(left.bottomRootPath) === folderPathKey(right.bottomRootPath) &&
+    saved.main.tabs.findIndex(({ id }) => left.mainTabId === id) ===
+      current.main.tabs.findIndex(({ id }) => right.mainTabId === id) &&
+    saved.bottom.tabs.findIndex(({ id }) => left.bottomTabId === id) ===
+      current.bottom.tabs.findIndex(({ id }) => right.bottomTabId === id);
+};
+
+const havePlacesChanged = (saved: PlacesState, current: PlacesState) => {
+  const savedPlaces = (saved.initialized ? saved : defaultPlaces).places;
+  const currentPlaces = (current.initialized ? current : defaultPlaces).places;
+  return savedPlaces.length !== currentPlaces.length || savedPlaces.some((place, index) => {
+    const other = currentPlaces[index];
+    return place.path !== other.path || place.name !== other.name || Boolean(place.pinned) !== Boolean(other.pinned);
+  });
+};
+
+export const hasCustomWorkspacePlaces = (places: PlacesState) => havePlacesChanged(defaultPlaces, places);
 
 // Focus, scroll, recent jumps, and regenerated tab IDs are saved when available,
 // but ordinary browsing state on its own should never trigger the exit warning.
 const hasLayoutChanges = (saved: WorkspaceLayout, current: WorkspaceLayout) => {
   if (!sameTabs(saved.main, current.main) || !sameTabs(saved.bottom, current.bottom)) return true;
+  if (!sameLink(saved, current)) return true;
   if (saved.pane.open !== current.pane.open) return true;
   // Old percentage-based heights can be converted automatically on display.
   if (saved.pane.heightUnit === current.pane.heightUnit && saved.pane.height !== current.pane.height) return true;
-  const savedPlaces = (saved.places.initialized ? saved.places : defaultPlaces).places;
-  const currentPlaces = (current.places.initialized ? current.places : defaultPlaces).places;
-  return savedPlaces.length !== currentPlaces.length || savedPlaces.some((place, index) => {
-    const other = currentPlaces[index];
-    return place.path !== other.path || place.name !== other.name || Boolean(place.pinned) !== Boolean(other.pinned);
-  });
+  return havePlacesChanged(saved.places, current.places);
 };
 
 const collectDrafts = ({ workspaces, activeId, drafts }: WorkspaceState, live: WorkspaceLayout) => {
@@ -183,6 +259,45 @@ const collectDrafts = ({ workspaces, activeId, drafts }: WorkspaceState, live: W
 };
 
 export const getWorkspaceChanges = (live: WorkspaceLayout) => collectDrafts(useWorkspaceStore.getState(), live);
+
+export const clearRecentLocations = () => {
+  const state = useWorkspaceStore.getState();
+  const clearLayout = <T extends { layout: WorkspaceLayout }>(entry: T): T => {
+    const { layout } = entry;
+    if (!layout.main.recentJumps.length && !layout.bottom.recentJumps.length) return entry;
+    return {
+      ...entry,
+      layout: {
+        ...layout,
+        main: { ...layout.main, recentJumps: [] },
+        bottom: { ...layout.bottom, recentJumps: [] },
+      },
+    };
+  };
+  const workspaces = state.workspaces.map(clearLayout);
+  const drafts = state.drafts.map(clearLayout);
+  const previous = state.previous && clearLayout(state.previous);
+  const changed = workspaces.some((item, index) => item !== state.workspaces[index]) ||
+    drafts.some((item, index) => item !== state.drafts[index]) || previous !== state.previous;
+  const next = { ...state, workspaces, drafts, previous };
+  const main = useSessionStore.getState();
+  const bottom = useBottomSessionStore.getState();
+  const records: BackupStorageRecord[] = [];
+  if (changed) records.push(serializeWorkspaceState(next));
+  if (main.recentJumps.length) records.push(serializePaneSession("main", { ...main, recentJumps: [] }));
+  if (bottom.recentJumps.length) records.push(serializePaneSession("bottom", { ...bottom, recentJumps: [] }));
+  if (!records.length) return;
+
+  // Persist both panes and the workspace snapshots together before publishing them.
+  try {
+    writeBackupRecords(records);
+  } catch {
+    throw new Error("Couldn't update the saved location history.");
+  }
+  if (changed) useWorkspaceStore.setState(next);
+  if (main.recentJumps.length) main.setRecentJumps([]);
+  if (bottom.recentJumps.length) bottom.setRecentJumps([]);
+};
 
 export const saveWorkspaceChanges = (changes: WorkspaceDraft[]) => {
   if (!changes.length) return;
@@ -225,24 +340,42 @@ export const removeWorkspace = (id: string) => {
   });
 };
 
-const restoreLayout = (layout: WorkspaceLayout) => {
-  useSessionStore.getState().restoreSession(layout.main);
-  useBottomSessionStore.getState().restoreSession(layout.bottom);
-  useBottomPaneStore.setState({ ...layout.pane, navigation: null });
-  usePlacesStore.setState({ initialized: layout.places.initialized, places: [...layout.places.places] });
+export const prepareWorkspaceRestore = (layout: WorkspaceLayout, gridSize: TabGridSize | undefined, shells?: WorkspaceShells): WorkspaceLayout => {
+  const main = prepareSessionRestore(layout.main, gridSize, shells);
+  const bottom = prepareSessionRestore(layout.bottom, gridSize, shells);
+  const link = layout.pane.link;
+  const mainIndex = link ? layout.main.tabs.findIndex(({ id }) => link.mainTabId === id) : -1;
+  const bottomIndex = link ? layout.bottom.tabs.findIndex(({ id }) => link.bottomTabId === id) : -1;
+  // Each restored tab has a new ID, so reconnect the pair by its saved position.
+  const mainTabId = main.tabs[mainIndex]?.id;
+  const bottomTabId = bottom.tabs[bottomIndex]?.id;
+  return {
+    ...layout, main, bottom,
+    pane: { ...layout.pane, link: link && mainTabId && bottomTabId ? { ...link, mainTabId, bottomTabId } : null },
+  };
+};
+
+export const applyWorkspaceRestore = (prepared: WorkspaceLayout, preferences?: BottomPanePreferences) => {
+  useSessionStore.getState().restoreSession(prepared.main);
+  useBottomSessionStore.getState().restoreSession(prepared.bottom);
+  useBottomPaneStore.setState({
+    ...prepared.pane, ...preferences, navigation: null,
+  });
+  usePlacesStore.setState({ initialized: prepared.places.initialized, places: [...prepared.places.places] });
 };
 
 export const switchWorkspace = (target: WorkspaceSession, outgoing: WorkspaceLayout) => {
   const state = useWorkspaceStore.getState();
   // The previous session remains switchable if its named snapshot was deleted.
   const id = state.workspaces.some((item) => item.id === target.id) ? target.id : null;
-  persist({ ...state, activeId: id, previous: { id: state.activeId, layout: outgoing }, drafts: collectDrafts(state, outgoing) });
-  restoreLayout(target.layout);
+  const prepared = prepareWorkspaceRestore(target.layout, getDefaultTabGridSize(useSettingsStore.getState()), parkedWorkspaceShells(target.id));
+  persist({ ...state, activeId: id, previous: { id: state.activeId, layout: outgoing }, drafts: collectDrafts(state, outgoing) }, true);
+  applyWorkspaceRestore(prepared);
 };
 
 export const createFreshWorkspace = (name: string, outgoing: WorkspaceLayout) => {
   const state = useWorkspaceStore.getState();
-  const start = createSessionTab("", { viewMode: useSettingsStore.getState().defaultViewMode });
+  const start = createSessionTab("");
   const layout: WorkspaceLayout = {
     main: { tabs: [start], activeTabId: start.id, recentJumps: [] },
     bottom: { tabs: [], activeTabId: null, recentJumps: [] },
@@ -255,6 +388,6 @@ export const createFreshWorkspace = (name: string, outgoing: WorkspaceLayout) =>
     activeId: workspace.id,
     previous: { id: state.activeId, layout: outgoing },
     drafts: collectDrafts(state, outgoing),
-  });
-  restoreLayout(layout);
+  }, true);
+  applyWorkspaceRestore(layout);
 };

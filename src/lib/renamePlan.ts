@@ -15,6 +15,7 @@ export const applyHiddenExtension = (
   hideExtension: boolean,
   isDir: boolean,
 ) => {
+  if (!nextName.trim()) return "";
   if (!hideExtension || isDir) return nextName;
   const { dotExtension } = splitNameExtension(originalName);
   if (!dotExtension) return nextName;

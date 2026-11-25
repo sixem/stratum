@@ -1,6 +1,6 @@
-// Per-item override rows for the conversion modal. Each row owns its inline
-// editor UI, while the open-state control stays in the parent model hook.
-import type { MutableRefObject } from "react";
+// Mount override editors only around the visible portion of the conversion list.
+import { useMemo } from "react";
+import type { CSSProperties } from "react";
 import { DropdownSelect, PressButton } from "@/components/primitives";
 import type {
   ConversionItemDraft,
@@ -13,6 +13,7 @@ import {
   findRuleFormat,
   overrideGroupsByKind,
 } from "./conversionModalConfig";
+import { CONVERSION_OVERRIDE_ROW_HEIGHT, useConversionOverrideWindow } from "./useConversionOverrideWindow";
 
 type ConversionOverrideListProps = {
   draft: ConversionModalDraft;
@@ -20,7 +21,6 @@ type ConversionOverrideListProps = {
   sortedOverrideItems: ConversionItemDraft[];
   titleId: string;
   expandedOverridePath: string | null;
-  overrideItemRefs: MutableRefObject<Map<string, HTMLDivElement>>;
   runInProgress: boolean;
   onOverrideToggle: (itemPath: string) => void;
   onOverrideFormatChange: (itemPath: string, targetFormat: string | null) => void;
@@ -32,30 +32,46 @@ export const ConversionOverrideList = ({
   sortedOverrideItems,
   titleId,
   expandedOverridePath,
-  overrideItemRefs,
   runInProgress,
   onOverrideToggle,
   onOverrideFormatChange,
 }: ConversionOverrideListProps) => {
+  const itemCount = sortedOverrideItems.length;
+  const expandedIndex = useMemo(
+    () => expandedOverridePath ? sortedOverrideItems.findIndex(({ path }) => path === expandedOverridePath) : -1,
+    [expandedOverridePath, sortedOverrideItems],
+  );
+  const { listRef, expandedRowRef, start, end, extraHeight } = useConversionOverrideWindow(itemCount, expandedIndex);
+  const indexes = Array.from({ length: end - start }, (_, index) => start + index);
+  // Keep the expanded row measurable when scrolled out of the window.
+  if (expandedIndex >= 0 && expandedIndex < start) indexes.unshift(expandedIndex);
+  if (expandedIndex >= end) indexes.push(expandedIndex);
+  const listStyle = {
+    "--conversion-override-row-height": `${CONVERSION_OVERRIDE_ROW_HEIGHT}px`,
+    height: itemCount * CONVERSION_OVERRIDE_ROW_HEIGHT + extraHeight,
+  } as CSSProperties;
+
   return (
     <div className="conversion-block">
       <div className="conversion-override-shell">
         <div className="conversion-override-shell-head">
           <div className="conversion-section-label">To process</div>
           <span className="conversion-override-count">
-            <span className="tnum">{sortedOverrideItems.length}</span>{" "}
-            item{sortedOverrideItems.length === 1 ? "" : "s"}
+            <span className="tnum">{itemCount}</span>{" "}
+            item{itemCount === 1 ? "" : "s"}
           </span>
         </div>
-        <div className="conversion-override-list" role="list" aria-label="Override target items">
-          {sortedOverrideItems.map((item, index) => {
+        <div className="conversion-override-list" ref={listRef} style={listStyle} role="list" aria-label="Override target items">
+          {indexes.map((index) => {
+            const item = sortedOverrideItems[index];
+            if (!item) return null;
             const defaultFormat = findRuleFormat(draft, item.kind);
             const appliedFormat = item.override?.targetFormat ?? defaultFormat;
             const appliedFormatDisplay = describeAppliedFormat(appliedFormat);
             const itemStatus = runState?.itemStatusByPath[item.path] ?? "idle";
             const itemStatusLabel = ITEM_STATUS_LABELS[itemStatus];
             const showItemStatus = itemStatus !== "idle";
-            const isActive = expandedOverridePath === item.path;
+            const isActive = expandedIndex === index;
             const hasOverride = Boolean(item.override?.targetFormat);
             const editorId = `${titleId}-override-${index}`;
 
@@ -66,13 +82,12 @@ export const ConversionOverrideList = ({
                   hasOverride ? " is-overridden" : ""
                 }`}
                 role="listitem"
-                ref={(node) => {
-                  if (node) {
-                    overrideItemRefs.current.set(item.path, node);
-                    return;
-                  }
-                  overrideItemRefs.current.delete(item.path);
-                }}
+                aria-posinset={index + 1}
+                aria-setsize={itemCount}
+                inert={index < start || index >= end}
+                data-last={index === itemCount - 1 || undefined}
+                ref={isActive ? expandedRowRef : undefined}
+                style={{ top: index * CONVERSION_OVERRIDE_ROW_HEIGHT + (expandedIndex < index ? extraHeight : 0) }}
               >
                 <PressButton
                   type="button"

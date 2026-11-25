@@ -23,6 +23,7 @@ type UseGridVirtualOptions = {
   rowCount: number;
   rowHeight: number;
   viewItems: EntryItem[];
+  applyScrollRequest: () => void;
 };
 
 export type GridVirtualState = {
@@ -40,6 +41,7 @@ export const useGridVirtual = ({
   rowCount,
   rowHeight,
   viewItems,
+  applyScrollRequest,
 }: UseGridVirtualOptions): GridVirtualState => {
   const baseOverscan = useDynamicOverscan({
     resetKey: viewKey,
@@ -155,6 +157,7 @@ export const useGridVirtual = ({
     {
       viewportHeight,
       observeContainerResize: false,
+      beforeLayoutMeasure: applyScrollRequest,
     },
   );
   const startIndex = virtual.startIndex * columnCount;

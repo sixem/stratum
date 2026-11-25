@@ -70,10 +70,9 @@ fn legacy_delete_entries(
 
         let processed = index;
         let completed = index + 1;
-        let trimmed = path.trim();
-        if trimmed.is_empty() {
+        if path.trim().is_empty() {
             report.skipped += 1;
-            emit_delete_progress(&mut on_progress, completed, total, None);
+            emit_delete_progress(&mut on_progress, completed, total, None, None);
             continue;
         }
 
@@ -81,17 +80,25 @@ fn legacy_delete_entries(
             &mut on_progress,
             processed,
             total,
-            Some(trimmed.to_string()),
+            Some(path.clone()),
+            None,
         );
 
-        let target = PathBuf::from(trimmed);
+        let target = PathBuf::from(&path);
         let metadata = match fs::metadata(&target) {
             Ok(value) => value,
             Err(err) => {
-                report
-                    .failures
-                    .push(format!("{}: {}", trimmed, err.to_string()));
-                emit_delete_progress(&mut on_progress, completed, total, None);
+                report.failures.push(format!("{path}: {err}"));
+                emit_delete_progress(
+                    &mut on_progress,
+                    completed,
+                    total,
+                    None,
+                    Some(super::CompletedTransferItem {
+                        path,
+                        source_removed: false,
+                    }),
+                );
                 continue;
             }
         };
@@ -102,13 +109,22 @@ fn legacy_delete_entries(
                 fs::remove_file(&target)
             }
         };
-        match hard_delete() {
+        let result = hard_delete();
+        let source_removed = result.is_ok();
+        match result {
             Ok(_) => report.deleted += 1,
-            Err(err) => report
-                .failures
-                .push(format!("{}: {}", trimmed, err.to_string())),
+            Err(err) => report.failures.push(format!("{path}: {err}")),
         }
-        emit_delete_progress(&mut on_progress, completed, total, None);
+        emit_delete_progress(
+            &mut on_progress,
+            completed,
+            total,
+            None,
+            Some(super::CompletedTransferItem {
+                path,
+                source_removed,
+            }),
+        );
     }
 
     Ok(report)
@@ -120,6 +136,7 @@ fn emit_delete_progress(
     processed: usize,
     total: usize,
     current_path: Option<String>,
+    completed_item: Option<super::CompletedTransferItem>,
 ) {
     let Some(callback) = on_progress.as_mut() else {
         return;
@@ -128,10 +145,7 @@ fn emit_delete_progress(
         processed,
         total,
         current_path,
-        current_bytes: None,
-        current_total_bytes: None,
-        progress_percent: None,
-        status_text: None,
-        rate_text: None,
+        completed_item,
+        ..Default::default()
     });
 }

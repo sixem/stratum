@@ -1,6 +1,8 @@
 use tauri::Manager;
 
 mod app;
+#[cfg(all(windows, debug_assertions))]
+mod dev_profile;
 mod domain;
 mod platform;
 mod services;
@@ -19,6 +21,9 @@ pub fn run() {
             }
             tauri::WindowEvent::Destroyed => {
                 window
+                    .state::<platform::windows::terminal::Terminals>()
+                    .clear(window.label());
+                window
                     .state::<platform::windows::dragdrop::IncomingDrops>()
                     .unsubscribe(window.label());
                 platform::windows::dragdrop::unregister_drop_target(window.label());
@@ -28,24 +33,38 @@ pub fn run() {
     });
     #[cfg(target_os = "windows")]
     let builder = builder
+        .plugin(platform::windows::profile_instance::init())
         .plugin(platform::windows::webview_navigation::init())
         .manage(platform::windows::dragdrop::IncomingDrops::default())
+        .manage(platform::windows::terminal::Terminals::default())
         .manage(platform::windows::menu_host::MenuHost::default())
         .on_page_load(|webview, payload| match payload.event() {
-            tauri::webview::PageLoadEvent::Started => webview
-                .state::<platform::windows::dragdrop::IncomingDrops>()
-                .unsubscribe(webview.label()),
+            tauri::webview::PageLoadEvent::Started => {
+                webview
+                    .state::<platform::windows::terminal::Terminals>()
+                    .clear(webview.label());
+                webview
+                    .state::<platform::windows::dragdrop::IncomingDrops>()
+                    .unsubscribe(webview.label());
+            }
             tauri::webview::PageLoadEvent::Finished => {
                 platform::dragdrop::schedule_registration(&webview.window(), true)
             }
         });
 
     let builder = services::preview_protocol::register_preview_protocol(builder);
+    let context = tauri::generate_context!();
+    #[cfg(all(windows, debug_assertions))]
+    let context = dev_profile::configure(context);
 
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            #[cfg(target_os = "windows")]
+            if let Err(error) = platform::windows::profile_instance::register_window(app.handle()) {
+                eprintln!("Failed to register the profile window: {error}");
+            }
             #[cfg(target_os = "windows")]
             if let Err(error) =
                 platform::windows::console::install_console_exit_handler(&app.handle().clone())
@@ -63,11 +82,16 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            app::commands::open_stratum_backup,
+            app::commands::save_stratum_backup,
+            app::commands::probe_backup_folders,
             app::commands::get_home,
             app::commands::get_places,
             app::commands::list_drives,
             app::commands::ensure_dir,
             app::commands::create_folder,
+            app::commands::create_tracked_folder,
+            app::commands::remove_created_folder_if_empty,
             app::commands::create_file,
             app::commands::list_drive_info,
             app::commands::list_dir,
@@ -82,7 +106,11 @@ pub fn run() {
             app::commands::pause_transfer_job,
             app::commands::resume_transfer_job,
             app::commands::cancel_transfer_job,
+            app::commands::begin_transfer_shutdown,
+            app::commands::wait_for_transfer_shutdown,
+            app::commands::reopen_transfer_queue,
             app::commands::set_clipboard_paths,
+            app::commands::set_clipboard_text,
             app::commands::get_clipboard_paths,
             app::commands::get_file_clipboard,
             app::commands::finish_file_cut,
@@ -98,9 +126,12 @@ pub fn run() {
             app::commands::file_drop_listener_ready,
             app::commands::cancel_drag_start,
             app::commands::request_thumbnails,
+            app::commands::open_thumbnail_scope,
+            app::commands::close_thumbnail_scope,
             app::commands::set_thumb_paused,
             app::commands::open_path,
             app::commands::show_shell_context_menu,
+            app::commands::warm_shell_context_menu,
             app::commands::open_path_properties,
             app::commands::list_open_with_handlers,
             app::commands::open_path_with_handler,
@@ -108,9 +139,13 @@ pub fn run() {
             app::commands::get_indexed_search_catalog_path,
             app::commands::get_indexed_search_status,
             app::commands::set_indexed_search_enabled,
+            app::commands::nudge_indexed_search,
             app::commands::list_indexed_drive_statuses,
+            app::commands::list_indexable_drive_roots,
             app::commands::query_indexed_paths,
             app::commands::query_indexed_path_page,
+            app::commands::query_indexed_folder_page,
+            app::commands::quick_move_destination_exists,
             app::commands::rebuild_indexed_drive,
             app::commands::get_thumb_cache_dir,
             app::commands::clear_thumb_cache,
@@ -121,15 +156,38 @@ pub fn run() {
             app::commands::get_executable_icons,
             app::commands::get_shell_availability,
             app::commands::open_shell,
+            #[cfg(windows)]
+            platform::windows::terminal::terminal_open,
+            #[cfg(windows)]
+            platform::windows::terminal::fonts::list_terminal_fonts,
+            #[cfg(windows)]
+            platform::windows::terminal::terminal_link_directory,
+            #[cfg(windows)]
+            platform::windows::terminal::terminal_read,
+            #[cfg(windows)]
+            platform::windows::terminal::terminal_write,
+            #[cfg(windows)]
+            platform::windows::terminal::terminal_resize,
+            #[cfg(windows)]
+            platform::windows::terminal::terminal_close,
+
             app::commands::is_windows_11,
             app::commands::get_indexing_launch_preferences,
-            app::commands::set_indexing_launch_preferences,
             app::commands::create_preview_grant,
             app::commands::release_preview_grant,
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { code, ref api, .. } = event {
+                if let Some(jobs) =
+                    app.try_state::<services::transfer_manager::TransferManagerHandle>()
+                {
+                    if jobs.defer_process_exit(app, code, api) {
+                        return;
+                    }
+                }
+            }
             if matches!(
                 event,
                 tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit

@@ -4,6 +4,7 @@ use std::fs::File;
 use std::path::Path;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
+use tokio::sync::Semaphore;
 
 use super::content_types::content_type_for_path;
 
@@ -40,10 +41,27 @@ struct Grant {
     expires_at: Instant,
 }
 
+impl Drop for Grant {
+    fn drop(&mut self) {
+        // Release, expiry and window teardown all wake queued readers.
+        self.source.read_slot.close();
+    }
+}
+
 pub(super) struct PreviewSource {
     pub(super) content_type: &'static str,
-    // Requests keep this one handle and synchronize its seek position.
-    pub(super) file: Mutex<File>,
+    pub(super) file: File,
+    pub(super) read_slot: Arc<Semaphore>,
+}
+
+impl PreviewSource {
+    fn new(file: File, content_type: &'static str) -> Self {
+        Self {
+            file,
+            content_type,
+            read_slot: Arc::new(Semaphore::new(1)),
+        }
+    }
 }
 
 impl PreviewGrants {
@@ -106,10 +124,7 @@ impl PreviewGrants {
             token.clone(),
             Grant {
                 owner: request.owner,
-                source: Arc::new(PreviewSource {
-                    content_type,
-                    file: Mutex::new(file),
-                }),
+                source: Arc::new(PreviewSource::new(file, content_type)),
                 expires_at: now + GRANT_LIFETIME,
             },
         );
@@ -225,10 +240,7 @@ mod tests {
     #[test]
     fn expiry_worker_releases_an_idle_grant_and_exits() -> std::io::Result<()> {
         let fixture = super::super::tests::PreviewFixture::new("idle-expiry")?;
-        let source = Arc::new(PreviewSource {
-            content_type: "video/mp4",
-            file: Mutex::new(File::open(&fixture.path)?),
-        });
+        let source = Arc::new(PreviewSource::new(File::open(&fixture.path)?, "video/mp4"));
         let source_ref = Arc::downgrade(&source);
         let registry = Arc::new(Mutex::new(Registry::default()));
         tauri::async_runtime::block_on(async {

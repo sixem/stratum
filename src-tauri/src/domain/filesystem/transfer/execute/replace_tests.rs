@@ -5,7 +5,7 @@ use crate::domain::filesystem::{
     CopyOptions, CopyReport, TransferControlCallback, TransferMode, TransferOptions,
     TransferProgressCallback, TransferProgressUpdate,
 };
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -67,6 +67,55 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.root);
     }
+}
+
+#[test]
+fn copy_releases_each_source_after_its_destination_is_published() {
+    let fixture = Fixture::new();
+    let second_source = fixture.root.join("second");
+    let second_destination = fixture.target.join("second");
+    fs::create_dir(&fixture.source).unwrap();
+    fs::write(fixture.source.join("child"), b"first bytes").unwrap();
+    fs::write(&second_source, b"").unwrap();
+
+    let completed_items = Rc::new(RefCell::new(Vec::new()));
+    let recorded_items = completed_items.clone();
+    let directory_destination = fixture.destination.clone();
+    let mut progress = move |update: TransferProgressUpdate| {
+        let Some(item) = update.completed_item else {
+            return;
+        };
+        assert!(!item.source_removed);
+        assert_eq!(update.total, 2);
+        match update.processed {
+            1 => {
+                assert_eq!(
+                    fs::read(directory_destination.join("child")).unwrap(),
+                    b"first bytes"
+                );
+                assert!(!second_destination.exists());
+            }
+            2 => assert!(second_destination.is_file()),
+            _ => panic!("unexpected root completion count"),
+        }
+        recorded_items.borrow_mut().push(item.path);
+    };
+    let sources = vec![
+        fixture.source.to_str().unwrap().to_owned(),
+        second_source.to_str().unwrap().to_owned(),
+    ];
+
+    let report = copy_entries(
+        sources.clone(),
+        fixture.target.to_str().unwrap().to_owned(),
+        None,
+        Some(&mut progress),
+        None,
+    )
+    .unwrap();
+    assert!(report.failures.is_empty());
+    assert_eq!(report.copied, 2);
+    assert_eq!(*completed_items.borrow(), sources);
 }
 
 #[test]
@@ -349,11 +398,69 @@ fn fast_move_refuses_a_destination_claimed_after_classification() {
     assert!(super::transfer::execute_fast_move_root(
         &f.source,
         &f.destination,
+        None,
         &mut Some(&mut control)
     )
     .is_err());
     assert_eq!(fs::read(&f.source).unwrap(), b"source");
     assert_eq!(fs::read(&f.destination).unwrap(), b"late arrival");
+}
+
+#[test]
+fn move_undo_leaves_a_replacement_and_restores_unchanged_batch_items() {
+    let fixture = Fixture::new();
+    let other_source = fixture.root.join("other");
+    fs::write(&fixture.source, b"original").unwrap();
+    fs::create_dir(&other_source).unwrap();
+    fs::write(other_source.join("child"), b"unchanged").unwrap();
+    let move_options = TransferOptions {
+        mode: Some(TransferMode::Move),
+        ..Default::default()
+    };
+    let moved = transfer_entries(
+        vec![
+            fixture.source.to_string_lossy().into_owned(),
+            other_source.to_string_lossy().into_owned(),
+        ],
+        fixture.target.to_string_lossy().into_owned(),
+        Some(move_options.clone()),
+        None,
+        None,
+    )
+    .unwrap();
+    assert_eq!(moved.moved, 2, "{:?}", moved.failures);
+    let kept = fixture.target.join("kept");
+    fs::rename(&fixture.destination, &kept).unwrap();
+    fs::write(&fixture.destination, b"replacement").unwrap();
+
+    let paths = moved
+        .moved_entries
+        .iter()
+        .map(|entry| entry.destination_path.clone())
+        .collect();
+    let expected_sources = moved
+        .moved_entries
+        .into_iter()
+        .map(|entry| (entry.destination_path, entry.identity.unwrap()))
+        .collect();
+    let restored = transfer_entries(
+        paths,
+        fixture.root.to_string_lossy().into_owned(),
+        Some(TransferOptions {
+            expected_sources: Some(expected_sources),
+            ..move_options
+        }),
+        None,
+        None,
+    )
+    .unwrap();
+    assert_eq!(restored.moved, 1, "{:?}", restored.failures);
+    assert_eq!(restored.failures.len(), 1);
+    assert!(restored.failures[0].contains("original item has been replaced"));
+    assert!(!fixture.source.exists());
+    assert_eq!(fs::read(&fixture.destination).unwrap(), b"replacement");
+    assert_eq!(fs::read(&kept).unwrap(), b"original");
+    assert_eq!(fs::read(other_source.join("child")).unwrap(), b"unchanged");
 }
 
 #[test]

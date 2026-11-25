@@ -1,0 +1,193 @@
+// Drive cards and the storage summary on the new-tab view.
+@use "./control-recipes" as control;
+
+:where(.lander-panel) .lander-drives {
+  --lander-drive-height: 64px;
+  --lander-drive-gap: 6px;
+  grid-column: 1 / -1;
+
+  .lander-drives-list {
+    display: grid;
+    gap: var(--lander-drive-gap);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+    grid-auto-rows: var(--lander-drive-height);
+    // Keep two rows in view as the volume probes replace loading cards.
+    block-size: calc(2 * var(--lander-drive-height) + var(--lander-drive-gap));
+    overflow: auto;
+    scrollbar-gutter: stable;
+    align-content: start;
+  }
+
+  .lander-drives-list[data-loading="true"] {
+    overflow: hidden;
+  }
+
+  .lander-drive {
+    @include control.control-surface(6px, var(--surface-control-muted), var(--stroke), var(--file-view-grid-card-border));
+    padding: 8px;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) 3px;
+    align-items: center;
+    gap: 4px;
+    min-inline-size: 0;
+    text-align: left;
+    cursor: pointer;
+    transition: none;
+  }
+
+  button.lander-drive:hover {
+    border-color: rgba(var(--accent-rgb), 0.36);
+  }
+
+  .lander-drive-placeholder {
+    cursor: default;
+
+    .lander-skeleton {
+      inline-size: min(32%, 44px);
+
+      &:nth-child(2) {
+        inline-size: min(62%, 115px);
+      }
+    }
+  }
+
+  .lander-skeleton {
+    background: color-mix(in srgb, var(--text) 9%, transparent);
+    block-size: 0.46rem;
+    border-radius: 3px;
+    display: block;
+  }
+
+  .lander-storage {
+    display: grid;
+    gap: 6px;
+    margin-block: 5px 7px;
+  }
+
+  .lander-storage-summary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 10ch;
+    align-items: center;
+    block-size: 1.25rem;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .lander-storage-title {
+    @include control.eyebrow-label(0.72rem, 0.08em, 500);
+  }
+
+  .lander-storage-placeholder {
+    inline-size: min(100%, 9rem);
+  }
+
+  .lander-storage-value {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .lander-storage-percent {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--muted);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .lander-storage-bar {
+    height: 3px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+  }
+
+  .lander-storage-bar-fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: rgba(var(--accent-rgb), 0.65);
+  }
+
+  .lander-drive-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    min-width: 0;
+  }
+
+  .lander-drive-label {
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 0.84rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .lander-drive-name {
+    font-size: 0.72rem;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .lander-drive-usage {
+    font-size: 0.75rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .lander-drive-usage-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .lander-drive-usage-percent {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--muted);
+    flex: 0 0 auto;
+  }
+
+  .lander-drive-bar {
+    height: 3px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+  }
+
+  .lander-drive-bar[data-known="false"] {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .lander-drive-bar-fill {
+    display: block;
+    height: 100%;
+    background: rgba(var(--accent-rgb), 0.7);
+    border-radius: inherit;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .lander-storage-value,
+    .lander-storage-percent,
+    button.lander-drive {
+      animation: lander-storage-reveal 150ms ease-out;
+    }
+  }
+}
+
+@keyframes lander-storage-reveal {
+  from { opacity: 0.45; }
+  to { opacity: 1; }
+}

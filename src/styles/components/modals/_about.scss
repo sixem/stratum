@@ -24,7 +24,7 @@
   background-color: var(--panel-deep);
 }
 
-.about-modal[data-open="true"] .about-panel {
+.about-modal[data-open="true"] :is(.about-panel, .notices-panel) {
   @include modal.panel-open();
   animation: about-enter 180ms ease-out both;
 }
@@ -79,6 +79,7 @@
     max-width: 35ch;
     color: color-mix(in srgb, var(--text) 78%, var(--muted));
     font-size: var(--font-size-md);
+    font-weight: 500;
     line-height: 1.6;
     text-wrap: balance;
   }
@@ -89,7 +90,7 @@
     justify-content: center;
     gap: 4px 22px;
 
-    a {
+    :is(a, button) {
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -106,6 +107,15 @@
       }
     }
 
+    button {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      font-family: inherit;
+      color: var(--text);
+      cursor: pointer;
+    }
+
     svg {
       width: 12px;
       height: 12px;
@@ -113,7 +123,7 @@
     }
   }
 
-  .about-links a:focus-visible {
+  .about-links :is(a, button):focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
   }

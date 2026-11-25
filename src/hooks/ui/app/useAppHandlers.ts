@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import type { RefObject } from "react";
 import type { SortState } from "@/types";
 import { folderPathKey } from "@/lib";
+import type { OpenNewTabOptions } from "@/hooks/domain/session/useTabSession";
 
 type UseAppHandlersOptions = {
   activeTabId: string | null;
@@ -18,7 +19,7 @@ type UseAppHandlersOptions = {
   closeTab: (id: string) => void;
   reopenClosedTab: () => boolean;
   newTab: () => void;
-  openInNewTab: (path: string) => void;
+  openInNewTab: (path: string, options?: OpenNewTabOptions) => void;
   setSort: (next: SortState) => void;
   setTabScrollTop: (id: string, top: number) => void;
   goBack: () => void;
@@ -100,9 +101,9 @@ export const useAppHandlers = ({
   }, [reopenClosedTab, stashActiveScroll]);
 
   const handleOpenInNewTab = useCallback(
-    (path: string) => {
+    (path: string, options?: OpenNewTabOptions) => {
       stashActiveScroll();
-      openInNewTab(path);
+      openInNewTab(path, options);
     },
     [openInNewTab, stashActiveScroll],
   );

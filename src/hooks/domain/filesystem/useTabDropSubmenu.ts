@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listDir } from "@/api";
 import type { DropTarget, DropTargetSubmenuItem, TabDropSubmenuState } from "@/lib";
-import { getPathName, normalizePath } from "@/lib";
+import { getParentPath, getPathName, normalizePath } from "@/lib";
 import {
   getDirectoryChildVersion,
   useDirectoryChildStateRevision,
@@ -10,6 +10,8 @@ import {
 
 type UseTabDropSubmenuOptions = {
   enabled: boolean;
+  includeSubfolders: boolean;
+  includeParent: boolean;
 };
 
 const TAB_SUBMENU_HOVER_DELAY_MS = 320;
@@ -51,7 +53,7 @@ const itemBelongsToSubmenu = (items: DropTargetSubmenuItem[], path: string) => {
   return items.some((item) => normalizePath(item.path) === pathKey);
 };
 
-export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
+export const useTabDropSubmenu = ({ enabled, includeSubfolders, includeParent }: UseTabDropSubmenuOptions) => {
   const directoryChildRevision = useDirectoryChildStateRevision();
   const [submenu, setSubmenu] = useState<TabDropSubmenuState>(EMPTY_SUBMENU_STATE);
   const openTimerRef = useRef<number | null>(null);
@@ -114,80 +116,69 @@ export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
       clearCloseTimer();
       pendingHostRef.current = null;
 
-      const hostKey = `${tabId}\u0000${normalizePath(trimmedPath)}`;
-      activeHostKeyRef.current = hostKey;
       const cacheKey = normalizePath(trimmedPath);
-      const currentVersion = getDirectoryChildVersion(trimmedPath);
-      const cachedEntry = cacheRef.current.get(cacheKey) ?? null;
-
-      if (cachedEntry && cachedEntry.version === currentVersion) {
-        setSubmenu(
-          cachedEntry.items.length === 0
-            ? EMPTY_SUBMENU_STATE
-            : {
-                hostTabId: tabId,
-                hostPath: trimmedPath,
-                items: cachedEntry.items,
-                loading: false,
-              },
-        );
+      const hostKey = `${tabId}\u0000${cacheKey}`;
+      activeHostKeyRef.current = hostKey;
+      const requestId = ++requestIdRef.current;
+      const parentPath = includeParent ? getParentPath(trimmedPath) : null;
+      const parent: DropTargetSubmenuItem | null = parentPath && normalizePath(parentPath) !== cacheKey
+        ? { path: parentPath, name: getPathName(parentPath) || parentPath, parent: true }
+        : null;
+      // The parent is known immediately and is independent of the child cache.
+      const showSubmenu = (children: DropTargetSubmenuItem[], loading = false) => {
+        const items = parent ? [parent, ...children] : children;
+        setSubmenu(items.length || loading
+          ? { hostTabId: tabId, hostPath: trimmedPath, items, loading }
+          : EMPTY_SUBMENU_STATE);
+      };
+      if (!includeSubfolders) {
+        showSubmenu([]);
         return;
       }
 
-      setSubmenu({
-        hostTabId: tabId,
-        hostPath: trimmedPath,
-        items: [],
-        loading: true,
-      });
+      const currentVersion = getDirectoryChildVersion(trimmedPath);
+      const cachedEntry = cacheRef.current.get(cacheKey) ?? null;
+      if (cachedEntry && cachedEntry.version === currentVersion) {
+        touchCache(cacheKey, cachedEntry);
+        showSubmenu(cachedEntry.items);
+        return;
+      }
 
-      const requestId = requestIdRef.current + 1;
-      requestIdRef.current = requestId;
+      showSubmenu([], true);
 
-      try {
+      let version = currentVersion;
+      while (true) {
         const result = await listDir(trimmedPath, {
           sort: { key: "name", dir: "asc" },
           fast: true,
-        });
+        }).catch(() => null);
         if (requestIdRef.current !== requestId) return;
         if (activeHostKeyRef.current !== hostKey) return;
-        const items = toSubmenuItems(result.entries);
-        touchCache(cacheKey, {
-          items,
-          version: getDirectoryChildVersion(trimmedPath),
-        });
-        setSubmenu(
-          items.length === 0
-            ? EMPTY_SUBMENU_STATE
-            : {
-                hostTabId: tabId,
-                hostPath: trimmedPath,
-                items,
-                loading: false,
-              },
-        );
-      } catch {
-        if (requestIdRef.current !== requestId) return;
-        if (activeHostKeyRef.current !== hostKey) return;
-        touchCache(cacheKey, {
-          items: [],
-          version: getDirectoryChildVersion(trimmedPath),
-        });
-        setSubmenu(EMPTY_SUBMENU_STATE);
+
+        const latestVersion = getDirectoryChildVersion(trimmedPath);
+        if (version !== latestVersion) {
+          // A file operation changed this folder while the listing was in flight.
+          version = latestVersion;
+          continue;
+        }
+        const items = result ? toSubmenuItems(result.entries) : [];
+        touchCache(cacheKey, { items, version });
+        showSubmenu(items);
+        return;
       }
     },
-    [clearCloseTimer, clearOpenTimer, closeSubmenu, enabled, touchCache],
+    [clearCloseTimer, clearOpenTimer, closeSubmenu, enabled, includeParent, includeSubfolders, touchCache],
   );
 
   const scheduleClose = useCallback(() => {
     clearOpenTimer();
-    if (submenu.hostTabId == null && pendingHostRef.current == null) return;
-    clearCloseTimer();
+    pendingHostRef.current = null;
+    if (submenu.hostTabId == null || closeTimerRef.current != null) return;
     closeTimerRef.current = window.setTimeout(() => {
       closeTimerRef.current = null;
       closeSubmenu();
     }, TAB_SUBMENU_CLOSE_DELAY_MS);
-  }, [clearCloseTimer, clearOpenTimer, closeSubmenu, submenu.hostTabId]);
+  }, [clearOpenTimer, closeSubmenu, submenu.hostTabId]);
 
   const updateTarget = useCallback(
     (target: DropTarget | null) => {
@@ -201,11 +192,11 @@ export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
         return;
       }
 
-      if (target.kind === "tab-subfolder") {
+      if (target.kind === "tab-destination" || target.kind === "tab-submenu") {
         if (
           !target.tabId ||
           target.tabId !== submenu.hostTabId ||
-          !itemBelongsToSubmenu(submenu.items, target.path)
+          (target.kind === "tab-destination" && !itemBelongsToSubmenu(submenu.items, target.path))
         ) {
           closeSubmenu();
           return;
@@ -272,12 +263,11 @@ export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
   );
 
   useEffect(() => {
-    if (enabled) return;
     closeSubmenu();
-  }, [closeSubmenu, enabled]);
+  }, [closeSubmenu, enabled, includeParent, includeSubfolders]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !includeSubfolders || !activeHostKeyRef.current) return;
     const hostPath = submenu.hostPath;
     const hostTabId = submenu.hostTabId;
     if (!hostPath || !hostTabId) return;
@@ -290,6 +280,7 @@ export const useTabDropSubmenu = ({ enabled }: UseTabDropSubmenuOptions) => {
   }, [
     directoryChildRevision,
     enabled,
+    includeSubfolders,
     openSubmenu,
     submenu.hostPath,
     submenu.hostTabId,

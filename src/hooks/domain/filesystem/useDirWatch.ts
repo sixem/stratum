@@ -2,10 +2,11 @@
 // tracking. Native watcher payloads are normalized before they enter the
 // debounce queue so the refresh path only deals with one change shape.
 import { useCallback, useEffect, useRef } from "react";
-import { startDirWatch, stopDirWatch } from "@/api";
-import { makeDebug, normalizePath } from "@/lib";
+import { folderPathKey, makeDebug } from "@/lib";
 import { bumpDirectoryChildVersions } from "@/modules";
-import type { ListDirOptions, SortState, Tab } from "@/types";
+import type { FileEntry, SortState, Tab } from "@/types";
+import type { LoadDirOptions, MetaRequestOptions } from "./fileManager.types";
+import { FileWriteChecks } from "./fileWriteChecks";
 import {
   consumePendingChanges,
   consumeQueuedRefreshWhenIdle,
@@ -22,11 +23,7 @@ import {
   subscribeToWatchEvent,
   type QueuedWatchChange,
 } from "./watchEventSubscriptions";
-
-type MetaRequestOptions = {
-  force?: boolean;
-  defer?: boolean;
-};
+import { markDirectoryWatchFailed, useDirectoryWatchRecovery } from "./useDirectoryWatchRecovery";
 
 type UseDirWatchOptions = {
   pane?: "main" | "bottom";
@@ -37,24 +34,27 @@ type UseDirWatchOptions = {
   currentPath: string;
   tabs: Tab[];
   sortState: SortState;
+  entryByPath: ReadonlyMap<string, FileEntry>;
   searchQuery: string;
-  loadDir: (path: string, options?: DirLoadOptions) => Promise<void>;
+  loadDir: (path: string, options?: LoadDirOptions) => Promise<void>;
   requestEntryMeta?: (paths: string[], options?: MetaRequestOptions) => Promise<unknown>;
   loading: boolean;
   onPresenceToggle?: (suppress: boolean) => void;
-};
-
-type DirLoadOptions = ListDirOptions & {
-  force?: boolean;
-  silent?: boolean;
 };
 
 const DIR_CHANGE_DEBOUNCE_MS = 260;
 const TAB_SWITCH_CHECK_DELAY_MS = 140;
 const TAB_SWITCH_REFRESH_COOLDOWN_MS = 2000;
 const REFRESH_COOLDOWN_MS = 900;
-// Extra refreshes after a change help catch slow/partial writes (1s, 2s, 4s).
-const REFRESH_BACKOFF_STEPS_MS = [1000, 2000, 4000];
+
+type PendingFolderChange = {
+  path: string;
+  entryPaths: Set<string>;
+  writtenPaths: Set<string>;
+  rename: boolean;
+  rescan: boolean;
+  writesOnly: boolean;
+};
 
 const log = makeDebug("watch");
 
@@ -67,6 +67,7 @@ export const useDirWatch = ({
   currentPath,
   tabs,
   sortState,
+  entryByPath,
   searchQuery,
   loadDir,
   requestEntryMeta,
@@ -79,24 +80,24 @@ export const useDirWatch = ({
   const currentPathRef = useRef(currentPath);
   const tabsRef = useRef(tabs);
   const sortRef = useRef(sortState);
+  const entriesRef = useRef(entryByPath);
   const searchRef = useRef(searchQuery);
   const loadDirRef = useRef(loadDir);
   // Optional metadata refresh for changed entries to keep thumbnails accurate.
   const requestEntryMetaRef = useRef(requestEntryMeta);
   const loadingRef = useRef(loading);
   const schedulerRef = useRef(createWatchRefreshSchedulerState());
-  const pendingRenamePathsRef = useRef<Set<string>>(new Set());
+  const pendingChangesRef = useRef(new Map<string, PendingFolderChange>());
+  const recoveryPathRef = useRef("");
   const refreshActiveRef = useRef<(reason: string) => void>(() => {});
   const presenceToggleRef = useRef<((suppress: boolean) => void) | null>(null);
   const externalSuppressedRef = useRef(false);
-  const pendingPathsRef = useRef<Set<string>>(new Set());
-  const pendingEntryPathsRef = useRef<Set<string>>(new Set());
   const flushTimerRef = useRef<number | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
   const lastTabIdRef = useRef<string | null>(null);
   const tabCheckTimerRef = useRef<number | null>(null);
-  const refreshBackoffTimerRef = useRef<number | null>(null);
-  const refreshBackoffStepRef = useRef(0);
-  const refreshBackoffKeyRef = useRef<string | null>(null);
+  const writeCheckTimerRef = useRef<number | null>(null);
+  const writeChecksRef = useRef<{ key: string; checks: FileWriteChecks } | null>(null);
 
   useEffect(() => {
     enabledRef.current = enabled;
@@ -105,6 +106,7 @@ export const useDirWatch = ({
     currentPathRef.current = currentPath;
     tabsRef.current = tabs;
     sortRef.current = sortState;
+    entriesRef.current = entryByPath;
     searchRef.current = searchQuery;
     loadDirRef.current = loadDir;
     requestEntryMetaRef.current = requestEntryMeta;
@@ -114,6 +116,7 @@ export const useDirWatch = ({
     activeTabId,
     activeTabPath,
     currentPath,
+    entryByPath,
     enabled,
     loadDir,
     loading,
@@ -130,6 +133,11 @@ export const useDirWatch = ({
     presenceToggleRef.current?.(next);
   }, []);
 
+  const clearDeferredRefresh = useCallback(() => {
+    if (refreshTimerRef.current != null) window.clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = null;
+  }, []);
+
   const refreshActive = useCallback((reason: string) => {
     const decision = evaluateActiveRefresh(schedulerRef.current, {
       enabled: enabledRef.current,
@@ -140,16 +148,33 @@ export const useDirWatch = ({
       now: Date.now(),
       refreshCooldownMs: REFRESH_COOLDOWN_MS,
     });
+    if (decision.kind === "defer") {
+      if (refreshTimerRef.current != null) return;
+      const tab = activeTabIdRef.current;
+      const path = folderPathKey(activeTabPathRef.current);
+      refreshTimerRef.current = window.setTimeout(() => {
+        refreshTimerRef.current = null;
+        if (tab === activeTabIdRef.current && path === folderPathKey(activeTabPathRef.current)) {
+          refreshActiveRef.current("coalesced");
+        }
+      }, decision.delayMs);
+      return;
+    }
     if (decision.kind !== "start") return;
+    clearDeferredRefresh();
+    const recovery = recoveryPathRef.current === folderPathKey(decision.viewPath);
+    if (recovery) recoveryPathRef.current = "";
     if (decision.suppressPresence) {
       setExternalSuppressed(true);
     }
 
-    const options: DirLoadOptions = {
+    const options: LoadDirOptions = {
       sort: sortRef.current,
       search: searchRef.current,
       force: true,
       silent: true,
+      includeMeta: recovery || undefined,
+      suppressError: recovery || undefined,
       // Avoid fast + full double refreshes when sorting by size/modified.
       // A single full refresh keeps ordering stable and prevents flicker.
       fast: sortRef.current.key === "name",
@@ -164,93 +189,132 @@ export const useDirWatch = ({
         refreshActiveRef.current("queued");
       }
     });
-  }, [setExternalSuppressed]);
+  }, [clearDeferredRefresh, setExternalSuppressed]);
 
   useEffect(() => {
     refreshActiveRef.current = refreshActive;
   }, [refreshActive]);
 
-  const clearRefreshBackoff = useCallback(() => {
-    if (refreshBackoffTimerRef.current != null) {
-      window.clearTimeout(refreshBackoffTimerRef.current);
-      refreshBackoffTimerRef.current = null;
+  const clearWriteChecks = useCallback(() => {
+    if (writeCheckTimerRef.current != null) {
+      window.clearTimeout(writeCheckTimerRef.current);
+      writeCheckTimerRef.current = null;
     }
-    refreshBackoffStepRef.current = 0;
-    refreshBackoffKeyRef.current = null;
+    writeChecksRef.current = null;
   }, []);
 
-  const scheduleRefreshBackoff = useCallback(
-    (path: string) => {
-      const key = normalizePath(path);
-      if (!key) return;
+  const checkWrittenFiles = useCallback((key: string, paths: string[]) => {
+    let refreshRequested = false;
+    void requestEntryMetaRef.current?.(paths, {
+      force: true,
+      onFileChecked: (path, meta) => {
+        if (refreshRequested || !enabledRef.current ||
+          folderPathKey(currentPathRef.current) !== key || folderPathKey(activeTabPathRef.current) !== key) return;
+        const entry = entriesRef.current.get(path);
+        const sort = sortRef.current.key;
+        // Metadata changes can invalidate the native order or a size filter.
+        // Let the listing apply its normal comparator and filter in those cases.
+        const sizeSensitive = sort === "size" || /(?:^|\s)size:|[<>=]/i.test(searchRef.current);
+        if (meta?.size == null || !entry || entry.isDir ||
+          (sizeSensitive && entry.size !== meta.size) ||
+          (sort === "modified" && entry.modified !== meta.modified)) {
+          refreshRequested = true;
+          refreshActiveRef.current("fs-write-layout");
+        }
+      },
+    }).catch(() => {});
+  }, []);
 
-      refreshBackoffKeyRef.current = key;
-      refreshBackoffStepRef.current = 0;
-      if (refreshBackoffTimerRef.current != null) {
-        window.clearTimeout(refreshBackoffTimerRef.current);
-        refreshBackoffTimerRef.current = null;
+  const scheduleWriteChecks = useCallback((key: string, paths: string[]) => {
+    const previous = writeChecksRef.current;
+    const pending = previous?.key === key ? previous : { key, checks: new FileWriteChecks() };
+    pending.checks.schedule(paths, performance.now());
+    writeChecksRef.current = pending;
+    if (writeCheckTimerRef.current != null) window.clearTimeout(writeCheckTimerRef.current);
+
+    const scheduleNext = () => {
+      const nextDueAt = pending.checks.nextDueAt;
+      if (nextDueAt === null) {
+        writeChecksRef.current = null;
+        return;
       }
+      writeCheckTimerRef.current = window.setTimeout(() => {
+        writeCheckTimerRef.current = null;
+        if (!enabledRef.current || folderPathKey(activeTabPathRef.current) !== key ||
+          folderPathKey(currentPathRef.current) !== key) {
+          writeChecksRef.current = null;
+          return;
+        }
+        const due = pending.checks.takeDue(performance.now());
+        if (due.length > 0) checkWrittenFiles(key, due);
+        scheduleNext();
+      }, Math.max(0, Math.ceil(nextDueAt - performance.now())));
+    };
 
-      const scheduleStep = (stepIndex: number) => {
-        const delay = REFRESH_BACKOFF_STEPS_MS[stepIndex];
-        if (delay == null) return;
-        refreshBackoffTimerRef.current = window.setTimeout(() => {
-          refreshBackoffTimerRef.current = null;
-          if (!enabledRef.current) return;
-          const activeKey = normalizePath(activeTabPathRef.current);
-          if (!activeKey || activeKey !== refreshBackoffKeyRef.current) return;
-          refreshActiveRef.current("fs-backoff");
-          const nextIndex = stepIndex + 1;
-          if (nextIndex < REFRESH_BACKOFF_STEPS_MS.length) {
-            scheduleStep(nextIndex);
-          }
-        }, delay);
-      };
+    scheduleNext();
+  }, [checkWrittenFiles]);
 
-      scheduleStep(0);
-    },
-    [],
-  );
+  const recoverVisibleFolder = useCallback((path: string) => {
+    const key = folderPathKey(path);
+    if (!key || key !== folderPathKey(activeTabPathRef.current)) return;
+    recoveryPathRef.current = key;
+    refreshActiveRef.current("watch-recovery");
+  }, []);
 
   const flushPendingChanges = useCallback(() => {
-    if (
-      pendingPathsRef.current.size === 0 &&
-      pendingEntryPathsRef.current.size === 0
-    ) {
+    const pending = pendingChangesRef.current;
+    if (pending.size === 0) return;
+    if (!enabledRef.current) {
+      pending.clear();
       return;
     }
-    const pending = Array.from(pendingPathsRef.current);
-    pendingPathsRef.current.clear();
+    const activeKey = folderPathKey(activeTabPathRef.current);
+    const currentKey = folderPathKey(currentPathRef.current);
+    const activeChange = pending.get(activeKey);
+    const currentChange = pending.get(currentKey);
+    const metaPaths = [...(currentChange?.entryPaths ?? [])];
+    const changes = [...pending.values()];
+    pending.clear();
+    const paths = changes.map(({ path }) => path);
     // The main subscriber observes events from both native watches. Publish each
     // shared folder revision once, while both panes update their own tab state.
-    if (pane === "main" && pending.length > 0) {
-      bumpDirectoryChildVersions(pending);
-    }
-    const metaPaths = Array.from(pendingEntryPathsRef.current)
-      .map((path) => path.trim())
-      .filter(Boolean);
-    pendingEntryPathsRef.current.clear();
-    const renamePending = new Set(pendingRenamePathsRef.current);
-    pendingRenamePathsRef.current.clear();
+    if (pane === "main") bumpDirectoryChildVersions(paths);
     const changeResult = consumePendingChanges(schedulerRef.current, {
-      pendingPaths: pending,
-      renamePaths: Array.from(renamePending),
+      pendingPaths: paths,
+      renamePaths: changes.filter(({ rename }) => rename).map(({ path }) => path),
       activeTabId: activeTabIdRef.current,
       activeTabPath: activeTabPathRef.current,
       tabs: tabsRef.current,
     });
 
+    const writtenPaths = changeResult.shouldRefreshActive && activeKey === currentKey && requestEntryMetaRef.current
+      ? currentChange?.writtenPaths : undefined;
+    const knownWrites: string[] = [];
+    const otherPaths: string[] = [];
+    for (const path of metaPaths) {
+      if (writtenPaths?.has(path) && entriesRef.current.get(path)?.isDir === false) knownWrites.push(path);
+      else otherPaths.push(path);
+    }
     if (changeResult.shouldRefreshActive) {
-      refreshActiveRef.current("fs-event");
-      // Re-check after a short backoff in case a large write finishes later.
-      scheduleRefreshBackoff(activeTabPathRef.current);
+      if (activeChange?.rescan) {
+        recoverVisibleFolder(activeTabPathRef.current);
+      } else if (!(activeChange?.writesOnly && !loadingRef.current &&
+        knownWrites.length > 0 && otherPaths.length === 0)) {
+        refreshActiveRef.current("fs-event");
+      }
     }
 
-    if (metaPaths.length > 0) {
-      // Force metadata refresh for changed entries so thumbnail signatures update.
-      void requestEntryMetaRef.current?.(metaPaths, { force: true }).catch(() => {});
+    // A listing can run while a different file is still being written.
+    // Keep the write checks even if this batch also contains a namespace change.
+    if (knownWrites.length > 0) {
+      checkWrittenFiles(currentKey, knownWrites);
+      scheduleWriteChecks(currentKey, knownWrites);
     }
-  }, [pane]);
+    if (otherPaths.length > 0) {
+      // Retain changed entries while the listing refresh and bounded stats settle.
+      void requestEntryMetaRef.current?.(otherPaths, { force: true }).catch(() => {});
+    }
+  }, [checkWrittenFiles, pane, recoverVisibleFolder, scheduleWriteChecks]);
 
   const scheduleFlush = useCallback(() => {
     if (flushTimerRef.current != null) return;
@@ -262,18 +326,24 @@ export const useDirWatch = ({
 
   const queueWatchChange = useCallback(
     (change: QueuedWatchChange) => {
-      pendingPathsRef.current.add(change.watchedPath);
-      change.renamePaths.forEach((path) => {
-        pendingRenamePathsRef.current.add(path);
-      });
-      if (normalizePath(change.watchedPath) === normalizePath(currentPathRef.current)) {
-        change.entryPaths.forEach((path) => {
-          pendingEntryPathsRef.current.add(path);
-        });
+      const key = folderPathKey(change.watchedPath);
+      if (change.watchFailed) markDirectoryWatchFailed(pane, change.watchedPath);
+      const pending = pendingChangesRef.current;
+      const folder = pending.get(key) ?? {
+        path: change.watchedPath, entryPaths: new Set<string>(), writtenPaths: new Set<string>(),
+        rename: false, rescan: false, writesOnly: true,
+      };
+      folder.rename ||= change.rename === true;
+      folder.rescan ||= Boolean(change.rescan || change.watchFailed);
+      folder.writesOnly &&= change.writing === true && change.entryPaths.length > 0 && !folder.rename && !folder.rescan;
+      for (const path of change.entryPaths) {
+        folder.entryPaths.add(path);
+        if (change.writing) folder.writtenPaths.add(path);
       }
+      pending.set(key, folder);
       scheduleFlush();
     },
-    [scheduleFlush],
+    [pane, scheduleFlush],
   );
 
   useEffect(() => {
@@ -300,20 +370,13 @@ export const useDirWatch = ({
     });
   }, [enabled, queueWatchChange]);
 
+  useDirectoryWatchRecovery({ enabled, pane, sharesWatch, path: activeTabPath, refreshFolder: recoverVisibleFolder });
+
   useEffect(() => {
-    if (!enabled || sharesWatch) return;
-    const target = activeTabPath.trim();
-    if (!target) {
-      void stopDirWatch(pane);
-      return;
-    }
-    void startDirWatch(target, pane).catch((error) => {
-      log("start watch failed: %o", error);
-    });
-    return () => {
-      void stopDirWatch(pane);
-    };
-  }, [activeTabPath, enabled, pane, sharesWatch]);
+    if (recoveryPathRef.current !== folderPathKey(activeTabPath)) recoveryPathRef.current = "";
+    clearDeferredRefresh();
+    if (!enabled || writeChecksRef.current?.key !== folderPathKey(activeTabPath)) clearWriteChecks();
+  }, [activeTabId, activeTabPath, clearDeferredRefresh, clearWriteChecks, enabled]);
 
   useEffect(() => {
     // Drop stale IDs when tabs close so dirty/refresh maps stay bounded.
@@ -377,7 +440,8 @@ export const useDirWatch = ({
         window.clearTimeout(tabCheckTimerRef.current);
         tabCheckTimerRef.current = null;
       }
-      clearRefreshBackoff();
+      clearWriteChecks();
+      clearDeferredRefresh();
     };
-  }, [clearRefreshBackoff]);
+  }, [clearDeferredRefresh, clearWriteChecks]);
 };

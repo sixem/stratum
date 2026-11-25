@@ -1,10 +1,11 @@
 {
   "name": "stratum",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:fresh": "node scripts/dev-fresh.mjs",
     "build": "tsc && vite build",
     "build:exe": "tauri build --no-bundle",
     "preview": "vite preview",
@@ -17,6 +18,7 @@
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "@xterm/xterm": "6.0.0",
     "debug": "^4.4.3",
     "tinykeys": "^3.0.0"
   },

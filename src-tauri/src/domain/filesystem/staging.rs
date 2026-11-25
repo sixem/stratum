@@ -48,7 +48,7 @@ impl StageDirectory {
 impl Drop for StageDirectory {
     fn drop(&mut self) {
         #[cfg(windows)]
-        remove_empty_pinned_directory(&self.handle);
+        let _ = remove_empty_pinned_directory(&self.handle);
         #[cfg(not(windows))]
         let _ = fs::remove_dir(&self.path);
     }
@@ -91,7 +91,7 @@ pub(crate) fn retry_sharing<T>(mut operation: impl FnMut() -> io::Result<T>) -> 
 }
 
 #[cfg(windows)]
-fn pin_directory(path: &Path) -> io::Result<fs::File> {
+pub(super) fn pin_directory(path: &Path) -> io::Result<fs::File> {
     use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
     use windows_sys::Win32::Storage::FileSystem::{
         DELETE, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS,
@@ -104,16 +104,20 @@ fn pin_directory(path: &Path) -> io::Result<fs::File> {
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
         .open(path)?;
     let metadata = directory.metadata()?;
-    if !metadata.is_dir() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-        return Err(io::Error::other(
-            "The staging directory changed before it could be opened",
+    if !metadata.is_dir() {
+        return Err(io::ErrorKind::NotADirectory.into());
+    }
+    if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "The directory changed before it could be opened",
         ));
     }
     Ok(directory)
 }
 
 #[cfg(windows)]
-fn remove_empty_pinned_directory(directory: &fs::File) {
+pub(super) fn remove_empty_pinned_directory(directory: &fs::File) -> io::Result<()> {
     use std::mem::size_of;
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::Storage::FileSystem::{
@@ -122,14 +126,18 @@ fn remove_empty_pinned_directory(directory: &fs::File) {
 
     let disposition = FILE_DISPOSITION_INFO { DeleteFile: 1 };
     // Windows checks emptiness and deletes this exact directory when its handle closes.
-    unsafe {
+    let removed = unsafe {
         SetFileInformationByHandle(
             directory.as_raw_handle() as isize,
             FileDispositionInfo,
             (&disposition as *const FILE_DISPOSITION_INFO).cast(),
             size_of::<FILE_DISPOSITION_INFO>() as u32,
-        );
+        )
+    };
+    if removed == 0 {
+        return Err(io::Error::last_os_error());
     }
+    Ok(())
 }
 
 #[cfg(target_os = "windows")]

@@ -10,10 +10,6 @@ pub(super) fn default_sort_state() -> SortState {
     }
 }
 
-pub(super) fn normalize_search(value: Option<String>) -> String {
-    value.unwrap_or_default().trim().to_lowercase()
-}
-
 pub(super) fn normalize_name(value: &str) -> String {
     value.to_lowercase()
 }

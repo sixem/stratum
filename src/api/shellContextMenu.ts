@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 export type ShellMenuTarget = { paths: string[] } | { backgroundPath: string };
 type ShellMenuOutcome = "dismissed" | "invoked" | "gallery";
 
+export const warmShellContextMenu = () => invoke<void>("warm_shell_context_menu");
+
 export const showShellContextMenu = (
   target: ShellMenuTarget,
   point: { x: number; y: number },

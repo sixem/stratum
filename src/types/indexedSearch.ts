@@ -17,6 +17,7 @@ export type IndexedDriveState =
   | "scanning"
   | "ready"
   | "saved"
+  | "excluded"
   | "unsupported"
   | "unavailable"
   | "stale"
@@ -28,6 +29,7 @@ export type IndexedDriveStatus = {
   filesystem?: string | null;
   state: IndexedDriveState;
   indexable: boolean;
+  searchable: boolean;
   startedAt?: number | null;
   lastUpdatedAt: number;
   entryCount?: number | null;
@@ -43,6 +45,7 @@ export type IndexedPathMatch = {
   parentPath?: string | null;
   drivePath?: string | null;
   kind: IndexedEntryKind;
+  sizeBytes?: number | null;
 };
 
 export type IndexedPathQuery = {

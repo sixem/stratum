@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { listFolderThumbSamplesBatch } from "@/api";
 import { normalizePath } from "@/lib";
 import { getDirectoryChildVersion } from "@/modules";
-import type { ThumbnailRequest } from "@/types";
+import type { ThumbnailLookup, ThumbnailRequest } from "@/types";
 
 type CachedFolderSample = {
   samplePath: string | null;
@@ -16,6 +16,7 @@ type CachedFolderSample = {
 };
 
 type UseGridFolderSamplesOptions = {
+  viewKey: string;
   folderPaths: string[];
   interactionActive: boolean;
   loading: boolean;
@@ -25,13 +26,15 @@ type UseGridFolderSamplesOptions = {
   thumbnailVideos: boolean;
   thumbnailsEnabled: boolean;
   thumbResetKey?: string;
-  thumbSource: Map<string, string>;
+  thumbSource: ThumbnailLookup;
   directoryChildRevision: number;
 };
 
+export type FolderThumbnail = { path: string; url: string };
+
 type GridFolderSamplesState = {
   folderThumbRequestCount: number;
-  folderThumbSource: Map<string, string>;
+  folderThumbSource: Map<string, FolderThumbnail>;
 };
 
 const FOLDER_SAMPLE_CACHE_LIMIT = 3000;
@@ -53,6 +56,7 @@ const upsertFolderSample = (
 };
 
 export const useGridFolderSamples = ({
+  viewKey,
   folderPaths,
   interactionActive,
   loading,
@@ -80,9 +84,9 @@ export const useGridFolderSamples = ({
   }, [thumbResetKey, thumbnailFolders, thumbnailSvgs, thumbnailVideos]);
 
   useEffect(() => {
-    // Directory-child revisions mean a folder may now choose a different sample path.
+    // A new visit must re-request any samples whose queued renders were retired.
     requestedFolderSampleThumbsRef.current.clear();
-  }, [directoryChildRevision]);
+  }, [directoryChildRevision, thumbnailsEnabled, viewKey]);
 
   useEffect(() => {
     if (!thumbnailsEnabled || !thumbnailFolders || loading || interactionActive) return;
@@ -154,19 +158,20 @@ export const useGridFolderSamples = ({
   const folderThumbRequests = useMemo(() => {
     if (!thumbnailsEnabled || !thumbnailFolders || loading || interactionActive) return [];
     const requests: ThumbnailRequest[] = [];
-    folderSampleByPath.forEach((sample, folderKey) => {
-      if (sample.version !== getDirectoryChildVersion(folderKey)) return;
+    for (const folderPath of folderPaths) {
+      const folderKey = normalizePath(folderPath);
+      const sample = folderSampleByPath.get(folderKey);
+      if (!sample || sample.version !== getDirectoryChildVersion(folderKey)) continue;
       const samplePath = sample.samplePath;
-      if (!samplePath) return;
+      if (!samplePath) continue;
       // Sample paths are requested verbatim, so direct map lookup avoids
       // rebuilding a normalized index of the full thumbnail cache.
-      if (thumbSource.has(samplePath)) return;
-      if (requestedFolderSampleThumbsRef.current.has(samplePath)) return;
-      requestedFolderSampleThumbsRef.current.add(samplePath);
+      if (thumbSource.has(samplePath)) continue;
       requests.push({ path: samplePath, size: null, modified: null });
-    });
+    }
     return requests;
   }, [
+    folderPaths,
     folderSampleByPath,
     interactionActive,
     loading,
@@ -176,13 +181,18 @@ export const useGridFolderSamples = ({
   ]);
 
   useEffect(() => {
-    if (folderThumbRequests.length === 0) return;
-    onRequestThumbs(folderThumbRequests);
-  }, [folderThumbRequests, onRequestThumbs]);
+    const requested = requestedFolderSampleThumbsRef.current;
+    const missing = folderThumbRequests.filter(({ path }) => {
+      if (requested.has(path)) return false;
+      requested.add(path);
+      return true;
+    });
+    if (missing.length > 0) onRequestThumbs(missing);
+  }, [directoryChildRevision, folderThumbRequests, onRequestThumbs, viewKey]);
 
   const folderThumbSource = useMemo(() => {
-    if (!thumbnailsEnabled || !thumbnailFolders) return new Map<string, string>();
-    const next = new Map<string, string>();
+    const next = new Map<string, FolderThumbnail>();
+    if (!thumbnailsEnabled || !thumbnailFolders) return next;
     folderPaths.forEach((folderPath) => {
       const folderKey = normalizePath(folderPath);
       if (!folderKey) return;
@@ -193,7 +203,7 @@ export const useGridFolderSamples = ({
       if (!samplePath) return;
       const sampleThumb = thumbSource.get(samplePath);
       if (!sampleThumb) return;
-      next.set(folderPath, sampleThumb);
+      next.set(folderPath, { path: samplePath, url: sampleThumb });
     });
     return next;
   }, [folderPaths, folderSampleByPath, thumbnailFolders, thumbSource, thumbnailsEnabled]);

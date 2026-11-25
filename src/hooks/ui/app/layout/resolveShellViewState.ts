@@ -82,6 +82,7 @@ export const resolveShellViewState = ({
     goBack,
     goForward,
     viewPath,
+    displaySearch,
     crumbTrailPath,
     viewPathKey,
     viewLoading,

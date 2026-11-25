@@ -1,7 +1,7 @@
 // Receives Windows OLE drags and forwards one ordered event stream to the file view.
 use serde::Serialize;
 use std::cell::Cell;
-use tauri::{AppHandle, Emitter, EventTarget, Manager};
+use tauri::{AppHandle, Manager};
 use windows::core::{implement, Ref, Result as WinResult};
 use windows::Win32::Foundation::{HWND, POINT, POINTL};
 use windows::Win32::Graphics::Gdi::ScreenToClient;
@@ -10,12 +10,15 @@ use windows::Win32::System::Ole::{IDropTarget, IDropTarget_Impl, DROPEFFECT, DRO
 use windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS;
 
 mod data;
+mod delivery;
 mod effects;
 mod leases;
 mod registration;
 mod shell;
 mod stage_slots;
 mod staging;
+#[cfg(test)]
+mod tests;
 
 pub(crate) use leases::staged_path_spelling_supported;
 #[cfg(test)]
@@ -29,6 +32,7 @@ use data::{
     extract_hdrop_paths, materialize_virtual_paths, supports_hdrop, supports_virtual_drop,
     DropDataError,
 };
+use delivery::{emit, DropDelivery};
 use effects::DropAction;
 
 use stage_slots::StageSlots;
@@ -46,8 +50,15 @@ fn extract_drop_paths_for_transfer(
         }
         // Some archive programs discard their temporary files as soon as Drop
         // returns. Only direct filesystem paths support moving the originals.
-        return staging::stage_temp_hdrop_paths(&paths, slots);
+        return staging::prepare_hdrop_paths(paths, slots)?.materialize();
     }
+    materialize_virtual_drop(data, slots)
+}
+
+fn materialize_virtual_drop(
+    data: &IDataObject,
+    slots: &StageSlots,
+) -> Result<ReceivedFiles, DropDataError> {
     match materialize_virtual_paths(data, slots)? {
         Some(files) => Ok(files),
         None => shell::materialize_shell_id_list_paths(data, slots),
@@ -76,15 +87,21 @@ enum FileDrag {
         can_open_folder_tab: bool,
     },
     Leave,
+    Receiving {
+        position: DragPosition,
+        pending_drop: u64,
+    },
     Drop {
         paths: Vec<String>,
         position: DragPosition,
         mode: DropAction,
         stage: Option<u64>,
         can_open_folder_tab: bool,
+        pending_drop: Option<u64>,
     },
     Error {
         message: &'static str,
+        pending_drop: Option<u64>,
     },
 }
 
@@ -101,13 +118,7 @@ struct DropTarget {
 
 impl DropTarget {
     fn emit(&self, event: FileDrag) -> bool {
-        self.app
-            .emit_to(
-                EventTarget::webview(&self.label),
-                "stratum-file-drag",
-                event,
-            )
-            .is_ok()
+        emit(&self.app, &self.label, event)
     }
 
     fn position(&self, pt: &POINTL) -> Option<DragPosition> {
@@ -217,61 +228,24 @@ impl IDropTarget_Impl for DropTarget_Impl {
             self.emit(FileDrag::Leave);
             return Ok(());
         };
-        let extracted = extract_drop_paths_for_transfer(
-            data,
-            is_stratum_drag_active(),
-            &incoming.staging_slots,
-        );
-        if incoming.generation(&self.label) != Some(generation) {
-            return Ok(());
-        }
-        let files = match extracted {
-            Ok(files) => files,
-            Err(error) => {
-                self.emit(FileDrag::Error {
-                    message: error.message(),
-                });
-                return Ok(());
-            }
+        let delivery = DropDelivery {
+            app: self.app.clone(),
+            label: self.label.clone(),
+            generation,
+            position,
+            allowed: self.allowed.get(),
+            keys,
+            can_open_folder_tab: can_open_folder_tab(),
         };
-        if files.stage.is_some()
-            && !files
-                .paths
-                .iter()
-                .all(|path| staged_path_spelling_supported(path))
-        {
-            self.emit(FileDrag::Error {
-                message: "A temporary drop contains a file or folder name that ends in whitespace. Rename it and try again.",
-            });
+        if is_stratum_drag_active() {
+            *effect = delivery.finish(
+                extract_drop_paths_for_transfer(data, true, &incoming.staging_slots),
+                None,
+            );
             return Ok(());
         }
-        if let Some(mode) = DropAction::choose(self.allowed.get(), keys, files.stage.is_none()) {
-            let stage = match files.stage {
-                Some(stage) => {
-                    let Some(id) = incoming.retain(&self.label, generation, stage, &files.paths)
-                    else {
-                        return Ok(());
-                    };
-                    Some(id)
-                }
-                None => None,
-            };
-            if self.emit(FileDrag::Drop {
-                paths: files.paths,
-                position,
-                mode,
-                stage,
-                can_open_folder_tab: can_open_folder_tab(),
-            }) {
-                *effect = mode.completion_effect();
-            } else if let Some(id) = stage {
-                incoming.release(&self.label, id);
-            }
-        } else {
-            self.emit(FileDrag::Error {
-                message: "This source provides temporary copies. Drag without Shift to copy them.",
-            });
-        }
+
+        *effect = delivery.receive_external(data);
         Ok(())
     }
 }

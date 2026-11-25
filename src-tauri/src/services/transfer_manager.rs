@@ -1,9 +1,11 @@
-// Sequential backend work queue used by filesystem and conversion commands.
+// Bounded backend work queue used by filesystem and conversion commands.
 // The public handle stays small here while submodules own state, events, and execution.
 #[path = "transfer_manager/control.rs"]
 mod control;
 #[path = "transfer_manager/job_execution.rs"]
 mod job_execution;
+#[path = "transfer_manager/job_paths.rs"]
+mod job_paths;
 #[path = "transfer_manager/job_planning.rs"]
 mod job_planning;
 #[path = "transfer_manager/job_state_updates.rs"]
@@ -14,13 +16,18 @@ mod manager_events;
 mod manager_queue;
 #[path = "transfer_manager/manager_run.rs"]
 mod manager_run;
+#[path = "transfer_manager/manager_shutdown.rs"]
+mod manager_shutdown;
 #[path = "transfer_manager/manager_state.rs"]
 mod manager_state;
+#[path = "transfer_manager/progress_batch.rs"]
+mod progress_batch;
 #[path = "transfer_manager/progress_dispatch.rs"]
 mod progress_dispatch;
 
 use std::sync::Arc;
 
+pub use self::manager_shutdown::TransferShutdownMode;
 use self::manager_state::TransferManagerInner;
 
 #[derive(Clone)]

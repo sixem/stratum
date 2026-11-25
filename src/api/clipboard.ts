@@ -12,6 +12,8 @@ export type FileClipboard = {
 export const setFileClipboard = (paths: string[], mode: FileClipboardMode) =>
   invoke<void>("set_clipboard_paths", { paths, mode });
 
+export const setTextClipboard = (text: string) => invoke<void>("set_clipboard_text", { text });
+
 export const getFileClipboard = () => invoke<FileClipboard>("get_file_clipboard");
 
 export const finishFileCut = (sequence: number, moved: string[]) =>

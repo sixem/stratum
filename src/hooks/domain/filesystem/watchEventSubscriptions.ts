@@ -7,7 +7,10 @@ import type { DirChangedEvent, DirRenameEvent } from "@/types";
 export type QueuedWatchChange = {
   watchedPath: string;
   entryPaths: string[];
-  renamePaths: string[];
+  rename?: boolean;
+  rescan?: boolean;
+  watchFailed?: boolean;
+  writing?: boolean;
 };
 
 type Normalizer<Payload> = (payload: Payload | null | undefined) => QueuedWatchChange | null;
@@ -46,7 +49,9 @@ export const normalizeDirChangedEvent = (
   return {
     watchedPath,
     entryPaths: collectEntryPaths(payload?.paths ?? []),
-    renamePaths: [],
+    rescan: payload?.rescan === true,
+    watchFailed: payload?.watchFailed === true,
+    writing: payload?.writing === true,
   };
 };
 
@@ -66,7 +71,7 @@ export const normalizeDirRenameEvent = (
   return {
     watchedPath,
     entryPaths,
-    renamePaths: [watchedPath],
+    rename: true,
   };
 };
 

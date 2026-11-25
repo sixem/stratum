@@ -2,8 +2,8 @@
 // objects actually copied and retire only those objects after publication.
 use super::super::common::{transfer_entry_kind, TransferEntryKind};
 use super::super::manifest::{TransferManifestEntry, TransferManifestRoot};
+use crate::domain::filesystem::EntryIdentity;
 use std::io;
-#[cfg(unix)]
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -96,6 +96,15 @@ impl SourceSnapshot {
         copy()?;
         Ok(snapshot)
     }
+}
+
+// A verified cross-volume move copies from the exact source root. Windows
+// denies renames while this read handle is open. Cleanup checks the copied
+// identity again with the delete handle after the read handle is released.
+pub(super) fn pin_expected_source(path: &Path, expected: &EntryIdentity) -> io::Result<impl Sized> {
+    let source = SourceFile::open(path, false)?;
+    expected.verify(source.identity()?)?;
+    Ok(source)
 }
 
 struct MoveCleanup<'a> {

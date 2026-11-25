@@ -1,8 +1,9 @@
 // Full-screen media preview overlay composed from focused hooks and view blocks.
 import { useCallback, useId, useMemo, useRef, useState } from "react";
-import { getFileKind, getPathName, normalizePath } from "@/lib";
-import type { EntryMeta, FileEntry, ThumbnailRequest } from "@/types";
-import { LoadingIndicator } from "@/components/primitives/LoadingIndicator";
+import { PREVIEW_STRIP_OPEN_KEY } from "@/constants/settings";
+import { getFileKind, getPathName, isPreviewableEntry } from "@/lib";
+import type { EntryMeta, EntryMetaLookup, FileEntry, RequestScopedThumbnails, ThumbnailLookup } from "@/types";
+import { useSettingsStore } from "@/modules";
 import { QuickPreviewFooter } from "./QuickPreviewFooter";
 import { QuickPreviewStrip } from "./QuickPreviewStrip";
 import { QuickPreviewTopBar } from "./QuickPreviewTopBar";
@@ -11,8 +12,7 @@ import { PreviewError } from "./PreviewError";
 import { PreviewStage } from "./PreviewStage";
 import { useQuickPreviewInput } from "./useQuickPreviewInput";
 import { useQuickPreviewMedia } from "./useQuickPreviewMedia";
-
-const PREVIEW_STRIP_OPEN_KEY = "stratum.preview.strip-open";
+import { createPreviewPositionLookup } from "./previewPosition";
 
 const readPreviewStripOpen = () => {
   try {
@@ -27,13 +27,14 @@ export type QuickPreviewOverlayProps = {
   path: string | null;
   meta?: EntryMeta | null;
   items: FileEntry[];
-  entryMeta: Map<string, EntryMeta>;
-  thumbnails: Map<string, string>;
+  entryMeta: EntryMetaLookup;
+  thumbnails: ThumbnailLookup;
   thumbnailsEnabled: boolean;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
-  onRequestThumbs: (requests: ThumbnailRequest[]) => void;
+  onRequestThumbs: RequestScopedThumbnails;
   thumbResetKey?: string;
   onSelectPreview: (path: string) => void;
+  onClose: () => void;
   smartTabJump: boolean;
   smartTabBlocked: boolean;
 };
@@ -54,22 +55,29 @@ const QuickPreviewOverlayContent = ({
   onRequestThumbs,
   thumbResetKey,
   onSelectPreview,
+  onClose,
   smartTabJump,
   smartTabBlocked,
 }: QuickPreviewOverlayContentProps) => {
   const [stripOpen, setStripOpen] = useState(readPreviewStripOpen);
   const stripId = useId();
-  const stripToggleRef = useRef<HTMLButtonElement>(null);
-  const previewPathIsVideo = useMemo(() => {
-    return getFileKind(getPathName(path)) === "video";
-  }, [path]);
-  const activePathKey = useMemo(() => normalizePath(path), [path]);
+  const returnButtonRef = useRef<HTMLButtonElement>(null);
+  const includeAudio = useSettingsStore((state) => state.galleryAudio);
+  const fileKind = getFileKind(getPathName(path));
+  const kind = fileKind === "audio" || fileKind === "video" ? fileKind : "image";
+  const playable = kind !== "image";
+  const previewItems = useMemo(
+    () => items.filter((entry) => isPreviewableEntry(entry, includeAudio)),
+    [includeAudio, items],
+  );
+  const getPreviewPosition = useMemo(() => createPreviewPositionLookup(previewItems), [previewItems]);
+  const activePreviewIndex = useMemo(() => getPreviewPosition(path), [getPreviewPosition, path]);
 
   const {
     containerRef,
     stageRef,
     stripRef,
-    videoRef,
+    mediaRef,
     zoom,
     offset,
     dragging,
@@ -83,9 +91,10 @@ const QuickPreviewOverlayContent = ({
     handlePointerCancel,
   } = useQuickPreviewInput({
     open,
-    isVideo: previewPathIsVideo,
+    playable,
     stripOpen,
-    items,
+    previewItems,
+    activeIndex: activePreviewIndex,
     activePath: path,
     onSelectPreview,
     smartTabJump,
@@ -95,39 +104,32 @@ const QuickPreviewOverlayContent = ({
   const preview = useQuickPreviewMedia({
     open,
     path,
+    kind,
     meta,
-    items,
     thumbnails,
     zoom,
-    videoRef,
+    mediaRef,
     resetViewport,
     fitMediaToViewport,
   });
-  const activePreviewIndex = useMemo(() => {
-    const strictIndex = preview.previewItems.findIndex((entry) => entry.path === path);
-    if (strictIndex >= 0) return strictIndex;
-    return preview.previewItems.findIndex((entry) => normalizePath(entry.path) === activePathKey);
-  }, [activePathKey, path, preview.previewItems]);
   const canGoPreviewBack = activePreviewIndex > 0;
-  const canGoPreviewForward =
-    activePreviewIndex >= 0 && activePreviewIndex < preview.previewItems.length - 1;
-  const showPreviewNavigation = preview.previewItems.length > 1;
-  const previewPositionLabel =
-    showPreviewNavigation && preview.previewItems.length > 0
-      ? `${Math.max(activePreviewIndex + 1, 1)} / ${preview.previewItems.length}`
-      : null;
+  const canGoPreviewForward = activePreviewIndex >= 0 && activePreviewIndex < previewItems.length - 1;
+  const showPreviewNavigation = previewItems.length > 1;
+  const previewPositionLabel = showPreviewNavigation
+    ? `${Math.max(activePreviewIndex + 1, 1)} / ${previewItems.length}`
+    : null;
   const handleGoPreviewBack = useCallback(() => {
     if (!canGoPreviewBack) return;
-    const previous = preview.previewItems[activePreviewIndex - 1];
+    const previous = previewItems[activePreviewIndex - 1];
     if (!previous) return;
     onSelectPreview(previous.path);
-  }, [activePreviewIndex, canGoPreviewBack, onSelectPreview, preview.previewItems]);
+  }, [activePreviewIndex, canGoPreviewBack, onSelectPreview, previewItems]);
   const handleGoPreviewForward = useCallback(() => {
     if (!canGoPreviewForward) return;
-    const next = preview.previewItems[activePreviewIndex + 1];
+    const next = previewItems[activePreviewIndex + 1];
     if (!next) return;
     onSelectPreview(next.path);
-  }, [activePreviewIndex, canGoPreviewForward, onSelectPreview, preview.previewItems]);
+  }, [activePreviewIndex, canGoPreviewForward, onSelectPreview, previewItems]);
 
   const handleToggleStrip = () => {
     const next = !stripOpen;
@@ -149,7 +151,30 @@ const QuickPreviewOverlayContent = ({
       aria-modal="true"
       aria-label={preview.label}
       tabIndex={-1}
+      onPointerDownCapture={(event) => {
+        if (event.button === 0 && event.currentTarget !== document.activeElement) {
+          event.currentTarget.focus({ preventScroll: true });
+        }
+      }}
+      onMouseDownCapture={(event) => {
+        // Pointer clicks still activate buttons without taking keyboard focus.
+        if (event.button === 0 && event.target instanceof Element && event.target.closest("button")) {
+          event.preventDefault();
+        }
+      }}
       onKeyDown={(event) => {
+        if (
+          playable && event.key === " " && !event.shiftKey &&
+          !event.altKey && !event.ctrlKey && !event.metaKey && !event.nativeEvent.isComposing
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!event.repeat) preview.handleTogglePlayback();
+          return;
+        }
+        if ((event.key === "Enter" || event.key === " ") && event.target instanceof Element && event.target.closest("button")) {
+          event.stopPropagation();
+        }
         // Reach the last control from the dialog even when Smart Tab owns forward Tab.
         if (
           event.key === "Tab" && event.shiftKey &&
@@ -157,7 +182,7 @@ const QuickPreviewOverlayContent = ({
           event.target === event.currentTarget
         ) {
           event.preventDefault();
-          stripToggleRef.current?.focus();
+          returnButtonRef.current?.focus();
         }
       }}
     >
@@ -173,29 +198,34 @@ const QuickPreviewOverlayContent = ({
       <PreviewStage
         src={preview.src}
         label={preview.label}
-        isVideo={preview.isVideo}
+        kind={preview.kind}
+        analyseAudio={preview.analyseAudio}
+        playbackKey={preview.playbackKey}
+        mediaAutoplay={preview.mediaAutoplay}
         isReady={preview.isReady}
+        isLoading={preview.isLoading}
         dragging={dragging}
         transforming={transforming}
         videoPoster={preview.videoPoster}
         mediaStyle={preview.mediaStyle}
+        mediaVolume={preview.mediaVolume}
         offset={offset}
         stageRef={stageRef}
-        videoRef={videoRef}
+        mediaRef={mediaRef}
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         onImageLoad={preview.handleImageLoad}
-        onVideoMetadata={preview.handleVideoMetadata}
-        onVideoPlay={preview.handleVideoPlay}
-        onVideoPause={preview.handleVideoPause}
+        onPlaybackMetadata={preview.handlePlaybackMetadata}
+        onPlaybackPlay={preview.handlePlaybackPlay}
+        onPlaybackPause={preview.handlePlaybackPause}
         onMediaError={preview.handleMediaError}
         errorContent={
           <PreviewError
             visible={preview.hasError}
-            isVideo={preview.isVideo}
+            kind={preview.kind}
             name={preview.name}
             typeLabel={preview.typeLabel}
             canUseExternalActions={preview.canUseExternalActions}
@@ -209,8 +239,8 @@ const QuickPreviewOverlayContent = ({
         {stripOpen ? (
           <QuickPreviewStrip
             open={open}
-            items={preview.previewItems}
-            activePath={path}
+            items={previewItems}
+            activeIndex={activePreviewIndex}
             entryMeta={entryMeta}
             thumbnails={thumbnails}
             thumbnailsEnabled={thumbnailsEnabled}
@@ -222,22 +252,17 @@ const QuickPreviewOverlayContent = ({
           />
         ) : null}
       </div>
-      <div className="quick-preview-loading" data-visible={preview.isLoading ? "true" : "false"}>
-        <div className="quick-preview-loading-card">
-          <LoadingIndicator label={preview.isVideo ? "Loading video" : "Loading image"} />
-        </div>
-      </div>
       <PreviewControls
         open={open}
-        visible={preview.isVideo}
-        disabled={preview.loadState === "error"}
-        videoRef={videoRef}
-        videoPaused={preview.videoPaused}
+        visible={playable}
+        disabled={!preview.src || preview.hasError}
+        mediaRef={mediaRef}
+        mediaKey={preview.playbackKey}
+        mediaPaused={preview.mediaPaused}
         volumePickerOpen={preview.volumePickerOpen}
         volumeLabel={preview.volumeLabel}
-        videoVolume={preview.videoVolume}
+        mediaVolume={preview.mediaVolume}
         volumeStyle={preview.volumeStyle}
-        volumeButtonRef={preview.volumeButtonRef}
         volumeRangeRef={preview.volumeRangeRef}
         onTogglePlayback={preview.handleTogglePlayback}
         onToggleVolumePicker={preview.handleToggleVolumePicker}
@@ -245,15 +270,21 @@ const QuickPreviewOverlayContent = ({
         onVolumeHoverEnd={preview.handleVolumeHoverEnd}
         onVolumeChange={preview.handleVolumeChange}
         onVolumePointerDown={preview.handleVolumePointerDown}
-        onVolumePointerUp={preview.handleVolumePointerUp}
+        onVolumePointerUp={(event) => {
+          if (document.activeElement === event.currentTarget) {
+            containerRef.current?.focus({ preventScroll: true });
+          }
+          preview.handleVolumePointerUp();
+        }}
         onVolumeBlur={() => preview.scheduleVolumePickerClose(220)}
       />
       <QuickPreviewFooter
         preview={preview}
         stripOpen={stripOpen}
         stripId={stripId}
-        stripToggleRef={stripToggleRef}
+        returnButtonRef={returnButtonRef}
         onToggleStrip={handleToggleStrip}
+        onClose={onClose}
       />
     </div>
   );

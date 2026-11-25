@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::domain::indexed_search::{
@@ -11,6 +11,7 @@ pub(super) struct IndexedSearchState {
     pub(super) service_status: IndexedSearchServiceStatus,
     pub(super) drive_statuses: BTreeMap<String, IndexedDriveStatus>,
     pub(super) volumes: VolumeTracking,
+    pub(super) excluded_drives: BTreeSet<String>,
 }
 
 impl IndexedSearchState {
@@ -29,11 +30,47 @@ impl IndexedSearchState {
             },
             drive_statuses: BTreeMap::new(),
             volumes: VolumeTracking::default(),
+            excluded_drives: BTreeSet::new(),
         }
     }
 
-    pub(super) fn drive_statuses_snapshot(&self) -> Vec<IndexedDriveStatus> {
-        self.drive_statuses.values().cloned().collect()
+    pub(super) fn includes_drive(&self, key: &str) -> bool {
+        !self.excluded_drives.contains(key)
+    }
+
+    pub(super) fn set_excluded_drives(&mut self, excluded: BTreeSet<String>) {
+        // The saved snapshot stays on disk so a restored drive can resume from
+        // its journal position. Drop its live binding and search eligibility.
+        self.volumes
+            .mounted
+            .retain(|key, _| !excluded.contains(key));
+        self.volumes.verified.retain(|key| !excluded.contains(key));
+        self.volumes
+            .journal_rebuilds
+            .retain(|key| !excluded.contains(key));
+        self.volumes
+            .unavailable_journals
+            .retain(|key| !excluded.contains(key));
+        for (key, status) in &mut self.drive_statuses {
+            if excluded.contains(key) && status.indexable {
+                mark_drive_excluded(status);
+            }
+        }
+        self.excluded_drives = excluded;
+        self.update_service_status(
+            self.service_status.state,
+            self.service_status.activity_label.clone(),
+        );
+    }
+
+    pub(super) fn drive_statuses_snapshot(&self, enabled: bool) -> Vec<IndexedDriveStatus> {
+        self.drive_statuses
+            .iter()
+            .map(|(key, status)| IndexedDriveStatus {
+                searchable: enabled && self.volumes.verified.contains(key),
+                ..status.clone()
+            })
+            .collect()
     }
 
     pub(super) fn update_service_status(
@@ -137,6 +174,31 @@ impl IndexedSearchState {
 pub(super) fn normalize_drive_key(path: &str) -> String {
     let trimmed = path.trim().trim_end_matches(['\\', '/']);
     trimmed.to_ascii_lowercase()
+}
+
+pub(super) fn normalize_excluded_drives(roots: Vec<String>) -> BTreeSet<String> {
+    roots
+        .into_iter()
+        .filter_map(|root| {
+            let key = normalize_drive_key(&root);
+            match key.as_bytes() {
+                [letter, b':'] if letter.is_ascii_lowercase() => Some(key),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+pub(super) fn mark_drive_excluded(status: &mut IndexedDriveStatus) {
+    let now = now_epoch_ms();
+    status.state = IndexedDriveState::Excluded;
+    status.indexable = false;
+    status.searchable = false;
+    status.started_at = Some(now);
+    status.last_updated_at = now;
+    status.entry_count = None;
+    status.source_label = None;
+    status.message = Some("Excluded from indexing in Settings.".to_string());
 }
 
 pub(super) fn now_epoch_ms() -> u64 {

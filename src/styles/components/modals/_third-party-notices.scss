@@ -1,0 +1,144 @@
+// Centered, scrollable notice reader with fixed navigation and scroll progress.
+@use "./shared" as modal;
+
+.notices-panel {
+  @include modal.panel-shell(
+    min(48rem, 100%), calc(100dvh - 32px), 0, 0, 16px, var(--panel-deep),
+    $height: 39rem, $overflow: hidden
+  );
+  --notices-inset: clamp(1rem, 3vw, 1.75rem);
+}
+
+.notices-header,
+.notices-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem var(--notices-inset);
+}
+
+.notices-header {
+  border-bottom: var(--surface-border-width) solid var(--stroke);
+  padding-inline-end: calc(var(--notices-inset) - 0.375rem);
+
+  h2 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+}
+
+.notices-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 1.25rem var(--notices-inset);
+
+  &:focus-visible {
+    outline: 2px solid var(--stroke);
+    outline-offset: -2px;
+  }
+}
+
+.notices-text,
+.notices-message {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+
+.notices-text {
+  font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+
+  a {
+    color: #fff;
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-color: rgba(255, 255, 255, 0.45);
+    text-underline-offset: 0.18em;
+
+    &:hover {
+      text-decoration-color: currentColor;
+    }
+  }
+}
+
+.notices-footer {
+  border-top: var(--surface-border-width) solid var(--stroke);
+}
+
+.notices-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  cursor: pointer;
+  text-underline-offset: 0.18em;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  svg {
+    width: 0.9375rem;
+    height: 0.9375rem;
+    transform: rotate(180deg);
+  }
+}
+
+:is(.notices-back, .notices-text a):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.notices-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+
+  &[aria-hidden="true"] {
+    visibility: hidden;
+  }
+
+  span {
+    flex: none;
+    inline-size: 5ch;
+    text-align: center;
+  }
+}
+
+.notices-progress-bar {
+  appearance: none;
+  width: 3.5rem;
+  height: 3px;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+
+  &::-webkit-progress-bar {
+    background: var(--stroke);
+  }
+
+  &::-webkit-progress-value {
+    background: var(--muted);
+  }
+}

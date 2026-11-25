@@ -7,6 +7,7 @@ type UseGridSelectionOptions = {
   viewportRef: RefObject<HTMLDivElement | null>;
   selectedPaths: Set<string>;
   selectionItems: { path: string; selectable: boolean }[];
+  canSelectPath: (path: string) => boolean;
   columnCount: number;
   columnWidth: number;
   columnGap: number;
@@ -22,6 +23,7 @@ export const useGridSelection = ({
   viewportRef,
   selectedPaths,
   selectionItems,
+  canSelectPath,
   columnCount,
   columnWidth,
   columnGap,
@@ -37,6 +39,7 @@ export const useGridSelection = ({
     setSelection: onSetSelection,
     clearSelection: onClearSelection,
     itemSelector: "[data-selectable=\"true\"]",
+    canSelectPath,
     layout: {
       kind: "grid",
       items: selectionItems,

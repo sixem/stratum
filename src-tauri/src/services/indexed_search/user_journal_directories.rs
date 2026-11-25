@@ -35,6 +35,7 @@ pub(super) struct DirectoryEntry {
     pub(super) name: String,
     pub(super) file_id: u64,
     pub(super) kind: IndexedEntryKind,
+    pub(super) size_bytes: Option<i64>,
     pub(super) can_descend: bool,
 }
 
@@ -171,6 +172,9 @@ fn read_directory_batch(mut bytes: &[u8], entries: &mut Vec<DirectoryEntry>) -> 
                 let file_id =
                     u64::from_le_bytes(bytes[id_offset..id_offset + 8].try_into().unwrap());
                 let is_dir = attributes & FILE_ATTRIBUTE_DIRECTORY != 0;
+                let size_offset = offset_of!(FILE_ID_BOTH_DIR_INFO, EndOfFile);
+                let size =
+                    i64::from_le_bytes(bytes[size_offset..size_offset + 8].try_into().unwrap());
                 entries.push(DirectoryEntry {
                     name,
                     file_id,
@@ -179,6 +183,7 @@ fn read_directory_batch(mut bytes: &[u8], entries: &mut Vec<DirectoryEntry>) -> 
                     } else {
                         IndexedEntryKind::File
                     },
+                    size_bytes: (!is_dir && size >= 0).then_some(size),
                     can_descend: is_dir && attributes & FILE_ATTRIBUTE_REPARSE_POINT == 0,
                 });
             }

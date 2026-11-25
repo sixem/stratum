@@ -15,6 +15,7 @@ type UseGridViewportLayoutOptions = {
   gridSize: GridSize;
   autoViewportWidth?: number;
   resizeDeferred?: boolean;
+  layoutKey?: string;
   viewKey: string;
   onAutoViewportWidthChange?: (width: number) => void;
 };
@@ -31,6 +32,7 @@ export const useGridViewportLayout = ({
   gridSize,
   autoViewportWidth,
   resizeDeferred = false,
+  layoutKey,
   viewKey,
   onAutoViewportWidthChange,
 }: UseGridViewportLayoutOptions): GridViewportLayoutState => {
@@ -63,19 +65,21 @@ export const useGridViewportLayout = ({
     const element = viewportRef.current;
     if (!element) return;
 
-    const measure = () => {
+    const measure = (beforePaint: boolean) => {
       const previousWidth = viewportSizeRef.current.width;
       // A sidebar drag moves the viewport while the auto grid keeps its current width.
       const width = deferWidth && previousWidth > 0 ? previousWidth : element.clientWidth;
       commitViewportSize(width, element.clientHeight);
+      // A split change needs both dimensions in the same update to preserve the scroll anchor.
+      if (stableViewportWidthRef.current <= 0 || (beforePaint && !deferWidth)) commitStableViewportWidth(width);
     };
 
-    measure();
-    const observer = new ResizeObserver(measure);
+    measure(true);
+    const observer = new ResizeObserver(() => measure(false));
     observer.observe(element);
 
     return () => observer.disconnect();
-  }, [deferWidth]);
+  }, [deferWidth, layoutKey]);
 
   useEffect(() => {
     const markResizeStart = () => {

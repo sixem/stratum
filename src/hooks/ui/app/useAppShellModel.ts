@@ -2,7 +2,7 @@
 // The section-level hooks keep navigation, view orchestration, and overlays
 // in dedicated files so this hook stays a thin assembler.
 import { useEffect, useRef, useState } from "react";
-import { getIndexingLaunchPreferences, setIndexedSearchEnabled, setIndexingLaunchPreferences } from "@/api";
+import { setIndexedSearchEnabled } from "@/api";
 import { useFileDrop, useFileManager } from "@/hooks/domain/filesystem";
 import { useSettings, useTabSession } from "@/hooks/domain/session";
 import { useWindowSize } from "@/hooks/perf/resize";
@@ -25,7 +25,7 @@ const isTauriEnv = () => {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 };
 
-export const useAppShellModel = () => {
+export const useAppShellModel = (welcomeOpen = false) => {
   // Core filesystem state is shared across every shell slice.
   const fileManager = useFileManager();
   const settings = useSettings();
@@ -34,9 +34,7 @@ export const useAppShellModel = () => {
     loadingPath: fileManager.loadingPath,
     loadDir: fileManager.loadDir,
     clearDir: fileManager.clearDir,
-    defaultViewMode: settings.defaultViewMode,
     keepFilterOnNavigation: settings.keepFilterOnNavigation,
-    recentJumpsLimit: settings.sidebarRecentLimit,
   });
   const lastViewRef = useRef<{ tabId: string | null; pathKey: string } | null>(null);
   const resolvedView = resolveShellViewState({ fileManager, settings, tabSession, lastViewRef });
@@ -50,10 +48,10 @@ export const useAppShellModel = () => {
     onRecordMoveUndo: fileManager.recordMoveUndo,
     onTransferInFlightChange: fileManager.setTransferInFlight,
     enableTabDropSubfolders: settings.tabDropSubfolders,
+    enableTabDropParentFolder: settings.tabDropParentFolder,
   });
   const scrollState = useScrollRequest();
   const { flushPersist: flushWindowSize } = useWindowSize();
-  const launchPreferencesHydratedRef = useRef(false);
 
   // Menu and overlay state stays local to the shell model so App only renders slices.
   const menuState = useAppMenuState();
@@ -62,7 +60,6 @@ export const useAppShellModel = () => {
   const [, setSuppressExternalPresence] = useState(false);
   const [thumbResetNonce, setThumbResetNonce] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [launchPreferencesReady, setLaunchPreferencesReady] = useState(!tauriEnv);
   const places = usePlacesStore((state) => state.places);
   const placesInitialized = usePlacesStore((state) => state.initialized);
   const seedDefaultPlaces = usePlacesStore((state) => state.seedDefaults);
@@ -84,7 +81,6 @@ export const useAppShellModel = () => {
   }, [fileManager.places, fileManager.placesLoaded, placesInitialized, seedDefaultPlaces]);
 
   useEffect(() => {
-    if (!launchPreferencesReady) return;
     if (!tauriEnv) return;
     if (!settings.indexedSearchEnabled) {
       useIndexedSearchUiStore.getState().closeModal();
@@ -93,58 +89,22 @@ export const useAppShellModel = () => {
     let canceled = false;
 
     const syncIndexedSearchState = async () => {
-      await setIndexedSearchEnabled(settings.indexedSearchEnabled);
-      await setIndexingLaunchPreferences({
-        indexedSearchEnabled: settings.indexedSearchEnabled,
-      });
+      await setIndexedSearchEnabled(settings.indexedSearchEnabled, settings.excludedIndexedDrives);
       if (canceled) return;
       await fileManager.refreshDriveInfo();
     };
 
-    void syncIndexedSearchState();
+    void syncIndexedSearchState().catch((error) => console.warn("Couldn't configure indexed search", error));
 
     return () => {
       canceled = true;
     };
   }, [
     fileManager.refreshDriveInfo,
-    launchPreferencesReady,
+    settings.excludedIndexedDrives,
     settings.indexedSearchEnabled,
     tauriEnv,
   ]);
-
-  useEffect(() => {
-    if (!tauriEnv) return;
-    if (launchPreferencesHydratedRef.current) {
-      setLaunchPreferencesReady(true);
-      return;
-    }
-    let canceled = false;
-
-    const reconcileLaunchPreferences = async () => {
-      const launchPreferences = await getIndexingLaunchPreferences();
-      if (canceled) return;
-
-      if (launchPreferences.indexedSearchEnabled === settings.indexedSearchEnabled) {
-        return;
-      }
-
-      settings.updateSettings({
-        indexedSearchEnabled: launchPreferences.indexedSearchEnabled,
-      });
-    };
-
-    void reconcileLaunchPreferences().finally(() => {
-      if (!canceled) {
-        launchPreferencesHydratedRef.current = true;
-        setLaunchPreferencesReady(true);
-      }
-    });
-
-    return () => {
-      canceled = true;
-    };
-  }, [settings.updateSettings, tauriEnv]);
 
   // View inputs stay grouped so the render tree only consumes already-derived data.
   const viewState = useAppViewState({
@@ -184,7 +144,7 @@ export const useAppShellModel = () => {
 
   const shellView = useShellViewModel({
     tauriEnv,
-    promptOpen: promptOpen || batchRenameOpen,
+    promptOpen: promptOpen || batchRenameOpen || welcomeOpen,
     aboutOpen,
     menuState,
     fileManager,

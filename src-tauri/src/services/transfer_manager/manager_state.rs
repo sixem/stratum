@@ -1,7 +1,10 @@
 // Shared queue state, job descriptors, and snapshot helpers for the transfer manager.
 use super::control::TransferJobControlHandle;
+use super::job_paths::TransferJobPaths;
 use super::manager_events::TransferEventEmitter;
+use super::progress_batch::TransferProgressBatch;
 use crate::domain::filesystem as fs;
+use crate::domain::filesystem::transfer::destination::TransferDestination;
 use crate::domain::filesystem::transfer::job_plan::{PlannedTransferJob, TransferProgressKind};
 use crate::domain::filesystem::transfer::types::{
     TransferJobCapabilities, TransferJobKind, TransferJobPhase, TransferJobSnapshot,
@@ -14,6 +17,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::{mpsc, Condvar, Mutex};
 
+#[cfg(test)]
+#[path = "manager_state/progress_tests.rs"]
+mod progress_tests;
+
 pub(super) const COMPLETED_JOB_HISTORY_LIMIT: usize = 20;
 
 pub(super) struct TransferManagerInner {
@@ -24,11 +31,18 @@ pub(super) struct TransferManagerInner {
 
 #[derive(Default)]
 pub(super) struct TransferManagerState {
-    // The single execution slot stays separate so we can keep filesystem writes serialized.
-    pub(super) active_job: Option<ActiveTransferJobState>,
-    // Queued jobs remain in arrival order even while their planning work happens elsewhere.
+    pub(super) active_jobs: Vec<ActiveTransferJobState>,
+    // Arrival order keeps overlapping operations from leapfrogging each other.
     pub(super) queued_jobs: VecDeque<QueuedTransferJobState>,
     pub(super) completed_jobs: VecDeque<TransferJobSnapshot>,
+    // A cancelled queue entry can disappear before its planner or staging
+    // cleanup finishes. Shutdown also waits for those owners.
+    pub(super) planning_jobs: usize,
+    pub(super) releasing_jobs: usize,
+    pub(super) shutdown_ticket: Option<u64>,
+    pub(super) next_shutdown_ticket: u64,
+    pub(super) process_exit_requested: bool,
+    snapshot_revision: u64,
 }
 
 pub(super) struct ActiveTransferJobState {
@@ -36,6 +50,7 @@ pub(super) struct ActiveTransferJobState {
     pub(super) runtime: Option<ActiveTransferRuntimeProgress>,
     pub(super) control: TransferJobControlHandle,
     pub(super) event_emitter: TransferEventEmitter,
+    paths: TransferJobPaths,
 }
 
 #[derive(Clone, Default)]
@@ -43,14 +58,12 @@ pub(super) struct ActiveTransferRuntimeProgress {
     pub(super) progress_kind: Option<TransferProgressKind>,
     pub(super) committed_files: usize,
     pub(super) committed_bytes: u64,
-    pub(super) current_file_path: Option<String>,
-    pub(super) current_file_total_bytes: Option<u64>,
-    pub(super) current_file_copied_bytes: u64,
 }
 
 pub(super) struct QueuedTransferJobState {
     pub(super) request: TransferJobRequest,
     pub(super) planning_state: QueuedTransferPlanningState,
+    pub(super) paths: TransferJobPaths,
 }
 
 pub(super) enum QueuedTransferPlanningState {
@@ -99,6 +112,20 @@ pub(super) struct TransferOperationOutcome {
     pub(super) terminal_status: TransferJobStatus,
 }
 
+impl TransferOperationOutcome {
+    pub(super) fn destination(&self) -> Option<TransferDestination> {
+        if self.terminal_status != TransferJobStatus::Completed {
+            return None;
+        }
+        match self.result.as_ref().ok()? {
+            TransferOperationResult::Copy(report) => report.destination.target(),
+            TransferOperationResult::Transfer(report) => report.destination.target(),
+            TransferOperationResult::Conversion(report) => report.destination.target(),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(super) struct TransferJobRequest {
     pub(super) snapshot: TransferJobSnapshot,
@@ -128,43 +155,87 @@ impl QueuedTransferJobState {
     pub(super) fn job_id(&self) -> &str {
         &self.request.snapshot.id
     }
-
-    pub(super) fn claim_for_planning(&mut self) -> Option<TransferJobRequest> {
-        if !self.planning_state.is_pending() {
-            return None;
-        }
-
-        self.planning_state = QueuedTransferPlanningState::Planning;
-        Some(self.request.clone())
-    }
-
-    pub(super) fn take_ready_plan(self) -> Option<(TransferJobRequest, PlannedTransferJob)> {
-        let QueuedTransferPlanningState::Ready(plan) = self.planning_state else {
-            return None;
-        };
-        Some((self.request, plan))
-    }
 }
 
 impl TransferManagerState {
-    // Planning workers claim the earliest still-pending job so queue order remains stable.
+    // Planning reads manifests from disk. Wait for older jobs that may create
+    // or change those paths so estimates and delete plans see committed work.
     pub(super) fn claim_next_planning_job(&mut self) -> Option<TransferJobRequest> {
-        self.queued_jobs
-            .iter_mut()
-            .find_map(QueuedTransferJobState::claim_for_planning)
+        let index = self.next_available_job(QueuedTransferPlanningState::is_pending)?;
+        let queued = &mut self.queued_jobs[index];
+        queued.planning_state = QueuedTransferPlanningState::Planning;
+        self.planning_jobs += 1;
+        Some(queued.request.clone())
     }
 
-    // The single executor takes the earliest ready job, which lets ready work bypass
-    // still-planning jobs while preserving arrival order among ready jobs themselves.
-    pub(super) fn take_next_ready_job(
+    // Claim the filesystem paths and make the job active under the same lock.
+    // Other workers and cancel commands can always see who owns the paths.
+    pub(super) fn activate_next_ready_job(
         &mut self,
     ) -> Option<(TransferJobRequest, PlannedTransferJob)> {
-        let ready_index = self
-            .queued_jobs
+        let index = self.next_available_job(QueuedTransferPlanningState::is_ready)?;
+        let QueuedTransferJobState {
+            request,
+            planning_state: QueuedTransferPlanningState::Ready(plan),
+            paths,
+        } = self.queued_jobs.remove(index)?
+        else {
+            return None;
+        };
+        let mut snapshot = request.snapshot.clone();
+        snapshot.status = TransferJobStatus::Running;
+        snapshot.phase = TransferJobPhase::Executing;
+        snapshot.current_path = None;
+        snapshot.work = plan.work.clone();
+        self.active_jobs.push(ActiveTransferJobState {
+            snapshot,
+            runtime: Some(ActiveTransferRuntimeProgress::from_plan(&plan)),
+            control: request.control.clone(),
+            event_emitter: request.event_emitter.clone(),
+            paths,
+        });
+        Some((request, plan))
+    }
+
+    fn next_available_job(
+        &self,
+        eligible: impl Fn(&QueuedTransferPlanningState) -> bool,
+    ) -> Option<usize> {
+        self.queued_jobs
             .iter()
-            .position(|job| job.planning_state.is_ready())?;
-        let queued = self.queued_jobs.remove(ready_index)?;
-        queued.take_ready_plan()
+            .enumerate()
+            .find(|(index, job)| {
+                eligible(&job.planning_state)
+                    && !self
+                        .active_jobs
+                        .iter()
+                        .any(|active| active.paths.overlaps(&job.paths))
+                    && !self
+                        .queued_jobs
+                        .iter()
+                        .take(*index)
+                        .any(|earlier| earlier.paths.overlaps(&job.paths))
+            })
+            .map(|(index, _)| index)
+    }
+
+    pub(super) fn has_pending_job(&self, job_id: &str) -> bool {
+        self.active_jobs.iter().any(|job| job.snapshot.id == job_id)
+            || self.queued_jobs.iter().any(|job| job.job_id() == job_id)
+    }
+
+    pub(super) fn active_job_mut(&mut self, job_id: &str) -> Option<&mut ActiveTransferJobState> {
+        self.active_jobs
+            .iter_mut()
+            .find(|job| job.snapshot.id == job_id)
+    }
+
+    pub(super) fn remove_active_job(&mut self, job_id: &str) -> Option<ActiveTransferJobState> {
+        let index = self
+            .active_jobs
+            .iter()
+            .position(|job| job.snapshot.id == job_id)?;
+        Some(self.active_jobs.remove(index))
     }
 
     pub(super) fn queued_job_mut(&mut self, job_id: &str) -> Option<&mut QueuedTransferJobState> {
@@ -200,45 +271,27 @@ impl ActiveTransferRuntimeProgress {
     pub(super) fn update_snapshot(
         &mut self,
         snapshot: &mut TransferJobSnapshot,
-        update: &fs::TransferProgressUpdate,
+        batch: &TransferProgressBatch,
     ) {
         match self.progress_kind {
             Some(TransferProgressKind::Files) => {
-                if let Some(path) = update.current_path.as_ref() {
-                    if update.current_total_bytes.is_some()
-                        && self.current_file_path.as_deref() != Some(path.as_str())
-                    {
-                        self.commit_current_file(snapshot);
-                        self.current_file_path = Some(path.clone());
-                        self.current_file_total_bytes = update.current_total_bytes;
-                        self.current_file_copied_bytes = update.current_bytes.unwrap_or(0);
-                    }
+                self.committed_files = self.committed_files.saturating_add(batch.file_work.files);
+                self.committed_bytes = self.committed_bytes.saturating_add(batch.file_work.bytes);
+                snapshot.work.files_completed = self.committed_files;
+                snapshot.work.bytes_completed =
+                    self.committed_bytes.saturating_add(batch.in_flight_bytes);
+                // A folder may grow between planning and execution. Count new
+                // work as we see it so the estimate can catch up.
+                if let Some(total) = snapshot.work.files_total.as_mut() {
+                    *total = (*total).max(self.committed_files);
                 }
-
-                if let Some(current_total_bytes) = update.current_total_bytes {
-                    if self.current_file_total_bytes != Some(current_total_bytes) {
-                        self.current_file_total_bytes = Some(current_total_bytes);
-                    }
-                }
-
-                if let Some(current_bytes) = update.current_bytes {
-                    self.current_file_copied_bytes = current_bytes;
-                }
-
-                if let Some(total_bytes) = self.current_file_total_bytes {
-                    snapshot.work.bytes_completed = self
-                        .committed_bytes
-                        .saturating_add(self.current_file_copied_bytes.min(total_bytes));
-                    if self.current_file_copied_bytes >= total_bytes {
-                        self.commit_current_file(snapshot);
-                    }
-                } else {
-                    snapshot.work.bytes_completed = self.committed_bytes;
+                if let Some(total) = snapshot.work.bytes_total.as_mut() {
+                    *total = (*total).max(snapshot.work.bytes_completed);
                 }
             }
             Some(TransferProgressKind::Items) => {
-                snapshot.work.files_total = Some(update.total);
-                snapshot.work.files_completed = update.processed;
+                snapshot.work.files_total = Some(batch.latest.total);
+                snapshot.work.files_completed = batch.latest.processed;
             }
             _ => {}
         }
@@ -247,7 +300,6 @@ impl ActiveTransferRuntimeProgress {
     pub(super) fn finalize_success(&mut self, snapshot: &mut TransferJobSnapshot) {
         match self.progress_kind {
             Some(TransferProgressKind::Files) => {
-                self.commit_current_file(snapshot);
                 snapshot.work.files_completed = snapshot.work.files_total.unwrap_or(0);
                 snapshot.work.bytes_completed = snapshot.work.bytes_total.unwrap_or(0);
             }
@@ -256,19 +308,6 @@ impl ActiveTransferRuntimeProgress {
             }
             _ => {}
         }
-    }
-
-    fn commit_current_file(&mut self, snapshot: &mut TransferJobSnapshot) {
-        let Some(total_bytes) = self.current_file_total_bytes else {
-            return;
-        };
-        self.committed_files = self.committed_files.saturating_add(1);
-        self.committed_bytes = self.committed_bytes.saturating_add(total_bytes);
-        snapshot.work.files_completed = self.committed_files;
-        snapshot.work.bytes_completed = self.committed_bytes;
-        self.current_file_path = None;
-        self.current_file_total_bytes = None;
-        self.current_file_copied_bytes = 0;
     }
 }
 
@@ -294,6 +333,7 @@ pub(super) fn build_initial_snapshot(
         phase: TransferJobPhase::Planning,
         capabilities: descriptor.capabilities,
         current_path: None,
+        destination: None,
         work: TransferWorkEstimate {
             roots_total,
             roots_completed: 0,
@@ -365,9 +405,17 @@ pub(super) fn describe_conversion_job() -> TransferJobDescriptor {
     }
 }
 
-pub(super) fn snapshot_from_state(state: &TransferManagerState) -> TransferQueueSnapshot {
+pub(super) fn snapshot_from_state(state: &mut TransferManagerState) -> TransferQueueSnapshot {
+    // Workers emit after releasing the lock. A revision lets consumers drop
+    // older snapshots even when the event order differs from the state order.
+    state.snapshot_revision = state.snapshot_revision.saturating_add(1);
     TransferQueueSnapshot {
-        active_job: state.active_job.as_ref().map(|job| job.snapshot.clone()),
+        revision: state.snapshot_revision,
+        active_jobs: state
+            .active_jobs
+            .iter()
+            .map(|job| job.snapshot.clone())
+            .collect(),
         queued_jobs: state
             .queued_jobs
             .iter()

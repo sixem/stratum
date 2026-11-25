@@ -1,5 +1,6 @@
 // Empty states and new-tab lander content.
 @use "./control-recipes" as control;
+@use "./lander-drives";
 
 .empty-state {
   border: 1px dashed var(--stroke);
@@ -10,11 +11,6 @@
   max-width: min(640px, 100%);
   max-height: min(70vh, 520px);
   overflow: auto;
-}
-
-:root[data-ambient="true"] .empty-state {
-  background: var(--panel-deep);
-  border-color: rgba(255, 255, 255, 0.12);
 }
 
 // Scope empty state internals to the container.
@@ -94,14 +90,9 @@
   width: min(360px, 100%);
   padding: 18px 20px;
   border-radius: 10px;
-  border: 1px solid var(--stroke);
+  border: var(--surface-border-width) solid var(--stroke);
   background: var(--surface-control-muted);
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
-}
-
-:root[data-ambient="true"] .view-lander {
-  padding: 12px 14px;
-  background: var(--panel-2);
 }
 
 :root[data-ambient="true"] :where(.thumb-shell) .thumb-empty,
@@ -110,9 +101,15 @@
   background: transparent;
 }
 
-:root[data-ambient="true"] .empty-state {
+:root[data-ambient="true"] .empty-state:where(:not(.view-lander .empty-state)) {
   background: var(--panel-2);
   border-color: var(--stroke);
+}
+
+:root[data-dark-mode="true"] :is(.thumb-empty, .list-empty) .empty-state {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 // Scope lander content to the panel without increasing specificity.
@@ -124,10 +121,6 @@
     grid-template-rows: auto minmax(0, 1fr);
     align-items: stretch;
     min-height: 0;
-  }
-
-  .lander-drives {
-    grid-column: 1 / -1;
   }
 
   .lander-recents {
@@ -186,7 +179,7 @@
     min-width: 24px;
     height: 18px;
     padding: 0 7px;
-    border-radius: 999px;
+    border-radius: 6px;
     border: var(--surface-border-width) solid var(--stroke);
     background: rgba(255, 255, 255, 0.02);
     color: var(--muted);
@@ -196,7 +189,7 @@
   }
 
   .lander-section-title {
-    @include control.eyebrow-label(var(--font-size-2xs), 0.16em, null);
+    @include control.eyebrow-label(var(--font-size-xs), 0.13em, 500);
     line-height: 1;
   }
 
@@ -205,139 +198,6 @@
     font-size: var(--font-size-sm);
     color: var(--muted);
     padding: 8px 2px 6px;
-  }
-
-  .lander-drives-list {
-    display: grid;
-    gap: 6px;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    overflow: auto;
-    align-content: start;
-    max-height: clamp(140px, 35vh, 290px);
-    padding-right: 2px;
-  }
-
-  @media (max-width: 560px) {
-    .lander-drives-list {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  .lander-drive {
-    @include control.control-surface(6px, var(--surface-control-muted), var(--stroke), var(--file-view-grid-card-border));
-    padding: 8px;
-    display: grid;
-    gap: 4px;
-    text-align: left;
-    cursor: pointer;
-    transition: none;
-  }
-
-  .lander-drive:hover {
-    border-color: rgba(var(--accent-rgb), 0.36);
-  }
-
-  .lander-storage-summary {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: baseline;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .lander-storage-title {
-    @include control.eyebrow-label(0.72rem, 0.08em, null);
-  }
-
-  .lander-storage-value {
-    font-size: 0.84rem;
-    font-weight: 600;
-    color: var(--text);
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .lander-storage-percent {
-    font-size: 0.72rem;
-    color: var(--muted);
-    white-space: nowrap;
-  }
-
-  .lander-storage-bar {
-    height: 3px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.1);
-    overflow: hidden;
-  }
-
-  .lander-storage-bar-fill {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: rgba(var(--accent-rgb), 0.65);
-  }
-
-  .lander-drive-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-weight: 500;
-    min-width: 0;
-  }
-
-  .lander-drive-label {
-    font-weight: 600;
-    color: var(--accent);
-    font-size: 0.84rem;
-  }
-
-  .lander-drive-name {
-    font-size: 0.72rem;
-    color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .lander-drive-usage {
-    font-size: 0.75rem;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }
-
-  .lander-drive-usage-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .lander-drive-usage-percent {
-    font-size: 0.7rem;
-    color: var(--muted);
-    flex: 0 0 auto;
-  }
-
-  .lander-drive-bar {
-    height: 3px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.1);
-    overflow: hidden;
-  }
-
-  .lander-drive-bar[data-known="false"] {
-    background: rgba(255, 255, 255, 0.04);
-  }
-
-  .lander-drive-bar-fill {
-    display: block;
-    height: 100%;
-    background: rgba(var(--accent-rgb), 0.7);
-    border-radius: inherit;
   }
 
   .lander-recents-list {
@@ -401,8 +261,4 @@
     text-overflow: ellipsis;
   }
 
-}
-
-:root[data-ambient="true"] :where(.lander-panel) .lander-drive {
-  background-color: color-mix(in srgb, var(--surface-control-muted) 90%, transparent);
 }

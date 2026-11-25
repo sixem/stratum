@@ -1,4 +1,4 @@
-// Runs a planned drag-and-drop transfer and reports the outcome back to UI state.
+// Runs a resolved transfer and reports its progress and outcome to the UI.
 import { transferEntries } from "@/api";
 import {
   formatFailures,
@@ -6,7 +6,10 @@ import {
   normalizeDropPath,
 } from "@/lib";
 import { bumpDirectoryChildVersions } from "@/modules";
+import { recordMoveDestination } from "@/modules/recentMoveStore";
 import type { PromptConfig } from "@/modules";
+import type { FileJobRegistration } from "@/modules/transferStore";
+import type { CreatedFolder } from "@/types/fs";
 import type { UndoMoveEntry } from "./fileManagerUndo";
 import {
   getTransferErrorMessage,
@@ -19,7 +22,7 @@ type PromptStoreLike = {
 };
 
 type TransferJobStoreLike = {
-  registerTransferJob: (input: { label: string; items?: string[] }) => { id: string };
+  registerTransferJob: (input: { label: string; items: string[]; kind: "transfer" }) => FileJobRegistration;
   updateTransferLabel: (id: string, label: string) => void;
   recordTransferJobOutcome: (
     id: string,
@@ -30,6 +33,8 @@ type TransferJobStoreLike = {
 type RunDropTransferOptions = {
   plan: ResolvedDropTransferPlan;
   dropStage?: number;
+  protectedFolder?: CreatedFolder;
+  moveHistoryWorkspace?: string | null;
   promptStore: PromptStoreLike;
   currentPathKey: string;
   onRefresh?: () => void;
@@ -72,6 +77,8 @@ const bumpTransferDirectoryChildren = (
 export const runDropTransfer = async ({
   plan,
   dropStage,
+  protectedFolder,
+  moveHistoryWorkspace,
   promptStore,
   currentPathKey,
   onRefresh,
@@ -81,6 +88,7 @@ export const runDropTransfer = async ({
   const job = transferStore.registerTransferJob({
     label: plan.mode === "move" ? "Move" : plan.mode === "copy" ? "Copy" : "Transfer",
     items: plan.items.map((item) => item.candidate.path),
+    kind: "transfer",
   });
 
   try {
@@ -88,7 +96,7 @@ export const runDropTransfer = async ({
     const report = await transferEntries(
       plan.items.map((item) => item.candidate.path),
       plan.destination,
-      { mode: plan.mode, overwritePaths: plan.overwritePaths },
+      { mode: plan.mode, overwritePaths: plan.overwritePaths, protectedFolder },
       job.id,
       dropStage,
     );
@@ -107,11 +115,11 @@ export const runDropTransfer = async ({
       failures: report.failures.length,
     });
     if (report.movedEntries.length > 0) {
+      recordMoveDestination(moveHistoryWorkspace, plan.destination);
       onRecordMoveUndo?.(
-        report.movedEntries.map((entry) => ({
-          from: entry.sourcePath,
-          to: entry.destinationPath,
-        })),
+        report.movedEntries.flatMap((entry) => entry.identity ? [{
+          from: entry.sourcePath, to: entry.destinationPath, identity: entry.identity,
+        }] : []),
       );
     }
 
@@ -150,5 +158,7 @@ export const runDropTransfer = async ({
       confirmLabel: "OK",
       cancelLabel: null,
     });
+  } finally {
+    job.finish();
   }
 };

@@ -40,9 +40,10 @@ export const getParentPath = (path: string) => {
   const lastSlash = trimmed.lastIndexOf("\\");
   // Windows resolves "C:" against the drive's working directory. Undo needs "C:\".
   const drive = /^(?:\\\\\?\\)?[a-z]:/i.exec(trimmed)?.[0];
-  if (drive) {
-    if (normalized[drive.length] !== "\\") return null;
-    if (lastSlash <= drive.length) return drive.toUpperCase() + "\\";
+  const volume = drive?.toUpperCase() ?? /^\\\\\?\\Volume\{[0-9a-f-]+\}/i.exec(trimmed)?.[0];
+  if (volume) {
+    if (normalized[volume.length] !== "\\") return null;
+    if (lastSlash <= volume.length) return volume + "\\";
   }
   // A UNC share is itself a filesystem root, including in extended-length paths.
   if (/^(?:\\\\\?\\UNC\\|\\\\(?![?.]\\))[^\\]+\\[^\\]+$/i.test(trimmed)) {

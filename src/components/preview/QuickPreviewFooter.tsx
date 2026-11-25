@@ -1,11 +1,11 @@
-// Gallery metadata and the disclosure control for its file list.
+// Gallery metadata and controls for the preview list and returning to the file view.
 import type { RefObject } from "react";
-import { ContextChevronRightIcon } from "@/components/icons";
+import { PanelRightCloseIcon, PanelRightOpenIcon, ReturnIcon } from "@/components/icons/contextMenuIcons";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 
 type QuickPreviewFooterProps = {
   preview: {
-    hasError: boolean;
+    kind: "image" | "video" | "audio";
     typeLabel: string;
     dimensionLabel: string;
     sizeLabel: string;
@@ -14,67 +14,66 @@ type QuickPreviewFooterProps = {
   };
   stripOpen: boolean;
   stripId: string;
-  stripToggleRef: RefObject<HTMLButtonElement | null>;
+  returnButtonRef: RefObject<HTMLButtonElement | null>;
   onToggleStrip: () => void;
+  onClose: () => void;
 };
 
 export const QuickPreviewFooter = ({
   preview,
   stripOpen,
   stripId,
-  stripToggleRef,
+  returnButtonRef,
   onToggleStrip,
+  onClose,
 }: QuickPreviewFooterProps) => {
   const toggleLabel = stripOpen ? "Hide preview list" : "Show preview list";
+  const StripIcon = stripOpen ? PanelRightCloseIcon : PanelRightOpenIcon;
 
   return (
-    <div className="quick-preview-info">
-      <div className="quick-preview-info-copy" aria-live="polite">
-        {preview.hasError ? (
-          <div className="quick-preview-info-error" role="status">
-            Preview unavailable. Try opening the file externally.
-          </div>
-        ) : null}
-        <div className="quick-preview-info-row">
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Type</span>
-            <span className="quick-preview-info-value">{preview.typeLabel}</span>
-          </div>
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Dimensions</span>
-            <span className="quick-preview-info-value tnum">{preview.dimensionLabel}</span>
-          </div>
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Size</span>
-            <span className="quick-preview-info-value tnum">{preview.sizeLabel}</span>
-          </div>
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Modified</span>
-            <span className="quick-preview-info-value tnum">{preview.modifiedLabel}</span>
-          </div>
-          <div className="quick-preview-info-item">
-            <span className="quick-preview-info-label">Zoom</span>
-            <span className="quick-preview-info-value tnum">{preview.zoomLabel}</span>
-          </div>
+    <footer className="statusbar quick-preview-info">
+      <div className="quick-preview-info-row" aria-live="polite">
+        <div className="quick-preview-info-item">
+          <span className="quick-preview-info-label">Type</span>
+          <span className="quick-preview-info-value">{preview.typeLabel}</span>
         </div>
+        {preview.kind !== "audio" ? <div className="quick-preview-info-item">
+          <span className="quick-preview-info-label">Dimensions</span>
+          <span className="quick-preview-info-value tnum">{preview.dimensionLabel}</span>
+        </div> : null}
+        <div className="quick-preview-info-item">
+          <span className="quick-preview-info-label">Size</span>
+          <span className="quick-preview-info-value tnum">{preview.sizeLabel}</span>
+        </div>
+        <div className="quick-preview-info-item">
+          <span className="quick-preview-info-label">Modified</span>
+          <span className="quick-preview-info-value tnum">{preview.modifiedLabel}</span>
+        </div>
+        {preview.kind !== "audio" ? <div className="quick-preview-info-item">
+          <span className="quick-preview-info-label">Zoom</span>
+          <span className="quick-preview-info-value tnum">{preview.zoomLabel}</span>
+        </div> : null}
       </div>
-      <TooltipWrapper text="Toggle preview list">
-        <button
-          type="button"
-          className="quick-preview-strip-toggle"
-          ref={stripToggleRef}
-          aria-label={toggleLabel}
-          aria-controls={stripId}
-          aria-expanded={stripOpen}
-          onClick={onToggleStrip}
-          onKeyDown={(event) => {
-            // Let the button activate without triggering gallery close or video playback.
-            if (event.key === "Enter" || event.key === " ") event.stopPropagation();
-          }}
-        >
-          <ContextChevronRightIcon className="quick-preview-strip-chevron" />
-        </button>
-      </TooltipWrapper>
-    </div>
+      <div className="quick-preview-info-actions">
+        <TooltipWrapper text={toggleLabel}>
+          <button
+            type="button"
+            className="quick-preview-info-action"
+            aria-label={toggleLabel}
+            aria-controls={stripId}
+            aria-expanded={stripOpen}
+            onClick={onToggleStrip}
+          >
+            <StripIcon />
+          </button>
+        </TooltipWrapper>
+        <TooltipWrapper text="Exit Gallery">
+          <button type="button" className="quick-preview-info-action" ref={returnButtonRef}
+            aria-label="Exit Gallery" onClick={onClose}>
+            <ReturnIcon />
+          </button>
+        </TooltipWrapper>
+      </div>
+    </footer>
   );
 };
