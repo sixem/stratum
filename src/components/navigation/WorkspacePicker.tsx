@@ -7,8 +7,8 @@ import { captureWorkspaceLayout } from "@/lib/captureWorkspaceLayout";
 import { usePromptStore } from "@/modules";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { useSessionStore } from "@/modules/sessionStore";
-import { createFreshWorkspace, getWorkspaceChanges, removeWorkspace, saveWorkspace, switchWorkspace, useWorkspaceStore } from "@/modules/workspaceStore";
-import type { Workspace, WorkspaceLayout } from "@/modules/workspaceStore";
+import { createFreshWorkspace, getWorkspaceChanges, losesPreviousShells, removeWorkspace, saveWorkspace, switchWorkspace, useWorkspaceStore } from "@/modules/workspaceStore";
+import type { Workspace, WorkspaceSession } from "@/modules/workspaceStore";
 import { promptWorkspaceName, runWorkspaceAction } from "./workspaceDialogs";
 import { WorkspaceList } from "./WorkspaceList";
 
@@ -55,12 +55,22 @@ export const WorkspacePicker = () => {
     },
   });
 
-  const load = (target: { id: string | null; layout: WorkspaceLayout }) => {
+  const changeWorkspace = (action: () => void, target?: WorkspaceSession) => {
+    if (!losesPreviousShells(target)) return action();
+    usePromptStore.getState().showPrompt({
+      title: "Close PowerShell in the previous session?",
+      content: "Switching will close that session and stop its running commands.",
+      confirmLabel: "Close and switch", cancelLabel: "Cancel",
+      onConfirm: () => runWorkspaceAction(action),
+    });
+  };
+
+  const load = (target: WorkspaceSession) => {
     closeAndFocus();
-    runWorkspaceAction(() => {
+    runWorkspaceAction(() => changeWorkspace(() => {
       switchWorkspace(target, captureWorkspaceLayout());
       focusRestoredPane();
-    });
+    }, target));
   };
 
   const loadNamed = (workspace: Workspace) => {
@@ -74,10 +84,10 @@ export const WorkspacePicker = () => {
 
   const create = () => {
     closeAndFocus();
-    promptWorkspaceName("New workspace", "Create", "", (name) => {
+    promptWorkspaceName("New workspace", "Create", "", (name) => changeWorkspace(() => {
       createFreshWorkspace(name, captureWorkspaceLayout());
       focusRestoredPane();
-    });
+    }));
   };
   const saveAs = () => {
     closeAndFocus();

@@ -161,16 +161,15 @@ pub fn rename_entry(
 
     let source = paths.source.to_string_lossy();
     let destination = paths.destination.to_string_lossy();
-    if source == destination || (cfg!(windows) && source.eq_ignore_ascii_case(&destination)) {
+    if source == destination {
         return Ok(RenamedEntry {
             path: source.into_owned(),
             identity: None,
         });
     }
 
-    // Recheck at apply time and rely on the native no-replace move if the
-    // destination becomes occupied between this check and the operation.
-    check_destination(&paths.destination)?;
+    // Windows resolves both spellings of a case-only rename to the same item.
+    // Let the no-replace operation distinguish that case from an occupied name.
     let identity = if let Some(expected) = expected {
         staging::retry_sharing(|| rename_verified(&paths.source, &paths.destination, &expected))
             .map_err(rename_failure)?;

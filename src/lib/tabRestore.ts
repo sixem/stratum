@@ -40,15 +40,13 @@ export function readTabContent(saved: SavedTabContent, key: string): TabContent 
   return { kind: "folder", split };
 }
 
-export function selectRestoredFolder(layout: TabLayout, createStartTab: () => FolderTab): TabLayout {
+export function selectRestoredFolder(layout: TabLayout): TabLayout {
   const { tabs, activeTabId } = layout;
   if (!tabs.length) return layout;
   const active = tabs.find(tab => tab.id === activeTabId);
   if (active?.kind === "folder" && !active.split) return layout;
 
   const folder = tabs.find(tab => tab.kind === "folder" && !tab.split);
-  if (folder) return { tabs, activeTabId: folder.id };
-
-  const start = createStartTab();
-  return { tabs: [...tabs, start], activeTabId: start.id };
+  // With only dormant terminals, show Start without adding a tab to the layout.
+  return { tabs, activeTabId: folder?.id ?? null };
 }

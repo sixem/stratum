@@ -205,12 +205,11 @@ pub(crate) fn shell_delete_entries(
 fn fallback_delete_discovery(paths: &[String]) -> DeleteDiscoveryPlan {
     let mut plan = DeleteDiscoveryPlan::default();
     for raw_path in paths {
-        let trimmed = raw_path.trim();
-        if trimmed.is_empty() {
+        if raw_path.trim().is_empty() {
             continue;
         }
         plan.roots.push(DeleteDiscoveryRoot {
-            path: trimmed.to_string(),
+            path: raw_path.clone(),
             item_count: 1,
             byte_count: 0,
         });

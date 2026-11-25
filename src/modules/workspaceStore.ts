@@ -12,6 +12,7 @@ import type { PlacesState } from "./placesStore";
 import { coerceSession, createSessionTab, prepareSessionRestore, serializePaneSession, useBottomSessionStore, useSessionStore } from "./sessionStore";
 import type { SessionState } from "./sessionStore";
 import { useSettingsStore } from "./settings.store";
+import { hasUnreachableShells, parkWorkspaceShells, parkedWorkspaceShells, retainWorkspaceShells, type WorkspaceShells } from "./workspaceTerminals";
 import { fillTabGridSizes, getDefaultTabGridSize, getTabGridSizeOnEnable, type TabGridSize } from "./tabGridSize";
 
 export type WorkspaceLayout = {
@@ -110,15 +111,44 @@ const readWorkspaces = (): WorkspaceState => {
 
 export const useWorkspaceStore = createWithEqualityFn<WorkspaceState>(readWorkspaces);
 
+function resumableWorkspace(state: WorkspaceState, id: string | null) {
+  return state.drafts.find(draft => draft.id === id) ?? state.workspaces.find(workspace => workspace.id === id);
+}
+
+// Workspace persistence and backup import both publish through this store.
+useWorkspaceStore.subscribe(state => {
+  function* inactiveSessions() {
+    if (state.previous) yield state.previous;
+    for (const workspace of state.workspaces) {
+      if (workspace.id !== state.activeId) yield state.drafts.find(draft => draft.id === workspace.id) ?? workspace;
+    }
+  }
+  retainWorkspaceShells(inactiveSessions());
+});
+
+export function parkPreviousWorkspace(next: WorkspaceState) {
+  if (next.previous) parkWorkspaceShells(next.previous, resumableWorkspace(next, next.previous.id)?.layout);
+}
+
+export function losesPreviousShells(target?: WorkspaceSession) {
+  const state = useWorkspaceStore.getState();
+  const previous = state.previous;
+  if (!previous || previous.layout === target?.layout) return false;
+  // A named workspace is also reachable from the picker. An unnamed session
+  // may have only the Previous session entry, which this switch will replace.
+  return hasUnreachableShells(previous, resumableWorkspace(state, previous.id)?.layout);
+}
+
 export const serializeWorkspaceState = (next: WorkspaceState) =>
   [STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, ...next })] as const;
 
-const persist = (next: WorkspaceState) => {
+const persist = (next: WorkspaceState, switching = false) => {
   try {
     globalThis.localStorage.setItem(...serializeWorkspaceState(next));
   } catch {
     throw new Error("Couldn't save workspaces to local storage.");
   }
+  if (switching) parkPreviousWorkspace(next);
   useWorkspaceStore.setState(next);
 };
 
@@ -310,9 +340,9 @@ export const removeWorkspace = (id: string) => {
   });
 };
 
-export const prepareWorkspaceRestore = (layout: WorkspaceLayout, gridSize: TabGridSize | undefined): WorkspaceLayout => {
-  const main = prepareSessionRestore(layout.main, gridSize);
-  const bottom = prepareSessionRestore(layout.bottom, gridSize);
+export const prepareWorkspaceRestore = (layout: WorkspaceLayout, gridSize: TabGridSize | undefined, shells?: WorkspaceShells): WorkspaceLayout => {
+  const main = prepareSessionRestore(layout.main, gridSize, shells);
+  const bottom = prepareSessionRestore(layout.bottom, gridSize, shells);
   const link = layout.pane.link;
   const mainIndex = link ? layout.main.tabs.findIndex(({ id }) => link.mainTabId === id) : -1;
   const bottomIndex = link ? layout.bottom.tabs.findIndex(({ id }) => link.bottomTabId === id) : -1;
@@ -334,15 +364,13 @@ export const applyWorkspaceRestore = (prepared: WorkspaceLayout, preferences?: B
   usePlacesStore.setState({ initialized: prepared.places.initialized, places: [...prepared.places.places] });
 };
 
-const restoreLayout = (layout: WorkspaceLayout) =>
-  applyWorkspaceRestore(prepareWorkspaceRestore(layout, getDefaultTabGridSize(useSettingsStore.getState())));
-
 export const switchWorkspace = (target: WorkspaceSession, outgoing: WorkspaceLayout) => {
   const state = useWorkspaceStore.getState();
   // The previous session remains switchable if its named snapshot was deleted.
   const id = state.workspaces.some((item) => item.id === target.id) ? target.id : null;
-  persist({ ...state, activeId: id, previous: { id: state.activeId, layout: outgoing }, drafts: collectDrafts(state, outgoing) });
-  restoreLayout(target.layout);
+  const prepared = prepareWorkspaceRestore(target.layout, getDefaultTabGridSize(useSettingsStore.getState()), parkedWorkspaceShells(target.id));
+  persist({ ...state, activeId: id, previous: { id: state.activeId, layout: outgoing }, drafts: collectDrafts(state, outgoing) }, true);
+  applyWorkspaceRestore(prepared);
 };
 
 export const createFreshWorkspace = (name: string, outgoing: WorkspaceLayout) => {
@@ -360,6 +388,6 @@ export const createFreshWorkspace = (name: string, outgoing: WorkspaceLayout) =>
     activeId: workspace.id,
     previous: { id: state.activeId, layout: outgoing },
     drafts: collectDrafts(state, outgoing),
-  });
-  restoreLayout(layout);
+  }, true);
+  applyWorkspaceRestore(layout);
 };

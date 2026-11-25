@@ -2,28 +2,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent as ReactChangeEvent } from "react";
 import { AUDIO_PREVIEW_VOLUME_KEY, PREVIEW_VOLUME_KEY } from "@/constants/settings";
+import { clampVolume, readPreviewVolume } from "@/lib/previewVolume";
 
 const VOLUME_AUTO_CLOSE_DELAY_MS = 2000;
 const VOLUME_HOVER_OPEN_DELAY_MS = 250;
-
-const clampVolume = (value: number) => {
-  if (value < 0) return 0;
-  if (value > 1) return 1;
-  return value;
-};
-
-// Keep preview volume sticky so the overlay feels consistent between files.
-const readPreviewVolume = (key: string) => {
-  const fallback = 0.1;
-  try {
-    const stored = window.localStorage.getItem(key);
-    if (stored == null) return fallback;
-    const parsed = Number(stored);
-    return Number.isFinite(parsed) ? clampVolume(parsed) : fallback;
-  } catch {
-    return fallback;
-  }
-};
 
 type UsePreviewVolumeControllerOptions = {
   previewSessionKey: string;

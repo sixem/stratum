@@ -36,8 +36,8 @@ export function useBottomPaneActions({
     selected: selection.selected,
     viewParentPath: dir.parentPath,
     gridNameHideExtension: hideExtension,
-    renameEntry: async (path, nextName) => {
-      const result = await actions.renameEntry(path, nextName);
+    renameEntry: async (path, nextName, options) => {
+      const result = await actions.renameEntry(path, nextName, options);
       if (result && viewVisit.current) await dir.refreshAfterChange();
       return result;
     },

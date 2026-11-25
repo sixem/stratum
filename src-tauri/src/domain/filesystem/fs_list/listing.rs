@@ -69,13 +69,18 @@ fn scan_dir_entry(
 
     // Check kind before metadata so a size search never has to stat folders
     // or names and extensions that will be excluded anyway.
-    let mut known_directory = None;
+    let file_type = entry.file_type().ok()?;
+    #[cfg(windows)]
+    let is_dir = {
+        use std::os::windows::fs::FileTypeExt;
+        file_type.is_dir() || file_type.is_symlink_dir()
+    };
+    #[cfg(not(windows))]
+    let is_dir = file_type.is_dir();
     if filters.has_filters() {
-        let is_dir = entry.file_type().ok()?.is_dir();
         if (is_dir && filters.has_size()) || !filters.matches_type(&normalized_name, is_dir) {
             return None;
         }
-        known_directory = Some(is_dir);
     }
 
     // Pull metadata once when needed so we can derive is_dir + size/modified without
@@ -84,11 +89,6 @@ fn scan_dir_entry(
         entry.metadata().ok()
     } else {
         None
-    };
-    let is_dir = match metadata.as_ref() {
-        Some(meta) => meta.is_dir(),
-        None => known_directory
-            .unwrap_or_else(|| entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)),
     };
     let (size, modified) = if !is_dir {
         match metadata.as_ref() {
@@ -252,21 +252,47 @@ mod tests {
     use super::*;
     use crate::domain::filesystem::FilePane;
 
-    #[test]
-    fn filters_by_size_and_type_even_in_fast_name_order() {
-        struct TestFolder(PathBuf);
-        impl Drop for TestFolder {
-            fn drop(&mut self) {
-                let _ = fs::remove_dir_all(&self.0);
-            }
+    struct TestFolder(PathBuf);
+    impl Drop for TestFolder {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
         }
+    }
 
+    fn test_folder() -> TestFolder {
         let root = TestFolder(std::env::temp_dir().join(format!(
-            "stratum-size-filter-{}-{}",
+            "stratum-listing-{}-{}",
             std::process::id(),
             getrandom::u64().unwrap()
         )));
         fs::create_dir(&root.0).unwrap();
+        root
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn lists_a_junction_as_a_navigable_folder() {
+        let root = test_folder();
+        fs::create_dir(root.0.join("target")).unwrap();
+        fs::write(root.0.join("target").join("inside.txt"), b"inside").unwrap();
+        let result = std::process::Command::new("cmd.exe")
+            .current_dir(&root.0)
+            .args(["/d", "/c", "mklink", "/j", "alias", "target"])
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{result:?}");
+        let entries = list_dir(root.0.to_str().unwrap().into(), None).unwrap().entries;
+        let alias = entries.iter().find(|entry| entry.name == "alias").unwrap();
+        assert!(alias.is_dir);
+        assert_eq!(
+            list_dir(alias.path.clone(), None).unwrap().entries[0].name,
+            "inside.txt"
+        );
+    }
+
+    #[test]
+    fn filters_by_size_and_type_even_in_fast_name_order() {
+        let root = test_folder();
         fs::write(root.0.join("Concert small.mp4"), [0; 12]).unwrap();
         fs::write(root.0.join("Concert live.MP4"), [0; 17]).unwrap();
         fs::write(root.0.join("Concert notes.txt"), [0; 24]).unwrap();

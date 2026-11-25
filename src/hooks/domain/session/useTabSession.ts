@@ -129,25 +129,13 @@ export const useTabSession = ({
 
   const ensureActiveTab = useCallback(
     (path: string) => {
-      if (activeTab?.terminal) {
-        const next = createSessionTab(path, { sort: sortState });
-        const session = useStore.getState();
-        session.updateSession({ tabs: [...session.tabs, next], activeTabId: next.id });
-        return next.id;
-      }
-      if (activeTabId) return activeTabId;
-      const fallback = tabs[0];
-      if (fallback) {
-        setActiveTabId(fallback.id);
-        return fallback.id;
-      }
-      const nextTab = createSessionTab(path, { sort: sortState, search: searchValue });
-      emptyTabIdsRef.current.delete(nextTab.id);
-      setTabs([nextTab]);
-      setActiveTabId(nextTab.id);
-      return nextTab.id;
+      if (activeTab && !activeTab.terminal) return activeTab.id;
+      const next = createSessionTab(path, { sort: sortState, search: activeTab?.terminal ? "" : searchValue });
+      const session = useStore.getState();
+      session.updateSession({ tabs: [...session.tabs, next], activeTabId: next.id });
+      return next.id;
     },
-    [activeTab, activeTabId, searchValue, setActiveTabId, setTabs, sortState, tabs, useStore],
+    [activeTab, searchValue, sortState, useStore],
   );
 
   const performNavigation = useCallback(

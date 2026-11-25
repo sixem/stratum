@@ -14,6 +14,7 @@ export const DEFAULT_TAB_STATE = {
 // Both panes use the same end-of-strip behavior for previous and next shortcuts.
 export const getAdjacentTab = (tabs: readonly Tab[], activeId: string | null, direction: -1 | 1, wrap: boolean) => {
   const index = tabs.findIndex((tab) => tab.id === activeId);
+  if (activeId === null) return direction === 1 ? tabs[0] : tabs[tabs.length - 1];
   if (index < 0 || tabs.length < 2) return undefined;
   const next = index + direction;
   return tabs[wrap ? (next + tabs.length) % tabs.length : next];

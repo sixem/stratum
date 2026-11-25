@@ -139,7 +139,7 @@ export const useAppKeybinds = ({
   const handleAdjacentTab = useCallback(
     (direction: -1 | 1) => {
       if (!canHandleGlobalKeybind()) return false;
-      if (!activeTabId || tabs.length < 2) return false;
+      if (!tabs.length || (activeTabId && tabs.length < 2)) return false;
       const target = getAdjacentTab(tabs, activeTabId, direction, useSettingsStore.getState().wrapTabNavigation);
       if (!target) return true;
       // Move focus before the terminal input is detached so subsequent keys stay in this pane.

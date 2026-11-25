@@ -1,5 +1,6 @@
 // Inspect an import completely before preparing any changes to the running app.
 import { SETTINGS_STORAGE_VERSION } from "@/constants";
+import { clampVolume, DEFAULT_PREVIEW_VOLUME } from "@/lib/previewVolume";
 import { readBatchRenamePresets } from "../batchRenamePresetStore";
 import { coerceQuickMovePreferences } from "../quickMovePreferences";
 import { coerceRememberedViewMode, coerceSettings, normalizeLegacySettings } from "../settings.normalize";
@@ -81,6 +82,7 @@ const importProfile = (value: unknown, ids: ReadonlySet<string>): BackupProfile 
   const renamePresets = readBatchRenamePresets(value.renamePresets);
   if (renamePresets.length !== value.renamePresets.length) return invalidBackup();
   const rawVolume = previewPreferences.volume;
+  const audioVolume = previewPreferences.audioVolume;
   const storedSettings = normalizeLegacySettings(value.settings as Partial<Settings>, settingsVersion);
   const { ffmpegPath: _toolPath, ...settings } = coerceSettings({
     ...storedSettings,
@@ -101,7 +103,8 @@ const importProfile = (value: unknown, ids: ReadonlySet<string>): BackupProfile 
       showBreadcrumbs: panePreferences.showBreadcrumbs === true,
     },
     previewPreferences: {
-      volume: typeof rawVolume === "number" && Number.isFinite(rawVolume) ? Math.min(1, Math.max(0, rawVolume)) : 0.1,
+      volume: typeof rawVolume === "number" && Number.isFinite(rawVolume) ? clampVolume(rawVolume) : DEFAULT_PREVIEW_VOLUME,
+      audioVolume: typeof audioVolume === "number" && Number.isFinite(audioVolume) ? clampVolume(audioVolume) : undefined,
       stripOpen: previewPreferences.stripOpen !== false,
     },
   };

@@ -47,7 +47,7 @@ impl TransferJobPaths {
             }
             TransferOperation::Delete { paths } | TransferOperation::Trash { paths } => {
                 for path in paths {
-                    claims.add_path(Path::new(path.trim()));
+                    claims.add_path(Path::new(path));
                 }
             }
             TransferOperation::Conversion { items } => {

@@ -14,6 +14,7 @@ export class DirectorySync {
   private reported = "";
   private directory?: string;
   private pendingDirectory?: string;
+  private parkedLocation?: TerminalLocation;
   private owner?: { pane: LinkedPane; id: string };
 
   constructor(private readonly key: string, private readonly showError: (message: string) => void) {}
@@ -25,7 +26,11 @@ export class DirectorySync {
   receive(message: TerminalLocation) {
     if (message.path) this.rememberDirectory(message.path);
     const owner = this.currentOwner();
-    if (!owner?.tab.split?.linkDirectory || message.version !== this.version) return;
+    if (!owner) {
+      this.parkedLocation = message;
+      return;
+    }
+    if (!owner.tab.split?.linkDirectory || message.version !== this.version) return;
     if (message.error) {
       this.failLink(message.version, message.error);
       return;
@@ -42,7 +47,12 @@ export class DirectorySync {
     this.persistDirectory();
     const target = tab.split?.linkDirectory ? tab.path : "";
     const key = folderPathKey(target);
-    if (this.folder === key) return;
+    const parkedLocation = this.parkedLocation;
+    this.parkedLocation = undefined;
+    if (this.folder === key) {
+      if (parkedLocation) this.receive(parkedLocation);
+      return;
+    }
     this.folder = key;
     // A shell-driven folder change has already put the terminal at this location.
     if (key && key === this.reported) return;

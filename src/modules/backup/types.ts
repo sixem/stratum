@@ -21,7 +21,7 @@ export type BackupProfile = {
   unnamedRecentMoves: readonly string[];
   unnamedQuickMove?: QuickMovePreferences;
   panePreferences: { showBreadcrumbs: boolean };
-  previewPreferences: { volume: number; stripOpen: boolean };
+  previewPreferences: { volume: number; audioVolume?: number; stripOpen: boolean };
 };
 
 type BackupHeader = {

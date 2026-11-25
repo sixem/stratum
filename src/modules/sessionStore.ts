@@ -4,6 +4,7 @@ import type { SortDir, SortKey, SortState, Tab, ViewMode } from "@/types";
 import type { FolderTab, TabHistory, TerminalSession, TerminalTab } from "@/types/tabs";
 import { createTab, DEFAULT_SORT, getDefaultSortDir } from "@/lib";
 import { readTabContent, selectRestoredFolder } from "@/lib/tabRestore";
+import type { WorkspaceShells } from "./workspaceTerminals";
 import { resolveDefaultViewMode, useSettingsStore } from "./settings.store";
 import {
   coerceTabAutoColumns, coerceTabGridSize, fillTabGridSizes, getDefaultTabGridSize, getTabGridSizeOnEnable,
@@ -75,21 +76,24 @@ export const createTerminalSessionTab = (shell: string | TerminalSession): Termi
 
 const restoreFolderSelection = (session: SessionState): SessionState => ({
   ...session,
-  ...selectRestoredFolder(session, () => createSessionTab("")),
+  ...selectRestoredFolder(session),
 });
 
 // A restore is a new visit, even if it opens the same saved tab.
-export const prepareSessionRestore = (layout: SessionState, gridSize: TabGridSize | undefined): SessionState => {
+export const prepareSessionRestore = (layout: SessionState, gridSize: TabGridSize | undefined, shells?: WorkspaceShells): SessionState => {
   const activeIndex = layout.tabs.findIndex((tab) => tab.id === layout.activeTabId);
   const tabs = fillTabGridSizes(layout.tabs, gridSize)
     .map<Tab>((tab) => {
       const id = createTab(tab.path).id;
       const copy = { id, sort: { ...tab.sort } };
-      if (tab.kind === "terminal") return { ...tab, ...copy, terminal: { ...tab.terminal, key: id } };
-      const split = tab.split && { ...tab.split, terminal: { ...tab.split.terminal, key: id } };
+      if (tab.kind === "terminal") return { ...tab, ...copy, terminal: { ...tab.terminal, key: shells?.get(tab.terminal) ?? id } };
+      const split = tab.split && { ...tab.split, terminal: { ...tab.split.terminal, key: shells?.get(tab.split.terminal) ?? id } };
       return { ...tab, ...copy, split };
     });
-  return restoreFolderSelection({ tabs, activeTabId: tabs[activeIndex]?.id ?? null, recentJumps: [...layout.recentJumps] });
+  const session = { tabs, activeTabId: tabs[activeIndex]?.id ?? null, recentJumps: [...layout.recentJumps] };
+  const active = layout.tabs[activeIndex];
+  const shell = active?.terminal ?? active?.split?.terminal;
+  return shell && shells?.has(shell) ? session : restoreFolderSelection(session);
 };
 
 const coerceViewMode = (value: unknown): ViewMode => {

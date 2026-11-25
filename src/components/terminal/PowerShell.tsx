@@ -5,6 +5,8 @@ import "@xterm/xterm/css/xterm.css";
 import "./terminal.css";
 import { useBottomSessionStore, useSessionStore } from "@/modules/sessionStore";
 import { useSettingsStore } from "@/modules/settings.store";
+import { useWorkspaceStore } from "@/modules/workspaceStore";
+import { isParkedShell, liveShellKeys } from "@/modules/workspaceTerminals";
 import { terminalFontStack } from "@/modules/terminalFonts";
 import { DEFAULT_TERMINAL_THEME } from "@/modules/terminalThemes";
 import type { Tab } from "@/types";
@@ -222,8 +224,9 @@ function reconcileSessions() {
       }
     }
     for (const [key, shell] of sessions) {
-      if (live.has(key)) continue;
+      if (live.has(key) || isParkedShell(key)) continue;
       sessions.delete(key);
+      liveShellKeys.delete(key);
       shell.dispose();
     }
   });
@@ -231,6 +234,7 @@ function reconcileSessions() {
 for (const store of [useSessionStore, useBottomSessionStore]) {
   store.subscribe((next, previous) => { if (next.tabs !== previous.tabs) reconcileSessions(); });
 }
+useWorkspaceStore.subscribe(reconcileSessions);
 
 export default function PowerShell({ terminal, autoFocus }: { terminal: TerminalSession; autoFocus: boolean }) {
   const host = useRef<HTMLDivElement>(null);
@@ -240,6 +244,7 @@ export default function PowerShell({ terminal, autoFocus }: { terminal: Terminal
     const container = host.current!;
     const shell = sessions.get(launch.key) ?? new Shell(container, launch);
     sessions.set(launch.key, shell);
+    liveShellKeys.add(launch.key);
     shell.attach(container, autoFocus);
     const unsubscribeAppearance = useSettingsStore.subscribe((next, previous) => {
       if (next.terminalTheme !== previous.terminalTheme) shell.updateTheme();

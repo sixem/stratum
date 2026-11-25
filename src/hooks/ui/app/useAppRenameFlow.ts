@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { EntryContextTarget, FileEntry, RenameCommitReason } from "@/types";
 import { applyHiddenExtension, getSelectionTargets } from "@/lib";
-import type { BatchRenameRequest } from "@/lib/batchRename";
+import type { RenameRequest } from "@/hooks/domain/filesystem/fileManager.types";
 import { useBatchRenameStore } from "@/modules/batchRenameStore";
 
 type UseAppRenameFlowOptions = {
@@ -13,9 +13,9 @@ type UseAppRenameFlowOptions = {
   selected: Set<string>;
   viewParentPath: string | null;
   gridNameHideExtension: boolean;
-  renameEntry: (path: string, nextName: string) => Promise<string | null | undefined>;
+  renameEntry: (path: string, nextName: string, options: Pick<RenameRequest, "updateFolderLocations">) => Promise<string | null | undefined>;
   renameEntries: (
-    renames: BatchRenameRequest[],
+    renames: RenameRequest[],
   ) => Promise<{ renamed: Map<string, string> } | null | undefined>;
   setSelection: (paths: string[], anchor?: string) => void;
 };
@@ -75,7 +75,9 @@ export const useAppRenameFlow = ({
         if (renameCommitRef.current) throw new Error("Another rename is already in progress.");
         renameCommitRef.current = true;
         try {
-          const result = await renameEntries(requests);
+          const result = await renameEntries(requests.map(request => ({
+            ...request, updateFolderLocations: entryByPath.get(request.path)?.isDir,
+          })));
           if (!result) throw new Error("Another rename is already in progress.");
           if (result.renamed.size && viewVisit.current) {
             setRenameSelection({
@@ -110,7 +112,7 @@ export const useAppRenameFlow = ({
       if (!resolvedNextName || resolvedNextName === originalName) return;
       const shouldSelect = reason === "enter";
       renameCommitRef.current = true;
-      void renameEntry(renameTarget.path, resolvedNextName)
+      void renameEntry(renameTarget.path, resolvedNextName, { updateFolderLocations: renameTarget.isDir })
         .then((nextPath) => {
           if (!nextPath || !shouldSelect || !viewVisit.current) return;
           setRenameSelection({ paths: [nextPath], anchor: nextPath, visit: viewVisit });

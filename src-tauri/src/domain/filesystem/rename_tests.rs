@@ -251,5 +251,14 @@ fn checks_windows_names_and_distinguishes_case_only_changes() {
         None,
     )
     .unwrap();
-    assert_eq!(Path::new(&single.path), source);
+    let actual_names = || {
+        fs::read_dir(source.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect::<Vec<_>>()
+    };
+    assert!(actual_names().contains(&"First.txt".into()));
+    assert!(!actual_names().contains(&"first.txt".into()));
+    rename_entry(single.path, "first.txt".into(), Some(single.identity.unwrap())).unwrap();
+    assert!(actual_names().contains(&"first.txt".into()));
 }

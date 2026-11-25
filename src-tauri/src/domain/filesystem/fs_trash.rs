@@ -175,11 +175,15 @@ mod tests {
     #[ignore = "uses the current Windows user's Recycle Bin for a disposable file"]
     fn recycle_undo_round_trips_a_disposable_windows_file() {
         let root = test_directory();
-        let path = root.0.join("disposable-undo.txt");
+        let sibling = root.0.join("disposable-undo.txt");
+        let path = root.0.join("disposable-undo.txt\u{a0}");
+        fs::write(&sibling, b"unselected sibling").unwrap();
         fs::write(&path, b"Stratum recycle smoke test").unwrap();
         let original = normalize_recycle_path(path.to_str().unwrap()).unwrap();
         let trashed = trash_entries(vec![original.clone()], None, None, None).unwrap();
         assert_eq!(trashed.deleted, 1, "{:?}", trashed.failures);
+        assert!(!path.exists());
+        assert_eq!(fs::read(&sibling).unwrap(), b"unselected sibling");
         let receipt = trashed
             .recycle_undo_receipt
             .expect("Windows should expose an exact recycled item");

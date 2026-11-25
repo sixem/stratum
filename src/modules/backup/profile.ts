@@ -1,5 +1,6 @@
 // Capture and apply the portable profile using the same stores as regular workspace changes.
-import { SETTINGS_STORAGE_VERSION, PREVIEW_STRIP_OPEN_KEY, PREVIEW_VOLUME_KEY } from "@/constants/settings";
+import { SETTINGS_STORAGE_VERSION, PREVIEW_STRIP_OPEN_KEY, PREVIEW_VOLUME_KEY, AUDIO_PREVIEW_VOLUME_KEY } from "@/constants/settings";
+import { DEFAULT_PREVIEW_VOLUME, readPreviewVolume } from "@/lib/previewVolume";
 import { captureWorkspaceLayout } from "@/lib/captureWorkspaceLayout";
 import { folderPathKey } from "@/lib/paths";
 import { serializeBatchRenamePresets, useBatchRenamePresetStore } from "../batchRenamePresetStore";
@@ -19,7 +20,7 @@ import { DEFAULT_SETTINGS } from "../settings.defaults";
 import { coerceSettings } from "../settings.normalize";
 import { serializeSettings, useSettingsStore } from "../settings.store";
 import { fillTabGridSizes, getDefaultTabGridSize, getTabGridSizeOnEnable } from "../tabGridSize";
-import { applyWorkspaceRestore, fillWorkspaceStateGridSizes, getWorkspaceChanges, hasCustomWorkspacePlaces, prepareWorkspaceRestore, serializeWorkspaceState, useWorkspaceStore } from "../workspaceStore";
+import { applyWorkspaceRestore, fillWorkspaceStateGridSizes, getWorkspaceChanges, hasCustomWorkspacePlaces, parkPreviousWorkspace, prepareWorkspaceRestore, serializeWorkspaceState, useWorkspaceStore } from "../workspaceStore";
 import type { Workspace, WorkspaceSession } from "../workspaceStore";
 import { makeImportedName, planBackupWorkspaceNames } from "./mergeWorkspaces";
 import type { BackupConflictPolicy } from "./mergeWorkspaces";
@@ -36,14 +37,13 @@ export type BackupImportOptions = {
 
 const readPreviewPreferences = () => {
   try {
-    const stored = globalThis.localStorage.getItem(PREVIEW_VOLUME_KEY);
-    const volume = stored === null ? 0.1 : Number(stored);
     return {
-      volume: Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 0.1,
+      volume: readPreviewVolume(PREVIEW_VOLUME_KEY),
+      audioVolume: readPreviewVolume(AUDIO_PREVIEW_VOLUME_KEY),
       stripOpen: globalThis.localStorage.getItem(PREVIEW_STRIP_OPEN_KEY) !== "false",
     };
   } catch {
-    return { volume: 0.1, stripOpen: true };
+    return { volume: DEFAULT_PREVIEW_VOLUME, audioVolume: DEFAULT_PREVIEW_VOLUME, stripOpen: true };
   }
 };
 
@@ -91,13 +91,13 @@ export const isUnusedBackupProfile = () => {
   const live = captureWorkspaceLayout();
   const { workspaces, previous } = useWorkspaceStore.getState();
   const { showBreadcrumbs } = useBottomPaneStore.getState();
-  const { volume, stripOpen } = readPreviewPreferences();
+  const { volume, audioVolume, stripOpen } = readPreviewPreferences();
   return !workspaces.length && !previous && !useBatchRenamePresetStore.getState().presets.length
     && !getRecentMoveHistory().size && !getQuickMoveWorkspacePreferences().size
-    && ![...live.main.tabs, ...live.bottom.tabs].some(({ path }) => path)
+    && ![...live.main.tabs, ...live.bottom.tabs].some(tab => tab.path || tab.terminal)
     && !live.main.recentJumps.length && !live.bottom.recentJumps.length && !hasCustomWorkspacePlaces(live.places)
     && !live.pane.open && live.pane.height === DEFAULT_BOTTOM_PANE_LAYOUT.height
-    && !showBreadcrumbs && volume === 0.1 && stripOpen
+    && !showBreadcrumbs && volume === DEFAULT_PREVIEW_VOLUME && audioVolume === DEFAULT_PREVIEW_VOLUME && stripOpen
     && JSON.stringify(coerceSettings(useSettingsStore.getState())) === JSON.stringify(coerceSettings(DEFAULT_SETTINGS));
 };
 
@@ -213,9 +213,13 @@ export const applyStratumBackup = (backup: StratumBackup, options: BackupImportO
       [PREVIEW_VOLUME_KEY, String(preferences.previewPreferences.volume)],
       [PREVIEW_STRIP_OPEN_KEY, String(preferences.previewPreferences.stripOpen)],
     );
+    if (preferences.previewPreferences.audioVolume !== undefined) {
+      records.push([AUDIO_PREVIEW_VOLUME_KEY, String(preferences.previewPreferences.audioVolume)]);
+    }
   }
   writeBackupRecords(records);
 
+  if (restored && previous?.layout === live) parkPreviousWorkspace(next);
   useWorkspaceStore.setState(next);
   publishRecentMoveHistory(recent);
   publishQuickMovePreferences(quickMove);

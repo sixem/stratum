@@ -70,8 +70,7 @@ fn legacy_delete_entries(
 
         let processed = index;
         let completed = index + 1;
-        let trimmed = path.trim();
-        if trimmed.is_empty() {
+        if path.trim().is_empty() {
             report.skipped += 1;
             emit_delete_progress(&mut on_progress, completed, total, None, None);
             continue;
@@ -81,24 +80,22 @@ fn legacy_delete_entries(
             &mut on_progress,
             processed,
             total,
-            Some(trimmed.to_string()),
+            Some(path.clone()),
             None,
         );
 
-        let target = PathBuf::from(trimmed);
+        let target = PathBuf::from(&path);
         let metadata = match fs::metadata(&target) {
             Ok(value) => value,
             Err(err) => {
-                report
-                    .failures
-                    .push(format!("{}: {}", trimmed, err.to_string()));
+                report.failures.push(format!("{path}: {err}"));
                 emit_delete_progress(
                     &mut on_progress,
                     completed,
                     total,
                     None,
                     Some(super::CompletedTransferItem {
-                        path: trimmed.to_string(),
+                        path,
                         source_removed: false,
                     }),
                 );
@@ -116,9 +113,7 @@ fn legacy_delete_entries(
         let source_removed = result.is_ok();
         match result {
             Ok(_) => report.deleted += 1,
-            Err(err) => report
-                .failures
-                .push(format!("{}: {}", trimmed, err.to_string())),
+            Err(err) => report.failures.push(format!("{path}: {err}")),
         }
         emit_delete_progress(
             &mut on_progress,
@@ -126,7 +121,7 @@ fn legacy_delete_entries(
             total,
             None,
             Some(super::CompletedTransferItem {
-                path: trimmed.to_string(),
+                path,
                 source_removed,
             }),
         );

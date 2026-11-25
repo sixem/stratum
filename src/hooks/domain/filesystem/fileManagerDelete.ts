@@ -36,7 +36,7 @@ const isNativeRecycleDeleteEnvironment = () => {
 };
 
 const normalizeDeletePaths = (paths: string[]) =>
-  Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
+  Array.from(new Set(paths.filter((path) => path.trim().length > 0)));
 
 export const useFileManagerDelete = ({
   deleteInFlightRef,
