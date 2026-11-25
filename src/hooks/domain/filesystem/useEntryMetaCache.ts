@@ -3,10 +3,10 @@ import { startTransition, useCallback, useEffect, useRef, useState } from "react
 import type { MutableRefObject } from "react";
 import { statEntries } from "@/api";
 import { META_CACHE_LIMIT, META_FLUSH_INTERVAL_MS } from "@/constants";
+import { PathSnapshot } from "@/lib/pathSnapshot";
 import { folderPathKey, getParentPath } from "@/lib/paths";
 import type { EntryMeta, FileEntry } from "@/types";
 import { EntryMetaRefreshQueue } from "./entryMetaRefreshQueue";
-import { EntryMetaSnapshot } from "./entryMetaSnapshot";
 import { getInlineEntryMeta } from "./fileManager.query";
 import type { FileManagerDebug, MetaRequestOptions } from "./fileManager.types";
 
@@ -20,7 +20,7 @@ type UseEntryMetaCacheOptions = {
 };
 
 export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions) => {
-  const [entryMeta, setEntryMeta] = useState(() => new EntryMetaSnapshot());
+  const [entryMeta, setEntryMeta] = useState(() => new PathSnapshot<EntryMeta>());
   const entryMetaRef = useRef(entryMeta);
   const pendingMetaRef = useRef(new Map<string, symbol>());
   const metaCacheRef = useRef<Map<string, EntryMeta>>(new Map());
@@ -144,7 +144,7 @@ export const useEntryMetaCache = ({ loadIdRef, perf }: UseEntryMetaCacheOptions)
         for (const meta of next.values()) storeEntryMeta(meta, false);
         trimMetaCache(cache);
       }
-      const snapshot = new EntryMetaSnapshot(next);
+      const snapshot = new PathSnapshot(next);
       entryMetaRef.current = snapshot;
       // Treat large metadata refreshes as non-urgent UI work.
       startTransition(() => {

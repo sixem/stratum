@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { requestThumbnails, toThumbnailUrl } from "@/api";
 import { getExtension, getPathName, isSvgLikeExtension, makeDebug } from "@/lib";
+import { PathSnapshot } from "@/lib/pathSnapshot";
 import type {
   ThumbnailEvent, ThumbnailRequest, ThumbnailRequestOptions, ThumbnailScope,
 } from "@/types";
@@ -26,15 +27,6 @@ const THUMB_EVENT_FLUSH_MS = 80;
 const RETRY_QUERY = "?retry=1";
 const MAX_THUMB_RETRIES = 256;
 const perf = makeDebug("perf:thumbs");
-
-const mergeThumbnailUpdates = (previous: Map<string, string>, updates: Map<string, string>) => {
-  let next: Map<string, string> | undefined;
-  for (const [path, url] of updates) {
-    if (previous.get(path) === url) continue;
-    (next ??= new Map(previous)).set(path, url);
-  }
-  return next ?? previous;
-};
 
 // Deduplicate thumbnail requests by path while preserving any known metadata.
 const normalizeRequests = (requests: ThumbnailRequest[]) => {
@@ -71,7 +63,7 @@ export const useThumbnails = (
   enabled: boolean,
   resetKey?: string,
 ) => {
-  const [thumbnails, setThumbnails] = useState(() => new Map<string, string>());
+  const [thumbnails, setThumbnails] = useState(() => new PathSnapshot<string>());
   // Both panes may need the same queued render. Deduplicate only within a visit
   // so each view can register its interest with the backend.
   const pending = useRef(new WeakMap<ThumbnailScope, Set<string>>());
@@ -113,7 +105,7 @@ export const useThumbnails = (
     if (updates.size === 0) return;
     pendingUpdatesRef.current = new Map();
     startTransition(() => {
-      setThumbnails((prev) => mergeThumbnailUpdates(prev, updates));
+      setThumbnails((prev) => prev.withUpdates(updates));
     });
   }, []);
 
@@ -139,7 +131,7 @@ export const useThumbnails = (
     retriedUrls.current.clear();
     pendingUpdatesRef.current.clear();
     clearFlushTimer();
-    setThumbnails(new Map());
+    setThumbnails(new PathSnapshot());
   }, [clearFlushTimer, optionsKey, otherSvgThemeKey]);
 
   useEffect(() => {
@@ -151,7 +143,7 @@ export const useThumbnails = (
     retriedUrls.current.clear();
     pendingUpdatesRef.current.clear();
     clearFlushTimer();
-    setThumbnails(new Map());
+    setThumbnails(new PathSnapshot());
   }, [clearFlushTimer, resetKey]);
 
   useEffect(() => {
@@ -258,7 +250,7 @@ export const useThumbnails = (
           updates.set(hit.path, resolveThumbnailUrl(hit.path, hit.thumbPath));
         }
         startTransition(() => {
-          setThumbnails((prev) => mergeThumbnailUpdates(prev, updates));
+          setThumbnails((prev) => prev.withUpdates(updates));
         });
       } catch {
         // Ignore thumbnail request errors; entries will retry on next view update.

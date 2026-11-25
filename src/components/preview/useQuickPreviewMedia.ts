@@ -3,7 +3,7 @@
 // derived-state builder.
 import { useMemo, useState } from "react";
 import { useSettingsStore } from "@/modules";
-import type { EntryMeta } from "@/types";
+import type { EntryMeta, ThumbnailLookup } from "@/types";
 import type { RefObject } from "react";
 import { buildQuickPreviewDerivedState } from "./quickPreviewDerivedState";
 import type { PreviewMediaKind } from "./quickPreviewDerivedState";
@@ -16,7 +16,7 @@ type UseQuickPreviewMediaOptions = {
   path: string | null;
   kind: PreviewMediaKind;
   meta?: EntryMeta | null;
-  thumbnails: Map<string, string>;
+  thumbnails: ThumbnailLookup;
   zoom: number;
   mediaRef: RefObject<HTMLMediaElement | null>;
   resetViewport: () => void;

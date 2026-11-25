@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { listFolderThumbSamplesBatch } from "@/api";
 import { normalizePath } from "@/lib";
 import { getDirectoryChildVersion } from "@/modules";
-import type { ThumbnailRequest } from "@/types";
+import type { ThumbnailLookup, ThumbnailRequest } from "@/types";
 
 type CachedFolderSample = {
   samplePath: string | null;
@@ -26,7 +26,7 @@ type UseGridFolderSamplesOptions = {
   thumbnailVideos: boolean;
   thumbnailsEnabled: boolean;
   thumbResetKey?: string;
-  thumbSource: Map<string, string>;
+  thumbSource: ThumbnailLookup;
   directoryChildRevision: number;
 };
 

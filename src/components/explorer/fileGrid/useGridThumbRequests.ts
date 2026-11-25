@@ -13,7 +13,7 @@ import { getExtension, makeDebug } from "@/lib";
 import type { EntryItem } from "@/lib";
 import { THUMB_INTERACTION_COOLDOWN_MS, THUMB_TYPING_PAUSE_MS } from "@/constants";
 import { useDirectoryChildStateRevision } from "@/modules";
-import type { EntryMeta, EntryMetaLookup, ThumbnailRequest } from "@/types";
+import type { EntryMeta, EntryMetaLookup, ThumbnailLookup, ThumbnailRequest } from "@/types";
 import { useGridDisplayMeta } from "./useGridDisplayMeta";
 import type { GridDisplayMeta } from "./useGridDisplayMeta";
 import { useGridFolderSamples } from "./useGridFolderSamples";
@@ -27,7 +27,7 @@ type UseGridThumbRequestsOptions = {
   entryMeta: EntryMetaLookup;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
-  thumbnails: Map<string, string>;
+  thumbnails: ThumbnailLookup;
   onRequestThumbs: (requests: ThumbnailRequest[]) => void;
   thumbResetKey?: string;
   thumbnailAppIcons: boolean;
@@ -39,7 +39,7 @@ type UseGridThumbRequestsOptions = {
 
 type GridThumbRequestsState = {
   gridMetaByPath: Map<string, GridDisplayMeta>;
-  thumbSource: Map<string, string>;
+  thumbSource: ThumbnailLookup;
   folderThumbSource: Map<string, FolderThumbnail>;
   fileIcons: Map<string, string | null>;
   executableIcons: Map<string, string | null>;
@@ -72,7 +72,7 @@ export const useGridThumbRequests = ({
   // Treat resize like scroll/typing so enrichment yields while layout is hot.
   const interactionActive = scrolling || typingActive || isResizing;
   const [thumbsSuppressed, setThumbsSuppressed] = useState(false);
-  const thumbSnapshotRef = useRef<Map<string, string>>(new Map());
+  const thumbSnapshotRef = useRef(thumbnails);
   const lastSuppressedRef = useRef(false);
   const lastPipelineLogRef = useRef("");
 

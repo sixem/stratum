@@ -42,3 +42,5 @@ export type ThumbnailHit = {
 };
 
 export type ThumbnailEvent = ThumbnailHit;
+
+export type ThumbnailLookup = Pick<ReadonlyMap<string, string>, "get" | "has">;

@@ -8,6 +8,7 @@ import {
   buildBatchRenamePreview,
   DEFAULT_BATCH_RENAME_NUMBERING,
   isBatchRenameNumberingValid,
+  prepareBatchRenameSelection,
   type BatchRenameMode,
   type BatchRenameRequest,
   type BatchRenameRule,
@@ -80,7 +81,8 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
 
   const rule = rules[mode];
   const updateRule = (next: BatchRenameRule) => setRules((current) => ({ ...current, [next.mode]: next }));
-  const rows = useMemo(() => buildBatchRenamePreview(items, rule, preserveExtensions), [items, rule, preserveExtensions]);
+  const selection = useMemo(() => prepareBatchRenameSelection(items), [items]);
+  const rows = useMemo(() => buildBatchRenamePreview(selection, rule, preserveExtensions), [selection, rule, preserveExtensions]);
   const requests = useMemo(() => rows.flatMap(({ item, nextName }) =>
     nextName !== item.name ? [{ path: item.path, nextName }] : [],
   ), [rows]);

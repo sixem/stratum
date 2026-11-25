@@ -2,8 +2,8 @@
 // The executor walks these manifests in order so it can stay predictable and
 // avoid rediscovering path kinds during the hot copy loop.
 use super::common::{
-    check_transfer_control, inspect_path, is_same_directory_copy, unique_destination,
-    TransferEntryKind,
+    check_transfer_control, inspect_path, is_same_directory_copy, transfer_entry_kind,
+    unique_destination, TransferEntryKind,
 };
 use crate::domain::filesystem::TransferControlCallback;
 use std::fs;
@@ -147,16 +147,13 @@ fn walk_directory_entries(
         let entry = entry.map_err(|err| err.to_string())?;
         let child_src = entry.path();
         let child_dest = dest_dir.map(|dir| dir.join(entry.file_name()));
-        let inspection = inspect_path(&child_src)?;
+        // Windows already supplies attributes and size during enumeration.
+        let metadata = entry.metadata().map_err(|err| err.to_string())?;
+        let kind = transfer_entry_kind(&child_src, &metadata);
 
-        visit(
-            &child_src,
-            child_dest.as_deref(),
-            inspection.kind,
-            &inspection.metadata,
-        );
+        visit(&child_src, child_dest.as_deref(), kind, &metadata);
 
-        if inspection.kind.is_traversable_directory() {
+        if kind.is_traversable_directory() {
             walk_directory_entries(&child_src, child_dest.as_deref(), visit, on_control)?;
         }
     }
@@ -272,5 +269,37 @@ mod tests {
             .entries
             .iter()
             .any(|entry| entry.destination == destination_root.join("nested").join("beta.txt")));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn directory_enumeration_keeps_junctions_as_leaf_entries() {
+        let temp = TestDir::new();
+        let source = temp.path().join("source");
+        let external = temp.path().join("external");
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&external).unwrap();
+        fs::write(source.join("file.txt"), b"abc").unwrap();
+        fs::write(external.join("outside.txt"), b"outside").unwrap();
+        let status = std::process::Command::new("cmd.exe")
+            .current_dir(temp.path())
+            .args(["/d", "/c", "mklink", "/j", r"source\alias", "external"])
+            .output()
+            .unwrap();
+        assert!(status.status.success(), "{status:?}");
+
+        let manifest = build_manifest_root(&source, &temp.path().join("dest"), &mut None).unwrap();
+        let estimate = estimate_manifest_work(&source, &mut None).unwrap();
+        let junction = manifest
+            .entries
+            .iter()
+            .find(|entry| entry.source == source.join("alias"))
+            .unwrap();
+
+        assert_eq!(junction.kind, inspect_path(&junction.source).unwrap().kind);
+        assert_eq!(junction.bytes_total, 0);
+        assert_eq!(manifest.entries.len(), 3);
+        assert_eq!((manifest.file_count, manifest.byte_count), (2, 3));
+        assert_eq!((estimate.file_count, estimate.byte_count), (2, 3));
     }
 }

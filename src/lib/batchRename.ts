@@ -1,7 +1,7 @@
 // Compute batch rename previews without mutating entries or reading the filesystem.
 import type { EntryContextTarget } from "@/types";
-import { splitNameExtension } from "./fileName";
-import { getParentPath, normalizePath } from "./paths";
+import { splitNameExtension } from "./fileName.ts";
+import { getParentPath, normalizePath } from "./paths.ts";
 
 export type BatchRenameRequest = { path: string; nextName: string };
 export type BatchRenameMode = "number" | "replace" | "affix";
@@ -91,8 +91,34 @@ const numberName = (base: string, number: number, numbering: BatchRenameNumberin
   return before ? `${digits}${separator}${base}` : `${base}${separator}${digits}`;
 };
 
+type PreparedBatchRenameItem = {
+  item: EntryContextTarget;
+  parentPrefix: string;
+  nameKey: string;
+  stem: string;
+  dotExtension: string;
+};
+
+type BatchRenameSelection = {
+  entries: readonly PreparedBatchRenameItem[];
+  sourcePaths: ReadonlyMap<string, string>;
+};
+
+// Prepare the dialog's selection once so editing a rule only evaluates new names.
+export const prepareBatchRenameSelection = (items: readonly EntryContextTarget[]): BatchRenameSelection => {
+  const sourcePaths = new Map<string, string>();
+  const entries = items.map((item) => {
+    const parentPrefix = `${normalizePath(getParentPath(item.path) ?? "")}\\`;
+    const nameKey = item.name.toLowerCase();
+    const parts = item.isDir ? null : splitNameExtension(item.name);
+    sourcePaths.set(parentPrefix + nameKey, item.path);
+    return { item, parentPrefix, nameKey, stem: parts?.base ?? item.name, dotExtension: parts?.dotExtension ?? "" };
+  });
+  return { entries, sourcePaths };
+};
+
 export const buildBatchRenamePreview = (
-  items: readonly EntryContextTarget[],
+  { entries, sourcePaths }: BatchRenameSelection,
   rule: BatchRenameRule,
   preserveExtensions: boolean,
 ): BatchRenamePreviewRow[] => {
@@ -101,63 +127,61 @@ export const buildBatchRenamePreview = (
     : null;
   const numbering = rule.mode === "number" ? rule.numbering ?? DEFAULT_BATCH_RENAME_NUMBERING : null;
   if (numbering && !isBatchRenameNumberingValid(numbering)) {
-    return items.map((item) => ({ item, nextName: item.name }));
+    return entries.map(({ item }) => ({ item, nextName: item.name }));
   }
-  const keys = (path: string, name: string) =>
-    `${normalizePath(getParentPath(path) ?? "")}\\${name.toLowerCase()}`;
-  const sources = new Map(items.map((item) => [keys(item.path, item.name), item.path]));
-  const destinations = new Map<string, number>();
+  const baseName = rule.mode === "number" && rule.baseName.trim() ? rule.baseName : null;
+  const numberedFile = baseName && !preserveExtensions ? splitNameExtension(baseName) : null;
+  const destinations = new Map<string, BatchRenamePreviewRow>();
 
-  const rows = items.map<BatchRenamePreviewRow>((item, index) => {
-    const source = preserveExtensions && !item.isDir
-      ? splitNameExtension(item.name)
-      : { base: item.name, dotExtension: null };
+  return entries.map<BatchRenamePreviewRow>(({ item, parentPrefix, nameKey, stem, dotExtension }, index) => {
+    const sourceName = preserveExtensions ? stem : item.name;
+    const preservedExtension = preserveExtensions ? dotExtension : "";
     let nextName = item.name;
     switch (rule.mode) {
       case "number": {
-        if (!rule.baseName.trim() || !numbering) break;
-        const target = !preserveExtensions && !item.isDir
-          ? splitNameExtension(rule.baseName)
-          : { base: rule.baseName, dotExtension: source.dotExtension };
+        if (!baseName || !numbering) break;
+        const fileName = item.isDir ? null : numberedFile;
+        const targetBase = fileName?.base ?? baseName;
+        const targetExtension = fileName?.dotExtension ?? preservedExtension;
         const offset = numbering.numberFirst ? index : index - 1;
         const number = numbering.start + offset * numbering.step;
         if (offset >= 0 && !Number.isSafeInteger(number)) {
           return { item, nextName: item.name, error: "The sequence exceeds the supported number range." };
         }
-        const base = offset < 0 ? target.base : numberName(target.base, number, numbering);
-        nextName = base + (target.dotExtension ?? "");
+        const base = offset < 0 ? targetBase : numberName(targetBase, number, numbering);
+        nextName = base + targetExtension;
         break;
       }
       case "replace":
         if (pattern) {
-          nextName = replaceMatch(source.base, pattern, rule) + (source.dotExtension ?? "");
+          nextName = replaceMatch(sourceName, pattern, rule) + preservedExtension;
         }
         break;
       case "affix":
-        nextName = rule.prefix + source.base + rule.suffix + (source.dotExtension ?? "");
+        nextName = rule.prefix + sourceName + rule.suffix + preservedExtension;
         break;
     }
 
-    const row = { item, nextName };
+    const row: BatchRenamePreviewRow = { item, nextName };
     if (nextName === item.name) return row;
     const error = validateName(nextName);
     if (error) return { ...row, error };
-    const key = keys(item.path, nextName);
-    destinations.set(key, (destinations.get(key) ?? 0) + 1);
-    return row;
-  });
-
-  for (const row of rows) {
-    if (row.error || row.nextName === row.item.name) continue;
-    const key = keys(row.item.path, row.nextName);
-    const occupant = sources.get(key);
-    if ((destinations.get(key) ?? 0) > 1) {
+    const nextNameKey = nextName.toLowerCase();
+    const key = parentPrefix + nextNameKey;
+    const previous = destinations.get(key);
+    if (previous) {
       row.error = "Multiple items would get this name.";
-    } else if (occupant && occupant !== row.item.path) {
+      // A shared destination takes precedence over a case-only rename or source collision.
+      previous.error = row.error;
+      return row;
+    }
+    destinations.set(key, row);
+    const occupant = sourcePaths.get(key);
+    if (occupant && occupant !== item.path) {
       row.error = "Another selected item already has this name.";
-    } else if (row.nextName.toLowerCase() === row.item.name.toLowerCase()) {
+    } else if (nextNameKey === nameKey) {
       row.error = "This batch cannot change only letter case.";
     }
-  }
-  return rows;
+    return row;
+  });
 };

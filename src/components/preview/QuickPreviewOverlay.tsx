@@ -1,8 +1,8 @@
 // Full-screen media preview overlay composed from focused hooks and view blocks.
 import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { PREVIEW_STRIP_OPEN_KEY } from "@/constants/settings";
-import { getFileKind, getPathName, isPreviewableEntry, normalizePath } from "@/lib";
-import type { EntryMeta, EntryMetaLookup, FileEntry, RequestScopedThumbnails } from "@/types";
+import { getFileKind, getPathName, isPreviewableEntry } from "@/lib";
+import type { EntryMeta, EntryMetaLookup, FileEntry, RequestScopedThumbnails, ThumbnailLookup } from "@/types";
 import { LoadingIndicator } from "@/components/primitives/LoadingIndicator";
 import { useSettingsStore } from "@/modules";
 import { QuickPreviewFooter } from "./QuickPreviewFooter";
@@ -13,6 +13,7 @@ import { PreviewError } from "./PreviewError";
 import { PreviewStage } from "./PreviewStage";
 import { useQuickPreviewInput } from "./useQuickPreviewInput";
 import { useQuickPreviewMedia } from "./useQuickPreviewMedia";
+import { createPreviewPositionLookup } from "./previewPosition";
 
 const readPreviewStripOpen = () => {
   try {
@@ -28,7 +29,7 @@ export type QuickPreviewOverlayProps = {
   meta?: EntryMeta | null;
   items: FileEntry[];
   entryMeta: EntryMetaLookup;
-  thumbnails: Map<string, string>;
+  thumbnails: ThumbnailLookup;
   thumbnailsEnabled: boolean;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   onRequestThumbs: RequestScopedThumbnails;
@@ -64,11 +65,12 @@ const QuickPreviewOverlayContent = ({
   const fileKind = getFileKind(getPathName(path));
   const kind = fileKind === "audio" || fileKind === "video" ? fileKind : "image";
   const playable = kind !== "image";
-  const activePathKey = useMemo(() => normalizePath(path), [path]);
   const previewItems = useMemo(
     () => items.filter((entry) => isPreviewableEntry(entry, includeAudio)),
     [includeAudio, items],
   );
+  const getPreviewPosition = useMemo(() => createPreviewPositionLookup(previewItems), [previewItems]);
+  const activePreviewIndex = useMemo(() => getPreviewPosition(path), [getPreviewPosition, path]);
 
   const {
     containerRef,
@@ -91,6 +93,7 @@ const QuickPreviewOverlayContent = ({
     playable,
     stripOpen,
     previewItems,
+    activeIndex: activePreviewIndex,
     activePath: path,
     onSelectPreview,
     smartTabJump,
@@ -108,11 +111,6 @@ const QuickPreviewOverlayContent = ({
     resetViewport,
     fitMediaToViewport,
   });
-  const activePreviewIndex = useMemo(() => {
-    const strictIndex = previewItems.findIndex((entry) => entry.path === path);
-    if (strictIndex >= 0) return strictIndex;
-    return previewItems.findIndex((entry) => normalizePath(entry.path) === activePathKey);
-  }, [activePathKey, path, previewItems]);
   const canGoPreviewBack = activePreviewIndex > 0;
   const canGoPreviewForward = activePreviewIndex >= 0 && activePreviewIndex < previewItems.length - 1;
   const showPreviewNavigation = previewItems.length > 1;
@@ -217,7 +215,7 @@ const QuickPreviewOverlayContent = ({
           <QuickPreviewStrip
             open={open}
             items={previewItems}
-            activePath={path}
+            activeIndex={activePreviewIndex}
             entryMeta={entryMeta}
             thumbnails={thumbnails}
             thumbnailsEnabled={thumbnailsEnabled}

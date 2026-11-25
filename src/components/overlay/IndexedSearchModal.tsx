@@ -110,6 +110,7 @@ export const IndexedSearchModal = ({ menuActions, preview, previewOpen, onOpenGa
   } = useIndexedSearchSelection({
     driveStatuses,
     open,
+    visible,
     results,
     resultIndexes,
     refreshedAnchorPath: scrollRestore?.path,

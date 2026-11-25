@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { FileEntry } from "@/types";
-import { isEditableElement, normalizePath } from "@/lib";
+import { isEditableElement } from "@/lib";
 
 type DragState = {
   active: boolean;
@@ -18,6 +18,7 @@ type UseQuickPreviewInputOptions = {
   playable: boolean;
   stripOpen: boolean;
   previewItems: FileEntry[];
+  activeIndex: number;
   activePath: string;
   onSelectPreview: (path: string) => void;
   smartTabJump: boolean;
@@ -42,6 +43,7 @@ export const useQuickPreviewInput = ({
   playable,
   stripOpen,
   previewItems,
+  activeIndex,
   activePath,
   onSelectPreview,
   smartTabJump,
@@ -191,13 +193,6 @@ export const useQuickPreviewInput = ({
       if (isEditableElement(active)) return;
       if (!document.hasFocus()) return;
 
-      if (!activePath || previewItems.length === 0) return;
-      const activePathKey = normalizePath(activePath);
-      const activeIndex = previewItems.findIndex(
-        (entry) =>
-          entry.path === activePath ||
-          (activePathKey !== "" && normalizePath(entry.path) === activePathKey),
-      );
       if (activeIndex < 0) return;
 
       const delta = event.key === "ArrowRight" ? 1 : -1;
@@ -213,7 +208,7 @@ export const useQuickPreviewInput = ({
 
     window.addEventListener("keydown", handleStripArrowNav);
     return () => window.removeEventListener("keydown", handleStripArrowNav);
-  }, [activePath, onSelectPreview, open, previewItems]);
+  }, [activeIndex, activePath, onSelectPreview, open, previewItems]);
 
   // Keep Space available to focused controls and use it for playback on the stage.
   useEffect(() => {

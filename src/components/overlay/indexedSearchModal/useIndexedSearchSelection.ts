@@ -24,6 +24,7 @@ import { updateIndexedCopySelection, type IndexedCopyModifiers, type IndexedCopy
 type UseIndexedSearchSelectionParams = {
   driveStatuses: IndexedDriveStatus[];
   open: boolean;
+  visible: boolean;
   results: IndexedPathMatch[];
   resultIndexes: IndexedResultLookup;
   refreshedAnchorPath?: string;
@@ -37,6 +38,7 @@ type UseIndexedSearchSelectionParams = {
 export const useIndexedSearchSelection = ({
   driveStatuses,
   open,
+  visible,
   results,
   resultIndexes,
   refreshedAnchorPath,
@@ -107,9 +109,11 @@ export const useIndexedSearchSelection = ({
   const selectedResultPath = selectedResult?.path;
 
   useEffect(() => {
+    // Gallery navigation keeps the selection current while the details panel is hidden.
+    if (!visible) return;
     setSelectedResultMeta(null);
     setSelectionError(null);
-    if (!open || !selectedResultPath) {
+    if (!selectedResultPath) {
       return;
     }
 
@@ -130,7 +134,7 @@ export const useIndexedSearchSelection = ({
     return () => {
       active = false;
     };
-  }, [open, selectedResultPath]);
+  }, [selectedResultPath, visible]);
 
   const handleOpenSelectedResult = useCallback(async (result: IndexedPathMatch) => {
     setSelectionError(null);

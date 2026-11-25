@@ -18,16 +18,13 @@ import type {
 } from "@/types";
 import {
   asVideoFormat,
-  buildValidationMessage,
   describeImageQuality,
   describeVideoQuality,
   findRuleFormat,
   formatQualityNormalized,
   formatVideoQualityLabel,
-  sortConversionOverrideItems,
 } from "./conversionModalConfig";
 
-const EMPTY_OVERRIDE_ITEMS: ConversionItemDraft[] = [];
 const DEFAULT_VIDEO_ENCODERS: ConversionVideoEncoder[] = ["libx264"];
 
 export type ConversionProgressTone =
@@ -42,7 +39,6 @@ export type ConversionModalDerivedState = {
   hasImageItems: boolean;
   hasQuickPrefill: boolean;
   hasVideoItems: boolean;
-  imageCount: number;
   imageQualityLabel: string;
   primaryActionDisabled: boolean;
   primaryActionIntent: "convert" | "close";
@@ -54,10 +50,8 @@ export type ConversionModalDerivedState = {
   sampleItem: ConversionItemDraft | null;
   secondaryActionLabel: string;
   selectedVideoPreset: ReturnType<typeof getVideoConvertPreset>;
-  sortedOverrideItems: ConversionItemDraft[];
   totalItems: number;
   validationMessage: string | null;
-  videoCount: number;
   videoEncoderGroups: DropdownGroup[];
   videoQualityHint: string | null;
   videoQualityLabel: string;
@@ -71,6 +65,7 @@ type BuildConversionModalDerivedStateParams = {
   runState: ConversionRunState | null;
   imageQualityValue: number;
   videoQualityInputValue: number;
+  validationMessage: string | null;
 };
 
 export const buildConversionModalDerivedState = ({
@@ -79,10 +74,8 @@ export const buildConversionModalDerivedState = ({
   runState,
   imageQualityValue,
   videoQualityInputValue,
+  validationMessage,
 }: BuildConversionModalDerivedStateParams): ConversionModalDerivedState => {
-  const sortedOverrideItems = draft
-    ? sortConversionOverrideItems(draft.items)
-    : EMPTY_OVERRIDE_ITEMS;
   const selectedVideoFormat = asVideoFormat(draft ? findRuleFormat(draft, "video") : null);
   const availableVideoEncoders = selectedVideoFormat
     ? getAllowedVideoEncoders(selectedVideoFormat)
@@ -125,13 +118,9 @@ export const buildConversionModalDerivedState = ({
   const hasQuickPrefill =
     Boolean(request?.quickTargetKind) && Boolean(request?.quickTargetFormat);
   const sampleItem = draft?.items[0] ?? null;
-  const videoCount = sortedOverrideItems.filter((item) => item.kind === "video").length;
-  const imageCount = sortedOverrideItems.filter((item) => item.kind === "image").length;
   const qualityNormalized = formatQualityNormalized(imageQualityValue);
   const imageQualityLabel = describeImageQuality(imageQualityValue);
   const itemCountLabel = `${totalItems} item${totalItems === 1 ? "" : "s"}`;
-  const validationMessage =
-    request && draft ? buildValidationMessage(request, draft) : null;
   const activeMessage = validationMessage
     ? validationMessage
     : runState?.message ??
@@ -168,7 +157,6 @@ export const buildConversionModalDerivedState = ({
     hasImageItems,
     hasQuickPrefill,
     hasVideoItems,
-    imageCount,
     imageQualityLabel,
     primaryActionDisabled,
     primaryActionIntent: queueCompleted ? "close" : "convert",
@@ -180,10 +168,8 @@ export const buildConversionModalDerivedState = ({
     sampleItem,
     secondaryActionLabel,
     selectedVideoPreset,
-    sortedOverrideItems,
     totalItems,
     validationMessage,
-    videoCount,
     videoEncoderGroups,
     videoQualityHint,
     videoQualityLabel,

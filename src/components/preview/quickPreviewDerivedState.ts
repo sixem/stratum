@@ -8,7 +8,7 @@ import {
   getPathName,
   splitNameExtension,
 } from "@/lib";
-import type { EntryMeta } from "@/types";
+import type { EntryMeta, ThumbnailLookup } from "@/types";
 
 export type QuickPreviewLoadState = "loading" | "ready" | "error";
 export type PreviewMediaKind = "image" | "video" | "audio";
@@ -19,7 +19,7 @@ type BuildQuickPreviewDerivedStateParams = {
   src: string;
   kind: PreviewMediaKind;
   meta?: EntryMeta | null;
-  thumbnails: Map<string, string>;
+  thumbnails: ThumbnailLookup;
   zoom: number;
   loadState: QuickPreviewLoadState;
   loadedSrc: string | null;

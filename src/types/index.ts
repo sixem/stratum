@@ -86,6 +86,7 @@ export type {
   ThumbnailEvent,
   ThumbnailFormat,
   ThumbnailHit,
+  ThumbnailLookup,
   ThumbnailRequest,
   ThumbnailRequestOptions,
   ThumbnailScope,

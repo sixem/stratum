@@ -15,6 +15,7 @@ import type {
   RenameCommitReason,
   SortState,
   RequestScopedThumbnails,
+  ThumbnailLookup,
   ViewMode,
   Place,
 } from "@/types";
@@ -78,7 +79,7 @@ type FileViewProps = {
   entryMeta: EntryMetaLookup;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   thumbnailsEnabled: boolean;
-  thumbnails: Map<string, string>;
+  thumbnails: ThumbnailLookup;
   onRequestThumbs: RequestScopedThumbnails;
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;

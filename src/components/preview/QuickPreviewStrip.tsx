@@ -6,8 +6,8 @@ import type {
   WheelEvent as ReactWheelEvent,
 } from "react";
 import { FILE_TOOLTIP_DELAY_MS } from "@/constants";
-import type { EntryMeta, EntryMetaLookup, FileEntry, RequestScopedThumbnails, ThumbnailRequest } from "@/types";
-import { formatBytes, formatDate, getFileKind, normalizePath, splitNameExtension } from "@/lib";
+import type { EntryMeta, EntryMetaLookup, FileEntry, RequestScopedThumbnails, ThumbnailLookup, ThumbnailRequest } from "@/types";
+import { formatBytes, formatDate, getFileKind, splitNameExtension } from "@/lib";
 import { useEntryMetaRequest, useThumbnailRequest, useVirtualRange } from "@/hooks";
 import { useThumbnailScope } from "@/hooks/domain/metadata/useThumbnailScope";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
@@ -16,9 +16,9 @@ import { FileTypeIcon } from "@/components/icons";
 type QuickPreviewStripProps = {
   open: boolean;
   items: FileEntry[];
-  activePath: string | null;
+  activeIndex: number;
   entryMeta: EntryMetaLookup;
-  thumbnails: Map<string, string>;
+  thumbnails: ThumbnailLookup;
   thumbnailsEnabled: boolean;
   onRequestMeta: (paths: string[]) => Promise<EntryMeta[]>;
   onRequestThumbs: RequestScopedThumbnails;
@@ -55,7 +55,7 @@ const clamp = (value: number, min: number, max: number) => {
 export const QuickPreviewStrip = ({
   open,
   items,
-  activePath,
+  activeIndex,
   entryMeta,
   thumbnails,
   thumbnailsEnabled,
@@ -87,20 +87,6 @@ export const QuickPreviewStrip = ({
     () => items.slice(virtual.startIndex, virtual.endIndex),
     [items, virtual.endIndex, virtual.startIndex],
   );
-  const activePathKey = useMemo(
-    () => (activePath ? normalizePath(activePath) : ""),
-    [activePath],
-  );
-  const activeIndex = useMemo(
-    () => {
-      if (!activePath) return -1;
-      const strictIndex = items.findIndex((entry) => entry.path === activePath);
-      if (strictIndex >= 0) return strictIndex;
-      if (!activePathKey) return -1;
-      return items.findIndex((entry) => normalizePath(entry.path) === activePathKey);
-    },
-    [activePath, activePathKey, items],
-  );
 
   const markStripActive = useCallback(() => {
     if (!open) return;
@@ -126,7 +112,7 @@ export const QuickPreviewStrip = ({
   useEffect(() => {
     if (!open) return;
     markStripActive();
-  }, [activePath, markStripActive, open]);
+  }, [activeIndex, markStripActive, open]);
 
   const clearScrollRetry = useCallback(() => {
     scrollRetryCountRef.current = 0;
@@ -314,9 +300,7 @@ export const QuickPreviewStrip = ({
       >
         {visibleItems.map((entry, index) => {
           const absoluteIndex = virtual.startIndex + index;
-          const isActive =
-            entry.path === activePath ||
-            (activePathKey !== "" && normalizePath(entry.path) === activePathKey);
+          const isActive = absoluteIndex === activeIndex;
           const distance = activeIndex >= 0 ? Math.abs(absoluteIndex - activeIndex) : 0;
           const opacity =
             isActive || activeIndex < 0 ? 1 : clamp(1 - distance * 0.08, 0.25, 0.9);
