@@ -11,6 +11,7 @@ import type { Tab } from "@/types";
 import type { LinkedPane } from "@/lib/paneLink";
 import { DirectorySync } from "./directorySync";
 import { readTerminalTheme } from "./terminalTheme";
+import { TerminalInput } from "./terminalInput";
 
 type Profile = NonNullable<Tab["terminal"]>;
 const sessions = new Map<string, Shell>();
@@ -31,7 +32,7 @@ class Shell {
   private ended = false;
   private writing = false;
   private resizing = false;
-  private pending = "";
+  private readonly pending = new TerminalInput();
   private readonly observer = new ResizeObserver(() => this.fit());
 
   constructor(host: HTMLElement, directory: string) {
@@ -50,7 +51,8 @@ class Shell {
     // Shell output cannot write or query the system clipboard.
     this.term.parser.registerOscHandler(52, () => true);
     this.term.attachCustomKeyEventHandler(event => !switchTab(event));
-    this.term.onData(data => this.enqueue(data));
+    this.term.onData(data => this.enqueue(data, false));
+    this.term.onBinary(data => this.enqueue(data, true));
     this.observer.observe(this.viewport);
     this.fit();
     void this.start(directory);
@@ -66,7 +68,9 @@ class Shell {
   }
 
   focus() {
-    this.term.focus();
+    const retry = this.status.querySelector("button");
+    if (retry) retry.focus({ preventScroll: true });
+    else this.term.focus();
   }
 
   updateTheme() {
@@ -125,22 +129,40 @@ class Shell {
       }
       if (!this.closed) this.status.textContent = "PowerShell exited.";
     } catch (error) {
-      if (!this.closed) this.status.textContent = String(error);
+      if (!this.closed) {
+        this.status.textContent = String(error);
+        if (this.id === undefined) this.showLaunchRetry(directory);
+      }
     } finally {
       this.ended = true;
-      this.pending = "";
+      this.pending.clear();
       this.closeNative();
     }
   }
 
-  private enqueue(data: string) {
+  private showLaunchRetry(directory: string) {
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "btn ghost";
+    retry.textContent = "Retry";
+    retry.addEventListener("click", () => {
+      if (this.closed || !this.ended) return;
+      this.ended = false;
+      this.status.textContent = "";
+      this.focus();
+      void this.start(directory);
+    }, { once: true });
+    this.status.append(" ", retry);
+    if (this.element.contains(document.activeElement)) retry.focus({ preventScroll: true });
+  }
+
+  private enqueue(data: string, binary: boolean) {
     if (this.closed || this.ended) return;
-    if (data.length + this.pending.length > 128 * 1024) {
+    if (!this.pending.push(data, binary)) {
       this.status.textContent = "Input too large. Paste a smaller selection.";
       return;
     }
     this.status.textContent = "";
-    this.pending += data;
     void this.flush();
   }
 
@@ -148,16 +170,13 @@ class Shell {
     if (this.writing || this.id === undefined) return;
     this.writing = true;
     try {
-      while (this.pending && !this.closed && !this.ended) {
-        // Even four-byte characters fit the backend's 32 KiB message limit.
-        let end = Math.min(8192, this.pending.length);
-        if (end < this.pending.length && /[\uD800-\uDBFF]/.test(this.pending[end - 1])) end--;
-        const data = this.pending.slice(0, end);
-        this.pending = this.pending.slice(end);
+      while (!this.closed && !this.ended) {
+        const data = this.pending.take();
+        if (data === undefined) break;
         await invoke("terminal_write", { id: this.id, data });
       }
     } catch (error) {
-      this.pending = "";
+      this.pending.clear();
       if (!this.closed && !this.ended) this.status.textContent = String(error);
     } finally { this.writing = false; }
   }

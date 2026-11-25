@@ -222,13 +222,24 @@ pub(crate) async fn terminal_read(
     Ok(Response::new(reader.recv().await.unwrap_or_default()))
 }
 
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+pub(crate) enum TerminalInput {
+    Text(String),
+    Bytes(Vec<u8>),
+}
+
 #[tauri::command]
 pub(crate) async fn terminal_write(
     webview: Webview,
     state: State<'_, Terminals>,
     id: u32,
-    data: String,
+    data: TerminalInput,
 ) -> Result<(), String> {
+    let data = match data {
+        TerminalInput::Text(text) => text.into_bytes(),
+        TerminalInput::Bytes(bytes) => bytes,
+    };
     if data.len() > CHUNK {
         return Err("Terminal input too large.".into());
     }
@@ -238,7 +249,7 @@ pub(crate) async fn terminal_write(
         .clone()
         .try_lock_owned()
         .map_err(|_| "Write already pending.")?;
-    tauri::async_runtime::spawn_blocking(move || input.write_all(data.as_bytes()))
+    tauri::async_runtime::spawn_blocking(move || input.write_all(&data))
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())

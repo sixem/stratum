@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { FileEntry } from "@/types";
 import { isEditableElement } from "@/lib";
+import { useModalFocusTrap } from "@/hooks/ui/app/useModalFocusTrap";
 
 type DragState = {
   active: boolean;
@@ -64,22 +65,14 @@ export const useQuickPreviewInput = ({
   const frameRef = useRef<number | null>(null);
   const wheelTransformTimerRef = useRef<number | null>(null);
   const fitSizeRef = useRef<{ width: number; height: number } | null>(null);
+  const minZoomRef = useRef(MIN_ZOOM);
   const offsetRef = useRef({ x: 0, y: 0 });
   const lastTabTapRef = useRef(0);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const [transforming, setTransforming] = useState(false);
-  useLayoutEffect(() => {
-    if (!open) return;
-    const previous = document.activeElement;
-    containerRef.current?.focus({ preventScroll: true });
-    return () => {
-      if (previous instanceof HTMLElement && previous.isConnected) {
-        previous.focus({ preventScroll: true });
-      }
-    };
-  }, [open]);
+  useModalFocusTrap({ open, containerRef, initialFocusRef: containerRef });
 
   const scheduleOffset = (next: { x: number; y: number }) => {
     offsetRef.current = next;
@@ -92,6 +85,7 @@ export const useQuickPreviewInput = ({
 
   const resetViewport = useCallback(() => {
     fitSizeRef.current = null;
+    minZoomRef.current = MIN_ZOOM;
     setZoom(1);
     setOffset({ x: 0, y: 0 });
     offsetRef.current = { x: 0, y: 0 };
@@ -103,19 +97,25 @@ export const useQuickPreviewInput = ({
     if (!container) return;
     if (width <= 0 || height <= 0) return;
     const bounds = container.getBoundingClientRect();
-    const fitZoom = Math.min(bounds.width / width, bounds.height / height, 1);
-    const nextZoom = clamp(fitZoom, MIN_ZOOM, MAX_ZOOM);
     fitSizeRef.current = { width, height };
-    setZoom(nextZoom);
+    if (!bounds.width || !bounds.height) return;
+    const fitZoom = Math.min(bounds.width / width, bounds.height / height, 1);
+    minZoomRef.current = Math.min(fitZoom, MIN_ZOOM);
+    setZoom(fitZoom);
     setOffset({ x: 0, y: 0 });
     offsetRef.current = { x: 0, y: 0 };
   }, []);
 
   useLayoutEffect(() => {
-    // Refit to the new stage width only while the media is in its automatic view.
-    const size = fitSizeRef.current;
-    if (size) fitMediaToViewport(size.width, size.height);
-  }, [fitMediaToViewport, stripOpen]);
+    const stage = stageRef.current;
+    if (!open || !stage) return;
+    const observer = new ResizeObserver(() => {
+      const size = fitSizeRef.current;
+      if (size) fitMediaToViewport(size.width, size.height);
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [fitMediaToViewport, open]);
 
   useEffect(() => {
     return () => {
@@ -284,7 +284,7 @@ export const useQuickPreviewInput = ({
     setTransforming(true);
     scheduleWheelTransformSettle();
     const factor = Math.exp(-event.deltaY * ZOOM_SPEED);
-    setZoom((value) => clamp(value * factor, MIN_ZOOM, MAX_ZOOM));
+    setZoom((value) => clamp(value * factor, minZoomRef.current, MAX_ZOOM));
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {

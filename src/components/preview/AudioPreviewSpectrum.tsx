@@ -54,7 +54,10 @@ export const AudioPreviewSpectrum = ({ mediaRef }: { mediaRef: RefObject<HTMLMed
     };
 
     const start = async () => {
-      if (!canDraw() || frame !== null) return;
+      // Once audio is routed through Web Audio, playback also needs the context
+      // when the window is hidden or the user has disabled the animation.
+      if (signal.aborted || media.paused || media.ended) return;
+      if (!context && !canDraw()) return;
       try {
         context ??= new AudioContext();
         await context.resume();
