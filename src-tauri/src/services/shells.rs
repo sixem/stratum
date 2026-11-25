@@ -59,7 +59,7 @@ fn find_command_path(command: &str) -> Option<PathBuf> {
 }
 
 #[cfg(windows)]
-fn powershell_path() -> Option<PathBuf> {
+pub(crate) fn powershell_path() -> Option<PathBuf> {
     find_command_path("pwsh").or_else(|| find_command_path("powershell"))
 }
 

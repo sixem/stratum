@@ -2,6 +2,8 @@
 import { lazy, Suspense, useState } from "react";
 import type { CSSProperties, ComponentProps, RefObject } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { TerminalPane } from "@/components/terminal/TerminalPane";
+import { useSessionStore } from "@/modules/sessionStore";
 import { FileView, PerfProfiler, Sidebar } from "@/components";
 import { SidebarDivider } from "@/components/navigation/SidebarDivider";
 import { useSettingsStore } from "@/modules";
@@ -57,6 +59,7 @@ export const AppContent = ({
   onContextMenu,
   onContextMenuDown,
 }: AppContentProps) => {
+  const terminal = useSessionStore(state => state.tabs.find(tab => tab.id === activeTabId)?.terminal);
   const split = useBottomPaneStore(state => state.open);
   const bottomHeight = useBottomPaneStore(state => `${state.height}${state.heightUnit}`);
   const bottomActive = useBottomPaneStore(state => state.open && state.active);
@@ -105,19 +108,19 @@ export const AppContent = ({
           </PerfProfiler>
         ) : null}
         <div className="pane-stack" data-split={split}>
-        <main className="main upper-files" data-file-pane="main" data-pane-path={upperPath}
+        <main className="main upper-files" data-file-pane="main" data-pane-path={terminal ? "" : upperPath}
           data-start-view={fileViewProps.showLander || undefined}
           data-drop-background={fileDrop.backgroundHovered && fileDrop.hoveredPane === "main" || undefined}
           onPointerDownCapture={event => {
             setBottomPaneActive(false);
-            focusFilePaneBackground(event);
+            if (!terminal) focusFilePaneBackground(event);
           }}
           onFocusCapture={() => setBottomPaneActive(false)} ref={mainRef} tabIndex={-1} aria-busy={folderBusy}>
-          {folderBusy && (
+          {!terminal && folderBusy && (
             <div className="folder-load-progress" role="progressbar" aria-label="Loading folder" />
           )}
           <PerfProfiler id="file-view">
-            {folderFailed ? (
+            {terminal ? <TerminalPane terminal={terminal} /> : folderFailed ? (
               <div className="pane-loading">
                 <button className="btn ghost" type="button" onClick={onRetryFolder}>Retry opening folder</button>
               </div>

@@ -21,6 +21,9 @@ pub fn run() {
             }
             tauri::WindowEvent::Destroyed => {
                 window
+                    .state::<platform::windows::terminal::Terminals>()
+                    .clear(window.label());
+                window
                     .state::<platform::windows::dragdrop::IncomingDrops>()
                     .unsubscribe(window.label());
                 platform::windows::dragdrop::unregister_drop_target(window.label());
@@ -33,11 +36,17 @@ pub fn run() {
         .plugin(platform::windows::profile_instance::init())
         .plugin(platform::windows::webview_navigation::init())
         .manage(platform::windows::dragdrop::IncomingDrops::default())
+        .manage(platform::windows::terminal::Terminals::default())
         .manage(platform::windows::menu_host::MenuHost::default())
         .on_page_load(|webview, payload| match payload.event() {
-            tauri::webview::PageLoadEvent::Started => webview
-                .state::<platform::windows::dragdrop::IncomingDrops>()
-                .unsubscribe(webview.label()),
+            tauri::webview::PageLoadEvent::Started => {
+                webview
+                    .state::<platform::windows::terminal::Terminals>()
+                    .clear(webview.label());
+                webview
+                    .state::<platform::windows::dragdrop::IncomingDrops>()
+                    .unsubscribe(webview.label());
+            }
             tauri::webview::PageLoadEvent::Finished => {
                 platform::dragdrop::schedule_registration(&webview.window(), true)
             }
@@ -147,6 +156,17 @@ pub fn run() {
             app::commands::get_executable_icons,
             app::commands::get_shell_availability,
             app::commands::open_shell,
+            #[cfg(windows)]
+            platform::windows::terminal::terminal_open,
+            #[cfg(windows)]
+            platform::windows::terminal::terminal_read,
+            #[cfg(windows)]
+            platform::windows::terminal::terminal_write,
+            #[cfg(windows)]
+            platform::windows::terminal::terminal_resize,
+            #[cfg(windows)]
+            platform::windows::terminal::terminal_close,
+
             app::commands::is_windows_11,
             app::commands::get_indexing_launch_preferences,
             app::commands::set_indexing_launch_preferences,

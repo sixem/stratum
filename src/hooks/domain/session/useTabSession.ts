@@ -138,6 +138,12 @@ export const useTabSession = ({
 
   const ensureActiveTab = useCallback(
     (path: string) => {
+      if (activeTab?.terminal) {
+        const next = createSessionTab(path, { sort: sortState });
+        const session = useStore.getState();
+        session.updateSession({ tabs: [...session.tabs, next], activeTabId: next.id });
+        return next.id;
+      }
       if (activeTabId) return activeTabId;
       const fallback = tabs[0];
       if (fallback) {
@@ -150,7 +156,7 @@ export const useTabSession = ({
       setActiveTabId(nextTab.id);
       return nextTab.id;
     },
-    [activeTabId, searchValue, setActiveTabId, setTabs, sortState, tabs],
+    [activeTab, activeTabId, searchValue, setActiveTabId, setTabs, sortState, tabs, useStore],
   );
 
   const performNavigation = useCallback(
@@ -210,7 +216,7 @@ export const useTabSession = ({
   useLayoutEffect(() => registerPaneLinkReceiver(pane, (target, linked) => {
     const session = useStore.getState();
     const tab = session.tabs.find(({ id }) => id === session.activeTabId);
-    if (tab && folderPathKey(tab.path) === folderPathKey(currentPath)) {
+    if (tab && !tab.terminal && folderPathKey(tab.path) === folderPathKey(currentPath)) {
       performNavigation(target, undefined, "navigate", tab.id, { linked });
     }
   }), [currentPath, pane, performNavigation, useStore]);
@@ -237,9 +243,10 @@ export const useTabSession = ({
     [activeTabId, setTabs],
   );
 
-  const openEmptyTab = useCallback((initialView?: ViewMode) => {
+  const openEmptyTab = useCallback((initialView?: ViewMode, terminalDirectory?: string) => {
     log("new tab -> empty");
     const nextTab = createSessionTab("", { sort: sortState });
+    if (terminalDirectory !== undefined) nextTab.terminal = { key: nextTab.id, directory: terminalDirectory };
     if (initialView) nextTab.viewMode = initialView;
     emptyTabIdsRef.current.add(nextTab.id);
     pendingNavigationRef.current = null;
@@ -248,6 +255,7 @@ export const useTabSession = ({
     clearDir({ silent: true });
   }, [clearDir, emptyTabIdsRef, pendingNavigationRef, sortState, useStore]);
 
+  const newPowerShellTab = () => openEmptyTab(undefined, activeTab?.terminal?.directory ?? displayPath);
   const newTab = useCallback(() => openEmptyTab(), [openEmptyTab]);
 
   const setViewMode = useCallback(
@@ -394,7 +402,7 @@ export const useTabSession = ({
       session.updateSession({
         tabs: nextTabs,
         activeTabId: wasActive || !fallback ? fallback?.id ?? null : session.activeTabId,
-        ...(receive ? {} : { closedTabs: [{ tab: savedTab, history, index }, ...session.closedTabs].slice(0, CLOSED_TAB_LIMIT) }),
+        ...(receive || tab.terminal ? {} : { closedTabs: [{ tab: savedTab, history, index }, ...session.closedTabs].slice(0, CLOSED_TAB_LIMIT) }),
       });
 
       if (!fallback || (wasActive && !fallback.path.trim())) {
@@ -509,6 +517,7 @@ export const useTabSession = ({
     goBack,
     goForward,
     newTab,
+    newPowerShellTab,
     openInNewTab,
     openInBackgroundTab,
     selectTab,

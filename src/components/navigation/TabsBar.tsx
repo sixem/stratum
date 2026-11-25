@@ -1,4 +1,5 @@
 // Tab strip for open folders with drag reordering and pane moves.
+import { SquareTerminalIcon } from "@/components/icons/SquareTerminalIcon";
 import type { MouseEvent as ReactMouseEvent, PointerEvent, ReactNode } from "react";
 import {
   Fragment,
@@ -34,6 +35,7 @@ type TabsBarProps = {
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onNew: () => void;
+  onNewPowerShell: () => void;
   onOpenLocation: (path: string) => void;
   onReorder: (fromId: string, toIndex: number) => void;
   onMoveTab: (id: string, receive: (transfer: TabTransfer) => boolean) => void;
@@ -85,21 +87,21 @@ const TabItem = ({
   onContextMenu,
   onContextMenuDown,
 }: TabItemProps) => {
-  const label = tabLabel(tab.path);
-  const isUntitled = tab.path.trim().length === 0;
-  const hasMenu = !isUntitled || untitledMenu;
+  const label = tab.terminal ? "PowerShell" : tabLabel(tab.path);
+  const isUntitled = !tab.terminal && tab.path.trim().length === 0;
+  const hasMenu = !tab.terminal && (!isUntitled || untitledMenu);
   const menuTarget: PlaceContextTarget = { name: label, path: tab.path, source: "tab", tabId: tab.id };
   return (
     <div
       className={`tab${isActive ? " is-active" : ""}${isDragging ? " is-dragging" : ""}${isUntitled ? " is-untitled" : ""}`}
-      data-drop-kind="tab"
+      data-drop-kind={tab.terminal ? undefined : "tab"}
       data-drop-path={tab.path}
       data-drop-id={tab.id}
       data-drop-target={isDropTarget ? "true" : "false"}
       data-tab-id={tab.id}
-      data-context-place="tab"
+      data-context-place={tab.terminal ? undefined : "tab"}
       data-context-name={label}
-      data-tab-kind={isUntitled ? "untitled" : "directory"}
+      data-tab-kind={tab.terminal ? "powershell" : isUntitled ? "untitled" : "directory"}
       onPointerDown={(event) => {
         if (event.button === 2 && hasMenu) {
           onContextMenuDown?.(event, menuTarget);
@@ -108,6 +110,7 @@ const TabItem = ({
         const target = event.target as HTMLElement | null;
         if (target?.closest(".tab-close")) return;
         if (event.button === 0 && !isActive) {
+          if (tab.terminal) event.preventDefault();
           onSelect(tab.id);
         }
         onPointerDown(event, tab.id);
@@ -121,7 +124,7 @@ const TabItem = ({
       }}
       onContextMenu={(event) => event.preventDefault()}
     >
-      <TooltipWrapper text={tab.path}>
+      <TooltipWrapper text={tab.terminal?.directory || tab.path}>
         <button
           type="button"
           className="tab-main"
@@ -134,6 +137,7 @@ const TabItem = ({
           }}
         >
           {showIndex ? <span className="tab-index">{index + 1}</span> : null}
+          {tab.terminal && <SquareTerminalIcon />}
           <span className="tab-title">{label}</span>
         </button>
       </TooltipWrapper>
@@ -168,6 +172,7 @@ export const TabsBar = ({
   onSelect,
   onClose,
   onNew,
+  onNewPowerShell,
   onOpenLocation,
   onReorder,
   onMoveTab,
@@ -298,6 +303,10 @@ export const TabsBar = ({
       </div>
       <PressButton type="button" className="tab-new" onClick={onNew} aria-label="New tab">
         <PlusIcon className="tab-new-icon" />
+      </PressButton>
+      <PressButton type="button" className="tab-new" aria-label="New PowerShell tab" title="New PowerShell tab"
+        pressOnPointerDown={false} onClick={onNewPowerShell}>
+        <SquareTerminalIcon />
       </PressButton>
       <DropTargetSubmenu
         open={Boolean(submenuAnchorElement && tabDropSubmenu?.hostTabId && (tabDropSubmenu.loading || tabDropSubmenu.items.length > 0))}

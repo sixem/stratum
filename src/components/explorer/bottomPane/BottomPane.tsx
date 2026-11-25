@@ -6,6 +6,7 @@ import { useDriveInfo } from "@/hooks/domain/filesystem/useDriveInfo";
 import { useStatusLabels } from "@/hooks/domain/metadata/useStatusLabels";
 import { useScrollRequest } from "@/hooks/perf/scroll";
 import type { ScrollAlignment } from "@/hooks/perf/scroll";
+import { TerminalPane } from "@/components/terminal/TerminalPane";
 import { FileView } from "../FileView";
 import { PathCrumbsBar } from "../PathCrumbsBar";
 import { TabsBar } from "@/components/navigation/TabsBar";
@@ -200,6 +201,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     onPointerDownCapture={event => {
       if (!event.currentTarget.contains(event.target as Node)) return;
       setBottomPaneActive(true);
+      if ((event.target as Element).closest("[data-terminal]")) return;
       if (!(event.target as Element).closest("button, input, [tabindex='0']") ||
           (event.button === 2 && !event.currentTarget.contains(document.activeElement))) {
         focusFiles();
@@ -287,7 +289,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       </ToolbarIconButton>
     </nav>
     <TabsBar tabs={tabs.tabs} activeId={tabs.activeTabId} showTabNumbers={tabNumbers} fixedWidthTabs={fixedWidth}
-      onSelect={tabs.selectTab} onClose={closeTab} onNew={tabs.newTab} onReorder={tabs.reorderTabs}
+      onSelect={tabs.selectTab} onClose={closeTab} onNew={tabs.newTab} onNewPowerShell={tabs.newPowerShellTab} onReorder={tabs.reorderTabs}
       onMoveTab={(id, receive) => tabs.moveTab(id, receive, id === activeTabId ? scrollTop.current ?? undefined : undefined)}
       onReceiveTab={(transfer, index) => {
         if (activeTabId && scrollTop.current !== null) setTabScrollTop(activeTabId, scrollTop.current);
@@ -315,7 +317,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         if (el.matches(".list-body,.thumb-viewport")) scrollTop.current = el.scrollTop;
       }}>
       {busy && <div className="folder-load-progress" role="progressbar" aria-label="Loading bottom folder" />}
-      {!ready && tabs.displayPath ? <div className="pane-loading">{busy ? "Loading folder…" : <button className="btn ghost" type="button" onClick={() => navigate(tabs.displayPath)}>Retry opening folder</button>}</div> :
+      {tabs.activeTab?.terminal ? <TerminalPane terminal={tabs.activeTab.terminal} /> : !ready && tabs.displayPath ? <div className="pane-loading">{busy ? "Loading folder…" : <button className="btn ghost" type="button" onClick={() => navigate(tabs.displayPath)}>Retry opening folder</button>}</div> :
       <FileView {...upper} {...model} pane="bottom" dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null} currentPath={path} viewMode={tabs.viewMode} viewKey={viewKey}
         showLander={!path} recentJumps={tabs.recentJumps} onOpenPlace={navigate} onOpenRecent={navigate} onOpenDrive={navigate}
         onOpenDriveNewTab={openNew} onOpenPlaceNewTab={openNew} onOpenRecentNewTab={openNew}

@@ -17,6 +17,9 @@ importers:
       '@tauri-apps/plugin-opener':
         specifier: ^2
         version: 2.5.3
+      '@xterm/xterm':
+        specifier: 6.0.0
+        version: 6.0.0
       debug:
         specifier: ^4.4.3
         version: 4.4.3
@@ -668,6 +671,9 @@ packages:
     engines: {node: ^14.18.0 || >=16.0.0}
     peerDependencies:
       vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
+
+  '@xterm/xterm@6.0.0':
+    resolution: {integrity: sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==}
 
   baseline-browser-mapping@2.11.39:
     resolution: {integrity: sha512-Q9buOYhr2ggrEZpImICecZTJHCCd8yXkRUokFlUEQ8uiD6oP82F4W4jWnhOHZYV+wlvrC51V7Wy0ULyWjil5Wg==}
@@ -1367,6 +1373,8 @@ snapshots:
       vite: 7.3.8(@types/node@24.11.0)(sass@1.108.2)
     transitivePeerDependencies:
       - supports-color
+
+  '@xterm/xterm@6.0.0': {}
 
   baseline-browser-mapping@2.11.39: {}
 

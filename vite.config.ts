@@ -28,6 +28,7 @@ export default defineConfig(async () => ({
         manualChunks(id) {
           const moduleId = id.replace(/\\/g, "/");
           if (moduleId.includes("/node_modules/")) {
+            if (moduleId.includes("/@xterm/xterm/")) return "vendor-terminal";
             if (
               moduleId.includes("/react/") ||
               moduleId.includes("/react-dom/") ||

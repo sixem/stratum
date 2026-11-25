@@ -5,6 +5,7 @@ import type { FixedGridSize } from "@/modules/settings.types";
 export type Tab = {
   id: string;
   path: string;
+  terminal?: { key: string; directory: string };
   // Deepest path visited in this tab's current branch for breadcrumb continuation.
   crumbTrailPath: string;
   viewMode: ViewMode;

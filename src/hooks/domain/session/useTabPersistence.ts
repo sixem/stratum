@@ -135,6 +135,7 @@ export const useTabPersistence = ({
       const index = prev.findIndex((tab) => tab.id === activeTabId);
       if (index === -1) return prev;
       const tab = prev[index];
+      if (tab.terminal) return prev;
       // A search entered during the load belongs to the newly opened folder.
       const reset = pending?.resetFilter;
       const nextSearch =

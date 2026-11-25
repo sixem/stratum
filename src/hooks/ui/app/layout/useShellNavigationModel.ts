@@ -98,6 +98,11 @@ export const useShellNavigationModel = ({
       onSelect: navigationController.handleSelectTab,
       onClose: navigationController.handleCloseTab,
       onNew: navigationController.handleNewTab,
+      onNewPowerShell: () => {
+        navigationController.stashActiveScroll();
+        setBottomPaneActive(false);
+        tabSession.newPowerShellTab();
+      },
       onOpenLocation: (path) => {
         setBottomPaneActive(false);
         viewState.mainRef.current?.focus({ preventScroll: true });

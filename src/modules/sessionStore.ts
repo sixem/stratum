@@ -196,8 +196,17 @@ const readStoredSession = (key: string) => {
   }
 };
 
+// A running shell belongs to this window. Only folder tabs can be restored.
+export const folderLayout = ({ tabs, activeTabId }: TabLayout): TabLayout => {
+  if (!tabs.some(tab => tab.terminal)) return { tabs, activeTabId };
+  const folders = tabs.filter(tab => !tab.terminal);
+  const activeFolder = folders.find(tab => tab.id === activeTabId) ?? folders[0];
+  return { tabs: folders, activeTabId: activeFolder?.id ?? null };
+};
+
 const serializeSession = (key: string, session: SessionState) => {
-  const { tabs, activeTabId, recentJumps } = session;
+  const { tabs, activeTabId } = folderLayout(session);
+  const { recentJumps } = session;
   const payload: StoredSession = { version: STORAGE_VERSION, session: { tabs, activeTabId, recentJumps } };
   return [key, JSON.stringify(payload)] as const;
 };

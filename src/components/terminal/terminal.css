@@ -1,0 +1,17 @@
+.powershell-host, .powershell-surface, .powershell-viewport {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.powershell-surface {
+  overflow: hidden;
+  background: #101318;
+  color: #e4e8ef;
+  padding: 8px;
+  border-radius: var(--panel-radius);
+}
+.powershell-viewport .xterm { height: 100%; }
+.powershell-status:empty { display: none; }
+.powershell-status { padding: 4px; font-size: var(--font-size-sm); }
