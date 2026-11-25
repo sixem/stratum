@@ -1,6 +1,7 @@
 // Shared audio and video timeline for preview mode.
 // Uses direct CSS variable updates for smooth playhead motion without per-frame React renders.
 import { useEffect, useRef, useState } from "react";
+import { previewSeekTime, seekPreviewMedia } from "./previewSeek";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
@@ -126,15 +127,7 @@ export const QuickPreviewTimeline = ({
     const duration = resolveDuration(media);
     if (!media || duration <= 0) return;
     const target = clamp(time, 0, duration);
-    if (typeof media.fastSeek === "function") {
-      try {
-        media.fastSeek(target);
-      } catch {
-        media.currentTime = target;
-      }
-    } else {
-      media.currentTime = target;
-    }
+    seekPreviewMedia(media, target);
     playheadAnchorRef.current = { time: target, perf: performance.now() };
     onCommitSeek?.(target);
     syncDisplay(target, duration, true);
@@ -163,7 +156,7 @@ export const QuickPreviewTimeline = ({
       media.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA;
     const syncClock = () => {
       const duration = resolveDuration(media);
-      const time = clamp(media.currentTime, 0, duration);
+      const time = clamp(previewSeekTime(media), 0, duration);
       playheadAnchorRef.current = { time, perf: performance.now() };
       if (!dragActiveRef.current) syncDisplay(time, duration, true);
     };
@@ -178,7 +171,7 @@ export const QuickPreviewTimeline = ({
       if (!dragActiveRef.current) {
         // Smooth the playhead between decoder updates, only while playing.
         const duration = resolveDuration(media);
-        const raw = clamp(media.currentTime, 0, duration);
+        const raw = clamp(previewSeekTime(media), 0, duration);
         const anchor = playheadAnchorRef.current;
         const rate = media.playbackRate > 0 ? media.playbackRate : 1;
         const projected = clamp(anchor.time + ((now - anchor.perf) / 1000) * rate, 0, duration);

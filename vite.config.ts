@@ -24,7 +24,9 @@ export default defineConfig(async () => ({
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        // Keep chunk boundaries stable as features grow.
+        // Let dynamic imports define feature boundaries. Pulling their shared
+        // dependencies into a named feature chunk can make it a startup import.
+        onlyExplicitManualChunks: true,
         manualChunks(id) {
           const moduleId = id.replace(/\\/g, "/");
           if (moduleId.includes("/node_modules/")) {
@@ -40,26 +42,6 @@ export default defineConfig(async () => ({
               return "vendor-tauri";
             }
             return "vendor";
-          }
-
-          if (
-            moduleId.includes("/src/components/overlay/ConversionModal") ||
-            moduleId.includes("/src/hooks/ui/app/conversion/") ||
-            moduleId.includes("/src/constants/convert") ||
-            moduleId.includes("/src/types/conversion")
-          ) {
-            return "feature-conversion";
-          }
-
-          if (moduleId.includes("/src/components/preview/QuickPreview")) {
-            return "feature-preview";
-          }
-
-          if (
-            moduleId.includes("/src/components/overlay/SettingsOverlay") ||
-            moduleId.includes("/src/components/settings/")
-          ) {
-            return "feature-settings";
           }
 
           return undefined;

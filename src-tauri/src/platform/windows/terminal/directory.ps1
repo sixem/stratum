@@ -3,14 +3,22 @@
 $global:__StratumLink = @{
     Root = (-join [char[]](__MAILBOX__)); Request = $null; Applied = 0; Report = $null; Reading = $false
 }
-function global:Sync-StratumLocation([bool]$reload, [bool]$beforeRead) {
+$global:__StratumLink.Inbox = [IO.Path]::Combine($global:__StratumLink.Root, 'request')
+$global:__StratumLink.Claim = [IO.Path]::Combine($global:__StratumLink.Root, 'request.read')
+$global:__StratumLink.ReadPending = $false
+function global:Sync-StratumLocation([bool]$beforeRead) {
     $s = $global:__StratumLink
     try {
-        if ($reload -or ($beforeRead -and $s.Request.path)) {
-            $request = [IO.Path]::Combine($s.Root, 'request')
-            if ([IO.File]::Exists($request)) {
-                $s.Request = [IO.File]::ReadAllText($request) | ConvertFrom-Json
-            }
+        # Claim one published request by renaming it. A newer request can arrive
+        # in the inbox during the read and will still be there at the next prompt.
+        if ([IO.File]::Exists($s.Inbox)) {
+            [IO.File]::Delete($s.Claim)
+            [IO.File]::Move($s.Inbox, $s.Claim)
+            $s.ReadPending = $true
+        }
+        if ($s.ReadPending) {
+            $s.Request = [IO.File]::ReadAllText($s.Claim) | ConvertFrom-Json
+            $s.ReadPending = $false
         }
         if (!$s.Request.path -or !$s.Reading) { return }
         $failure = $null
@@ -47,7 +55,7 @@ if ($global:__StratumLink.Reader) {
     function global:PSConsoleHostReadLine {
         $global:__StratumLink.Reading = $true
         try {
-            Sync-StratumLocation $false $true
+            Sync-StratumLocation $true
             & $global:__StratumLink.Reader
         } finally { $global:__StratumLink.Reading = $false }
     }
@@ -55,12 +63,12 @@ if ($global:__StratumLink.Reader) {
     $global:__StratumLink.Prompt = $function:prompt
     function global:prompt {
         $global:__StratumLink.Reading = $true
-        try { Sync-StratumLocation $true $true } finally { $global:__StratumLink.Reading = $false }
+        try { Sync-StratumLocation $true } finally { $global:__StratumLink.Reading = $false }
         & $global:__StratumLink.Prompt
     }
 }
 $global:__StratumLink.Watcher = [IO.FileSystemWatcher]::new($global:__StratumLink.Root, 'signal')
 $global:__StratumLink.Watcher.NotifyFilter = [IO.NotifyFilters]::LastWrite
-$null = Register-ObjectEvent $global:__StratumLink.Watcher Changed -SupportEvent -Action { Sync-StratumLocation $true $false }
+$null = Register-ObjectEvent $global:__StratumLink.Watcher Changed -SupportEvent -Action { Sync-StratumLocation $false }
 $global:__StratumLink.Watcher.EnableRaisingEvents = $true
-Sync-StratumLocation $true $false
+Sync-StratumLocation $false

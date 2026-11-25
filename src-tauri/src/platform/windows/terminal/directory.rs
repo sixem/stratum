@@ -125,7 +125,14 @@ impl Drop for DirectoryBridge {
     fn drop(&mut self) {
         self.link.get_mut().unwrap().watcher.take();
         // Remove only our own files, even if a child wrote something unexpected.
-        for name in ["signal", "request", "request.tmp", "report", "report.tmp"] {
+        for name in [
+            "signal",
+            "request",
+            "request.tmp",
+            "request.read",
+            "report",
+            "report.tmp",
+        ] {
             let _ = fs::remove_file(self.root.join(name));
         }
         let _ = fs::remove_dir(&self.root);

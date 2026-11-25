@@ -204,6 +204,7 @@ export const useShellFileViewAssembly = ({
       requestThumbnails: dataPipeline.requestThumbnails,
       thumbnailResetKey: dataPipeline.thumbnailResetKey,
       handlePreviewSelect: interactionModel.handlePreviewSelect,
+      closePreview: interactionModel.closePreviewIfOpen,
       smartTabJump: settings.smartTabJump,
       smartTabBlocked: dataPipeline.smartTabBlocked,
       handleOpenThumbCache: interactionModel.handleOpenThumbCache,

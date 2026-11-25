@@ -1,9 +1,11 @@
 // Custom URI scheme for streaming full-resolution media previews.
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
+use std::sync::Arc;
 
 use tauri::http::{header, Method, Request, Response, StatusCode};
 use tauri::Manager;
+use tokio::sync::Semaphore;
 
 mod cache;
 mod content_types;
@@ -26,6 +28,8 @@ const PREVIEW_SCHEME: &str = "stratum-preview";
 const PREVIEW_CACHE_CONTROL: &str = "no-store";
 // A whole-file response is buffered by the protocol and the WebView.
 const MAX_WHOLE_PREVIEW_BYTES: u64 = 64 * 1024 * 1024;
+// Separate grants can make progress without flooding the shared blocking pool.
+static DISK_READS: Semaphore = Semaphore::const_new(4);
 
 pub fn register_preview_protocol<R: tauri::Runtime>(
     builder: tauri::Builder<R>,
@@ -92,14 +96,17 @@ pub fn register_preview_protocol<R: tauri::Runtime>(
                     .get(header::IF_MODIFIED_SINCE)
                     .and_then(|value| value.to_str().ok())
                     .map(|value| value.to_string());
-                tauri::async_runtime::spawn_blocking(move || {
-                    let response = build_file_response(
-                        &source,
-                        head_only,
-                        range_header.as_deref(),
-                        if_none_match.as_deref(),
-                        if_modified_since.as_deref(),
-                    );
+                tauri::async_runtime::spawn(async move {
+                    let response = read_preview(source, move |source| {
+                        build_file_response(
+                            source,
+                            head_only,
+                            range_header.as_deref(),
+                            if_none_match.as_deref(),
+                            if_modified_since.as_deref(),
+                        )
+                    })
+                    .await;
                     // Only the issuing app origin can use its audio stream with Web Audio.
                     #[cfg(windows)]
                     let response = if let Some(origin) = audio_origin {
@@ -148,6 +155,34 @@ fn unavailable_grant() -> Response<Vec<u8>> {
     error_response(StatusCode::NOT_FOUND, "Preview is unavailable.".to_string())
 }
 
+async fn read_preview(
+    source: Arc<PreviewSource>,
+    read: impl FnOnce(&PreviewSource) -> Response<Vec<u8>> + Send + 'static,
+) -> Response<Vec<u8>> {
+    // Wait outside the blocking pool. Only one request can move this handle's cursor.
+    let Ok(slot) = source.read_slot.clone().acquire_owned().await else {
+        return unavailable_grant();
+    };
+    let disk = DISK_READS
+        .acquire()
+        .await
+        .expect("permanent preview read limit");
+    tauri::async_runtime::spawn_blocking(move || {
+        let _permits = (slot, disk);
+        if source.read_slot.is_closed() {
+            return unavailable_grant();
+        }
+        read(&source)
+    })
+    .await
+    .unwrap_or_else(|_| {
+        error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Preview read failed.".into(),
+        )
+    })
+}
+
 fn build_file_response(
     source: &PreviewSource,
     head_only: bool,
@@ -156,12 +191,7 @@ fn build_file_response(
     if_modified_since: Option<&str>,
 ) -> Response<Vec<u8>> {
     let content_type = source.content_type;
-    let Ok(mut file) = source.file.lock() else {
-        return error_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Preview is unavailable.".into(),
-        );
-    };
+    let mut file = &source.file;
     let Ok(metadata) = file.metadata() else {
         return error_response(
             StatusCode::NOT_FOUND,
@@ -175,7 +205,7 @@ fn build_file_response(
         return head_response(content_type, size, &validators);
     }
     if let Some(range_header) = range_header {
-        return build_range_response(&mut file, size, content_type, range_header, &validators);
+        return build_range_response(file, size, content_type, range_header, &validators);
     }
     if size > MAX_WHOLE_PREVIEW_BYTES {
         return preview_too_large();
@@ -194,7 +224,7 @@ fn build_file_response(
             "Failed to seek preview file.".into(),
         );
     }
-    let data = match read_full_file(&mut *file) {
+    let data = match read_full_file(file) {
         Ok(data) => data,
         Err(response) => return response,
     };
@@ -202,7 +232,7 @@ fn build_file_response(
 }
 
 fn build_range_response(
-    file: &mut File,
+    file: &File,
     size: u64,
     content_type: &'static str,
     range_header: &str,
@@ -219,7 +249,7 @@ fn build_range_response(
     partial_content_response(content_type, range.start, range.end, size, data, validators)
 }
 
-fn read_file_range(file: &mut File, range: ByteRange) -> Result<Vec<u8>, Response<Vec<u8>>> {
+fn read_file_range(mut file: &File, range: ByteRange) -> Result<Vec<u8>, Response<Vec<u8>>> {
     let length_usize = usize::try_from(range.len()).map_err(|_| {
         error_response(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -389,6 +419,29 @@ mod tests {
         assert!(grants.resolve("main", &url_path).is_some());
         grants.release("main", &token);
         assert!(grants.resolve("main", &url_path).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn closing_a_preview_skips_queued_disk_reads() -> io::Result<()> {
+        let fixture = PreviewFixture::new("queued-read")?;
+        let grants = PreviewGrants::default();
+        let token = open_grant(&grants, &fixture.path).unwrap();
+        let source = grants.resolve("main", &format!("/{token}")).unwrap();
+        let busy = source.read_slot.clone().try_acquire_owned().unwrap();
+        tauri::async_runtime::block_on(async {
+            let queued = tauri::async_runtime::spawn(read_preview(source, |_| {
+                panic!("a released grant reached disk I/O")
+            }));
+            tokio::task::yield_now().await;
+            grants.release("main", &token);
+            let response = tokio::time::timeout(std::time::Duration::from_secs(2), queued)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        });
+        drop(busy);
         Ok(())
     }
 

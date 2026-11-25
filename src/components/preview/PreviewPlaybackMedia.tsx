@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useLayoutEffect } from "react";
 import type { CSSProperties, RefObject, SyntheticEvent } from "react";
 import { AudioPreviewSpectrum } from "./AudioPreviewSpectrum";
+import { cancelPreviewSeek } from "./previewSeek";
 
 type Props = {
   src: string;
@@ -36,6 +37,7 @@ export const PreviewPlaybackMedia = ({
     if (!element) return;
     element.src = src;
     return () => {
+      cancelPreviewSeek(element);
       element.pause();
       element.removeAttribute("src");
       element.load();

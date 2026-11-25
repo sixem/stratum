@@ -35,6 +35,7 @@ export type QuickPreviewOverlayProps = {
   onRequestThumbs: RequestScopedThumbnails;
   thumbResetKey?: string;
   onSelectPreview: (path: string) => void;
+  onClose: () => void;
   smartTabJump: boolean;
   smartTabBlocked: boolean;
 };

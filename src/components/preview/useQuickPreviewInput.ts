@@ -4,6 +4,7 @@ import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent }
 import type { FileEntry } from "@/types";
 import { isEditableElement } from "@/lib";
 import { useModalFocusTrap } from "@/hooks/ui/app/useModalFocusTrap";
+import { previewSeekTime, seekPreviewMedia } from "./previewSeek";
 
 type DragState = {
   active: boolean;
@@ -163,16 +164,7 @@ export const useQuickPreviewInput = ({
       if (duration <= 0) return;
 
       const delta = event.key === "ArrowLeft" ? -SHORT_SEEK_SECONDS : SHORT_SEEK_SECONDS;
-      const target = clamp(media.currentTime + delta, 0, duration);
-      if (typeof media.fastSeek === "function") {
-        try {
-          media.fastSeek(target);
-        } catch {
-          media.currentTime = target;
-        }
-      } else {
-        media.currentTime = target;
-      }
+      seekPreviewMedia(media, clamp(previewSeekTime(media) + delta, 0, duration));
     };
 
     window.addEventListener("keydown", handleSeekKey);

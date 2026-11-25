@@ -61,6 +61,7 @@ export const useShellOverlayModel = ({
       onRequestThumbs: shellView.overlayContext.requestThumbnails,
       thumbResetKey: shellView.overlayContext.thumbnailResetKey,
       onSelectPreview: shellView.overlayContext.handlePreviewSelect,
+      onClose: shellView.overlayContext.closePreview,
       smartTabJump: shellView.overlayContext.smartTabJump,
       smartTabBlocked: shellView.overlayContext.smartTabBlocked,
     },
