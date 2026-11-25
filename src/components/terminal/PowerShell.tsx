@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal.css";
+import { DEFAULT_TERMINAL_FONT_STACK } from "@/modules/terminalFonts";
 import { useBottomSessionStore, useSessionStore } from "@/modules/sessionStore";
 import { useSettingsStore } from "@/modules/settings.store";
 import { DEFAULT_TERMINAL_THEME } from "@/modules/terminalThemes";
@@ -41,7 +42,7 @@ class Shell {
     this.element.append(this.viewport, this.status);
     host.append(this.element);
     this.term = new Terminal({
-      fontFamily: 'Consolas, "Cascadia Mono", monospace', fontSize: 14,
+      fontFamily: DEFAULT_TERMINAL_FONT_STACK, fontSize: 14,
       scrollback: 1500, theme: this.applySurfaceTheme(),
       linkHandler: { activate() {} },
     });

@@ -8,6 +8,7 @@ import { useModalFocusTrap } from "@/hooks";
 import { OpenExternalIcon } from "@/components/icons";
 import stratumLogo from "@/assets/stratum-logo.webp";
 import { DialogCloseButton } from "./DialogCloseButton";
+import { ThirdPartyNotices } from "./ThirdPartyNotices";
 
 type AboutModalProps = {
   open: boolean;
@@ -123,6 +124,8 @@ export const AboutModal = ({
             Report an issue <OpenExternalIcon />
           </a>
         </nav>
+
+        <ThirdPartyNotices />
 
         <footer className="about-footer">
           <p>{platform} · {runtime} · {buildModeLabel(buildMode)}</p>

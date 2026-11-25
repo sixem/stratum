@@ -127,3 +127,25 @@
     line-height: 1.4;
   }
 }
+
+.about-notices {
+  min-width: 0;
+  summary {
+    width: fit-content;
+    margin-inline: auto;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: var(--font-size-sm);
+  }
+
+  pre {
+    max-height: 32vh;
+    overflow: auto;
+    text-align: start;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+    color: var(--text);
+    font-size: var(--font-size-sm);
+  }
+}
