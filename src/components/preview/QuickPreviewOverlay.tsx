@@ -3,7 +3,6 @@ import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { PREVIEW_STRIP_OPEN_KEY } from "@/constants/settings";
 import { getFileKind, getPathName, isPreviewableEntry } from "@/lib";
 import type { EntryMeta, EntryMetaLookup, FileEntry, RequestScopedThumbnails, ThumbnailLookup } from "@/types";
-import { LoadingIndicator } from "@/components/primitives/LoadingIndicator";
 import { useSettingsStore } from "@/modules";
 import { QuickPreviewFooter } from "./QuickPreviewFooter";
 import { QuickPreviewStrip } from "./QuickPreviewStrip";
@@ -56,12 +55,13 @@ const QuickPreviewOverlayContent = ({
   onRequestThumbs,
   thumbResetKey,
   onSelectPreview,
+  onClose,
   smartTabJump,
   smartTabBlocked,
 }: QuickPreviewOverlayContentProps) => {
   const [stripOpen, setStripOpen] = useState(readPreviewStripOpen);
   const stripId = useId();
-  const stripToggleRef = useRef<HTMLButtonElement>(null);
+  const returnButtonRef = useRef<HTMLButtonElement>(null);
   const includeAudio = useSettingsStore((state) => state.galleryAudio);
   const fileKind = getFileKind(getPathName(path));
   const kind = fileKind === "audio" || fileKind === "video" ? fileKind : "image";
@@ -151,7 +151,30 @@ const QuickPreviewOverlayContent = ({
       aria-modal="true"
       aria-label={preview.label}
       tabIndex={-1}
+      onPointerDownCapture={(event) => {
+        if (event.button === 0 && event.currentTarget !== document.activeElement) {
+          event.currentTarget.focus({ preventScroll: true });
+        }
+      }}
+      onMouseDownCapture={(event) => {
+        // Pointer clicks still activate buttons without taking keyboard focus.
+        if (event.button === 0 && event.target instanceof Element && event.target.closest("button")) {
+          event.preventDefault();
+        }
+      }}
       onKeyDown={(event) => {
+        if (
+          playable && event.key === " " && !event.shiftKey &&
+          !event.altKey && !event.ctrlKey && !event.metaKey && !event.nativeEvent.isComposing
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!event.repeat) preview.handleTogglePlayback();
+          return;
+        }
+        if ((event.key === "Enter" || event.key === " ") && event.target instanceof Element && event.target.closest("button")) {
+          event.stopPropagation();
+        }
         // Reach the last control from the dialog even when Smart Tab owns forward Tab.
         if (
           event.key === "Tab" && event.shiftKey &&
@@ -159,7 +182,7 @@ const QuickPreviewOverlayContent = ({
           event.target === event.currentTarget
         ) {
           event.preventDefault();
-          stripToggleRef.current?.focus();
+          returnButtonRef.current?.focus();
         }
       }}
     >
@@ -180,6 +203,7 @@ const QuickPreviewOverlayContent = ({
         playbackKey={preview.playbackKey}
         mediaAutoplay={preview.mediaAutoplay}
         isReady={preview.isReady}
+        isLoading={preview.isLoading}
         dragging={dragging}
         transforming={transforming}
         videoPoster={preview.videoPoster}
@@ -228,11 +252,6 @@ const QuickPreviewOverlayContent = ({
           />
         ) : null}
       </div>
-      <div className="quick-preview-loading" data-visible={preview.isLoading ? "true" : "false"}>
-        <div className="quick-preview-loading-card">
-          <LoadingIndicator label={`Loading ${preview.kind}`} />
-        </div>
-      </div>
       <PreviewControls
         open={open}
         visible={playable}
@@ -244,7 +263,6 @@ const QuickPreviewOverlayContent = ({
         volumeLabel={preview.volumeLabel}
         mediaVolume={preview.mediaVolume}
         volumeStyle={preview.volumeStyle}
-        volumeButtonRef={preview.volumeButtonRef}
         volumeRangeRef={preview.volumeRangeRef}
         onTogglePlayback={preview.handleTogglePlayback}
         onToggleVolumePicker={preview.handleToggleVolumePicker}
@@ -252,15 +270,21 @@ const QuickPreviewOverlayContent = ({
         onVolumeHoverEnd={preview.handleVolumeHoverEnd}
         onVolumeChange={preview.handleVolumeChange}
         onVolumePointerDown={preview.handleVolumePointerDown}
-        onVolumePointerUp={preview.handleVolumePointerUp}
+        onVolumePointerUp={(event) => {
+          if (document.activeElement === event.currentTarget) {
+            containerRef.current?.focus({ preventScroll: true });
+          }
+          preview.handleVolumePointerUp();
+        }}
         onVolumeBlur={() => preview.scheduleVolumePickerClose(220)}
       />
       <QuickPreviewFooter
         preview={preview}
         stripOpen={stripOpen}
         stripId={stripId}
-        stripToggleRef={stripToggleRef}
+        returnButtonRef={returnButtonRef}
         onToggleStrip={handleToggleStrip}
+        onClose={onClose}
       />
     </div>
   );

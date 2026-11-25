@@ -6,6 +6,7 @@ import { openPathProperties, type ShellMenuTarget } from "@/api";
 import type { BeginFileActivity } from "@/hooks/domain/filesystem/useFileActivity";
 import { getSelectionTargets, isEditableElement, toMessage } from "@/lib";
 import { applyContextMenuVisibility } from "@/lib/contextMenuVisibility";
+import { setTabAnchored } from "@/lib/tabAnchors";
 import { useClipboardStore, usePromptStore, useSettingsStore } from "@/modules";
 import { showBottomPane } from "@/modules/bottomPaneStore";
 import { openQuickMove } from "@/modules/quickMoveSession";
@@ -36,7 +37,7 @@ import { getKeyboardMenuRequest } from "../menus/keyboardContextMenu";
 import { beginSplitPicker, hasSplitTarget } from "@/modules/terminalSplit";
 import type { useTabSession } from "@/hooks/domain/session/useTabSession";
 import { useWindowsContextMenu } from "../menus/useWindowsContextMenu";
-import { buildPlaceTargetMenuItems } from "../menus/placeTargetMenuItems";
+import { buildPlaceTargetMenuItems, isSidebarPlaceTarget } from "../menus/placeTargetMenuItems";
 import { resolveGalleryStartPath } from "../view/previewGallerySource";
 import type { useAppMenuState } from "./useAppMenuState";
 
@@ -201,9 +202,12 @@ export const useAppContextMenus = ({
   }), [currentPath, entryByPath, onSelectionChange, selected, transfer]);
   const handleQuickMove = useCallback((paths: string[]) => openQuickMove(paths, onMoveEntries), [onMoveEntries]);
   const usePaneSession = getPaneSessionStore(pane);
-  const tabId = contextMenu?.kind === "place-target" && contextMenu.target.source === "tab"
-    ? contextMenu.target.tabId : undefined;
+  const placeTarget = contextMenu?.kind === "place-target" ? contextMenu.target : null;
+  const tabId = placeTarget?.source === "tab" ? placeTarget.tabId : undefined;
   const menuTab = usePaneSession(state => tabId ? state.tabs.find(tab => tab.id === tabId) : undefined);
+  const terminalSidebarMenu = usePaneSession(({ activeTabId, tabs }) =>
+    isSidebarPlaceTarget(placeTarget) && tabs.some(tab => tab.id === activeTabId && Boolean(tab.terminal)),
+  );
   const openWindowsMenu = useWindowsContextMenu({
     enabled: windowsMenuEnabled, beginFileActivity, closeContextMenu, onCommand: onShellCommand,
   });
@@ -235,7 +239,7 @@ export const useAppContextMenus = ({
     const main = mainRef.current;
     if (!main) return false;
     const paths = getSelectionTargets(selected, viewParentPath);
-    const request = getKeyboardMenuRequest(main, currentPath, paths, viewParentPath, Boolean(defaultTabGridSize));
+    const request = getKeyboardMenuRequest(main, currentPath, paths, viewParentPath);
     if (!request) return false;
     const { target, point, place, listHeader } = request;
     if (native) {
@@ -255,7 +259,7 @@ export const useAppContextMenus = ({
       openContextMenuAt({ kind: "sort", listHeader, ...point, focusFirstItem: true });
     }
     return true;
-  }, [contextMenu, currentPath, defaultTabGridSize, entryByPath, galleryAction, mainRef, menuTarget, menuUseWindowsForItems,
+  }, [contextMenu, currentPath, entryByPath, galleryAction, mainRef, menuTarget, menuUseWindowsForItems,
     onSelectionChange, openContextMenuAt, openWindowsMenu, selected, viewParentPath]);
 
   const handlePlaceTargetContextMenuDown = useCallback(
@@ -376,24 +380,44 @@ export const useAppContextMenus = ({
     onQuickConvertImages,
     menuShowConvert,
   });
+  const tabActions: ContextMenuItem[] = [];
+  if (menuTab) {
+    tabActions.push({
+      id: "anchor-tab",
+      label: menuTab.anchored ? "Unanchor tab" : "Anchor tab",
+      icon: "anchor",
+      onSelect: () => usePaneSession.getState().setTabs(tabs => setTabAnchored(tabs, menuTab.id, !menuTab.anchored)),
+    });
+    if (menuTab.terminal && !menuTab.anchored) {
+      tabActions.push({
+        id: "split-terminal", label: "Split with…", icon: "split-tab", disabled: !hasSplitTarget(),
+        onSelect: () => beginSplitPicker(pane, menuTab, terminalTabs.closeTab),
+      });
+    }
+    if (menuTab.split) {
+      tabActions.push(
+        { id: "separate-terminal", label: "Separate tabs", icon: "separate-tabs", onSelect: () => terminalTabs.endTerminalSplit(menuTab.id, "both") },
+        { id: "close-split-terminal", label: "Close PowerShell", icon: "remove", onSelect: () => terminalTabs.endTerminalSplit(menuTab.id, "folder") },
+      );
+      if (!menuTab.anchored) {
+        tabActions.push({ id: "close-split-folder", label: "Close folder", icon: "remove",
+          onSelect: () => terminalTabs.endTerminalSplit(menuTab.id, "terminal") });
+      }
+    }
+    if (!menuTab.terminal && defaultTabGridSize !== undefined) {
+      tabActions.push({
+        id: "reset-tab-grid-size",
+        label: "Reset thumbnail size",
+        disabled: (readTabGridSize(menuTab, defaultTabGridSize) ?? defaultTabGridSize) === defaultTabGridSize,
+        onSelect: () => usePaneSession.getState().setTabGridSize(menuTab.id, defaultTabGridSize),
+      });
+    }
+  }
   const placeTargetMenuItems = buildPlaceTargetMenuItems({
-    target: contextMenu?.kind === "place-target" ? contextMenu.target : null,
+    target: placeTarget,
     places,
-    terminalActions: menuTab?.terminal ? [{
-      id: "split-terminal", label: "Split with…", icon: "split-tab", disabled: !hasSplitTarget(),
-      onSelect: () => beginSplitPicker(pane, menuTab, terminalTabs.closeTab),
-    }] : menuTab?.split ? [
-      { id: "separate-terminal", label: "Separate tabs", icon: "separate-tabs", onSelect: () => terminalTabs.endTerminalSplit(menuTab.id, "both") },
-      { id: "close-split-terminal", label: "Close PowerShell", icon: "remove", onSelect: () => terminalTabs.endTerminalSplit(menuTab.id, "folder") },
-      { id: "close-split-folder", label: "Close folder", icon: "remove", onSelect: () => terminalTabs.endTerminalSplit(menuTab.id, "terminal") },
-    ] : undefined,
-    tabAction: menuTab && !menuTab.terminal && defaultTabGridSize !== undefined ? {
-      id: "reset-tab-grid-size",
-      label: "Reset thumbnail size",
-      disabled: (readTabGridSize(menuTab, defaultTabGridSize) ?? defaultTabGridSize) === defaultTabGridSize,
-      onSelect: () => usePaneSession.getState().setTabGridSize(menuTab.id, defaultTabGridSize),
-    } : undefined,
-    onOpenPath: onOpenDir,
+    tabActions,
+    onOpenPath: terminalSidebarMenu ? undefined : onOpenDir,
     onOpenPathNewTab: onOpenDirNewTab,
     onOpenPathInBackgroundTab: menuOpenBackgroundTab ? onOpenDirInBackgroundTab : undefined,
     otherPane,

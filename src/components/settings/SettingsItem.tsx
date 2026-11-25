@@ -12,6 +12,22 @@ export type SettingsItemText = {
 
 export const SettingsSearchMatches = createContext<ReadonlySet<SettingsItemText> | null>(null);
 
+export const SettingsGroup = ({ id, title, items, children }: {
+  id: string;
+  title: string;
+  items: readonly SettingsItemText[];
+  children: ReactNode;
+}) => {
+  const matches = useContext(SettingsSearchMatches);
+  if (matches && !items.some((item) => matches.has(item))) return null;
+  return (
+    <section className="settings-section" id={id} data-settings-group={title}>
+      <div className="settings-section-title">{title}</div>
+      {children}
+    </section>
+  );
+};
+
 type SettingsItemProps = {
   item: SettingsItemText;
   labelFor?: string;

@@ -1,8 +1,9 @@
 // Persistent session state for tabs and view settings.
 import { createWithEqualityFn } from "zustand/traditional";
 import type { SortDir, SortKey, SortState, Tab, ViewMode } from "@/types";
-import type { TabHistory } from "@/types/tabs";
+import type { FolderTab, TabHistory, TerminalSession, TerminalTab } from "@/types/tabs";
 import { createTab, DEFAULT_SORT, getDefaultSortDir } from "@/lib";
+import { readTabContent, selectRestoredFolder } from "@/lib/tabRestore";
 import { resolveDefaultViewMode, useSettingsStore } from "./settings.store";
 import {
   coerceTabAutoColumns, coerceTabGridSize, fillTabGridSizes, getDefaultTabGridSize, getTabGridSizeOnEnable,
@@ -60,18 +61,35 @@ const DEFAULT_SESSION: SessionState = {
   recentJumps: [],
 };
 
-export const createSessionTab = (path: string, base?: Partial<Pick<Tab, "sort" | "search">>): Tab => {
+export const createSessionTab = (path: string, base?: Partial<Pick<Tab, "sort" | "search">>): FolderTab => {
   const settings = useSettingsStore.getState();
   const tab = createTab(path, { ...base, sort: settings.newTabSort ?? base?.sort, viewMode: resolveDefaultViewMode(settings) });
   return seedTabGridSize(tab, getDefaultTabGridSize(settings));
 };
 
+export const createTerminalSessionTab = (shell: string | TerminalSession): TerminalTab => {
+  const tab = createSessionTab("");
+  const terminal = typeof shell === "string" ? { key: tab.id, directory: shell } : shell;
+  return { ...tab, kind: "terminal", terminal, split: undefined };
+};
+
+const restoreFolderSelection = (session: SessionState): SessionState => ({
+  ...session,
+  ...selectRestoredFolder(session, () => createSessionTab("")),
+});
+
 // A restore is a new visit, even if it opens the same saved tab.
 export const prepareSessionRestore = (layout: SessionState, gridSize: TabGridSize | undefined): SessionState => {
   const activeIndex = layout.tabs.findIndex((tab) => tab.id === layout.activeTabId);
   const tabs = fillTabGridSizes(layout.tabs, gridSize)
-    .map((tab) => ({ ...tab, id: createTab(tab.path).id, sort: { ...tab.sort } }));
-  return { tabs, activeTabId: (tabs[activeIndex] ?? tabs[0])?.id ?? null, recentJumps: [...layout.recentJumps] };
+    .map<Tab>((tab) => {
+      const id = createTab(tab.path).id;
+      const copy = { id, sort: { ...tab.sort } };
+      if (tab.kind === "terminal") return { ...tab, ...copy, terminal: { ...tab.terminal, key: id } };
+      const split = tab.split && { ...tab.split, terminal: { ...tab.split.terminal, key: id } };
+      return { ...tab, ...copy, split };
+    });
+  return restoreFolderSelection({ tabs, activeTabId: tabs[activeIndex]?.id ?? null, recentJumps: [...layout.recentJumps] });
 };
 
 const coerceViewMode = (value: unknown): ViewMode => {
@@ -118,12 +136,16 @@ const coerceScrollTop = (value: unknown): number => {
 
 const coerceTabs = (value: unknown) => {
   if (!Array.isArray(value)) return [];
-  return value
+  const tabs = value
     .map<Tab | null>((item) => {
       if (!item || typeof item !== "object") return null;
       const tab = item as {
         id?: unknown;
         path?: unknown;
+        kind?: unknown;
+        anchored?: unknown;
+        terminal?: unknown;
+        split?: unknown;
         crumbTrailPath?: unknown;
         viewMode?: unknown;
         gridSize?: unknown;
@@ -133,10 +155,15 @@ const coerceTabs = (value: unknown) => {
         scrollTop?: unknown;
       };
       if (typeof tab.id !== "string" || typeof tab.path !== "string") return null;
+      const content = readTabContent(tab, tab.id);
+      if (!content) return null;
+      const path = content.kind === "terminal" ? "" : tab.path;
       return {
         id: tab.id,
-        path: tab.path,
-        crumbTrailPath: coerceCrumbTrailPath(tab.crumbTrailPath, tab.path),
+        ...content,
+        path,
+        anchored: tab.anchored === true ? true : undefined,
+        crumbTrailPath: content.kind === "terminal" ? "" : coerceCrumbTrailPath(tab.crumbTrailPath, path),
         viewMode: coerceViewMode(tab.viewMode),
         gridSize: coerceTabGridSize(tab.gridSize),
         gridAutoColumns: coerceTabAutoColumns(tab.gridAutoColumns),
@@ -146,6 +173,7 @@ const coerceTabs = (value: unknown) => {
       };
     })
     .filter((item): item is Tab => Boolean(item));
+  return [...tabs.filter(tab => tab.anchored), ...tabs.filter(tab => !tab.anchored)];
 };
 
 const coerceTabLayout = (value: Partial<TabLayout> | null | undefined): TabLayout => {
@@ -183,12 +211,12 @@ const readStoredSession = (key: string) => {
     const storage = globalThis.localStorage;
     const raw = storage.getItem(key);
     if (raw) {
-      return parseStoredSession(raw);
+      return restoreFolderSelection(parseStoredSession(raw));
     }
     if (key !== STORAGE_KEY) return DEFAULT_SESSION;
     const legacy = storage.getItem(LEGACY_STORAGE_KEY);
     if (!legacy) return DEFAULT_SESSION;
-    const session = parseStoredSession(legacy);
+    const session = restoreFolderSelection(parseStoredSession(legacy));
     // Migrate legacy storage to the new key so tab sort stays persistent.
     writeStoredSession(key, session);
     storage.removeItem(LEGACY_STORAGE_KEY);
@@ -198,23 +226,15 @@ const readStoredSession = (key: string) => {
   }
 };
 
-// A running shell belongs to this window. Only folder tabs can be restored.
+// A running shell belongs to this window. Closing its split leaves a folder tab.
 export function folderWithoutTerminal(tab: Tab): Tab {
   if (!tab.split) return tab;
   const { split, ...folder } = tab;
   return folder;
 }
 
-export const folderLayout = ({ tabs, activeTabId }: TabLayout): TabLayout => {
-  if (!tabs.some(tab => tab.terminal || tab.split)) return { tabs, activeTabId };
-  const folders = tabs.filter(tab => !tab.terminal).map(folderWithoutTerminal);
-  const activeFolder = folders.find(tab => tab.id === activeTabId) ?? folders[0];
-  return { tabs: folders, activeTabId: activeFolder?.id ?? null };
-};
-
 const serializeSession = (key: string, session: SessionState) => {
-  const { tabs, activeTabId } = folderLayout(session);
-  const { recentJumps } = session;
+  const { tabs, activeTabId, recentJumps } = session;
   const payload: StoredSession = { version: STORAGE_VERSION, session: { tabs, activeTabId, recentJumps } };
   return [key, JSON.stringify(payload)] as const;
 };

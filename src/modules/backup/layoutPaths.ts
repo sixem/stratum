@@ -2,6 +2,7 @@
 import { coerceQuickMovePreferences } from "../quickMovePreferences.ts";
 import type { QuickMovePreferences } from "../quickMovePreferences";
 import type { SessionState } from "../sessionStore";
+import { mapTabLocations } from "../../lib/tabLocations.ts";
 import type { WorkspaceLayout } from "../workspaceStore";
 import { backupLocationKey, createBackupPathRemapper } from "./locations.ts";
 import type { BackupPathMapping } from "./locations";
@@ -11,7 +12,7 @@ type MapPath = (path: string) => string;
 
 const mapSessionPaths = (session: SessionState, map: MapPath): SessionState => ({
   ...session,
-  tabs: session.tabs.map((tab) => ({ ...tab, path: map(tab.path), crumbTrailPath: map(tab.crumbTrailPath) })),
+  tabs: session.tabs.map((tab) => mapTabLocations(tab, map)),
   recentJumps: session.recentJumps.map(map),
 });
 

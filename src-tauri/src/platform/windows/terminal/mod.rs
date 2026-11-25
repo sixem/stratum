@@ -1,12 +1,16 @@
 // A bounded pull stream lets a slow or hidden WebView apply backpressure to ConPTY.
 mod directory;
+pub(crate) mod fonts;
 mod process;
 use std::collections::HashMap;
 use std::io::{PipeWriter, Read, Write};
 use std::os::windows::io::{AsRawHandle, OwnedHandle};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tauri::{ipc::Response, State, Webview};
+use tauri::{
+    ipc::{Channel, Response},
+    State, Webview,
+};
 use tokio::sync::{mpsc, Mutex as AsyncMutex};
 use windows_sys::Win32::System::{JobObjects::TerminateJobObject, Threading::WaitForSingleObject};
 
@@ -118,6 +122,12 @@ fn owner(webview: &Webview) -> Result<(), String> {
     }
 }
 
+#[derive(serde::Serialize)]
+pub(crate) struct OpenedTerminal {
+    id: u32,
+    directory: String,
+}
+
 #[tauri::command]
 pub(crate) async fn terminal_open(
     webview: Webview,
@@ -125,7 +135,8 @@ pub(crate) async fn terminal_open(
     directory: String,
     cols: u16,
     rows: u16,
-) -> Result<u32, String> {
+    location: Channel<directory::Location>,
+) -> Result<OpenedTerminal, String> {
     owner(&webview)?;
     let id = {
         let mut registry = state.0.lock().unwrap();
@@ -140,17 +151,21 @@ pub(crate) async fn terminal_open(
         registry.sessions.insert(id, None);
         id
     };
-    let opened = tauri::async_runtime::spawn_blocking(move || open(directory, cols, rows))
-        .await
-        .map_err(|e| e.to_string())
-        .and_then(|result| result);
+    let opened = tauri::async_runtime::spawn_blocking(move || {
+        open(directory, cols, rows, move |report| {
+            let _ = location.send(report);
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())
+    .and_then(|result| result);
     let mut registry = state.0.lock().unwrap();
     match opened {
-        Ok(session) => {
+        Ok((session, directory)) => {
             // A reload or window close also invalidates opens still in flight.
             let slot = registry.sessions.get_mut(&id).ok_or("Terminal closed.")?;
             *slot = Some(Arc::new(session));
-            Ok(id)
+            Ok(OpenedTerminal { id, directory })
         }
         Err(error) => {
             registry.sessions.remove(&id);
@@ -159,7 +174,12 @@ pub(crate) async fn terminal_open(
     }
 }
 
-fn open(directory: String, cols: u16, rows: u16) -> Result<Session, String> {
+fn open(
+    directory: String,
+    cols: u16,
+    rows: u16,
+    on_location: impl Fn(directory::Location) + Send + 'static,
+) -> Result<(Session, String), String> {
     super::process_token::require_standard_token_for_tools()?;
     let directory = if directory.is_empty() {
         crate::domain::filesystem::get_home()
@@ -172,7 +192,7 @@ fn open(directory: String, cols: u16, rows: u16) -> Result<Session, String> {
         return Err("Working folder unavailable.".into());
     }
     let exe = crate::services::shells::powershell_path().ok_or("PowerShell is unavailable.")?;
-    let bridge = directory::DirectoryBridge::new().ok();
+    let bridge = directory::DirectoryBridge::new(on_location).ok();
     let flags = bridge.as_ref().map(|bridge| bridge.arguments());
     let process = process::spawn(
         &exe,
@@ -184,7 +204,7 @@ fn open(directory: String, cols: u16, rows: u16) -> Result<Session, String> {
     .map_err(|e| e.to_string())?;
     let mut session = Session::new(process);
     session.directory = bridge;
-    Ok(session)
+    Ok((session, directory.to_string_lossy().into_owned()))
 }
 
 #[tauri::command]
@@ -194,7 +214,6 @@ pub(crate) async fn terminal_link_directory(
     id: u32,
     version: u32,
     path: Option<String>,
-    channel: tauri::ipc::Channel<directory::Location>,
 ) -> Result<(), String> {
     let session = state.get(&webview, id)?;
     tauri::async_runtime::spawn_blocking(move || {
@@ -202,7 +221,7 @@ pub(crate) async fn terminal_link_directory(
             .directory
             .as_ref()
             .ok_or("PowerShell directory linking is unavailable.")?
-            .update(version, path, channel)
+            .update_link(version, path)
     })
     .await
     .map_err(|e| e.to_string())?

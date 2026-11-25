@@ -67,7 +67,7 @@ export const SettingsBackupSection = ({ sectionId }: { sectionId: string }) => {
 
   return (
     <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Backup</div>
+      <div className="settings-section-title">Backup &amp; restore</div>
       <SettingsItem item={BACKUP_SETTINGS_ITEMS.export} className="is-stacked">
         <div className="settings-backup-export">
           <div className="settings-pills" role="group" aria-label="Export scope">

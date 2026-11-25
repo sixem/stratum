@@ -22,6 +22,15 @@ const ContextGlyph = ({ name, className, children }: ContextGlyphProps) => (
   </svg>
 );
 
+export const AnchorIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="anchor" className={className}>
+    <path d="M12 6v16" />
+    <path d="m19 13 2-1a9 9 0 0 1-18 0l2 1" />
+    <path d="M9 11h6" />
+    <circle cx="12" cy="4" r="2" />
+  </ContextGlyph>
+);
+
 export const ContextOpenIcon = ({ className }: IconProps) => (
   <ContextGlyph name="external-link" className={className}>
     <path d="M15 3h6v6" />
@@ -140,6 +149,29 @@ export const PanelRightIcon = ({ className }: IconProps) => (
   <ContextGlyph name="panel-right" className={className}>
     <rect width="18" height="18" x="3" y="3" rx="2" />
     <path d="M15 3v18" />
+  </ContextGlyph>
+);
+
+export const PanelRightCloseIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="panel-right-close" className={className}>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M15 3v18" />
+    <path d="m8 9 3 3-3 3" />
+  </ContextGlyph>
+);
+
+export const PanelRightOpenIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="panel-right-open" className={className}>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M15 3v18" />
+    <path d="m10 15-3-3 3-3" />
+  </ContextGlyph>
+);
+
+export const ReturnIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="undo-2" className={className}>
+    <path d="M9 14 4 9l5-5" />
+    <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" />
   </ContextGlyph>
 );
 

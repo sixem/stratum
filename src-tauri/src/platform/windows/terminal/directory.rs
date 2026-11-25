@@ -4,43 +4,64 @@ use std::fs;
 use std::io::{self, Read};
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use tauri::ipc::Channel;
+use std::sync::Mutex;
 
 #[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct Location {
-    version: u32,
-    path: Option<String>,
+    pub(super) version: u32,
+    pub(super) path: Option<String>,
     #[serde(default)]
-    error: Option<String>,
-}
-
-#[derive(Default)]
-struct Link {
-    version: u32,
-    watcher: Option<RecommendedWatcher>,
-    channel: Arc<Mutex<Option<Channel<Location>>>>,
+    pub(super) error: Option<String>,
 }
 
 // Directory names are data in a private per-session mailbox. No path or command
 // from the folder view is written to the terminal input stream.
 pub(super) struct DirectoryBridge {
     root: PathBuf,
-    link: Mutex<Link>,
+    watcher: Option<RecommendedWatcher>,
+    linked_version: Mutex<u32>,
+}
+
+fn is_filesystem_path(path: &str) -> bool {
+    Path::new(path).is_absolute() && !path.contains('\0') && path.len() <= 32767 * 4
 }
 
 impl DirectoryBridge {
-    pub fn new() -> io::Result<Self> {
+    pub fn new(on_location: impl Fn(Location) + Send + 'static) -> io::Result<Self> {
         let mut token = [0u8; 16];
         getrandom::fill(&mut token).map_err(|e| io::Error::other(e.to_string()))?;
         let root =
             std::env::temp_dir().join(format!("stratum-shell-{:032x}", u128::from_le_bytes(token)));
         fs::create_dir(&root)?;
-        let bridge = Self {
+        let mut bridge = Self {
             root,
-            link: Mutex::default(),
+            watcher: None,
+            linked_version: Mutex::new(0),
         };
         fs::write(bridge.root.join("signal"), [])?;
+
+        // Watch before the shell starts so the first prompt can report its directory.
+        let report = bridge.root.join("report");
+        let mut watcher =
+            notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+                if !event.is_ok_and(|event| event.paths.iter().any(|path| path == &report)) {
+                    return;
+                }
+                let Ok(file) = fs::File::open(&report) else {
+                    return;
+                };
+                if let Ok(location) = serde_json::from_reader::<_, Location>(file.take(256 * 1024))
+                {
+                    if location.path.as_deref().is_some_and(is_filesystem_path) {
+                        on_location(location);
+                    }
+                }
+            })
+            .map_err(io::Error::other)?;
+        watcher
+            .watch(&bridge.root, RecursiveMode::NonRecursive)
+            .map_err(io::Error::other)?;
+        bridge.watcher = Some(watcher);
         Ok(bridge)
     }
 
@@ -56,54 +77,16 @@ impl DirectoryBridge {
         format!("-NoLogo -NoExit -Command \"{script}\"")
     }
 
-    pub fn update(
-        &self,
-        version: u32,
-        path: Option<String>,
-        channel: Channel<Location>,
-    ) -> Result<(), String> {
-        let mut link = self.link.lock().unwrap();
-        if version <= link.version {
+    pub fn update_link(&self, version: u32, path: Option<String>) -> Result<(), String> {
+        let mut linked_version = self.linked_version.lock().unwrap();
+        if version <= *linked_version {
             return Ok(());
         }
-        if let Some(dir) = &path {
-            if !Path::new(dir).is_absolute() || dir.contains('\0') || dir.len() > 32767 * 4 {
-                return Err("Invalid folder path.".into());
-            }
-            if link.watcher.is_none() {
-                let report = self.root.join("report");
-                let recipient = link.channel.clone();
-                let mut watcher =
-                    notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
-                        if !event.is_ok_and(|e| e.paths.iter().any(|p| p == &report)) {
-                            return;
-                        }
-                        let Ok(file) = fs::File::open(&report) else {
-                            return;
-                        };
-                        if let Ok(location) =
-                            serde_json::from_reader::<_, Location>(file.take(256 * 1024))
-                        {
-                            if !location.path.as_ref().is_some_and(|dir| {
-                                Path::new(dir).is_absolute() && !dir.contains('\0')
-                            }) {
-                                return;
-                            }
-                            if let Some(channel) = recipient.lock().unwrap().as_ref() {
-                                let _ = channel.send(location);
-                            }
-                        }
-                    })
-                    .map_err(|e| e.to_string())?;
-                watcher
-                    .watch(&self.root, RecursiveMode::NonRecursive)
-                    .map_err(|e| e.to_string())?;
-                link.watcher = Some(watcher);
-            }
-            *link.channel.lock().unwrap() = Some(channel);
-        } else {
-            link.watcher = None;
-            link.channel.lock().unwrap().take();
+        if path
+            .as_deref()
+            .is_some_and(|path| !is_filesystem_path(path))
+        {
+            return Err("Invalid folder path.".into());
         }
         let request = serde_json::to_vec(&Location {
             version,
@@ -116,14 +99,14 @@ impl DirectoryBridge {
             .and_then(|_| fs::rename(temp, self.root.join("request")))
             .and_then(|_| fs::write(self.root.join("signal"), version.to_le_bytes()))
             .map_err(|e| e.to_string())?;
-        link.version = version;
+        *linked_version = version;
         Ok(())
     }
 }
 
 impl Drop for DirectoryBridge {
     fn drop(&mut self) {
-        self.link.get_mut().unwrap().watcher.take();
+        self.watcher.take();
         // Remove only our own files, even if a child wrote something unexpected.
         for name in [
             "signal",

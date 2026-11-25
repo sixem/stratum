@@ -19,3 +19,10 @@ test("Undo keeps a UNC share as the root", () => {
     assert.equal(getParentPath(root + "\\Work\\Report.txt"), root + "\\Work");
   }
 });
+
+test("volume GUID paths keep the root separator for parent destinations", () => {
+  const root = "\\\\?\\Volume{8fd2b351-7262-4799-907c-17334e096365}\\";
+  assert.equal(getParentPath(root), root);
+  assert.equal(getParentPath(root + "Folder"), root);
+  assert.equal(getParentPath(root + "Folder\\Child"), root + "Folder");
+});

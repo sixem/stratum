@@ -1,6 +1,6 @@
-// Gallery metadata and the disclosure control for its file list.
+// Gallery metadata and controls for the preview list and returning to the file view.
 import type { RefObject } from "react";
-import { ContextChevronRightIcon } from "@/components/icons";
+import { PanelRightCloseIcon, PanelRightOpenIcon, ReturnIcon } from "@/components/icons/contextMenuIcons";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 
 type QuickPreviewFooterProps = {
@@ -14,18 +14,21 @@ type QuickPreviewFooterProps = {
   };
   stripOpen: boolean;
   stripId: string;
-  stripToggleRef: RefObject<HTMLButtonElement | null>;
+  returnButtonRef: RefObject<HTMLButtonElement | null>;
   onToggleStrip: () => void;
+  onClose: () => void;
 };
 
 export const QuickPreviewFooter = ({
   preview,
   stripOpen,
   stripId,
-  stripToggleRef,
+  returnButtonRef,
   onToggleStrip,
+  onClose,
 }: QuickPreviewFooterProps) => {
   const toggleLabel = stripOpen ? "Hide preview list" : "Show preview list";
+  const StripIcon = stripOpen ? PanelRightCloseIcon : PanelRightOpenIcon;
 
   return (
     <footer className="statusbar quick-preview-info">
@@ -51,23 +54,26 @@ export const QuickPreviewFooter = ({
           <span className="quick-preview-info-value tnum">{preview.zoomLabel}</span>
         </div> : null}
       </div>
-      <TooltipWrapper text="Toggle preview list">
-        <button
-          type="button"
-          className="quick-preview-strip-toggle"
-          ref={stripToggleRef}
-          aria-label={toggleLabel}
-          aria-controls={stripId}
-          aria-expanded={stripOpen}
-          onClick={onToggleStrip}
-          onKeyDown={(event) => {
-            // Let the button activate without triggering gallery close or video playback.
-            if (event.key === "Enter" || event.key === " ") event.stopPropagation();
-          }}
-        >
-          <ContextChevronRightIcon className="quick-preview-strip-chevron" />
-        </button>
-      </TooltipWrapper>
+      <div className="quick-preview-info-actions">
+        <TooltipWrapper text={toggleLabel}>
+          <button
+            type="button"
+            className="quick-preview-info-action"
+            aria-label={toggleLabel}
+            aria-controls={stripId}
+            aria-expanded={stripOpen}
+            onClick={onToggleStrip}
+          >
+            <StripIcon />
+          </button>
+        </TooltipWrapper>
+        <TooltipWrapper text="Exit Gallery">
+          <button type="button" className="quick-preview-info-action" ref={returnButtonRef}
+            aria-label="Exit Gallery" onClick={onClose}>
+            <ReturnIcon />
+          </button>
+        </TooltipWrapper>
+      </div>
     </footer>
   );
 };

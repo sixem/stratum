@@ -8,8 +8,7 @@ import { showEntryRenamePrompt } from "./showEntryRenamePrompt";
 type BuildPlaceTargetMenuItemsOptions = {
   target: PlaceContextTarget | null;
   places: Place[];
-  tabAction?: ContextMenuItem;
-  terminalActions?: ContextMenuItem[];
+  tabActions: ContextMenuItem[];
   onOpenPath?: (path: string) => void;
   onOpenPathNewTab?: (path: string) => void;
   onOpenPathInBackgroundTab?: (path: string) => void;
@@ -26,6 +25,9 @@ type BuildPlaceTargetMenuItemsOptions = {
   onOpenProperties?: (path: string) => void | Promise<unknown>;
 };
 
+export const isSidebarPlaceTarget = (target: PlaceContextTarget | null) =>
+  target?.source === "sidebar-place" || target?.source === "sidebar-recent";
+
 const buildAddLabel = (source: PlaceContextTarget["source"]) => {
   if (source === "sidebar-recent") return "Add to places";
   return "Add folder to places";
@@ -40,8 +42,7 @@ const buildPinLabel = (source: PlaceContextTarget["source"], exists: boolean, pi
 export const buildPlaceTargetMenuItems = ({
   target,
   places,
-  tabAction,
-  terminalActions,
+  tabActions,
   onOpenPath,
   onOpenPathNewTab,
   onOpenPathInBackgroundTab,
@@ -59,14 +60,13 @@ export const buildPlaceTargetMenuItems = ({
 }: BuildPlaceTargetMenuItemsOptions): ContextMenuItem[] => {
   if (!target) return [];
   const path = target.path.trim();
-  const items: ContextMenuItem[] = [...(terminalActions ?? [])];
-  if (tabAction) items.push(tabAction);
+  const items = [...tabActions];
   if (!path) return items;
   if (items.length) items.push({ kind: "divider", id: "place-target-divider-tab" });
   const key = normalizePath(path);
   const existing = places.find((place) => normalizePath(place.path) === key);
   const isPinned = existing?.pinned === true;
-  const hasFolderActions = target.source === "sidebar-place" || target.source === "sidebar-recent" || target.source === "tab";
+  const hasFolderActions = isSidebarPlaceTarget(target) || target.source === "tab";
   const parent = hasFolderActions ? getParentPath(path) : null;
   const hasParent = parent && folderPathKey(parent) !== folderPathKey(path);
   const folderName = getPathName(path);

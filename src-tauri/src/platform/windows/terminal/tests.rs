@@ -69,6 +69,61 @@ fn powershell_round_trip_resize_interrupt_and_exit() {
     });
 }
 
+async fn expect_directory(
+    reports: &mut mpsc::UnboundedReceiver<directory::Location>,
+    version: u32,
+    expected: &Path,
+) {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while let Some(report) = reports.recv().await {
+            if report.version == version
+                && report
+                    .path
+                    .as_deref()
+                    .is_some_and(|path| Path::new(path) == expected)
+            {
+                assert!(report.error.is_none());
+                return;
+            }
+        }
+        panic!("Terminal stopped reporting its directory.");
+    })
+    .await
+    .unwrap_or_else(|_| panic!("Missing directory report for {}", expected.display()));
+}
+
+#[test]
+fn powershell_reports_directories_before_during_and_after_linking() {
+    let exe = crate::services::shells::powershell_path().unwrap();
+    let cwd = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let (send_report, mut reports) = mpsc::unbounded_channel();
+    let bridge = directory::DirectoryBridge::new(move |location| {
+        let _ = send_report.send(location);
+    })
+    .unwrap();
+    let args = format!("-NoProfile {}", bridge.arguments());
+    let shell = Session::new(process::spawn(&exe, &args, cwd, 80, 24).unwrap());
+
+    tauri::async_runtime::block_on(async {
+        expect(&shell, "PS ").await;
+        expect_directory(&mut reports, 0, cwd).await;
+
+        send(
+            &shell,
+            "Set-Location -LiteralPath src; [Console]::WriteLine('cwd-' + 'changed')\r",
+        );
+        expect(&shell, "cwd-changed").await;
+        expect_directory(&mut reports, 0, &cwd.join("src")).await;
+
+        bridge
+            .update_link(1, Some(cwd.to_str().unwrap().to_owned()))
+            .unwrap();
+        expect_directory(&mut reports, 1, cwd).await;
+        bridge.update_link(2, None).unwrap();
+        expect_directory(&mut reports, 2, cwd).await;
+    });
+}
+
 #[test]
 #[ignore = "requires an installed Debian WSL distribution"]
 fn wsl_debian_round_trip() {

@@ -1,14 +1,13 @@
 // Read the live layout, including scroll positions that have yet to reach the tab stores.
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { usePlacesStore } from "@/modules/placesStore";
-import { folderLayout, useBottomSessionStore, useSessionStore } from "@/modules/sessionStore";
+import { useBottomSessionStore, useSessionStore } from "@/modules/sessionStore";
 import type { SessionState } from "@/modules/sessionStore";
 import type { WorkspaceLayout } from "@/modules/workspaceStore";
 import { folderPathKey } from "./paths";
 
 const captureSession = (session: SessionState, pane: "main" | "bottom"): SessionState => {
-  const { tabs, activeTabId } = folderLayout(session);
-  const { recentJumps } = session;
+  const { tabs, activeTabId, recentJumps } = session;
   const files = document.querySelector<HTMLElement>(`[data-file-pane="${pane}"]`);
   const viewport = files?.querySelector<HTMLElement>(".list-body, .thumb-viewport");
   const displayedPath = folderPathKey(files?.dataset.panePath ?? "");

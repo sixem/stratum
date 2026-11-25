@@ -202,38 +202,6 @@ export const useQuickPreviewInput = ({
     return () => window.removeEventListener("keydown", handleStripArrowNav);
   }, [activeIndex, activePath, onSelectPreview, open, previewItems]);
 
-  // Keep Space available to focused controls and use it for playback on the stage.
-  useEffect(() => {
-    if (!open || !playable) return;
-    const handleSpace = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.isComposing || event.repeat) return;
-
-      const isSpace = event.key === " " || event.key === "Spacebar" || event.code === "Space";
-      if (!isSpace) return;
-
-      const active = document.activeElement;
-      if (isEditableElement(active)) return;
-      if (active?.closest("button, [role='slider']")) return;
-      if (!document.hasFocus()) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      const media = mediaRef.current;
-      if (!media) return;
-      if (media.paused) {
-        void media.play().catch(() => {});
-      } else {
-        media.pause();
-      }
-    };
-
-    window.addEventListener("keydown", handleSpace);
-    return () => window.removeEventListener("keydown", handleSpace);
-  }, [open, playable]);
-
   // Smart Tab jump also works in preview mode to jump the right-hand strip.
   useEffect(() => {
     if (!open || !stripOpen || !smartTabJump) return;
@@ -250,6 +218,8 @@ export const useQuickPreviewInput = ({
       if (!document.hasFocus()) return;
       const strip = stripRef.current;
       if (!strip) return;
+      // Let keyboard focus advance normally between playback and window controls.
+      if (active !== containerRef.current && !strip.contains(active)) return;
       const maxScrollTop = strip.scrollHeight - strip.clientHeight;
       if (maxScrollTop <= 0) return;
 

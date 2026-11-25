@@ -29,9 +29,20 @@
 .terminal-split-side {
   grid-area: terminal;
   display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   padding: var(--main-padding);
+
+  .terminal-directory-bar {
+    padding-inline: 8px;
+    border-radius: var(--panel-radius) var(--panel-radius) 0 0;
+  }
+
+  .powershell-surface {
+    border-start-start-radius: 0;
+    border-start-end-radius: 0;
+  }
 }
 
 .terminal-split-actions {

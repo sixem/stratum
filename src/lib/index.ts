@@ -41,7 +41,7 @@ export { entryExists, getDriveKey, toMessage } from "./fsUtils";
 export { applyHiddenExtension, getRenameInputValue } from "./renamePlan";
 export { formatDeleteLabel, getSelectionTargets } from "./selection";
 export { DEFAULT_SORT, getDefaultSortDir, nextSortState } from "./sort";
-export { createTab, DEFAULT_TAB_STATE } from "./tabs";
+export { createTab, DEFAULT_TAB_STATE, getAdjacentTab } from "./tabs";
 export { buildDriveTooltip, buildEntryTooltip } from "./tooltips";
 export type { EntryItem } from "./entryItems";
 export type { FileKind } from "./fileKind";

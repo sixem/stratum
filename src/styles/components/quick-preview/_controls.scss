@@ -1,6 +1,5 @@
 // Quick preview transport controls and metadata bars.
 @use "../control-recipes" as control;
-@use "../modals/shared" as shell;
 
 .quick-preview-info {
   grid-column: 1 / -1;
@@ -8,54 +7,48 @@
 }
 
 .quick-preview-controls {
-  --quick-preview-slider-track-idle: rgba(186, 197, 214, 0.28);
-  --quick-preview-slider-track-fill: linear-gradient(
-    90deg,
-    rgba(250, 252, 255, 0.96),
-    rgba(216, 226, 243, 0.9)
-  );
+  --quick-preview-transport-height: 1.625rem;
+  --quick-preview-progress-fill: color-mix(in srgb, var(--stroke), #fff 4%);
   position: relative;
   // Keep video controls in the main column so they don't overlay the right strip.
   grid-column: 1 / 2;
   grid-row: 3;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
+  gap: 6px;
+  padding-inline: 8px;
   border-top: var(--quick-preview-divider);
-  background: linear-gradient(180deg, rgba(8, 10, 16, 0.78), rgba(8, 10, 16, 0.62));
-  @include shell.frosted-backdrop(var(--frosted-surface-blur), var(--frosted-surface-saturate));
-  color: var(--text);
+  background: #000;
+  color: #ededed;
   pointer-events: auto;
 }
 
 .quick-preview-control-button {
-  @include control.toolbar-control(
-    5px,
-    rgba(16, 20, 30, 0.84),
-    rgba(255, 255, 255, 0.14),
-    5px 9px,
-    null,
-    var(--font-size-xs),
-    600,
-    0.04em,
-    var(--text)
-  );
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  min-height: var(--range-hit-height);
+  min-height: var(--quick-preview-transport-height);
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
   line-height: 1;
-  transition: border-color 0.14s ease, background 0.14s ease;
+  cursor: pointer;
 }
 
-.quick-preview-control-button:hover:not(:disabled) {
-  border-color: rgba(var(--accent-rgb), 0.5);
-  background: rgba(20, 26, 38, 0.92);
+.quick-preview-control-button:is(:hover, :focus-visible, [aria-expanded="true"]):not(:disabled) {
+  color: #fff;
+}
+
+.quick-preview-control-button:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.45);
+  outline-offset: -1px;
 }
 
 .quick-preview-control-button--playback {
-  flex: 0 0 var(--range-hit-height);
-  width: var(--range-hit-height);
-  padding: 0;
+  flex: 0 0 var(--quick-preview-transport-height);
 }
 
 .quick-preview-control-button--playback:disabled {
@@ -64,197 +57,162 @@
 }
 
 .quick-preview-playback-icon {
-  width: 18px;
-  height: 18px;
+  width: 15px;
+  height: 15px;
 }
 
 .quick-preview-timeline-shell {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .quick-preview-timeline {
-  --preview-seek-progress: 0%;
-  --quick-preview-timeline-progress: var(--preview-seek-progress);
-  --quick-preview-timeline-played: rgba(var(--accent-rgb), 0.72);
+  --preview-seek-progress: 0;
   position: relative;
-  flex: 1 1 auto;
+  flex: 1;
   min-width: 0;
-  height: var(--range-hit-height);
+  border-inline: var(--quick-preview-divider);
+  background: #000;
   cursor: pointer;
   touch-action: none;
 }
 
 .quick-preview-timeline.is-disabled {
-  --quick-preview-timeline-progress: 0%;
   cursor: default;
-  opacity: 0.48;
 }
 
-.quick-preview-timeline:focus-visible .quick-preview-timeline-rail {
-  outline: 1px solid var(--muted);
-  outline-offset: 2px;
+.quick-preview-timeline:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.45);
+  outline-offset: -1px;
 }
 
-.quick-preview-timeline:is(:hover, :focus-visible, .is-dragging):not(.is-disabled) {
-  --quick-preview-timeline-played: var(--accent);
-}
-
-// Quarter marks divide the seek area without adding labels.
+// Scale the fill across the full transport row without changing its layout.
 .quick-preview-timeline::before {
-  --quick-preview-timeline-tick: linear-gradient(rgba(186, 197, 214, 0.38) 0 0);
   content: "";
   position: absolute;
-  inset-inline: 0;
-  top: calc(50% + 5px);
-  height: 3px;
-  background:
-    var(--quick-preview-timeline-tick) 25% / 1px 100% no-repeat,
-    var(--quick-preview-timeline-tick) 50% / 1px 100% no-repeat,
-    var(--quick-preview-timeline-tick) 75% / 1px 100% no-repeat;
+  inset: 0;
+  background: var(--quick-preview-progress-fill);
+  transform: scaleX(var(--preview-seek-progress));
+  transform-origin: left center;
   pointer-events: none;
 }
 
-.quick-preview-timeline-rail {
-  position: absolute;
-  inset-inline: 0;
-  top: 50%;
-  height: 3px;
-  border-radius: 1px;
-  transform: translateY(-50%);
-  background: linear-gradient(
-    90deg,
-    var(--quick-preview-timeline-played) 0 var(--quick-preview-timeline-progress),
-    rgba(186, 197, 214, 0.26) var(--quick-preview-timeline-progress) 100%
-  );
-  pointer-events: none;
-}
-
-.quick-preview-playhead {
-  position: absolute;
-  left: var(--preview-seek-progress);
-  top: 50%;
-  width: 2px;
-  height: 12px;
-  border-radius: 1px;
-  transform: translate(-50%, -50%);
-  background: var(--text);
-  pointer-events: none;
-}
-
-.quick-preview-timeline.is-disabled .quick-preview-playhead {
-  visibility: hidden;
-}
-
-.quick-preview-control-volume-slider::before {
+.quick-preview-timeline-hover-time {
   position: absolute;
   left: 0;
-  right: 0;
   top: 50%;
-  height: var(--range-track-height);
-  transform: translateY(-50%);
-  border: var(--surface-border-width) solid rgba(186, 197, 214, 0.38);
-  border-radius: var(--range-radius);
-  // Paint progress inside the rail so the border stays visible at full volume or seek.
-  background:
-    var(--quick-preview-slider-track-fill) left center / var(--quick-preview-slider-progress) 100% no-repeat,
-    var(--quick-preview-slider-track-idle);
-  background-clip: padding-box;
+  transform: translate(var(--preview-seek-hover-left, 0px), -50%);
+  color: #fff;
+  -webkit-text-stroke: 2px #101010;
+  paint-order: stroke fill;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
   pointer-events: none;
 }
 
 .quick-preview-control-volume {
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  justify-self: end;
+  align-self: center;
 }
 
 .quick-preview-control-volume-slider {
   --preview-volume-progress: 0%;
-  --quick-preview-slider-progress: var(--preview-volume-progress);
-  display: inline-flex;
-  align-items: center;
-  position: relative;
-  width: 0;
-  opacity: 0;
-  overflow: hidden;
-  pointer-events: none;
-  margin-left: 0;
-  transition: width 0.18s ease, opacity 0.18s ease, margin-left 0.18s ease;
-}
-
-.quick-preview-control-volume-slider::before {
-  content: "";
+  position: absolute;
+  z-index: 1;
+  inset-inline-end: 0;
+  inset-block-end: 100%;
+  width: 6.5rem;
+  // The padding keeps the pointer inside the flyout on the way to the slider.
+  padding-block-end: 6px;
+  visibility: hidden;
 }
 
 .quick-preview-control-volume[data-open="true"] .quick-preview-control-volume-slider {
-  width: 130px;
-  opacity: 1;
-  pointer-events: auto;
-  margin-left: 8px;
+  visibility: visible;
 }
 
 .quick-preview-control-volume-button {
-  min-width: 54px;
+  min-width: 4.75ch;
   text-align: center;
 }
 
 .quick-preview-control-range {
-  --range-track-border: transparent;
-  --range-track-background: transparent;
-  --range-progress-background: transparent;
-  --range-thumb-background: rgba(252, 254, 255, 0.96);
-  min-width: 0;
-  position: relative;
+  display: block;
+  width: 100%;
+  height: 1.5rem;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  appearance: none;
+  border: var(--quick-preview-divider);
+  border-radius: 5px;
+  background: linear-gradient(90deg,
+    var(--quick-preview-progress-fill) 0 var(--preview-volume-progress),
+    #000 var(--preview-volume-progress) 100%);
+  background-clip: padding-box;
+  box-shadow: var(--navigation-item-shadow);
+  cursor: pointer;
+}
+
+.quick-preview-control-range:focus-visible {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.quick-preview-control-range::-webkit-slider-runnable-track {
+  height: 100%;
+}
+
+.quick-preview-control-range::-webkit-slider-thumb {
+  // The full meter is the hit target, with travel all the way to either edge.
+  appearance: none;
+  width: 0;
+  height: 100%;
+}
+
+:is(.quick-preview-control-time, .quick-preview-timeline-hover-time) {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .quick-preview-control-time {
-  font-size: var(--font-size-xs);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: rgba(229, 235, 245, 0.75);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  align-self: center;
   text-align: center;
-  min-width: 9ch;
+  min-width: 7ch;
 }
 
 .quick-preview-control-time-current {
-  color: rgba(252, 254, 255, 0.92);
+  color: #ededed;
 }
 
 .quick-preview-control-time-remaining {
-  color: rgba(229, 235, 245, 0.72);
+  color: rgba(255, 255, 255, 0.65);
 }
 
-.quick-preview-strip-toggle {
+.quick-preview-info-actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  // Reach into the footer padding while keeping the existing height.
+  margin-block: calc(-1 * var(--statusbar-padding-block));
+}
+
+.quick-preview-info-action {
   @include control.icon-button-shell(26px);
   border: 0;
-  flex: 0 0 auto;
-  // Let the toggle reach into the footer padding without making the bar taller.
-  margin-block: calc(-1 * var(--statusbar-padding-block));
 
   &:hover,
   &:focus-visible {
     color: var(--text);
   }
-}
-
-.quick-preview-strip-chevron {
-  width: 15px;
-  height: 15px;
-  transition: transform 0.18s ease;
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
+  > svg {
+    width: 17px;
+    height: 17px;
   }
-}
-
-.quick-preview-strip-toggle[aria-expanded="false"] .quick-preview-strip-chevron {
-  transform: rotate(180deg);
 }
 
 .quick-preview-info-row {

@@ -2,13 +2,13 @@
 import { useCallback, useMemo } from "react";
 import type { RefObject } from "react";
 import { REOPEN_CLOSED_TAB_KEYBIND } from "@/constants";
-import { formatDeleteLabel, getDriveKey, getSelectionTargets, isEditableElement, normalizeDropPath } from "@/lib";
+import { formatDeleteLabel, getAdjacentTab, getDriveKey, getSelectionTargets, isEditableElement, normalizeDropPath } from "@/lib";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { getFileCommandFocus } from "../menus/keyboardContextMenu";
 import { focusOtherFilePane } from "../inputs/focusOtherFilePane";
 import { focusSplitTerminal } from "../inputs/focusSplitTerminal";
 import { useKeybinds } from "../inputs/useKeybinds";
-import { useIndexedSearchUiStore, usePromptStore, writeFileClipboard } from "@/modules";
+import { useIndexedSearchUiStore, usePromptStore, useSettingsStore, writeFileClipboard } from "@/modules";
 import { openQuickMove } from "@/modules/quickMoveSession";
 import type { KeybindMap } from "@/modules/keybinds";
 import type { Tab } from "@/types";
@@ -137,18 +137,19 @@ export const useAppKeybinds = ({
   }, [canHandleGlobalKeybind, onReopenClosedTab]);
 
   const handleAdjacentTab = useCallback(
-    (direction: -1 | 1, wrap = false) => {
+    (direction: -1 | 1) => {
       if (!canHandleGlobalKeybind()) return false;
       if (!activeTabId || tabs.length < 2) return false;
-      const index = tabs.findIndex((tab) => tab.id === activeTabId);
-      if (index < 0) return false;
-      const nextIndex = index + direction;
-      const target = tabs[wrap ? (nextIndex + tabs.length) % tabs.length : nextIndex];
-      if (!target) return false;
+      const target = getAdjacentTab(tabs, activeTabId, direction, useSettingsStore.getState().wrapTabNavigation);
+      if (!target) return true;
+      // Move focus before the terminal input is detached so subsequent keys stay in this pane.
+      if (document.activeElement?.closest("[data-terminal]")) {
+        mainRef.current?.focus({ preventScroll: true });
+      }
       onSelectTab(target.id);
       return true;
     },
-    [activeTabId, canHandleGlobalKeybind, onSelectTab, tabs],
+    [activeTabId, canHandleGlobalKeybind, mainRef, onSelectTab, tabs],
   );
 
   const handleSelectTabIndex = useCallback(
@@ -268,7 +269,8 @@ export const useAppKeybinds = ({
 
   const handleContextMenuKeybind = useCallback((native: boolean) => {
     if (modalOpen) return false;
-    return (contextMenuOpen || canHandleViewKeybind()) && onContextMenu(native);
+    const sidebarFocused = Boolean(document.activeElement?.closest(".sidebar [data-context-place]"));
+    return (contextMenuOpen || sidebarFocused || canHandleViewKeybind()) && onContextMenu(native);
   }, [canHandleViewKeybind, contextMenuOpen, modalOpen, onContextMenu]);
 
   const handleRefreshKeybind = useCallback((_event: KeyboardEvent) => {
@@ -314,8 +316,8 @@ export const useAppKeybinds = ({
       focusSplitTerminal: (event: KeyboardEvent) => !event.isComposing && canHandleGlobalKeybind() &&
         !useBottomPaneStore.getState().active && !isEditableElement(document.activeElement) && focusSplitTerminal(mainRef.current),
       previewItem: handlePreviewItemKeybind,
-      prevTab: () => handleAdjacentTab(-1),
-      nextTab: () => handleAdjacentTab(1),
+      prevTab: () => !isEditableElement(document.activeElement) && handleAdjacentTab(-1),
+      nextTab: () => !isEditableElement(document.activeElement) && handleAdjacentTab(1),
     }),
     [
       canHandleGlobalKeybind,
@@ -347,8 +349,8 @@ export const useAppKeybinds = ({
         "Control+c": () => handleClipboardSelection("copy"),
         "Control+x": () => handleClipboardSelection("move"),
         "Control+v": handlePasteSelectionKeybind,
-        "Control+Tab": () => handleAdjacentTab(1, true),
-        "Control+Shift+Tab": () => handleAdjacentTab(-1, true),
+        "Control+Tab": () => handleAdjacentTab(1),
+        "Control+Shift+Tab": () => handleAdjacentTab(-1),
         [REOPEN_CLOSED_TAB_KEYBIND]: handleReopenClosedTabKeybind,
         ContextMenu: () => handleContextMenuKeybind(false),
         "Shift+F10": () => handleContextMenuKeybind(true),

@@ -19,8 +19,9 @@ export const applyStartupSession = () => {
   }
 
   const outgoing = captureWorkspaceLayout();
+  const firstTab = outgoing.main.tabs[0];
   if (!activeId && !outgoing.pane.open && !outgoing.bottom.tabs.length &&
-    outgoing.main.tabs.length <= 1 && !outgoing.main.tabs[0]?.path.trim()) return;
+    outgoing.main.tabs.length <= 1 && !firstTab?.path.trim() && !firstTab?.anchored) return;
 
   const tab = createSessionTab("");
   // Keep places and recent locations available on the Start browsing screen.

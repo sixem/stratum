@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import { FILE_TOOLTIP_DELAY_MS, TOOLTIP_EDGE_PADDING, TOOLTIP_GAP } from "@/constants";
 import { buildEntryTooltip } from "@/lib";
-import { useTooltipStore } from "@/modules";
+import { useSettingsStore, useTooltipStore } from "@/modules";
 import type { EntryMeta, EntryMetaLookup, FileEntry } from "@/types";
 
 type UseGridTooltipOptions = {
@@ -44,6 +44,7 @@ export const useGridTooltip = ({
   disabled,
   delayMs = FILE_TOOLTIP_DELAY_MS,
 }: UseGridTooltipOptions) => {
+  const enabled = useSettingsStore((state) => state.showTooltips);
   const entryByPathRef = useRef(entryByPath);
   const entryMetaRef = useRef(entryMeta);
   const hoveredCardRef = useRef<HTMLElement | null>(null);
@@ -92,7 +93,7 @@ export const useGridTooltip = ({
       return document.hasFocus();
     };
 
-    if (disabled) {
+    if (disabled || !enabled) {
       hideTooltip();
       return () => {};
     }
@@ -302,5 +303,5 @@ export const useGridTooltip = ({
       resetHoverState();
       hideTooltip();
     };
-  }, [delayMs, disabled, viewportRef]);
+  }, [delayMs, disabled, enabled, viewportRef]);
 };

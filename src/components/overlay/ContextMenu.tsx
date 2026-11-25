@@ -14,6 +14,7 @@ import {
   TabCloseIcon,
 } from "@/components/icons";
 import {
+  AnchorIcon,
   ContextCutIcon,
   ContextGalleryIcon,
   ContextInvertSelectionIcon,
@@ -71,6 +72,7 @@ const contextIcons = {
   paste: ContextPasteIcon,
   "paste-into-folder": ContextPasteIntoFolderIcon,
   terminal: ContextTerminalIcon,
+  anchor: AnchorIcon,
   "split-tab": Link2Icon,
   "separate-tabs": ContextUnlinkIcon,
   pin: ContextPinIcon,

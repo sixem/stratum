@@ -23,6 +23,32 @@
     opacity: 0.5;
   }
 
+  .settings-terminal-theme-select {
+    inline-size: 10rem;
+    max-inline-size: 100%;
+  }
+
+  .settings-terminal-font-select {
+    inline-size: 13rem;
+    max-inline-size: 100%;
+  }
+
+  .settings-terminal-preview {
+    grid-column: 1 / -1;
+    min-width: 0;
+    padding: 6px 9px;
+    border: var(--surface-border-width) solid var(--stroke);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    line-height: 1.45;
+
+    > div {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: pre;
+    }
+  }
+
   .settings-label {
     font-weight: 600;
     font-size: var(--font-size-md);

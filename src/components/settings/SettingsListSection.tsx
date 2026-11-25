@@ -3,7 +3,7 @@ import { PressButton } from "@/components/primitives/PressButton";
 import { LIST_COLUMN_OPTIONS } from "@/constants/settings";
 import { useSettingsStore } from "@/modules";
 import type { ListDensity } from "@/modules/settings.types";
-import { SettingsItem } from "./SettingsItem";
+import { SettingsGroup, SettingsItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
 
 export const LIST_SETTINGS_ITEMS = {
@@ -32,8 +32,7 @@ export const SettingsListSection = ({ sectionId }: { sectionId: string }) => {
   const visibleColumns = { listShowSize: showSize, listShowModified: showModified };
 
   return (
-    <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">List</div>
+    <SettingsGroup id={sectionId} title="List" items={Object.values(LIST_SETTINGS_ITEMS)}>
       <SettingsItem item={LIST_SETTINGS_ITEMS.density}>
         <div className="settings-pills" role="group" aria-label="Row spacing">
           {DENSITIES.map(({ value, label }) => (
@@ -64,6 +63,6 @@ export const SettingsListSection = ({ sectionId }: { sectionId: string }) => {
           ))}
         </div>
       </SettingsItem>
-    </section>
+    </SettingsGroup>
   );
 };

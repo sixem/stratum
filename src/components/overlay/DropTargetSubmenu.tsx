@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
+import { ChevronUpIcon } from "@/components/icons";
 import { ScrollArea } from "@/components/primitives";
 import { getDropTargetFromPoint } from "@/lib";
 import type { DropTarget, DropTargetSubmenuItem } from "@/lib";
@@ -333,7 +334,7 @@ export const DropTargetSubmenu = ({
         style={{ maxHeight: menuPosition.maxHeight }}
       >
         <div className="drop-submenu-title">
-          <span>Subfolders</span>
+          <span>{items[0]?.parent ? "Drop into" : "Subfolders"}</span>
         </div>
         <ScrollArea
           ref={viewportRef}
@@ -342,22 +343,20 @@ export const DropTargetSubmenu = ({
           contentClassName="drop-submenu-content"
           scrollbarVariant="nav"
         >
-          {loading ? (
-            <div className="drop-submenu-status">Loading folders...</div>
-          ) : (
-            items.map((item) => (
-              <div
-                key={item.path}
-                className="drop-submenu-item"
-                data-drop-kind="tab-subfolder"
-                data-drop-path={item.path}
-                data-drop-tab-id={hostTabId}
-                data-drop-target={activePath === item.path ? "true" : "false"}
-              >
-                <span className="drop-submenu-item-name">{item.name}</span>
-              </div>
-            ))
-          )}
+          {items.map((item) => (
+            <div
+              key={item.path}
+              className="drop-submenu-item"
+              data-drop-kind="tab-destination"
+              data-drop-path={item.path}
+              data-drop-tab-id={hostTabId}
+              data-drop-target={activePath === item.path ? "true" : "false"}
+            >
+              {item.parent && <ChevronUpIcon className="drop-submenu-parent-icon" />}
+              <span className="drop-submenu-item-name">{item.name}</span>
+            </div>
+          ))}
+          {loading && <div className="drop-submenu-status">Loading folders...</div>}
         </ScrollArea>
       </div>
     </div>,

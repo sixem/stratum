@@ -27,12 +27,12 @@ export const readTabGridSize = (tab: Tab | undefined, defaultSize: TabGridSize |
   return typeof defaultSize === "number" ? tab?.gridAutoColumns : tab?.gridSize;
 };
 
-export const withTabGridSize = (tab: Tab, size: TabGridSize): Tab => {
+export const withTabGridSize = <T extends Tab>(tab: T, size: TabGridSize): T => {
   if (readTabGridSize(tab, size) === size) return tab;
   return typeof size === "number" ? { ...tab, gridAutoColumns: size } : { ...tab, gridSize: size };
 };
 
-export const seedTabGridSize = (tab: Tab, defaultSize: TabGridSize | undefined): Tab =>
+export const seedTabGridSize = <T extends Tab>(tab: T, defaultSize: TabGridSize | undefined): T =>
   defaultSize !== undefined && readTabGridSize(tab, defaultSize) === undefined
     ? withTabGridSize(tab, defaultSize) : tab;
 

@@ -98,7 +98,6 @@ export const useQuickPreviewMedia = ({
     mediaVolume: volume.mediaVolume,
     volumePickerOpen: volume.volumePickerOpen,
     externalActionError: lifecycle.externalActionError,
-    volumeButtonRef: volume.volumeButtonRef,
     volumeRangeRef: volume.volumeRangeRef,
     handlePlaybackPlay: lifecycle.handlePlaybackPlay,
     handlePlaybackPause: lifecycle.handlePlaybackPause,

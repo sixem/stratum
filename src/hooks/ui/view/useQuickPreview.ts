@@ -351,8 +351,10 @@ export const useQuickPreview = ({
       if (!next || next !== previewBinding) return;
       const modified = (event.ctrlKey || event.altKey || event.metaKey) && !event.getModifierState("AltGraph");
       const current = previewRef.current;
-      if (event.code === "Space" && !modified && !event.shiftKey && current &&
-        getFileKind(getPathName(current.path)) === "audio") return;
+      if (event.code === "Space" && !modified && !event.shiftKey && current) {
+        const kind = getFileKind(getPathName(current.path));
+        if (kind === "audio" || kind === "video") return;
+      }
       const handled = startHold(getHoveredPreviewTarget(), "key", event.code, false, modified);
       if (!handled) return;
       event.preventDefault();

@@ -7,6 +7,7 @@ import type {
   SyntheticEvent as ReactSyntheticEvent,
   WheelEvent as ReactWheelEvent,
 } from "react";
+import loader from "@/assets/icons/loaders/ring.svg";
 import { FileTypeIcon } from "@/components/icons";
 import { getExtension } from "@/lib";
 import { PreviewPlaybackMedia } from "./PreviewPlaybackMedia";
@@ -20,6 +21,7 @@ type PreviewStageProps = {
   playbackKey: string;
   mediaAutoplay: boolean;
   isReady: boolean;
+  isLoading: boolean;
   dragging: boolean;
   transforming: boolean;
   videoPoster?: string;
@@ -49,6 +51,7 @@ export const PreviewStage = ({
   playbackKey,
   mediaAutoplay,
   isReady,
+  isLoading,
   dragging,
   transforming,
   videoPoster,
@@ -125,6 +128,11 @@ export const PreviewStage = ({
           />
         )}
       </div>
+      {isLoading ? (
+        <div className="quick-preview-loading" role="status" aria-label={`Loading ${kind}`}>
+          <img src={loader} alt="" />
+        </div>
+      ) : null}
       {errorContent}
     </div>
   );

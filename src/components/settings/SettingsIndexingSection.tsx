@@ -89,7 +89,7 @@ export const SettingsIndexingSection = ({
 
   return (
     <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Indexing</div>
+      <div className="settings-section-title">Indexed search</div>
       <SettingsItem item={INDEXING_SETTINGS_ITEMS.enable}>
         <label className="settings-toggle">
           <input

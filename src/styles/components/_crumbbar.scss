@@ -20,6 +20,19 @@
   box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.25);
 }
 
+.terminal-directory-bar {
+  flex: none;
+
+  .terminal-directory-path {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+  }
+}
+
 // Scope crumb elements to the bar without increasing specificity.
 :where(.crumbbar) {
   .crumbs {

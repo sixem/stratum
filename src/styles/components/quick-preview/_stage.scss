@@ -55,28 +55,22 @@
 
 .quick-preview-loading {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
+  inset-block-start: 12px;
+  inset-inline-end: 12px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.18s ease;
+  // Keep the indicator out of view when the next item loads immediately.
+  animation: quick-preview-show-spinner 0s 150ms forwards;
 }
 
-.quick-preview-loading::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at center, rgba(12, 16, 24, 0.55), rgba(6, 8, 12, 0));
+.quick-preview-loading img {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
-.quick-preview-loading[data-visible="true"] {
-  opacity: 1;
-}
-
-.quick-preview-loading-card {
-  position: relative;
-  z-index: 1;
+@keyframes quick-preview-show-spinner {
+  to { opacity: 0.85; }
 }
 
 .quick-preview-error {

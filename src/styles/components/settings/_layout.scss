@@ -40,10 +40,13 @@
 
   .settings-nav {
     display: grid;
+    align-content: start;
     gap: 6px;
     min-height: 0;
     overflow: auto;
-    padding-right: 4px;
+    margin: 0;
+    padding: 0 4px 0 0;
+    list-style: none;
   }
 
   .settings-footer {
@@ -93,6 +96,7 @@
   }
 
   .settings-nav-item {
+    width: 100%;
     padding: 6px 10px;
     @include control.panel-card(8px, var(--surface-nav));
     font-size: var(--font-size-sm);
@@ -124,6 +128,40 @@
   .settings-nav[data-searching="true"] .settings-nav-item.is-search-match {
     background: color-mix(in srgb, var(--surface-nav), var(--accent) 6%);
     border-color: color-mix(in srgb, var(--stroke), var(--accent) 18%);
+  }
+
+  .settings-nav-groups {
+    display: grid;
+    gap: 2px;
+    margin: 4px 0 2px 11px;
+    padding: 0 0 0 7px;
+    border-inline-start: var(--surface-border-width) solid var(--stroke);
+    list-style: none;
+  }
+
+  .settings-nav-group {
+    width: 100%;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: color-mix(in srgb, var(--text) 72%, var(--muted));
+    font-family: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    text-align: start;
+    cursor: pointer;
+
+    &:hover,
+    &[aria-current="location"] {
+      background: rgba(var(--accent-rgb), 0.09);
+      color: var(--text);
+    }
+
+    &:focus-visible {
+      outline: 2px solid rgba(var(--accent-rgb), 0.56);
+      outline-offset: -2px;
+    }
   }
 
   .settings-diagnostics {
@@ -241,7 +279,7 @@
     scrollbar-gutter: stable;
   }
 
-  .settings-search-results {
+  :is(.settings-search-results, .settings-category-panel) {
     display: grid;
     gap: 12px;
   }
@@ -259,7 +297,7 @@
     font-size: var(--font-size-sm);
   }
 
-  .settings-tab-panel {
+  .settings-category-panel {
     min-height: 0;
   }
 

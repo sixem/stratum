@@ -13,10 +13,10 @@ import { EyeIcon, EyeOffIcon } from "@/components";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useDeferredRange } from "./useDeferredRange";
 
-import { SettingsItem } from "./SettingsItem";
+import { SettingsGroup, SettingsItem, SettingsToggleItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
 
-export const BARS_SETTINGS_ITEMS = {
+const TAB_SETTINGS_ITEMS = {
   tabNumbers: {
     label: "Tab numbers",
     description: "Show a small index number beside each tab title.",
@@ -30,19 +30,31 @@ export const BARS_SETTINGS_ITEMS = {
     description: "Gently reveal the selected tab’s contents in either pane.",
     keywords: "animation transition motion fade",
   },
+  wrapTabNavigation: {
+    label: "Wrap tab navigation",
+    description: "Go from the first tab to the last, and from the last tab to the first, with tab shortcuts in either pane.",
+    keywords: "wrap around cycle previous next left right ctrl tab keyboard",
+  },
   tabDropSubfolders: {
     label: "Tab drop subfolders",
     description: "When dragging onto a tab, reveal its direct subfolders as extra drop targets.",
   },
+  tabDropParentFolder: {
+    label: "Tab drop parent folder",
+    description: "Show the parent folder at the top of the tab drop menu.",
+  },
+} satisfies Record<string, SettingsItemText>;
+
+const SIDEBAR_SETTINGS_ITEMS = {
   recentJumps: {
-    label: "Recent jumps window",
+    label: "Recent jumps limit",
     description: "Control how many locations stay in the rolling list.",
     keywords: "recent folders sidebar history",
   },
   sidebarOrder: {
-    label: "Sidebar order",
-    description: "Reorder sections or toggle visibility to match your flow.",
-    keywords: "sidebar visibility reorder hide show",
+    label: "Sidebar sections",
+    description: "Reorder or show and hide Places, Recent jumps, and Tips.",
+    keywords: "sidebar visibility reorder hide show disable tips hints",
   },
 } satisfies Record<string, SettingsItemText>;
 
@@ -51,7 +63,7 @@ type SettingsBarsSectionProps = {
 };
 
 const RECENT_STEP = 1;
-export const TOPBAR_SETTINGS_OPTIONS = [
+const TOPBAR_SETTINGS_OPTIONS = [
   {
     key: "showRecycleBinButton",
     label: "Topbar Recycle Bin button",
@@ -81,6 +93,12 @@ export const TOPBAR_SETTINGS_OPTIONS = [
   },
 ] as const;
 
+export const BARS_SETTINGS_ITEMS = [
+  ...Object.values(TAB_SETTINGS_ITEMS),
+  ...TOPBAR_SETTINGS_OPTIONS,
+  ...Object.values(SIDEBAR_SETTINGS_ITEMS),
+];
+
 export const SettingsBarsSection = ({
   sectionId,
 }: SettingsBarsSectionProps) => {
@@ -89,7 +107,9 @@ export const SettingsBarsSection = ({
       showTabNumbers: state.showTabNumbers,
       fixedWidthTabs: state.fixedWidthTabs,
       animateTabChanges: state.animateTabChanges,
+      wrapTabNavigation: state.wrapTabNavigation,
       tabDropSubfolders: state.tabDropSubfolders,
+      tabDropParentFolder: state.tabDropParentFolder,
       showRecycleBinButton: state.showRecycleBinButton,
       showDriveToggle: state.showDriveToggle,
       collapseDrivePickerOnBlur: state.collapseDrivePickerOnBlur,
@@ -103,7 +123,7 @@ export const SettingsBarsSection = ({
     shallow,
   );
   const {
-    showTabNumbers, fixedWidthTabs, animateTabChanges, tabDropSubfolders, sidebarRecentLimit,
+    showTabNumbers, fixedWidthTabs, animateTabChanges, wrapTabNavigation, tabDropSubfolders, sidebarRecentLimit,
     sidebarSectionOrder, sidebarHiddenSections, updateSettings,
   } = settings;
   const normalizedSidebarOrder = normalizeSidebarSectionOrder(sidebarSectionOrder);
@@ -139,141 +159,99 @@ export const SettingsBarsSection = ({
   };
 
   return (
-    <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Tabs &amp; bars</div>
-      <SettingsItem item={BARS_SETTINGS_ITEMS.tabNumbers}>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={showTabNumbers}
-            onChange={(event) =>
-              updateSettings({ showTabNumbers: event.currentTarget.checked })
-            }
-          />
-          <span />
-        </label>
-      </SettingsItem>
-      <SettingsItem item={BARS_SETTINGS_ITEMS.fixedWidthTabs}>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={fixedWidthTabs}
-            onChange={(event) =>
-              updateSettings({ fixedWidthTabs: event.currentTarget.checked })
-            }
-          />
-          <span />
-        </label>
-      </SettingsItem>
-      <SettingsItem item={BARS_SETTINGS_ITEMS.animateTabChanges}>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            aria-label={BARS_SETTINGS_ITEMS.animateTabChanges.label}
-            checked={animateTabChanges}
-            onChange={(event) => updateSettings({ animateTabChanges: event.currentTarget.checked })}
-          />
-          <span />
-        </label>
-      </SettingsItem>
-      <SettingsItem item={BARS_SETTINGS_ITEMS.tabDropSubfolders}>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={tabDropSubfolders}
-            onChange={(event) =>
-              updateSettings({ tabDropSubfolders: event.currentTarget.checked })
-            }
-          />
-          <span />
-        </label>
-      </SettingsItem>
-      {TOPBAR_SETTINGS_OPTIONS.map((option) => {
-        const { key } = option;
-        return (
-          <SettingsItem item={option} key={key}>
-            <label className="settings-toggle">
-              <input
-                type="checkbox"
-                aria-label={option.label}
-                checked={settings[key]}
-                onChange={(event) => updateSettings({ [key]: event.currentTarget.checked })}
-              />
-              <span />
-            </label>
-          </SettingsItem>
-        );
-      })}
-      <div className="settings-section-title">Sidebar</div>
-      <SettingsItem item={BARS_SETTINGS_ITEMS.recentJumps}>
-        <div className="settings-range">
-          <input
-            type="range"
-            className="ui-range"
-            min={SIDEBAR_RECENT_LIMIT_MIN}
-            max={SIDEBAR_RECENT_LIMIT_MAX}
-            step={RECENT_STEP}
-            {...recentRange.bind}
-          />
-          <span className="settings-value">{recentRange.draft}</span>
-        </div>
-      </SettingsItem>
-      <SettingsItem item={BARS_SETTINGS_ITEMS.sidebarOrder} className="is-stacked">
-        <div className="settings-order">
-          {normalizedSidebarOrder.map((sectionIdValue, index) => {
-            const section = SIDEBAR_SECTION_DEFINITIONS.find(
-              (item) => item.id === sectionIdValue,
-            );
-            const isHidden = hiddenSet.has(sectionIdValue);
-            return (
-              <div
-                className={`settings-order-item${isHidden ? " is-hidden" : ""}`}
-                key={sectionIdValue}
-              >
-                <span className="settings-order-label">
-                  {section?.label ?? sectionIdValue}
-                </span>
-                <div className="settings-order-actions">
-                  <PressButton
-                    type="button"
-                    className={`settings-order-visibility${
-                      isHidden ? " is-hidden" : ""
-                    }`}
-                    onClick={() => handleToggleSection(sectionIdValue)}
-                    aria-label={`${
-                      isHidden ? "Show" : "Hide"
-                    } ${section?.label ?? sectionIdValue} section`}
-                  >
-                    {isHidden ? (
-                      <EyeOffIcon className="settings-order-icon" />
-                    ) : (
-                      <EyeIcon className="settings-order-icon" />
-                    )}
-                  </PressButton>
-                  <PressButton
-                    type="button"
-                    className="btn ghost"
-                    disabled={index === 0}
-                    onClick={() => handleMoveSidebarSection(sectionIdValue, -1)}
-                    aria-label={`Move ${section?.label ?? sectionIdValue} up`}
-                  >
-                    Up
-                  </PressButton>
-                  <PressButton
-                    type="button"
-                    className="btn ghost"
-                    disabled={index === normalizedSidebarOrder.length - 1}
-                    onClick={() => handleMoveSidebarSection(sectionIdValue, 1)}
-                    aria-label={`Move ${section?.label ?? sectionIdValue} down`}
-                  >
-                    Down
-                  </PressButton>
+    <>
+      <SettingsGroup id={sectionId} title="Tabs" items={Object.values(TAB_SETTINGS_ITEMS)}>
+        <SettingsToggleItem item={TAB_SETTINGS_ITEMS.tabNumbers} checked={showTabNumbers}
+          onChange={(checked) => updateSettings({ showTabNumbers: checked })} />
+        <SettingsToggleItem item={TAB_SETTINGS_ITEMS.fixedWidthTabs} checked={fixedWidthTabs}
+          onChange={(checked) => updateSettings({ fixedWidthTabs: checked })} />
+        <SettingsToggleItem item={TAB_SETTINGS_ITEMS.animateTabChanges} checked={animateTabChanges}
+          onChange={(checked) => updateSettings({ animateTabChanges: checked })} />
+        <SettingsToggleItem item={TAB_SETTINGS_ITEMS.wrapTabNavigation} checked={wrapTabNavigation}
+          onChange={(checked) => updateSettings({ wrapTabNavigation: checked })} />
+        <SettingsToggleItem item={TAB_SETTINGS_ITEMS.tabDropSubfolders} checked={tabDropSubfolders}
+          onChange={(checked) => updateSettings({ tabDropSubfolders: checked })} />
+        <SettingsToggleItem item={TAB_SETTINGS_ITEMS.tabDropParentFolder} checked={settings.tabDropParentFolder}
+          onChange={(checked) => updateSettings({ tabDropParentFolder: checked })} />
+      </SettingsGroup>
+      <SettingsGroup id={`${sectionId}-topbar`} title="Top bar" items={TOPBAR_SETTINGS_OPTIONS}>
+        {TOPBAR_SETTINGS_OPTIONS.map((option) => (
+          <SettingsToggleItem key={option.key} item={option} checked={settings[option.key]}
+            onChange={(checked) => updateSettings({ [option.key]: checked })} />
+        ))}
+      </SettingsGroup>
+      <SettingsGroup id={`${sectionId}-sidebar`} title="Sidebar" items={Object.values(SIDEBAR_SETTINGS_ITEMS)}>
+        <SettingsItem item={SIDEBAR_SETTINGS_ITEMS.recentJumps}>
+          <div className="settings-range">
+            <input
+              type="range"
+              aria-label={SIDEBAR_SETTINGS_ITEMS.recentJumps.label}
+              className="ui-range"
+              min={SIDEBAR_RECENT_LIMIT_MIN}
+              max={SIDEBAR_RECENT_LIMIT_MAX}
+              step={RECENT_STEP}
+              {...recentRange.bind}
+            />
+            <span className="settings-value">{recentRange.draft}</span>
+          </div>
+        </SettingsItem>
+        <SettingsItem item={SIDEBAR_SETTINGS_ITEMS.sidebarOrder} className="is-stacked">
+          <div className="settings-order">
+            {normalizedSidebarOrder.map((sectionIdValue, index) => {
+              const section = SIDEBAR_SECTION_DEFINITIONS.find(
+                (item) => item.id === sectionIdValue,
+              );
+              const isHidden = hiddenSet.has(sectionIdValue);
+              return (
+                <div
+                  className={`settings-order-item${isHidden ? " is-hidden" : ""}`}
+                  key={sectionIdValue}
+                >
+                  <span className="settings-order-label">
+                    {section?.label ?? sectionIdValue}
+                  </span>
+                  <div className="settings-order-actions">
+                    <PressButton
+                      type="button"
+                      className={`settings-order-visibility${
+                        isHidden ? " is-hidden" : ""
+                      }`}
+                      onClick={() => handleToggleSection(sectionIdValue)}
+                      aria-label={`${
+                        isHidden ? "Show" : "Hide"
+                      } ${section?.label ?? sectionIdValue} section`}
+                    >
+                      {isHidden ? (
+                        <EyeOffIcon className="settings-order-icon" />
+                      ) : (
+                        <EyeIcon className="settings-order-icon" />
+                      )}
+                    </PressButton>
+                    <PressButton
+                      type="button"
+                      className="btn ghost"
+                      disabled={index === 0}
+                      onClick={() => handleMoveSidebarSection(sectionIdValue, -1)}
+                      aria-label={`Move ${section?.label ?? sectionIdValue} up`}
+                    >
+                      Up
+                    </PressButton>
+                    <PressButton
+                      type="button"
+                      className="btn ghost"
+                      disabled={index === normalizedSidebarOrder.length - 1}
+                      onClick={() => handleMoveSidebarSection(sectionIdValue, 1)}
+                      aria-label={`Move ${section?.label ?? sectionIdValue} down`}
+                    >
+                      Down
+                    </PressButton>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      </SettingsItem>
-    </section>
+              );
+            })}
+          </div>
+        </SettingsItem>
+      </SettingsGroup>
+    </>
   );
 };

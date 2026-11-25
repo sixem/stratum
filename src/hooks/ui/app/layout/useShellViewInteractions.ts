@@ -11,6 +11,8 @@ import { useAppCommands } from "../useAppCommands";
 import { useAppContextMenuSection } from "../useAppContextMenuSection";
 import type { ContextMenuServices } from "../useAppContextMenus";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
+import type { PlaceContextTarget } from "@/types";
+import { isSidebarPlaceTarget } from "../../menus/placeTargetMenuItems";
 import { useAppPreviewSection } from "../useAppPreviewSection";
 import { useAppRenameFlow } from "../useAppRenameFlow";
 import { useAppSelectionHandlers } from "../useAppSelectionHandlers";
@@ -294,6 +296,9 @@ export const useShellViewInteractions = ({
     onUnpinPlace: unpinPlace,
     onRemovePlace: removePlace,
   };
+  // Sidebar actions follow pane focus even though the sidebar sits outside both panes.
+  const getPlaceMenuOwner = (target: PlaceContextTarget) =>
+    isSidebarPlaceTarget(target) && useBottomPaneStore.getState().active ? menuState.bottomMenu : menuState;
   const {
     paneFileCommands,
     openKeyboardContextMenu,
@@ -310,14 +315,13 @@ export const useShellViewInteractions = ({
     onShellCommand,
     mainRef: viewState.mainRef,
     contextMenu: menuState.contextMenu,
-    openContextMenuAt: menuState.openContextMenuAt,
+    openContextMenuAt: (menu) => {
+      const owner = menu.kind === "place-target" ? getPlaceMenuOwner(menu.target) : menuState;
+      owner.openContextMenuAt(menu);
+    },
     openSortMenu: menuState.openSortMenu,
     openEntryMenu: menuState.openEntryMenu,
-    openPlaceTargetMenu: (event, target) => {
-      const fromSidebar = target.source === "sidebar-place" || target.source === "sidebar-recent";
-      const owner = fromSidebar && useBottomPaneStore.getState().active ? menuState.bottomMenu : menuState;
-      owner.openPlaceTargetMenu(event, target);
-    },
+    openPlaceTargetMenu: (event, target) => getPlaceMenuOwner(target).openPlaceTargetMenu(event, target),
     closeContextMenu: menuState.closeContextMenu,
     selected,
     entryByPath: viewModel.entryByPath,

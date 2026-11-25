@@ -2,6 +2,7 @@ import type { ViewMode } from "./view";
 import type { SortState } from "./sort";
 import type { FixedGridSize } from "@/modules/settings.types";
 
+// Identifies a terminal view and its starting directory. The live process stays in the terminal component.
 export type TerminalSession = { key: string; directory: string };
 export type TerminalSplit = {
   terminal: TerminalSession;
@@ -11,11 +12,10 @@ export type TerminalSplit = {
   stacked?: boolean;
 };
 
-export type Tab = {
+type TabBase = {
   id: string;
   path: string;
-  terminal?: TerminalSession;
-  split?: TerminalSplit;
+  anchored?: true;
   // Deepest path visited in this tab's current branch for breadcrumb continuation.
   crumbTrailPath: string;
   viewMode: ViewMode;
@@ -25,6 +25,10 @@ export type Tab = {
   sort: SortState;
   search: string;
 };
+
+export type FolderTab = TabBase & { kind: "folder"; split?: TerminalSplit; terminal?: never };
+export type TerminalTab = TabBase & { kind: "terminal"; terminal: TerminalSession; split?: never };
+export type Tab = FolderTab | TerminalTab;
 
 export type TabHistory = {
   back: string[];

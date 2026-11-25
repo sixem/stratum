@@ -90,7 +90,7 @@
   width: min(360px, 100%);
   padding: 18px 20px;
   border-radius: 10px;
-  border: 1px solid var(--stroke);
+  border: var(--surface-border-width) solid var(--stroke);
   background: var(--surface-control-muted);
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
 }
@@ -104,6 +104,12 @@
 :root[data-ambient="true"] .empty-state:where(:not(.view-lander .empty-state)) {
   background: var(--panel-2);
   border-color: var(--stroke);
+}
+
+:root[data-dark-mode="true"] :is(.thumb-empty, .list-empty) .empty-state {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 // Scope lander content to the panel without increasing specificity.

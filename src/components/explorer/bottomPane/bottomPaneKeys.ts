@@ -1,7 +1,7 @@
 // Route keyboard actions to the tabs and selection of the focused lower pane.
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 import { REOPEN_CLOSED_TAB_KEYBIND } from "@/constants";
-import { formatDeleteLabel, isEditableElement } from "@/lib";
+import { formatDeleteLabel, getAdjacentTab, isEditableElement } from "@/lib";
 import { releaseInputFocusOnEscape } from "@/hooks/ui/inputs/inputFocus";
 import { focusOtherFilePane } from "@/hooks/ui/inputs/focusOtherFilePane";
 import { focusSplitTerminal } from "@/hooks/ui/inputs/focusSplitTerminal";
@@ -50,7 +50,7 @@ export function bottomPaneKeys({
     // Menus use a portal. Their keystrokes are handled before reaching this pane.
     if (!event.currentTarget.contains(event.target as Node)) return;
     const binding = buildKeybindFromEvent(event.nativeEvent);
-    const { keybinds, confirmDelete, smartTabJump } = useSettingsStore.getState();
+    const { keybinds, confirmDelete, smartTabJump, wrapTabNavigation } = useSettingsStore.getState();
     // Indexed search belongs to the window, even when the lower pane has focus.
     if (binding === keybinds.openIndexedSearch) return;
     event.stopPropagation();
@@ -62,16 +62,20 @@ export function bottomPaneKeys({
     if (event.repeat && !event.key.startsWith("Arrow")) return;
     const cmd = event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey;
     const key = event.key.toLowerCase();
+    const tabCycle = binding === "Control+Tab" || binding === "Control+Shift+Tab";
     if (binding === REOPEN_CLOSED_TAB_KEYBIND) tabs.reopenClosedTab();
     else if (binding === keybinds.newTab) tabs.newTab();
     else if (binding === keybinds.closeTab && tabs.activeTabId) closeTab(tabs.activeTabId);
     else if (cmd && key === "l") { address.current?.focus(); address.current?.select(); }
-    else if ((binding === "Control+Tab" || binding === "Control+Shift+Tab" ||
-        binding === keybinds.prevTab || binding === keybinds.nextTab) && tabs.tabs.length) {
-      const n = tabs.tabs.length;
-      const i = tabs.tabs.findIndex(tab => tab.id === tabs.activeTabId);
+    else if ((tabCycle || binding === keybinds.prevTab || binding === keybinds.nextTab) && tabs.tabs.length) {
+      if (!tabCycle && isEditableElement(event.target as Element)) return;
       const backward = binding === "Control+Shift+Tab" || binding === keybinds.prevTab;
-      tabs.selectTab(tabs.tabs[(i + (backward ? n - 1 : 1)) % n].id);
+      const target = getAdjacentTab(tabs.tabs, tabs.activeTabId, backward ? -1 : 1, wrapTabNavigation);
+      if (target) {
+        // Retain lower-pane focus when switching unmounts the terminal input.
+        if ((event.target as Element).closest("[data-terminal]")) files.current?.focus({ preventScroll: true });
+        tabs.selectTab(target.id);
+      }
     } else if (cmd && /^[1-9]$/.test(key)) {
       const tab = tabs.tabs[Number(key) - 1];
       if (tab) tabs.selectTab(tab.id);

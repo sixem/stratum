@@ -2,8 +2,9 @@
 import type { ReactNode } from "react";
 import { KEYBIND_DEFINITIONS } from "@/modules";
 import { BACKUP_SETTINGS_ITEMS, SettingsBackupSection } from "./SettingsBackupSection";
-import { BARS_SETTINGS_ITEMS, SettingsBarsSection, TOPBAR_SETTINGS_OPTIONS } from "./SettingsBarsSection";
+import { BARS_SETTINGS_ITEMS, SettingsBarsSection } from "./SettingsBarsSection";
 import { CACHE_SETTINGS_ITEMS, SettingsCacheSection } from "./SettingsCacheSection";
+import { FILE_VIEW_DEFAULTS_ITEMS, SettingsFileViewDefaults } from "./SettingsFileViewDefaults";
 import { FLAIR_SETTINGS_ITEMS, SettingsFlairSection } from "./SettingsFlairSection";
 import { GENERAL_SETTINGS_ITEMS, SettingsGeneralSection } from "./SettingsGeneralSection";
 import { GRID_SETTINGS_ITEMS, SettingsGridSection } from "./SettingsGridSection";
@@ -20,8 +21,7 @@ export type SettingsSectionId =
   | "settings-general"
   | "settings-indexing"
   | "settings-bars"
-  | "settings-grid"
-  | "settings-list"
+  | "settings-file-views"
   | "settings-menus"
   | "settings-flair"
   | "settings-thumbnails"
@@ -40,6 +40,7 @@ export type SettingsSectionRenderContext = {
 export type SettingsSectionDefinition = {
   id: SettingsSectionId;
   label: string;
+  keywords?: string;
   items: readonly SettingsItemText[];
   render: (context: SettingsSectionRenderContext) => ReactNode;
 };
@@ -52,22 +53,30 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
     render: ({ open }) => <SettingsGeneralSection sectionId="settings-general" open={open} />,
   },
   {
+    id: "settings-flair",
+    label: "Appearance",
+    keywords: "flair",
+    items: Object.values(FLAIR_SETTINGS_ITEMS),
+    render: ({ open }) => <SettingsFlairSection sectionId="settings-flair" open={open} />,
+  },
+  {
     id: "settings-bars",
-    label: "Tabs & bars",
-    items: [...Object.values(BARS_SETTINGS_ITEMS), ...TOPBAR_SETTINGS_OPTIONS],
+    label: "Tabs & layout",
+    keywords: "bars",
+    items: BARS_SETTINGS_ITEMS,
     render: () => <SettingsBarsSection sectionId="settings-bars" />,
   },
   {
-    id: "settings-grid",
-    label: "Grid",
-    items: Object.values(GRID_SETTINGS_ITEMS),
-    render: () => <SettingsGridSection sectionId="settings-grid" />,
-  },
-  {
-    id: "settings-list",
-    label: "List",
-    items: Object.values(LIST_SETTINGS_ITEMS),
-    render: () => <SettingsListSection sectionId="settings-list" />,
+    id: "settings-file-views",
+    label: "File views",
+    items: [...Object.values(FILE_VIEW_DEFAULTS_ITEMS), ...Object.values(GRID_SETTINGS_ITEMS), ...Object.values(LIST_SETTINGS_ITEMS)],
+    render: () => (
+      <>
+        <SettingsFileViewDefaults sectionId="settings-file-views" />
+        <SettingsGridSection sectionId="settings-grid" />
+        <SettingsListSection sectionId="settings-list" />
+      </>
+    ),
   },
   {
     id: "settings-menus",
@@ -76,18 +85,32 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
     render: () => <SettingsMenusSection sectionId="settings-menus" />,
   },
   {
+    id: "settings-keybinds",
+    label: "Shortcuts",
+    keywords: "keybinds keybindings keyboard controls",
+    items: [...Object.values(KEYBINDS_SETTINGS_ITEMS), ...KEYBIND_DEFINITIONS],
+    render: ({ open, onCaptureChange }) => (
+      <SettingsKeybindsSection
+        sectionId="settings-keybinds"
+        open={open}
+        onCaptureChange={onCaptureChange}
+      />
+    ),
+  },
+  {
     id: "settings-indexing",
-    label: "Indexing",
+    label: "Indexed search",
+    keywords: "indexing",
     items: Object.values(INDEXING_SETTINGS_ITEMS),
     render: ({ open }) => (
       <SettingsIndexingSection sectionId="settings-indexing" open={open} />
     ),
   },
   {
-    id: "settings-flair",
-    label: "Flair",
-    items: Object.values(FLAIR_SETTINGS_ITEMS),
-    render: () => <SettingsFlairSection sectionId="settings-flair" />,
+    id: "settings-media",
+    label: "Gallery & media",
+    items: Object.values(MEDIA_SETTINGS_ITEMS),
+    render: () => <SettingsMediaSection sectionId="settings-media" />,
   },
   {
     id: "settings-thumbnails",
@@ -109,26 +132,8 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
     ),
   },
   {
-    id: "settings-media",
-    label: "Media",
-    items: Object.values(MEDIA_SETTINGS_ITEMS),
-    render: () => <SettingsMediaSection sectionId="settings-media" />,
-  },
-  {
-    id: "settings-keybinds",
-    label: "Keybinds",
-    items: [...Object.values(KEYBINDS_SETTINGS_ITEMS), ...KEYBIND_DEFINITIONS],
-    render: ({ open, onCaptureChange }) => (
-      <SettingsKeybindsSection
-        sectionId="settings-keybinds"
-        open={open}
-        onCaptureChange={onCaptureChange}
-      />
-    ),
-  },
-  {
     id: "settings-backup",
-    label: "Backup",
+    label: "Backup & restore",
     items: Object.values(BACKUP_SETTINGS_ITEMS),
     render: () => <SettingsBackupSection sectionId="settings-backup" />,
   },
@@ -137,14 +142,14 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
 export const DEFAULT_SETTINGS_SECTION_ID = SETTINGS_SECTION_DEFINITIONS[0].id;
 
 export const searchSettingsSections = (query: string, autoGrid: boolean, moveHistoryEnabled: boolean) => {
-  const terms = query.toLowerCase().split(/[\s-]+/).filter(Boolean);
+  const terms = query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   if (terms.length === 0) return null;
 
   return SETTINGS_SECTION_DEFINITIONS.flatMap((section) => {
     const items = section.items.filter((item) => {
       if (item.requiresAutoGrid !== undefined && item.requiresAutoGrid !== autoGrid) return false;
       if (item.requiresMoveHistory && !moveHistoryEnabled) return false;
-      const searchable = [section.label, item.label, item.description, item.keywords].join(" ").toLowerCase();
+      const searchable = [section.label, section.keywords, item.label, item.description, item.keywords].join(" ").toLowerCase();
       return terms.every((term) => searchable.includes(term));
     });
     return items.length > 0 ? [{ section, matches: new Set(items) }] : [];

@@ -12,6 +12,7 @@ import type { BackupProfile, BackupWorkspace, StratumBackup } from "./types";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 const pathString = (value: unknown): value is string => typeof value === "string" && !value.includes("\0");
+const shellDescriptor = (value: unknown) => isRecord(value) && pathString(value.directory);
 
 const invalidBackup = (): never => {
   throw new Error("This file doesn't contain a valid Stratum backup.");
@@ -40,6 +41,8 @@ const checkSession = (value: unknown) => {
       !pathString(tab.path) || (tab.crumbTrailPath !== undefined && !pathString(tab.crumbTrailPath))) {
       return invalidBackup();
     }
+    if ((tab.kind === "terminal" || tab.terminal !== undefined) && !shellDescriptor(tab.terminal)) return invalidBackup();
+    if (tab.split !== undefined && (!isRecord(tab.split) || !shellDescriptor(tab.split.terminal))) return invalidBackup();
     ids.add(tab.id);
   }
   if (value.recentJumps !== undefined) pathList(value.recentJumps);

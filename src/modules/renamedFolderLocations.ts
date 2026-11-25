@@ -1,5 +1,6 @@
 // Keep live location shortcuts attached to a folder after renaming it.
 import { getPathName } from "@/lib/paths";
+import { mapTabLocations } from "@/lib/tabLocations";
 import type { Tab, TabHistory } from "@/types/tabs";
 import { createBackupPathRemapper } from "./backup/locations";
 import { useBottomPaneStore } from "./bottomPaneStore";
@@ -22,11 +23,7 @@ export const mapTabHistoryLocations = (history: TabHistory, mapPath: MapLocation
 export const updateRenamedFolderLocations = (from: string, to: string) => {
   if (from === to) return;
   const mapPath = createBackupPathRemapper([{ from, to }]);
-  const mapTab = (tab: Tab) => {
-    const path = mapPath(tab.path);
-    const crumbTrailPath = mapPath(tab.crumbTrailPath);
-    return path === tab.path && crumbTrailPath === tab.crumbTrailPath ? tab : { ...tab, path, crumbTrailPath };
-  };
+  const mapTab = (tab: Tab) => mapTabLocations(tab, mapPath);
 
   // Retarget the panes' in-flight requests before exposing the renamed tab paths.
   listeners.forEach((listener) => listener(mapPath));

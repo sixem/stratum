@@ -29,6 +29,7 @@ export type ContextMenuIcon =
   | "paste"
   | "paste-into-folder"
   | "terminal"
+  | "anchor"
   | "split-tab"
   | "separate-tabs"
   | "pin"

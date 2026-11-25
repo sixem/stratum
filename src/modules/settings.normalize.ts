@@ -16,6 +16,7 @@ import {
 } from "@/constants";
 import { coerceKeybinds } from "./keybinds";
 import { coerceTerminalTheme } from "./terminalThemes";
+import { coerceTerminalFont } from "./terminalFonts";
 import {
   DEFAULT_SETTINGS,
   DEFAULT_SIDEBAR_HIDDEN_SECTIONS,
@@ -180,10 +181,15 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.animateTabChanges === "boolean"
         ? value.animateTabChanges
         : DEFAULT_SETTINGS.animateTabChanges,
+    wrapTabNavigation: value?.wrapTabNavigation !== false,
     tabDropSubfolders:
       typeof value?.tabDropSubfolders === "boolean"
         ? value.tabDropSubfolders
         : DEFAULT_SETTINGS.tabDropSubfolders,
+    tabDropParentFolder:
+      typeof value?.tabDropParentFolder === "boolean"
+        ? value.tabDropParentFolder
+        : DEFAULT_SETTINGS.tabDropParentFolder,
     showRecycleBinButton:
       typeof value?.showRecycleBinButton === "boolean"
         ? value.showRecycleBinButton
@@ -211,6 +217,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
         : DEFAULT_SETTINGS.smartTabJump,
     accentTheme: coerceAccentTheme(value?.accentTheme),
     terminalTheme: coerceTerminalTheme(value?.terminalTheme),
+    terminalFontFamily: coerceTerminalFont(value?.terminalFontFamily),
     darkMode:
       typeof value?.darkMode === "boolean" ? value.darkMode : DEFAULT_SETTINGS.darkMode,
     categoryTinting:
@@ -245,6 +252,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.blurOverlays === "boolean"
         ? value.blurOverlays
         : DEFAULT_SETTINGS.blurOverlays,
+    showTooltips: value?.showTooltips !== false,
     keybinds: coerceKeybinds(value?.keybinds),
     gridSize: coerceGridSize(value?.gridSize),
     // Profiles saved before this setting used shared sizing.

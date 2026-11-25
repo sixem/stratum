@@ -154,7 +154,7 @@ export const SettingsKeybindsSection = ({
 
   return (
     <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Keybinds</div>
+      <div className="settings-section-title">Shortcuts</div>
       <SettingsItem item={KEYBINDS_SETTINGS_ITEMS.customShortcuts}>
         <div className="settings-actions">
           <PressButton type="button" className="btn ghost" onClick={handleResetKeybinds}>

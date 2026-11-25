@@ -171,7 +171,16 @@ const sameTabs = (saved: SessionState, current: SessionState) =>
   saved.tabs.length === current.tabs.length && saved.tabs.every((tab, index) => {
     const other = current.tabs[index];
     const samePath = tab.path === other.path || folderPathKey(tab.path) === folderPathKey(other.path);
-    return samePath && tab.viewMode === other.viewMode && tab.gridSize === other.gridSize &&
+    const split = tab.split;
+    const otherSplit = other.split;
+    const sameSplit = split && otherSplit
+      ? split.terminal.directory === otherSplit.terminal.directory && split.folderPercent === otherSplit.folderPercent &&
+        Boolean(split.linkDirectory) === Boolean(otherSplit.linkDirectory) &&
+        Boolean(split.terminalFirst) === Boolean(otherSplit.terminalFirst) && Boolean(split.stacked) === Boolean(otherSplit.stacked)
+      : !split && !otherSplit;
+    return samePath && tab.kind === other.kind && tab.anchored === other.anchored && sameSplit &&
+      tab.terminal?.directory === other.terminal?.directory &&
+      tab.viewMode === other.viewMode && tab.gridSize === other.gridSize &&
       tab.gridAutoColumns === other.gridAutoColumns && tab.search === other.search &&
       tab.sort.key === other.sort.key && tab.sort.dir === other.sort.dir;
   });

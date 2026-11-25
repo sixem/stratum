@@ -36,7 +36,9 @@ export type Settings = {
   showTabNumbers: boolean;
   fixedWidthTabs: boolean;
   animateTabChanges: boolean;
+  wrapTabNavigation: boolean;
   tabDropSubfolders: boolean;
+  tabDropParentFolder: boolean;
   showRecycleBinButton: boolean;
   showDriveToggle: boolean;
   collapseDrivePickerOnBlur: boolean;
@@ -46,6 +48,7 @@ export type Settings = {
   smartTabJump: boolean;
   accentTheme: AccentTheme;
   terminalTheme: TerminalThemeId;
+  terminalFontFamily: string | null;
   darkMode: boolean;
   categoryTinting: boolean;
   showParentEntry: boolean;
@@ -55,6 +58,7 @@ export type Settings = {
   warnOnUnsavedWorkspaces: boolean;
   ambientBackground: boolean;
   blurOverlays: boolean;
+  showTooltips: boolean;
   keybinds: KeybindMap;
   gridSize: GridSize;
   rememberTabGridSize: boolean;

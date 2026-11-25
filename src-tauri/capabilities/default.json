@@ -26,7 +26,17 @@
       "allow": [
         {
           "url": "https://github.com/*"
-        }
+        },
+        { "url": "https://creativecommons.org/licenses/by/4.0/" },
+        { "url": "https://fontawesome.com/" },
+        { "url": "https://fontawesome.com/license/free" },
+        { "url": "https://openfontlicense.org/" },
+        { "url": "https://openfontlicense.org/open-font-license-official-text/" },
+        { "url": "https://opensource.org/licenses/MIT" },
+        { "url": "https://pictogrammers.com/" },
+        { "url": "https://pictogrammers.com/library/mdi/" },
+        { "url": "https://www.apache.org/licenses/" },
+        { "url": "https://www.apache.org/licenses/LICENSE-2.0" }
       ]
     }
   ]

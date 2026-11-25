@@ -41,8 +41,7 @@
     --quick-preview-divider: var(--surface-border-width) solid var(--stroke);
   }
 
-  :is(.quick-preview-controls, .quick-preview-strip,
-      .quick-preview-error-card) {
+  :is(.quick-preview-strip, .quick-preview-error-card) {
     background: var(--panel-deep);
     border-color: var(--stroke);
   }
@@ -73,8 +72,7 @@
 
   // Bordered controls stay black when the pointer enters them. A brighter
   // edge gives immediate feedback without changing their size or fill.
-  :is(.btn, .inputbar-refresh, .tab-new,
-      .empty-action, .quick-preview-control-button,
+  :is(.btn, .inputbar-refresh, .tab-new, .empty-action,
       .transfer-item-action, .settings-nav-item, .settings-pill, .settings-toggle,
       .conversion-mode-btn, .ui-select-trigger, .indexed-search-drive) {
     background: var(--surface-control);
@@ -242,11 +240,11 @@
 
     &:not(.is-active):hover {
       background: #161619;
-      border-top-color: var(--dark-hover-stroke);
+      --tab-edge-color: var(--dark-hover-stroke);
     }
 
     &.is-active {
-      border-top-color: rgba(var(--accent-rgb), 0.42);
+      --tab-edge-color: rgba(var(--accent-rgb), 0.42);
     }
   }
 

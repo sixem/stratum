@@ -159,6 +159,8 @@ pub fn run() {
             #[cfg(windows)]
             platform::windows::terminal::terminal_open,
             #[cfg(windows)]
+            platform::windows::terminal::fonts::list_terminal_fonts,
+            #[cfg(windows)]
             platform::windows::terminal::terminal_link_directory,
             #[cfg(windows)]
             platform::windows::terminal::terminal_read,
@@ -171,7 +173,6 @@ pub fn run() {
 
             app::commands::is_windows_11,
             app::commands::get_indexing_launch_preferences,
-            app::commands::set_indexing_launch_preferences,
             app::commands::create_preview_grant,
             app::commands::release_preview_grant,
         ])

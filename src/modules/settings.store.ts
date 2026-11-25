@@ -18,7 +18,7 @@ type SettingsStore = Settings & {
 
 type StoredSettings = {
   version: number;
-  settings: Settings;
+  settings: Partial<Settings>;
 };
 
 const STORAGE_KEY = SETTINGS_STORAGE_KEY;
@@ -37,6 +37,22 @@ const readLegacyBottomView = (storage: Storage) => {
   }
 };
 
+const readSettingsPayload = (raw: string | null) => {
+  const parsed = raw ? JSON.parse(raw) as StoredSettings | Partial<Settings> : {};
+  return "settings" in parsed
+    ? normalizeLegacySettings(parsed.settings, parsed.version)
+    : normalizeLegacySettings(parsed, undefined);
+};
+
+export const hasStoredIndexingPreference = () => {
+  try {
+    const stored = readSettingsPayload(globalThis.localStorage.getItem(STORAGE_KEY));
+    return typeof stored.indexedSearchEnabled === "boolean";
+  } catch {
+    return false;
+  }
+};
+
 const readStoredSettings = () => {
   try {
     if (!("localStorage" in globalThis)) {
@@ -44,17 +60,15 @@ const readStoredSettings = () => {
     }
     const storage = globalThis.localStorage;
     const raw = storage.getItem(STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) as StoredSettings | Partial<Settings> : {};
-    const normalized = "settings" in parsed
-      ? normalizeLegacySettings(parsed.settings, parsed.version)
-      : normalizeLegacySettings(parsed, undefined);
+    const normalized = readSettingsPayload(raw);
     const settings = raw ? coerceSettings(normalized) : { ...DEFAULT_SETTINGS };
     if (normalized.lastUsedViewMode === undefined) {
       // The bottom pane held the only remembered view in older profiles.
       const remembered = readLegacyBottomView(storage);
       if (remembered) {
         settings.lastUsedViewMode = remembered;
-        writeStoredSettings(settings);
+        // Leave an unset indexing preference available for its own migration.
+        writeStoredSettings({ ...settings, indexedSearchEnabled: normalized.indexedSearchEnabled });
       }
     }
     return settings;
@@ -63,12 +77,12 @@ const readStoredSettings = () => {
   }
 };
 
-export const serializeSettings = (settings: Settings) => {
+export const serializeSettings = (settings: Partial<Settings>) => {
   const payload: StoredSettings = { version: STORAGE_VERSION, settings };
   return [STORAGE_KEY, JSON.stringify(payload)] as const;
 };
 
-const writeStoredSettings = (settings: Settings) => {
+const writeStoredSettings = (settings: Partial<Settings>) => {
   try {
     if (!("localStorage" in globalThis)) return;
     globalThis.localStorage.setItem(...serializeSettings(settings));
@@ -106,7 +120,9 @@ useSettingsStore.subscribe((state) => {
     showTabNumbers: state.showTabNumbers,
     fixedWidthTabs: state.fixedWidthTabs,
     animateTabChanges: state.animateTabChanges,
+    wrapTabNavigation: state.wrapTabNavigation,
     tabDropSubfolders: state.tabDropSubfolders,
+    tabDropParentFolder: state.tabDropParentFolder,
     showRecycleBinButton: state.showRecycleBinButton,
     showDriveToggle: state.showDriveToggle,
     collapseDrivePickerOnBlur: state.collapseDrivePickerOnBlur,
@@ -116,6 +132,7 @@ useSettingsStore.subscribe((state) => {
     smartTabJump: state.smartTabJump,
     accentTheme: state.accentTheme,
     terminalTheme: state.terminalTheme,
+    terminalFontFamily: state.terminalFontFamily,
     darkMode: state.darkMode,
     categoryTinting: state.categoryTinting,
     showParentEntry: state.showParentEntry,
@@ -125,6 +142,7 @@ useSettingsStore.subscribe((state) => {
     warnOnUnsavedWorkspaces: state.warnOnUnsavedWorkspaces,
     ambientBackground: state.ambientBackground,
     blurOverlays: state.blurOverlays,
+    showTooltips: state.showTooltips,
     keybinds: state.keybinds,
     gridSize: state.gridSize,
     rememberTabGridSize: state.rememberTabGridSize,

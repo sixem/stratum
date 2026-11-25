@@ -6,7 +6,6 @@ export type IndexingLaunchPreferences = {
 };
 
 export const getIndexingLaunchPreferences = () =>
-  invoke<IndexingLaunchPreferences>("get_indexing_launch_preferences");
+  invoke<IndexingLaunchPreferences | null>("get_indexing_launch_preferences");
 
-export const setIndexingLaunchPreferences = (preferences: IndexingLaunchPreferences) =>
-  invoke<void>("set_indexing_launch_preferences", { preferences });
+export const listTerminalFonts = () => invoke<string[]>("list_terminal_fonts");

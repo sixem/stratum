@@ -1,19 +1,20 @@
 import { useLayoutEffect, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal.css";
-import { DEFAULT_TERMINAL_FONT_STACK } from "@/modules/terminalFonts";
 import { useBottomSessionStore, useSessionStore } from "@/modules/sessionStore";
 import { useSettingsStore } from "@/modules/settings.store";
+import { terminalFontStack } from "@/modules/terminalFonts";
 import { DEFAULT_TERMINAL_THEME } from "@/modules/terminalThemes";
 import type { Tab } from "@/types";
+import type { TerminalSession } from "@/types/tabs";
 import type { LinkedPane } from "@/lib/paneLink";
-import { DirectorySync } from "./directorySync";
+import { DirectorySync, type TerminalLocation } from "./directorySync";
 import { readTerminalTheme } from "./terminalTheme";
 import { TerminalInput } from "./terminalInput";
 
-type Profile = NonNullable<Tab["terminal"]>;
+type OpenedTerminal = { id: number; directory: string };
 const sessions = new Map<string, Shell>();
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, Math.floor(n)));
 
@@ -22,7 +23,7 @@ const switchTab = (event: Pick<KeyboardEvent, "key" | "ctrlKey" | "altKey" | "me
   event.key === "Tab" && event.ctrlKey && !event.altKey && !event.metaKey;
 
 class Shell {
-  private readonly directorySync = new DirectorySync();
+  private readonly directorySync: DirectorySync;
   readonly element = document.createElement("div");
   private readonly viewport = document.createElement("div");
   private readonly status = document.createElement("div");
@@ -35,7 +36,8 @@ class Shell {
   private readonly pending = new TerminalInput();
   private readonly observer = new ResizeObserver(() => this.fit());
 
-  constructor(host: HTMLElement, directory: string) {
+  constructor(host: HTMLElement, terminal: TerminalSession) {
+    this.directorySync = new DirectorySync(terminal.key, message => { this.status.textContent = message; });
     this.element.className = "powershell-surface";
     this.viewport.className = "powershell-viewport";
     this.status.className = "powershell-status";
@@ -43,7 +45,7 @@ class Shell {
     this.element.append(this.viewport, this.status);
     host.append(this.element);
     this.term = new Terminal({
-      fontFamily: DEFAULT_TERMINAL_FONT_STACK, fontSize: 14,
+      fontFamily: terminalFontStack(useSettingsStore.getState().terminalFontFamily), fontSize: 14,
       scrollback: 1500, theme: this.applySurfaceTheme(),
       linkHandler: { activate() {} },
     });
@@ -55,7 +57,7 @@ class Shell {
     this.term.onBinary(data => this.enqueue(data, true));
     this.observer.observe(this.viewport);
     this.fit();
-    void this.start(directory);
+    void this.start(terminal.directory);
   }
 
   attach(host: HTMLElement, autoFocus: boolean) {
@@ -63,7 +65,7 @@ class Shell {
       host.append(this.element);
       this.updateTheme();
     }
-    this.fit();
+    this.updateFont();
     if (autoFocus) this.focus();
   }
 
@@ -77,6 +79,12 @@ class Shell {
     this.term.options.theme = this.applySurfaceTheme();
   }
 
+  updateFont() {
+    const fontFamily = terminalFontStack(useSettingsStore.getState().terminalFontFamily);
+    if (this.term.options.fontFamily !== fontFamily) this.term.options.fontFamily = fontFamily;
+    this.fit();
+  }
+
   private applySurfaceTheme() {
     const theme = readTerminalTheme(this.element, useSettingsStore.getState().terminalTheme);
     this.element.style.setProperty("--terminal-background", theme.background);
@@ -86,13 +94,13 @@ class Shell {
   }
 
   syncFolder(pane: LinkedPane, tab: Tab) {
-    if (this.id !== undefined) this.directorySync.update(this.id, pane, tab, message => { this.status.textContent = message; });
+    if (this.id !== undefined) this.directorySync.update(this.id, pane, tab);
   }
 
   private fit() {
     const screen = this.viewport.querySelector(".xterm-screen")?.getBoundingClientRect();
     if (!screen?.width || !screen.height || !this.viewport.clientWidth) return;
-    const cols = clamp((this.viewport.clientWidth - 16) / (screen.width / this.term.cols), 2, 512);
+    const cols = clamp(this.viewport.clientWidth / (screen.width / this.term.cols), 2, 512);
     const rows = clamp(this.viewport.clientHeight / (screen.height / this.term.rows), 1, 256);
     if (cols === this.term.cols && rows === this.term.rows) return;
     this.term.resize(cols, rows);
@@ -117,8 +125,13 @@ class Shell {
   private async start(directory: string) {
     try {
       const { cols, rows } = this.term;
-      this.id = await invoke<number>("terminal_open", { directory, cols, rows });
+      const location = new Channel<TerminalLocation>(message => {
+        if (!this.closed) this.directorySync.receive(message);
+      });
+      const opened = await invoke<OpenedTerminal>("terminal_open", { directory, cols, rows, location });
+      this.id = opened.id;
       if (this.closed) return;
+      this.directorySync.setStartingDirectory(opened.directory);
       reconcileSessions();
       if (cols !== this.term.cols || rows !== this.term.rows) void this.resizeNative();
       void this.flush();
@@ -219,15 +232,18 @@ for (const store of [useSessionStore, useBottomSessionStore]) {
   store.subscribe((next, previous) => { if (next.tabs !== previous.tabs) reconcileSessions(); });
 }
 
-export default function PowerShell({ terminal, autoFocus }: { terminal: Profile; autoFocus: boolean }) {
+export default function PowerShell({ terminal, autoFocus }: { terminal: TerminalSession; autoFocus: boolean }) {
   const host = useRef<HTMLDivElement>(null);
+  // TerminalPane keys this component by session. A directory report must not refocus it.
+  const launch = useRef(terminal).current;
   useLayoutEffect(() => {
     const container = host.current!;
-    const shell = sessions.get(terminal.key) ?? new Shell(container, terminal.directory);
-    sessions.set(terminal.key, shell);
+    const shell = sessions.get(launch.key) ?? new Shell(container, launch);
+    sessions.set(launch.key, shell);
     shell.attach(container, autoFocus);
-    const unsubscribeTheme = useSettingsStore.subscribe((next, previous) => {
+    const unsubscribeAppearance = useSettingsStore.subscribe((next, previous) => {
       if (next.terminalTheme !== previous.terminalTheme) shell.updateTheme();
+      if (next.terminalFontFamily !== previous.terminalFontFamily) shell.updateFont();
     });
     // In Follow app mode, read the shared tokens after the root attributes change.
     const appearance = new MutationObserver(() => {
@@ -235,13 +251,13 @@ export default function PowerShell({ terminal, autoFocus }: { terminal: Profile;
     });
     appearance.observe(document.documentElement, { attributeFilter: ["data-dark-mode", "data-accent"] });
     return () => {
-      unsubscribeTheme();
+      unsubscribeAppearance();
       appearance.disconnect();
       if (shell.element.parentNode === container) shell.element.remove();
     };
-  }, [terminal, autoFocus]);
+  }, [launch, autoFocus]);
   return <div data-terminal="" className="powershell-host" ref={host} aria-label="PowerShell terminal" tabIndex={-1}
-    onFocus={event => { if (event.target === event.currentTarget) sessions.get(terminal.key)?.focus(); }}
+    onFocus={event => { if (event.target === event.currentTarget) sessions.get(launch.key)?.focus(); }}
     onKeyDown={event => { if (!switchTab(event)) event.stopPropagation(); }} onKeyUp={event => event.stopPropagation()}
     onPointerDown={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} />;
 }

@@ -11,10 +11,6 @@ export {
   queryIndexedPaths,
   rebuildIndexedDrive,
 } from "./indexedSearch";
-export {
-  getIndexingLaunchPreferences,
-  setIndexingLaunchPreferences,
-} from "./system";
 export { getShellAvailability, openShell } from "./shells";
 export { showShellContextMenu, type ShellMenuTarget } from "./shellContextMenu";
 export {

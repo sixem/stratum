@@ -91,18 +91,28 @@
 // Scope tab elements to the strip without increasing specificity.
 :where(.tabs) {
   .tab {
+    --tab-edge-color: transparent;
     display: flex;
-    align-items: stretch;
+    align-items: center;
+    // Keep the same height when the active tab has no close button.
+    min-block-size: 28px;
     gap: 0;
-    // Reserve the top edge in every state so highlighting cannot shift the label.
+    // Reserve both edges so moving the highlight keeps the label aligned.
     border: 0;
-    border-top: 2px solid transparent;
+    border-block: 2px solid transparent;
+    border-block-start-color: var(--tab-edge-color);
     transition: none;
     border-radius: 3px;
     cursor: grab;
-    padding: 2px 7px 3px 1px;
+    padding: 2px 7px 1px 1px;
     box-sizing: border-box;
     position: relative;
+  }
+
+  .tab:where([data-tab-anchored="true"]) {
+    --tab-edge-color: rgba(var(--accent-rgb), 0.18);
+    border-block-start-color: transparent;
+    border-block-end-color: var(--tab-edge-color);
   }
 
   .tab[data-tab-kind="untitled"] {
@@ -119,16 +129,16 @@
 
   .tab:not(.is-active):hover {
     background-color: rgba(33, 38, 49, 0.46);
-    border-top-color: rgba(255, 255, 255, 0.14);
+    --tab-edge-color: rgba(255, 255, 255, 0.14);
   }
 
   .tab.is-active {
     background: rgba(255, 255, 255, 0.06);
-    border-top-color: rgba(var(--accent-rgb), 0.24);
+    --tab-edge-color: rgba(var(--accent-rgb), 0.24);
   }
 
   .tab.is-active[data-tab-kind="untitled"] {
-    border-top-color: rgba(var(--accent-rgb), 0.28);
+    --tab-edge-color: rgba(var(--accent-rgb), 0.28);
     background: rgba(var(--accent-rgb), 0.09);
   }
 
@@ -143,12 +153,12 @@
   .tab-main {
     display: flex;
     align-items: center;
+    align-self: stretch;
     padding: 0 12px;
     text-align: left;
     min-width: 0;
     width: 140px;
     cursor: pointer;
-    height: 100%;
     gap: 6px;
   }
 
@@ -186,8 +196,12 @@
     font-weight: 500;
   }
 
-  .tab.is-active[data-tab-kind="untitled"] .tab-title {
+  .tab[data-tab-kind="untitled"]:where(.is-active) .tab-title {
     color: var(--text);
+  }
+
+  .tab[data-tab-anchored="true"] .tab-title {
+    color: color-mix(in srgb, var(--text) 83%, var(--accent));
   }
 
   .tab-close {
@@ -217,7 +231,6 @@
   .tab-close-spacer {
     display: block;
     width: 30px;
-    height: 100%;
     flex: 0 0 auto;
   }
 
@@ -361,9 +374,17 @@
   .drop-submenu-item {
     display: flex;
     align-items: center;
+    gap: 6px;
     padding: 6px 9px;
     background: transparent;
     min-width: 0;
+  }
+
+  .drop-submenu-parent-icon {
+    width: 12px;
+    height: 12px;
+    flex: none;
+    color: var(--muted);
   }
 
   .drop-submenu-item[data-drop-target="true"] {

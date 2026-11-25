@@ -13,6 +13,9 @@
   border-radius: var(--panel-radius);
 }
 .powershell-viewport .xterm { height: 100%; }
+.powershell-viewport, .powershell-viewport .xterm-viewport { overflow: clip; }
+/* xterm manages scrollback in its buffer. Keep wheel and keyboard scrolling. */
+.powershell-viewport .xterm-scrollable-element > .scrollbar { display: none; }
 .powershell-status:empty { display: none; }
 .powershell-status {
   border-top: var(--surface-border-width) solid color-mix(in srgb, currentColor 30%, transparent);

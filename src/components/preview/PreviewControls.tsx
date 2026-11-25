@@ -1,5 +1,5 @@
 // Shared playback controls for audio and video previews.
-import type { ChangeEvent as ReactChangeEvent, CSSProperties, RefObject } from "react";
+import type { ChangeEvent as ReactChangeEvent, CSSProperties, PointerEvent as ReactPointerEvent, RefObject } from "react";
 import { PauseIcon, PlayIcon } from "@/components/icons";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PressButton } from "@/components/primitives/PressButton";
@@ -16,7 +16,6 @@ type PreviewControlsProps = {
   volumeLabel: string;
   mediaVolume: number;
   volumeStyle: CSSProperties;
-  volumeButtonRef: RefObject<HTMLButtonElement | null>;
   volumeRangeRef: RefObject<HTMLInputElement | null>;
   onTogglePlayback: () => void;
   onToggleVolumePicker: () => void;
@@ -24,7 +23,7 @@ type PreviewControlsProps = {
   onVolumeHoverEnd: () => void;
   onVolumeChange: (event: ReactChangeEvent<HTMLInputElement>) => void;
   onVolumePointerDown: () => void;
-  onVolumePointerUp: () => void;
+  onVolumePointerUp: (event: ReactPointerEvent<HTMLInputElement>) => void;
   onVolumeBlur: () => void;
 };
 
@@ -39,7 +38,6 @@ export const PreviewControls = ({
   volumeLabel,
   mediaVolume,
   volumeStyle,
-  volumeButtonRef,
   volumeRangeRef,
   onTogglePlayback,
   onToggleVolumePicker,
@@ -54,12 +52,7 @@ export const PreviewControls = ({
   const playbackLabel = mediaPaused ? "Play" : "Pause";
   const PlaybackIcon = mediaPaused ? PlayIcon : PauseIcon;
   return (
-    <div
-      className="quick-preview-controls"
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") event.stopPropagation();
-      }}
-    >
+    <div className="quick-preview-controls">
       <TooltipWrapper text={playbackLabel} disabled={disabled}>
         <PressButton
           type="button"
@@ -71,6 +64,7 @@ export const PreviewControls = ({
           <PlaybackIcon className="quick-preview-playback-icon" />
         </PressButton>
       </TooltipWrapper>
+      <QuickPreviewTimeline mediaRef={mediaRef} mediaKey={mediaKey} open={open} disabled={disabled} />
       <div
         className="quick-preview-control-volume"
         data-open={volumePickerOpen ? "true" : "false"}
@@ -81,7 +75,6 @@ export const PreviewControls = ({
           type="button"
           className="quick-preview-control-button quick-preview-control-volume-button tnum"
           onClick={onToggleVolumePicker}
-          ref={volumeButtonRef}
           aria-expanded={volumePickerOpen ? "true" : "false"}
           aria-controls="quick-preview-volume-range"
           aria-label={`Preview volume ${volumeLabel}`}
@@ -92,7 +85,7 @@ export const PreviewControls = ({
           <input
             ref={volumeRangeRef}
             id="quick-preview-volume-range"
-            className="ui-range quick-preview-control-range"
+            className="quick-preview-control-range"
             type="range"
             min={0}
             max={1}
@@ -108,7 +101,6 @@ export const PreviewControls = ({
           />
         </div>
       </div>
-      <QuickPreviewTimeline mediaRef={mediaRef} mediaKey={mediaKey} open={open} disabled={disabled} />
     </div>
   );
 };

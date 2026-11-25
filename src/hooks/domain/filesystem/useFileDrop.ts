@@ -34,6 +34,7 @@ type UseFileDropOptions = {
   onTransferInFlightChange?: (active: boolean) => void;
   enabled?: boolean;
   enableTabDropSubfolders?: boolean;
+  enableTabDropParentFolder?: boolean;
 };
 
 type ClientPoint = {
@@ -60,7 +61,9 @@ export const useFileDrop = ({
   onTransferInFlightChange,
   enabled = true,
   enableTabDropSubfolders = false,
+  enableTabDropParentFolder = false,
 }: UseFileDropOptions) => {
+  const tabDropMenuEnabled = enabled && (enableTabDropSubfolders || enableTabDropParentFolder);
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
   const [dropTargetTabId, setDropTargetTabId] = useState<string | null>(null);
   const [dragPoint, setDragPoint] = useState<ClientPoint | null>(null);
@@ -81,7 +84,9 @@ export const useFileDrop = ({
     updateTarget: updateTabDropSubmenuTarget,
     closeSubmenu: closeTabDropSubmenu,
   } = useTabDropSubmenu({
-    enabled: enabled && enableTabDropSubfolders,
+    enabled: tabDropMenuEnabled,
+    includeSubfolders: enableTabDropSubfolders,
+    includeParent: enableTabDropParentFolder,
   });
 
   const setDropTarget = useCallback((target: DropTarget | null) => {
@@ -99,7 +104,7 @@ export const useFileDrop = ({
       updateTabDropSubmenuTarget(target);
       return;
     }
-    if (target.kind === "tab-subfolder") {
+    if (target.kind === "tab-destination") {
       setDropTargetPath((prev) => (prev === target.path ? prev : target.path));
       setDropTargetTabId((prev) => (prev === target.tabId ? prev : target.tabId ?? null));
       updateTabDropSubmenuTarget(target);
@@ -275,12 +280,12 @@ export const useFileDrop = ({
       const target = getDropTargetFromPoint(point.x, point.y);
       // Only the optional tab submenu uses coordinates to scroll. Ordinary
       // file drags need a render when the hovered destination changes.
-      if (enableTabDropSubfolders) {
+      if (tabDropMenuEnabled) {
         setDragPoint((previous) => previous?.x === point.x && previous.y === point.y ? previous : point);
       }
       setDropTarget(target);
     };
-  }, [beginFileActivity, clearDragState, closeTabDropSubmenu, enableTabDropSubfolders, highlightTabStrip, performDrop, queueDropError, setDropTarget]);
+  }, [beginFileActivity, clearDragState, closeTabDropSubmenu, highlightTabStrip, performDrop, queueDropError, setDropTarget, tabDropMenuEnabled]);
 
   useEffect(() => {
     if (!enabled) return;

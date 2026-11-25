@@ -2,17 +2,15 @@ import { useEffect, useRef } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from "react";
 import type { Tab } from "@/types";
 import type { LinkedPane } from "@/lib/paneLink";
+import { clampTerminalSplit as clamp, TERMINAL_SPLIT_MIN as MIN, TERMINAL_SPLIT_MAX as MAX } from "@/lib/tabRestore";
 import { setBottomPaneActive, useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { setTerminalSplitSize } from "@/modules/terminalSplit";
 import { buildKeybindFromEvent, useIndexedSearchUiStore, usePromptStore, useSettingsStore } from "@/modules";
 import { useQuickMoveSession } from "@/modules/quickMoveSession";
 import { focusOtherFilePane } from "@/hooks/ui/inputs/focusOtherFilePane";
+import { TerminalDirectoryBar } from "./TerminalDirectoryBar";
 import { TerminalPane } from "./TerminalPane";
 import "./terminalSplit.scss";
-
-const MIN = 20;
-const MAX = 80;
-const clamp = (value: number) => Math.max(MIN, Math.min(MAX, value));
 
 type SplitDividerProps = { firstPercent: number; stacked: boolean; save: (value: number) => void };
 type SplitDrag = { position: number; span: number; start: number; value: number; pointer: number; frame: number | null };
@@ -115,6 +113,8 @@ export function TerminalSplitView({ pane, tab, filePaneRef, commandsBlocked, chi
   const handleTerminalFocusKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     // Claim focus shortcuts before xterm receives them as shell input.
     if (!(event.target instanceof Element) || !event.target.closest("[data-terminal]")) return;
+    if (event.ctrlKey && !event.altKey && !event.metaKey &&
+        (event.key === "ArrowLeft" || event.key === "ArrowRight")) return;
     const { keybinds } = useSettingsStore.getState();
     if ((!keybinds.focusOtherPane && !keybinds.focusSplitTerminal) ||
         event.defaultPrevented || event.nativeEvent.isComposing || commandsBlocked ||
@@ -142,6 +142,7 @@ export function TerminalSplitView({ pane, tab, filePaneRef, commandsBlocked, chi
       <SplitDivider key={`${tab.id}:${stacked}`} firstPercent={firstPercent} stacked={stacked}
         save={value => setTerminalSplitSize(pane, tab.id, terminalFirst ? 100 - value : value)} />
       <div className="terminal-split-side" data-pane-path="" onFocusCapture={focusPane} onPointerDownCapture={focusPane}>
+        <TerminalDirectoryBar directory={split.terminal.directory} />
         <TerminalPane terminal={split.terminal} autoFocus={false} />
       </div>
     </>}

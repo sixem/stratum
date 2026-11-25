@@ -4,15 +4,16 @@ import { shallow } from "zustand/shallow";
 import type { ListDirOptions, SortState, Tab, ViewMode } from "@/types";
 import type { TabHistoryDirection, TabTransfer } from "@/types/tabs";
 import { DEFAULT_TAB_STATE, makeDebug, folderPathKey, getNextTrailPath } from "@/lib";
+import { firstUnanchoredTabIndex, reorderTabs as reorderTabList } from "@/lib/tabAnchors";
 import { useSessionStore } from "@/modules";
-import { createSessionTab, folderWithoutTerminal, useBottomSessionStore } from "@/modules/sessionStore";
+import { createSessionTab, createTerminalSessionTab, folderWithoutTerminal, useBottomSessionStore } from "@/modules/sessionStore";
 import { registerShellNavigation, rememberShellDirectory } from "@/modules/terminalSplit";
 import { resolveDefaultViewMode, useSettingsStore } from "@/modules/settings.store";
 import { beginLinkedNavigation, closeLinkedTab, registerPaneLinkReceiver } from "@/modules/paneLinkNavigation";
 import type { LinkedNavigation } from "@/modules/paneLinkNavigation";
 import type { LoadDirOptions } from "@/hooks/domain/filesystem/fileManager.types";
 import { useTabHistory } from "./tabHistory";
-import { usePendingJump } from "./tabNavigation";
+import { removeRecentJump, usePendingJump, useRecentJumps } from "./tabNavigation";
 import { useTabPersistence } from "./useTabPersistence";
 
 type TabSessionOptions = {
@@ -26,7 +27,6 @@ type TabSessionOptions = {
 
 const log = makeDebug("tabs");
 const CLOSED_TAB_LIMIT = 20;
-const NO_RECENT_LOCATIONS: string[] = [];
 
 export type OpenNewTabOptions = {
   background?: boolean;
@@ -43,13 +43,11 @@ export const useTabSession = ({
 }: TabSessionOptions) => {
   const pane = useStore === useBottomSessionStore ? "bottom" : "main";
   const defaultViewMode = useSettingsStore(resolveDefaultViewMode);
-  const rememberRecentLocations = useSettingsStore((state) => state.rememberRecentLocations);
   const recentJumpsLimit = useSettingsStore((state) => state.sidebarRecentLimit);
   const newTabSort = useSettingsStore((state) => state.newTabSort);
   const {
     tabs,
     activeTabId,
-    recentJumps,
     restoreRevision,
     setTabs,
     setTabSearch,
@@ -60,7 +58,6 @@ export const useTabSession = ({
     (state) => ({
       tabs: state.tabs,
       activeTabId: state.activeTabId,
-      recentJumps: state.recentJumps,
       restoreRevision: state.restoreRevision,
       setTabs: state.setTabs,
       setTabSearch: state.setTabSearch,
@@ -83,13 +80,7 @@ export const useTabSession = ({
     ? Math.max(1, Math.round(recentJumpsLimit))
     : 1;
 
-  const visibleRecentJumps = useMemo(
-    () => {
-      if (!rememberRecentLocations) return NO_RECENT_LOCATIONS;
-      return recentJumps.length <= safeRecentLimit ? recentJumps : recentJumps.slice(0, safeRecentLimit);
-    },
-    [recentJumps, rememberRecentLocations, safeRecentLimit],
-  );
+  const visibleRecentJumps = useRecentJumps(safeRecentLimit);
 
   const pathForHistory = loadingPath ?? (activeTab?.path || currentPath);
   // History and pending-jump tracking live in focused hooks to keep this file readable.
@@ -99,7 +90,6 @@ export const useTabSession = ({
     activeTabId,
     currentPath,
     recentLimit: safeRecentLimit,
-    setRecentJumps,
   });
   const { emptyTabIdsRef, pendingNavigationRef, restoringTabs } = useTabPersistence({
     tabs,
@@ -245,7 +235,7 @@ export const useTabSession = ({
   }), [pane, performNavigation, recordHistory, useStore]);
 
   const updateActiveTab = useCallback(
-    (patch: Partial<Tab>) => {
+    (patch: Partial<Pick<Tab, "viewMode" | "sort">>) => {
       if (!activeTabId) return;
       setTabs((prev) =>
         prev.map((tab) => (tab.id === activeTabId ? { ...tab, ...patch } : tab)),
@@ -256,8 +246,8 @@ export const useTabSession = ({
 
   const openEmptyTab = useCallback((initialView?: ViewMode, terminalDirectory?: string) => {
     log("new tab -> empty");
-    const nextTab = createSessionTab("", { sort: sortState });
-    if (terminalDirectory !== undefined) nextTab.terminal = { key: nextTab.id, directory: terminalDirectory };
+    const nextTab = terminalDirectory === undefined
+      ? createSessionTab("", { sort: sortState }) : createTerminalSessionTab(terminalDirectory);
     if (initialView) nextTab.viewMode = initialView;
     emptyTabIdsRef.current.add(nextTab.id);
     pendingNavigationRef.current = null;
@@ -386,6 +376,7 @@ export const useTabSession = ({
       const index = session.tabs.findIndex((tab) => tab.id === id);
       if (index === -1) return;
       const tab = session.tabs[index];
+      if (tab.anchored) return;
       const savedTab = scrollTop !== undefined && Number.isFinite(scrollTop)
         ? { ...tab, scrollTop: Math.max(0, Math.round(scrollTop)) }
         : tab;
@@ -450,12 +441,13 @@ export const useTabSession = ({
   }, [clearDir, emptyTabIdsRef, pendingNavigationRef, performNavigation]);
 
   const receiveTab = useCallback(({ tab, history, navigation }: TabTransfer, toIndex: number) => {
+    if (tab.anchored) return false;
     const session = useStore.getState();
     const idInUse = session.tabs.some(({ id }) => id === tab.id) ||
       session.closedTabs.some((closed) => closed.tab.id === tab.id);
     const incoming = idInUse ? { ...tab, id: createSessionTab(tab.path).id } : tab;
     const nextTabs = [...session.tabs];
-    nextTabs.splice(Math.min(Math.max(toIndex, 0), nextTabs.length), 0, incoming);
+    nextTabs.splice(Math.min(Math.max(toIndex, firstUnanchoredTabIndex(nextTabs)), nextTabs.length), 0, incoming);
     session.updateSession({ tabs: nextTabs, activeTabId: incoming.id });
     if (history) restoreHistory(incoming.id, history);
     activateStoredTab(incoming, navigation);
@@ -466,7 +458,7 @@ export const useTabSession = ({
     const session = useStore.getState();
     const index = session.tabs.findIndex(tab => tab.id === id);
     const folder = session.tabs[index];
-    if (!folder?.split) return;
+    if (!folder?.split || (folder.anchored && keep === "terminal")) return;
     const next = [...session.tabs];
     next[index] = folderWithoutTerminal(folder);
     const keepShellActive = keep === "terminal" && session.activeTabId === id;
@@ -474,8 +466,8 @@ export const useTabSession = ({
       session.setTabs(next);
       return;
     }
-    const shell = { ...createSessionTab(""), terminal: folder.split.terminal };
-    next.splice(index + 1, 0, shell);
+    const shell = createTerminalSessionTab(folder.split.terminal);
+    next.splice(Math.max(index + 1, firstUnanchoredTabIndex(next)), 0, shell);
     session.updateSession({ tabs: next, activeTabId: keepShellActive ? shell.id : session.activeTabId });
     if (keep === "terminal") {
       closeTab(id);
@@ -490,7 +482,7 @@ export const useTabSession = ({
 
     const { tab, index, history } = closed;
     const nextTabs = [...session.tabs];
-    nextTabs.splice(Math.min(index, nextTabs.length), 0, tab);
+    nextTabs.splice(Math.min(Math.max(index, firstUnanchoredTabIndex(nextTabs)), nextTabs.length), 0, tab);
     session.updateSession({ tabs: nextTabs, activeTabId: tab.id, closedTabs: remainingClosedTabs });
     if (history) restoreHistory(tab.id, history);
     activateStoredTab(tab);
@@ -499,30 +491,9 @@ export const useTabSession = ({
 
   const reorderTabs = useCallback(
     (fromId: string, toIndex: number) => {
-      setTabs((prev) => {
-        const fromIndex = prev.findIndex((tab) => tab.id === fromId);
-        if (fromIndex === -1) return prev;
-        // The drop slot was measured with the dragged tab still in the strip.
-        const adjustedIndex = toIndex > fromIndex ? toIndex - 1 : toIndex;
-        const insertIndex = Math.min(Math.max(adjustedIndex, 0), prev.length - 1);
-        if (insertIndex === fromIndex) return prev;
-        const next = [...prev];
-        const [moved] = next.splice(fromIndex, 1);
-        next.splice(insertIndex, 0, moved);
-        return next;
-      });
+      setTabs((prev) => reorderTabList(prev, fromId, toIndex));
     },
     [setTabs],
-  );
-
-  const removeRecentJump = useCallback(
-    (path: string) => {
-      const key = folderPathKey(path);
-      if (!key) return;
-      // Recent entries are keyed by normalized path so duplicates collapse consistently.
-      setRecentJumps((prev) => prev.filter((item) => folderPathKey(item) !== key));
-    },
-    [setRecentJumps],
   );
 
   return {

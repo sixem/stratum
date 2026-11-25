@@ -20,7 +20,6 @@ import { PlusIcon, TabCloseIcon } from "@/components/icons";
 import { HorizontalChevronButton, PressButton } from "@/components/primitives";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { formatKeybind, useSettingsStore } from "@/modules";
-import { getDefaultTabGridSize } from "@/modules/tabGridSize";
 import { cancelSplitPicker, canPairFolder, pairWithFolder, useSplitPicker } from "@/modules/terminalSplit";
 import type { LinkedPane } from "@/lib/paneLink";
 
@@ -60,7 +59,7 @@ type TabItemProps = {
   isActive: boolean;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
-  onPointerDown: (event: PointerEvent<HTMLDivElement>, id: string) => void;
+  onPointerDown: (event: PointerEvent<HTMLDivElement>, id: string, anchored: boolean) => void;
   onSuppressClick: (event: ReactMouseEvent) => void;
   isDragging: boolean;
   isDropTarget: boolean;
@@ -68,7 +67,6 @@ type TabItemProps = {
   showIndex: boolean;
   showClose: boolean;
   fixedWidthTabs: boolean;
-  untitledMenu: boolean;
   onContextMenu?: (event: PointerEvent<HTMLDivElement>, target: PlaceContextTarget) => void;
   onContextMenuDown?: (
     event: PointerEvent<HTMLDivElement>,
@@ -91,13 +89,12 @@ const TabItem = ({
   showIndex,
   showClose,
   fixedWidthTabs,
-  untitledMenu,
   onContextMenu,
   onContextMenuDown,
 }: TabItemProps) => {
-  const label = tab.terminal ? "PowerShell" : tabLabel(tab.path);
+  const location = tab.terminal?.directory.trim() ?? tab.path;
+  const label = tab.terminal && !location ? "PowerShell" : tabLabel(location) || location;
   const isUntitled = !tab.terminal && tab.path.trim().length === 0;
-  const hasMenu = !isUntitled || untitledMenu;
   const menuTarget: PlaceContextTarget = { name: label, path: tab.path, source: "tab", tabId: tab.id };
   return (
     <div
@@ -107,6 +104,7 @@ const TabItem = ({
       data-drop-id={tab.id}
       data-drop-target={isDropTarget ? "true" : "false"}
       data-tab-id={tab.id}
+      data-tab-anchored={tab.anchored ? "true" : undefined}
       data-split-target={onPick ? "true" : undefined}
       data-context-place="tab"
       data-context-name={label}
@@ -116,7 +114,7 @@ const TabItem = ({
           event.stopPropagation();
           return;
         }
-        if (event.button === 2 && hasMenu) {
+        if (event.button === 2) {
           onContextMenuDown?.(event, menuTarget);
           return;
         }
@@ -126,21 +124,22 @@ const TabItem = ({
           if (tab.terminal) event.preventDefault();
           onSelect(tab.id);
         }
-        onPointerDown(event, tab.id);
+        onPointerDown(event, tab.id, tab.anchored === true);
       }}
       onPointerUp={(event) => {
-        if (event.button !== 2 || !hasMenu) return;
+        if (event.button !== 2) return;
         onContextMenu?.(event, menuTarget);
       }}
       onMouseDown={(event) => {
-        handleMiddleClick(event, () => onClose(tab.id));
+        handleMiddleClick(event, () => { if (!tab.anchored) onClose(tab.id); });
       }}
       onContextMenu={(event) => event.preventDefault()}
     >
-      <TooltipWrapper text={tab.terminal?.directory || tab.path}>
+      <TooltipWrapper text={location}>
         <button
           type="button"
           className="tab-main"
+          aria-label={tab.anchored ? `${label}, anchored` : undefined}
           onClickCapture={event => {
             if (!choosing) return onSuppressClick(event);
             event.preventDefault();
@@ -171,7 +170,7 @@ const TabItem = ({
         >
           <TabCloseIcon className="tab-close-icon" />
         </PressButton>
-      ) : fixedWidthTabs ? (
+      ) : fixedWidthTabs && !tab.anchored ? (
         <span className="tab-close-spacer" aria-hidden="true" />
       ) : null}
     </div>
@@ -203,7 +202,6 @@ export const TabsBar = ({
   onTabContextMenu,
   onTabContextMenuDown,
 }: TabsBarProps) => {
-  const untitledMenu = useSettingsStore(state => Boolean(getDefaultTabGridSize(state)));
   // Container ref lets the reorder hook measure tab positions.
   const tabsRef = useRef<HTMLDivElement | null>(null);
   const source = useSplitPicker(state => state.source);
@@ -255,6 +253,7 @@ export const TabsBar = ({
     if (stripRef.current) return registerTabLocationDrop(stripRef.current, onOpenLocation);
   }, [onOpenLocation]);
 
+  const activeIndex = tabs.findIndex(tab => tab.id === activeId);
   useEffect(() => {
     if (!activeId) return;
     const tabsEl = tabsRef.current;
@@ -266,7 +265,7 @@ export const TabsBar = ({
     // Keep the active tab visible when tab count exceeds strip width.
     activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
     updateScrollState();
-  }, [activeId, tabs.length, updateScrollState]);
+  }, [activeId, activeIndex, tabs.length, updateScrollState]);
 
   useLayoutEffect(() => {
     const hostTabId = tabDropSubmenu?.hostTabId ?? null;
@@ -332,11 +331,10 @@ export const TabsBar = ({
                 isDropTarget={dropTargetId === tab.id}
                 index={index}
                 showIndex={showTabNumbers}
-                showClose={tab.id === activeId}
+                showClose={!tab.anchored && tab.id === activeId}
                 fixedWidthTabs={fixedWidthTabs}
                 onContextMenu={onTabContextMenu}
                 onContextMenuDown={onTabContextMenuDown}
-                untitledMenu={untitledMenu}
               />
             </Fragment>
           ))}

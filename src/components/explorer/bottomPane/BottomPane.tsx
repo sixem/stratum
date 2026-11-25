@@ -7,6 +7,7 @@ import { useStatusLabels } from "@/hooks/domain/metadata/useStatusLabels";
 import { useScrollRequest } from "@/hooks/perf/scroll";
 import type { ScrollAlignment } from "@/hooks/perf/scroll";
 import { TerminalPane } from "@/components/terminal/TerminalPane";
+import { TerminalDirectoryBar } from "@/components/terminal/TerminalDirectoryBar";
 import { TerminalSplitControls } from "@/components/terminal/TerminalSplitControls";
 import { TerminalSplitView } from "@/components/terminal/TerminalSplitView";
 import { FileView } from "../FileView";
@@ -38,7 +39,6 @@ export type PaneActions = ReturnType<typeof useFileManager>;
 export type PaneDrop = ReturnType<typeof useFileDrop>;
 export type PaneSummary = {
   path: string;
-  recentJumps: string[];
   countLabel: string;
   selectionLabel: string;
 };
@@ -55,6 +55,7 @@ type Props = {
 export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, menu, commandsBlocked }: Props) {
   const folder = useBottomFolder();
   const { dir, meta, tabs, model, selection, viewKey, busy } = folder;
+  const terminal = tabs.activeTab?.terminal;
   const handleHistoryMenu = useTabHistoryMenu(tabs, menu.openActionMenu);
   const root = useRef<HTMLElement>(null);
   const files = useRef<HTMLDivElement>(null);
@@ -79,8 +80,8 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     currentDriveInfo, selected: selection.selected, entryMeta: meta.entryMeta,
   });
   useLayoutEffect(() => {
-    onSummary({ path, recentJumps: tabs.recentJumps, countLabel, selectionLabel });
-  }, [onSummary, path, tabs.recentJumps, countLabel, selectionLabel]);
+    onSummary({ path, countLabel, selectionLabel });
+  }, [onSummary, path, countLabel, selectionLabel]);
   // The listing can commit one render before its tab is updated.
   const ready = !!path && !busy && !tabs.restoringTabs && folderPathKey(path) === folderPathKey(tabs.displayPath);
   useTabReveal(files, {
@@ -277,7 +278,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       </ToolbarIconButton>
       <PaneLinkControls mainPath={upper.loading ? "" : upper.currentPath}
         bottomPath={ready ? path : ""} bottomTabId={activeTabId} />
-      <ToolbarIconButton
+      {!terminal && <ToolbarIconButton
         label={showBreadcrumbs ? "Hide path bar" : "Show path bar"}
         ariaLabel="Bottom pane path bar"
         active={showBreadcrumbs}
@@ -286,7 +287,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         pressOnPointerDown={false}
       >
         <ChevronDownIcon className="bottom-path-chevron" />
-      </ToolbarIconButton>
+      </ToolbarIconButton>}
       <ToolbarIconButton label="Hide bottom pane" onClick={hideBottomPane} pressOnPointerDown={false}>
         <TabCloseIcon />
       </ToolbarIconButton>
@@ -307,7 +308,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       onTabContextMenuDown={paneActions.handlePlaceTargetContextMenuDown}
       dropTargetId={drop.dropTargetTabId} dropTargetPath={drop.dropTargetPath} tabDropSubmenu={drop.tabDropSubmenu}
       dragPoint={drop.dragPoint} onSubmenuHoverTargetChange={drop.setDropTarget} onSubmenuCloseRequest={drop.clearDragState} />
-    {showBreadcrumbs ? (
+    {terminal ? <TerminalDirectoryBar directory={terminal.directory} /> : showBreadcrumbs ? (
       <PathCrumbsBar pane="bottom" path={tabs.displayPath} trailPath={tabs.activeTab?.crumbTrailPath} reserveSpace
         dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null}
         onNavigate={browseFromView} onNavigateNewTab={openLocationTab}
@@ -322,7 +323,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         if (el.matches(".list-body,.thumb-viewport")) scrollTop.current = el.scrollTop;
       }}>
       {busy && <div className="folder-load-progress" role="progressbar" aria-label="Loading bottom folder" />}
-      {tabs.activeTab?.terminal ? <TerminalPane terminal={tabs.activeTab.terminal} /> : !ready && tabs.displayPath ? <div className="pane-loading">{busy ? "Loading folder…" : <button className="btn ghost" type="button" onClick={() => navigate(tabs.displayPath)}>Retry opening folder</button>}</div> :
+      {terminal ? <TerminalPane terminal={terminal} /> : !ready && tabs.displayPath ? <div className="pane-loading">{busy ? "Loading folder…" : <button className="btn ghost" type="button" onClick={() => navigate(tabs.displayPath)}>Retry opening folder</button>}</div> :
       <FileView {...upper} {...model} pane="bottom" dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null} currentPath={path} viewMode={tabs.viewMode} viewKey={viewKey}
         showLander={!path} recentJumps={tabs.recentJumps} onOpenPlace={navigate} onOpenRecent={navigate} onOpenDrive={navigate}
         onOpenDriveNewTab={openNew} onOpenPlaceNewTab={openNew} onOpenRecentNewTab={openNew}

@@ -3,12 +3,11 @@ import { useId } from "react";
 import { shallow } from "zustand/shallow";
 import { ACCENT_THEMES } from "@/constants/settings";
 import { PressButton } from "@/components/primitives/PressButton";
-import { DropdownSelect } from "@/components/primitives/DropdownSelect";
 import { useSettingsStore } from "@/modules";
-import { coerceTerminalTheme, TERMINAL_THEME_OPTIONS } from "@/modules/terminalThemes";
 
-import { SettingsItem } from "./SettingsItem";
+import { SettingsItem, SettingsToggleItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
+import { SettingsTerminalAppearance, TERMINAL_APPEARANCE_ITEMS } from "./SettingsTerminalAppearance";
 
 export const FLAIR_SETTINGS_ITEMS = {
   darkMode: {
@@ -21,11 +20,7 @@ export const FLAIR_SETTINGS_ITEMS = {
     description: "Tint highlights and accents.",
     keywords: "theme appearance",
   },
-  terminalTheme: {
-    label: "Terminal theme",
-    description: "Choose a color palette for PowerShell tabs.",
-    keywords: "shell console appearance",
-  },
+  ...TERMINAL_APPEARANCE_ITEMS,
   categoryTints: {
     label: "Category tints",
     description: "Subtle color cues for file types in grid and list views.",
@@ -36,35 +31,39 @@ export const FLAIR_SETTINGS_ITEMS = {
   },
   blurOverlays: {
     label: "Blur overlays",
-    description: "Backdrop blur for dialogs, menus, and tooltips.",
+    description: "Soften the background behind dialogs and menus.",
+  },
+  showTooltips: {
+    label: "Show tooltips",
+    description: "Show hints for controls and file items on hover or keyboard focus.",
+    keywords: "tool tips disable hide hover hints help popups",
   },
 } satisfies Record<string, SettingsItemText>;
 
-const terminalThemeGroups = [{ id: "terminal-themes", options: [...TERMINAL_THEME_OPTIONS] }];
-
 type SettingsFlairSectionProps = {
   sectionId: string;
+  open: boolean;
 };
 
-export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) => {
+export const SettingsFlairSection = ({ sectionId, open }: SettingsFlairSectionProps) => {
   const darkModeId = useId();
   const darkModeDescriptionId = `${darkModeId}-description`;
   const {
     accentTheme,
-    terminalTheme,
     darkMode,
     categoryTinting,
     ambientBackground,
     blurOverlays,
+    showTooltips,
     updateSettings,
   } = useSettingsStore(
     (state) => ({
       accentTheme: state.accentTheme,
-      terminalTheme: state.terminalTheme,
       darkMode: state.darkMode,
       categoryTinting: state.categoryTinting,
       ambientBackground: state.ambientBackground,
       blurOverlays: state.blurOverlays,
+      showTooltips: state.showTooltips,
       updateSettings: state.updateSettings,
     }),
     shallow,
@@ -72,7 +71,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
 
   return (
     <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Flair</div>
+      <div className="settings-section-title">Appearance</div>
       <SettingsItem
         item={FLAIR_SETTINGS_ITEMS.darkMode}
         labelFor={darkModeId}
@@ -106,14 +105,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
           ))}
         </div>
       </SettingsItem>
-      <SettingsItem item={FLAIR_SETTINGS_ITEMS.terminalTheme}>
-        <DropdownSelect
-          value={terminalTheme}
-          ariaLabel={FLAIR_SETTINGS_ITEMS.terminalTheme.label}
-          groups={terminalThemeGroups}
-          onChange={(value) => updateSettings({ terminalTheme: coerceTerminalTheme(value) })}
-        />
-      </SettingsItem>
+      <SettingsTerminalAppearance open={open} />
       <SettingsItem item={FLAIR_SETTINGS_ITEMS.categoryTints}>
         <label className="settings-toggle">
           <input
@@ -148,6 +140,8 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
           <span />
         </label>
       </SettingsItem>
+      <SettingsToggleItem item={FLAIR_SETTINGS_ITEMS.showTooltips} checked={showTooltips}
+        onChange={(checked) => updateSettings({ showTooltips: checked })} />
     </section>
   );
 };

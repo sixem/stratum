@@ -15,7 +15,7 @@ type UseTabDragDropOptions = {
 
 type DropSlot = { index: number; indicatorX: number };
 type TabStrip = {
-  measure: (clientX: number) => DropSlot | null;
+  measure: (clientX: number, anchored: boolean) => DropSlot | null;
   showIndicator: (x: number | null, incoming?: boolean) => void;
   receive: UseTabDragDropOptions["onReceiveTab"];
 };
@@ -27,20 +27,23 @@ type DragState = {
   startX: number;
   startY: number;
   tabId: string | null;
+  anchored: boolean;
 };
 
 const DRAG_THRESHOLD = 4;
 const SUPPRESS_TIMEOUT_MS = 400;
 const tabStrips = new WeakMap<HTMLElement, TabStrip>();
 
-function measureDropSlot(container: HTMLElement, clientX: number): DropSlot {
+function measureDropSlot(container: HTMLElement, clientX: number, anchored: boolean): DropSlot {
   const tabs = container.querySelectorAll<HTMLElement>(".tab[data-tab-id]");
   const bounds = container.getBoundingClientRect();
   let edge = bounds.left;
   let index = 0;
   for (const tab of tabs) {
+    const tabAnchored = tab.dataset.tabAnchored === "true";
+    if (anchored && !tabAnchored) break;
     const rect = tab.getBoundingClientRect();
-    if (clientX < rect.left + rect.width / 2) {
+    if (anchored === tabAnchored && clientX < rect.left + rect.width / 2) {
       edge = rect.left;
       break;
     }
@@ -63,6 +66,7 @@ export const useTabDragDrop = ({ containerRef, stripRef, onReorder, onMoveTab, o
     startX: 0,
     startY: 0,
     tabId: null,
+    anchored: false,
   });
   const callbacksRef = useRef({ onReorder, onMoveTab, onReceiveTab });
   const windowTrackingRef = useRef<AbortController | null>(null);
@@ -77,7 +81,7 @@ export const useTabDragDrop = ({ containerRef, stripRef, onReorder, onMoveTab, o
     const strip = stripRef.current;
     if (!strip) return;
     tabStrips.set(strip, {
-      measure: (x) => containerRef.current ? measureDropSlot(containerRef.current, x) : null,
+      measure: (x, anchored) => containerRef.current ? measureDropSlot(containerRef.current, x, anchored) : null,
       showIndicator: (x, incoming = false) => {
         setDropIndicatorX(x);
         setReceivingTab(incoming);
@@ -89,9 +93,13 @@ export const useTabDragDrop = ({ containerRef, stripRef, onReorder, onMoveTab, o
 
   const resolveDrop = (event: PointerEvent) => {
     const strip = getTabLocationDropTarget(event.clientX, event.clientY);
-    const target = strip && tabStrips.get(strip);
-    const slot = target?.measure(event.clientX);
-    return strip && target && slot ? { target, slot, incoming: strip !== stripRef.current } : null;
+    if (!strip) return null;
+    const incoming = strip !== stripRef.current;
+    const { anchored } = dragRef.current;
+    if (incoming && anchored) return null;
+    const target = tabStrips.get(strip);
+    const slot = target?.measure(event.clientX, anchored);
+    return target && slot ? { target, slot, incoming } : null;
   };
 
   const showDrop = (drop: ReturnType<typeof resolveDrop>) => {
@@ -128,6 +136,7 @@ export const useTabDragDrop = ({ containerRef, stripRef, onReorder, onMoveTab, o
       startX: 0,
       startY: 0,
       tabId: null,
+      anchored: false,
     };
   };
 
@@ -179,7 +188,7 @@ export const useTabDragDrop = ({ containerRef, stripRef, onReorder, onMoveTab, o
     finishDrag();
   };
 
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>, id: string) => {
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>, id: string, anchored: boolean) => {
     if (event.button !== 0) return;
     stopWindowTracking();
     dragRef.current = {
@@ -189,6 +198,7 @@ export const useTabDragDrop = ({ containerRef, stripRef, onReorder, onMoveTab, o
       startX: event.clientX,
       startY: event.clientY,
       tabId: id,
+      anchored,
     };
     const tracking = new AbortController();
     windowTrackingRef.current = tracking;

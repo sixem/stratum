@@ -88,7 +88,7 @@ export const SettingsMediaSection = ({ sectionId }: { sectionId: string }) => {
 
   return (
     <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Media</div>
+      <div className="settings-section-title">Gallery &amp; media</div>
       <SettingsItem item={MEDIA_SETTINGS_ITEMS.galleryAudio}>
         <label className="settings-toggle">
           <input

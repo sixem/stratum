@@ -35,7 +35,6 @@ export const usePreviewVolumeController = ({
   isAudio,
 }: UsePreviewVolumeControllerOptions) => {
   const sessionKeyRef = useRef("");
-  const volumeButtonRef = useRef<HTMLButtonElement | null>(null);
   const volumeRangeRef = useRef<HTMLInputElement | null>(null);
   const volumeCloseTimerRef = useRef<number | null>(null);
   const volumeHoverTimerRef = useRef<number | null>(null);
@@ -63,11 +62,8 @@ export const usePreviewVolumeController = ({
       clearVolumePickerCloseTimer();
       volumeCloseTimerRef.current = window.setTimeout(() => {
         volumeCloseTimerRef.current = null;
-        const active = document.activeElement;
-        setVolumePickerOpen((prev) => (prev ? false : prev));
-        if (active === volumeRangeRef.current) {
-          volumeButtonRef.current?.focus();
-        }
+        if (document.activeElement === volumeRangeRef.current) return;
+        setVolumePickerOpen(false);
       }, delayMs);
     },
     [clearVolumePickerCloseTimer],
@@ -101,8 +97,6 @@ export const usePreviewVolumeController = ({
     if (!volumePinnedOpenRef.current) {
       scheduleVolumePickerClose();
     }
-    const frame = window.requestAnimationFrame(() => volumeRangeRef.current?.focus());
-    return () => window.cancelAnimationFrame(frame);
   }, [clearVolumePickerCloseTimer, scheduleVolumePickerClose, volumePickerOpen]);
 
   const persistMediaVolume = useCallback((value: number) => {
@@ -175,7 +169,6 @@ export const usePreviewVolumeController = ({
   return {
     mediaVolume: isAudio ? audioVolume : videoVolume,
     volumePickerOpen,
-    volumeButtonRef,
     volumeRangeRef,
     handleToggleVolumePicker,
     handleVolumeHoverStart,

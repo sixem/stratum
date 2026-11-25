@@ -1,7 +1,8 @@
 # Loaded once in the embedded interactive shell. The watcher wakes the idle
 # reader on navigation. A busy shell applies the newest request at its next prompt.
 $global:__StratumLink = @{
-    Root = (-join [char[]](__MAILBOX__)); Request = $null; Applied = 0; Report = $null; Reading = $false
+    Root = (-join [char[]](__MAILBOX__)); Request = $null; Applied = 0
+    Report = $null; ReportVersion = $null; Reading = $false
 }
 $global:__StratumLink.Inbox = [IO.Path]::Combine($global:__StratumLink.Root, 'request')
 $global:__StratumLink.Claim = [IO.Path]::Combine($global:__StratumLink.Root, 'request.read')
@@ -20,32 +21,36 @@ function global:Sync-StratumLocation([bool]$beforeRead) {
             $s.Request = [IO.File]::ReadAllText($s.Claim) | ConvertFrom-Json
             $s.ReadPending = $false
         }
-        if (!$s.Request.path -or !$s.Reading) { return }
+        if (!$s.Reading) { return }
         $failure = $null
         $changed = $false
-        if ($s.Applied -ne $s.Request.version) {
-            if (!$beforeRead) {
-                $line = ''; $cursor = 0
-                [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
-                if ($line.Length) { return }
-            }
-            try {
-                if ($PWD.Provider.Name -ne 'FileSystem' -or $PWD.ProviderPath -cne $s.Request.path) {
-                    Microsoft.PowerShell.Management\Set-Location -LiteralPath $s.Request.path -ErrorAction Stop
-                    $changed = $true
+        if ($s.Request -and $s.Applied -ne $s.Request.version) {
+            if ($s.Request.path) {
+                if (!$beforeRead) {
+                    $line = ''; $cursor = 0
+                    [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+                    if ($line.Length) { return }
                 }
-            } catch { $failure = $_.Exception.Message }
+                try {
+                    if ($PWD.Provider.Name -ne 'FileSystem' -or $PWD.ProviderPath -cne $s.Request.path) {
+                        Microsoft.PowerShell.Management\Set-Location -LiteralPath $s.Request.path -ErrorAction Stop
+                        $changed = $true
+                    }
+                } catch { $failure = $_.Exception.Message }
+            }
             $s.Applied = $s.Request.version
-            $s.Report = $null
         }
-        if ($PWD.Provider.Name -eq 'FileSystem' -and ($PWD.ProviderPath -cne $s.Report -or $failure)) {
+        # The filesystem directory remains meaningful when visiting providers like Env:.
+        $location = $ExecutionContext.SessionState.Path.CurrentFileSystemLocation.ProviderPath
+        if ($location -cne $s.Report -or $s.Applied -ne $s.ReportVersion -or $failure) {
             $file = [IO.Path]::Combine($s.Root, 'report')
             $temp = $file + '.tmp'
-            $data = @{version=$s.Applied; path=$PWD.ProviderPath; error=$failure} | ConvertTo-Json -Compress
+            $data = @{version=$s.Applied; path=$location; error=$failure} | ConvertTo-Json -Compress
             [IO.File]::WriteAllText($temp, $data)
             if ([IO.File]::Exists($file)) { [IO.File]::Replace($temp, $file, [System.Management.Automation.Language.NullString]::Value) }
             else { [IO.File]::Move($temp, $file) }
-            $s.Report = $PWD.ProviderPath
+            $s.Report = $location
+            $s.ReportVersion = $s.Applied
         }
         if ($changed -and !$beforeRead) { [Microsoft.PowerShell.PSConsoleReadLine]::InvokePrompt() }
     } catch { }

@@ -106,20 +106,19 @@ const PRESETS: Record<Exclude<TerminalThemeId, typeof DEFAULT_TERMINAL_THEME>, T
   },
 };
 
-const readAppPalette = (surface: HTMLElement): TerminalPalette => {
-  const styles = getComputedStyle(surface);
-  return {
+// HTML previews can inherit the app tokens directly. xterm needs their resolved colors.
+export const resolveTerminalTheme = (
+  preference: TerminalThemeId,
+  appColor = (property: string) => "var(" + property + ")",
+): ResolvedTheme => {
+  const palette = preference === DEFAULT_TERMINAL_THEME ? {
     ...APP_ANSI,
-    background: styles.getPropertyValue("--bg").trim(),
-    foreground: styles.getPropertyValue("--text").trim(),
-    muted: styles.getPropertyValue("--muted").trim(),
-    accent: styles.getPropertyValue("--accent").trim(),
-    accentRgb: styles.getPropertyValue("--accent-rgb").trim(),
-  };
-};
-
-export const readTerminalTheme = (surface: HTMLElement, preference: TerminalThemeId): ResolvedTheme => {
-  const palette = preference === DEFAULT_TERMINAL_THEME ? readAppPalette(surface) : PRESETS[preference];
+    background: appColor("--bg"),
+    foreground: appColor("--text"),
+    muted: appColor("--muted"),
+    accent: appColor("--accent"),
+    accentRgb: appColor("--accent-rgb"),
+  } : PRESETS[preference];
   const { background, foreground, accent, accentRgb } = palette;
   return {
     background,
@@ -145,4 +144,10 @@ export const readTerminalTheme = (surface: HTMLElement, preference: TerminalThem
     brightCyan: palette.cyan[1],
     brightWhite: palette.brightWhite ?? "#ffffff",
   };
+};
+
+export const readTerminalTheme = (surface: HTMLElement, preference: TerminalThemeId): ResolvedTheme => {
+  if (preference !== DEFAULT_TERMINAL_THEME) return resolveTerminalTheme(preference);
+  const styles = getComputedStyle(surface);
+  return resolveTerminalTheme(preference, property => styles.getPropertyValue(property).trim());
 };

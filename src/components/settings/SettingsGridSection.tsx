@@ -11,7 +11,7 @@ import type { GridNameEllipsis, GridSize } from "@/modules";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useDeferredRange } from "./useDeferredRange";
 
-import { SettingsItem } from "./SettingsItem";
+import { SettingsGroup, SettingsItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
 
 export const GRID_SETTINGS_ITEMS = {
@@ -28,6 +28,7 @@ export const GRID_SETTINGS_ITEMS = {
   autoColumns: {
     label: "Auto columns",
     description: "With per-tab sizing, this sets the default column count for new tabs.",
+    keywords: "grid auto-fit",
     requiresAutoGrid: true,
   },
   gap: {
@@ -112,8 +113,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
   });
 
   return (
-    <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Grid</div>
+    <SettingsGroup id={sectionId} title="Grid" items={Object.values(GRID_SETTINGS_ITEMS)}>
       <SettingsItem item={GRID_SETTINGS_ITEMS.size}>
         <div className="settings-pills" role="group" aria-label="Grid size">
           {GRID_SIZES.map((size) => (
@@ -254,6 +254,6 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
           ))}
         </div>
       </SettingsItem>
-    </section>
+    </SettingsGroup>
   );
 };
