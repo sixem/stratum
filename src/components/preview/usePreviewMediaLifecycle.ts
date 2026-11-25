@@ -6,18 +6,16 @@ import type {
   RefObject,
   SyntheticEvent as ReactSyntheticEvent,
 } from "react";
-import type { PreviewMediaKind, QuickPreviewLoadState } from "./quickPreviewDerivedState";
+import type { QuickPreviewLoadState } from "./quickPreviewDerivedState";
 
 type UsePreviewMediaLifecycleOptions = {
   open: boolean;
   path: string | null;
   src: string;
-  kind: PreviewMediaKind;
   previewSessionKey: string;
   mediaRef: RefObject<HTMLMediaElement | null>;
   resetViewport: () => void;
   fitMediaToViewport: (width: number, height: number) => void;
-  videoAutoplay: boolean;
   canUseExternalActions: boolean;
 };
 
@@ -25,12 +23,10 @@ export const usePreviewMediaLifecycle = ({
   open,
   path,
   src,
-  kind,
   previewSessionKey,
   mediaRef,
   resetViewport,
   fitMediaToViewport,
-  videoAutoplay,
   canUseExternalActions,
 }: UsePreviewMediaLifecycleOptions) => {
   const previewSessionRef = useRef("");
@@ -80,12 +76,6 @@ export const usePreviewMediaLifecycle = ({
     setLoadStateIfChanged,
     setMediaSizeIfChanged,
   ]);
-
-  useEffect(() => {
-    if (!open || kind !== "video" || !src || !videoAutoplay) return;
-    const media = mediaRef.current;
-    if (media?.paused) void media.play().catch(() => {});
-  }, [kind, mediaRef, open, src, videoAutoplay]);
 
   const handlePlaybackPlay = useCallback(() => setMediaPaused(false), []);
 

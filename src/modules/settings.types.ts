@@ -88,6 +88,7 @@ export type Settings = {
   thumbnailCacheMb: number;
   thumbnailFit: ThumbnailFit;
   thumbnailAppIcons: boolean;
+  /** Applies to audio and video. Keep the stored key for existing profiles and backups. */
   videoAutoplay: boolean;
   galleryAudio: boolean;
   ffmpegPath: string;

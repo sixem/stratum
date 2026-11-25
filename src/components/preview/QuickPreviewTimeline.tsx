@@ -321,6 +321,7 @@ export const QuickPreviewTimeline = ({
         ref={rootRef}
         role="slider"
         aria-label="Playback position"
+        aria-disabled={seekDisabled || undefined}
         aria-valuemin={0}
         aria-valuemax={seekDisabled ? 0 : labels.max}
         aria-valuenow={seekDisabled ? 0 : labels.now}
@@ -333,7 +334,7 @@ export const QuickPreviewTimeline = ({
         onKeyDown={handleKeyDown}
       >
         <div className="quick-preview-timeline-rail" aria-hidden="true" />
-        <div className="quick-preview-timeline-thumb" aria-hidden="true" />
+        <div className="quick-preview-playhead" aria-hidden="true" />
       </div>
       <div className="quick-preview-control-time quick-preview-control-time-remaining">
         -{labels.remaining}

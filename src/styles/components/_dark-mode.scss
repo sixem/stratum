@@ -206,8 +206,7 @@
   }
 
   // Borderless actions use an inset edge so hover cannot shift nearby content.
-  :is(.quick-preview-topbar-nav > .btn,
-      .drive-picker-scroll-button, .tab-scroll-button,
+  :is(.drive-picker-scroll-button, .tab-scroll-button,
       .indexed-search-clear) {
     background: var(--surface-control);
     transition: none;

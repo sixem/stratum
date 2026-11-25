@@ -68,11 +68,20 @@
 }
 
 .quick-preview-topbar-nav > .btn {
-  border: none;
-}
+  // Keep the shared 2px border in the button box with a transparent idle edge.
+  --stroke: transparent;
+  --surface-control: transparent;
+  padding: 2px 8px;
+  border-color: var(--stroke);
 
-.quick-preview-topbar-nav > .btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
+  &:hover:not(:disabled) {
+    border-color: var(--dark-hover-stroke, rgba(255, 255, 255, 0.2));
+  }
+
+  &:focus-visible:not(:disabled) {
+    outline: 1px solid var(--muted);
+    outline-offset: 1px;
+  }
 }
 
 .quick-preview-topbar-nav .btn-icon {

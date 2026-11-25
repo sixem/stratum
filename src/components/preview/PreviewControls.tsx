@@ -1,5 +1,7 @@
 // Shared playback controls for audio and video previews.
 import type { ChangeEvent as ReactChangeEvent, CSSProperties, RefObject } from "react";
+import { PauseIcon, PlayIcon } from "@/components/icons";
+import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { PressButton } from "@/components/primitives/PressButton";
 import { QuickPreviewTimeline } from "./QuickPreviewTimeline";
 
@@ -49,6 +51,8 @@ export const PreviewControls = ({
   onVolumeBlur,
 }: PreviewControlsProps) => {
   if (!visible) return null;
+  const playbackLabel = mediaPaused ? "Play" : "Pause";
+  const PlaybackIcon = mediaPaused ? PlayIcon : PauseIcon;
   return (
     <div
       className="quick-preview-controls"
@@ -56,14 +60,17 @@ export const PreviewControls = ({
         if (event.key === "Enter" || event.key === " ") event.stopPropagation();
       }}
     >
-      <PressButton
-        type="button"
-        className="quick-preview-control-button quick-preview-control-button--playback"
-        disabled={disabled}
-        onClick={onTogglePlayback}
-      >
-        {mediaPaused ? "Play" : "Pause"}
-      </PressButton>
+      <TooltipWrapper text={playbackLabel} disabled={disabled}>
+        <PressButton
+          type="button"
+          className="quick-preview-control-button quick-preview-control-button--playback"
+          aria-label={playbackLabel}
+          disabled={disabled}
+          onClick={onTogglePlayback}
+        >
+          <PlaybackIcon className="quick-preview-playback-icon" />
+        </PressButton>
+      </TooltipWrapper>
       <div
         className="quick-preview-control-volume"
         data-open={volumePickerOpen ? "true" : "false"}

@@ -14,9 +14,6 @@
     rgba(250, 252, 255, 0.96),
     rgba(216, 226, 243, 0.9)
   );
-  --quick-preview-slider-thumb-shadow:
-    0 0 0 2px rgba(8, 11, 18, 0.7),
-    0 4px 10px rgba(0, 0, 0, 0.35);
   position: relative;
   // Keep video controls in the main column so they don't overlay the right strip.
   grid-column: 1 / 2;
@@ -39,24 +36,36 @@
     rgba(255, 255, 255, 0.14),
     5px 9px,
     null,
-    var(--font-size-micro),
+    var(--font-size-xs),
     600,
     0.04em,
     var(--text)
   );
   justify-content: center;
+  min-height: var(--range-hit-height);
   line-height: 1;
   transition: border-color 0.14s ease, background 0.14s ease;
 }
 
-.quick-preview-control-button:hover {
+.quick-preview-control-button:hover:not(:disabled) {
   border-color: rgba(var(--accent-rgb), 0.5);
   background: rgba(20, 26, 38, 0.92);
 }
 
 .quick-preview-control-button--playback {
-  min-width: 56px;
-  text-align: center;
+  flex: 0 0 var(--range-hit-height);
+  width: var(--range-hit-height);
+  padding: 0;
+}
+
+.quick-preview-control-button--playback:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.quick-preview-playback-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .quick-preview-timeline-shell {
@@ -69,22 +78,77 @@
 
 .quick-preview-timeline {
   --preview-seek-progress: 0%;
-  --quick-preview-slider-progress: var(--preview-seek-progress);
+  --quick-preview-timeline-progress: var(--preview-seek-progress);
+  --quick-preview-timeline-played: rgba(var(--accent-rgb), 0.72);
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
   height: var(--range-hit-height);
   cursor: pointer;
-  outline: none;
+  touch-action: none;
 }
 
 .quick-preview-timeline.is-disabled {
-  --quick-preview-slider-progress: 0%;
+  --quick-preview-timeline-progress: 0%;
   cursor: default;
   opacity: 0.48;
 }
 
-.quick-preview-timeline-rail,
+.quick-preview-timeline:focus-visible .quick-preview-timeline-rail {
+  outline: 1px solid var(--muted);
+  outline-offset: 2px;
+}
+
+.quick-preview-timeline:is(:hover, :focus-visible, .is-dragging):not(.is-disabled) {
+  --quick-preview-timeline-played: var(--accent);
+}
+
+// Quarter marks divide the seek area without adding labels.
+.quick-preview-timeline::before {
+  --quick-preview-timeline-tick: linear-gradient(rgba(186, 197, 214, 0.38) 0 0);
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: calc(50% + 5px);
+  height: 3px;
+  background:
+    var(--quick-preview-timeline-tick) 25% / 1px 100% no-repeat,
+    var(--quick-preview-timeline-tick) 50% / 1px 100% no-repeat,
+    var(--quick-preview-timeline-tick) 75% / 1px 100% no-repeat;
+  pointer-events: none;
+}
+
+.quick-preview-timeline-rail {
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: 3px;
+  border-radius: 1px;
+  transform: translateY(-50%);
+  background: linear-gradient(
+    90deg,
+    var(--quick-preview-timeline-played) 0 var(--quick-preview-timeline-progress),
+    rgba(186, 197, 214, 0.26) var(--quick-preview-timeline-progress) 100%
+  );
+  pointer-events: none;
+}
+
+.quick-preview-playhead {
+  position: absolute;
+  left: var(--preview-seek-progress);
+  top: 50%;
+  width: 2px;
+  height: 12px;
+  border-radius: 1px;
+  transform: translate(-50%, -50%);
+  background: var(--text);
+  pointer-events: none;
+}
+
+.quick-preview-timeline.is-disabled .quick-preview-playhead {
+  visibility: hidden;
+}
+
 .quick-preview-control-volume-slider::before {
   position: absolute;
   left: 0;
@@ -100,42 +164,6 @@
     var(--quick-preview-slider-track-idle);
   background-clip: padding-box;
   pointer-events: none;
-}
-
-.quick-preview-timeline-thumb {
-  position: absolute;
-  left: var(--preview-seek-progress);
-  top: 50%;
-  width: var(--range-thumb-size);
-  height: var(--range-thumb-size);
-  border-radius: 50%;
-  border: var(--surface-border-width) solid rgba(255, 255, 255, 0.78);
-  background: rgba(252, 254, 255, 0.96);
-  box-shadow: var(--quick-preview-slider-thumb-shadow);
-  transform: translate(-50%, -50%) scale(0.92);
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease;
-  pointer-events: none;
-}
-
-.quick-preview-timeline:hover .quick-preview-timeline-thumb,
-.quick-preview-timeline:focus-visible .quick-preview-timeline-thumb,
-.quick-preview-timeline.is-dragging .quick-preview-timeline-thumb {
-  transform: translate(-50%, -50%) scale(1);
-  box-shadow:
-    0 0 0 2px rgba(8, 11, 18, 0.7),
-    0 0 0 5px rgba(var(--accent-rgb), 0.16),
-    0 5px 11px rgba(0, 0, 0, 0.35);
-}
-
-.quick-preview-timeline.is-dragging .quick-preview-timeline-thumb {
-  will-change: left, transform;
-  transition: none;
-}
-
-.quick-preview-timeline.is-disabled .quick-preview-timeline-thumb {
-  opacity: 0;
 }
 
 .quick-preview-control-volume {
@@ -184,14 +212,14 @@
 }
 
 .quick-preview-control-time {
-  font-size: var(--font-size-2xs);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
   letter-spacing: 0.02em;
   color: rgba(229, 235, 245, 0.75);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   text-align: center;
-  min-width: 62px;
-  padding: 0 2px;
+  min-width: 9ch;
 }
 
 .quick-preview-control-time-current {

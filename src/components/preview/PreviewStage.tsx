@@ -18,7 +18,7 @@ type PreviewStageProps = {
   kind: PreviewMediaKind;
   analyseAudio: boolean;
   playbackKey: string;
-  videoAutoplay: boolean;
+  mediaAutoplay: boolean;
   isReady: boolean;
   dragging: boolean;
   transforming: boolean;
@@ -47,7 +47,7 @@ export const PreviewStage = ({
   kind,
   analyseAudio,
   playbackKey,
-  videoAutoplay,
+  mediaAutoplay,
   isReady,
   dragging,
   transforming,
@@ -100,7 +100,7 @@ export const PreviewStage = ({
             audio={isAudio}
             analyseAudio={analyseAudio}
             ready={isReady}
-            videoAutoplay={videoAutoplay}
+            mediaAutoplay={mediaAutoplay}
             videoPoster={videoPoster}
             mediaStyle={mediaStyle}
             mediaVolume={mediaVolume}

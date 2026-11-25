@@ -36,7 +36,7 @@ export const useQuickPreviewMedia = ({
   resetViewport,
   fitMediaToViewport,
 }: UseQuickPreviewMediaOptions) => {
-  const videoAutoplay = useSettingsStore((state) => state.videoAutoplay);
+  const mediaAutoplay = useSettingsStore((state) => state.videoAutoplay);
   const { src, failed: sourceFailed } = usePreviewSource(open ? path : null);
   const [plainAudioSource, setPlainAudioSource] = useState<string | null>(null);
   const analyseAudio = kind === "audio" && src !== plainAudioSource;
@@ -48,12 +48,10 @@ export const useQuickPreviewMedia = ({
     open,
     path,
     src,
-    kind,
     previewSessionKey,
     mediaRef,
     resetViewport,
     fitMediaToViewport,
-    videoAutoplay,
     canUseExternalActions,
   });
   const loadState = sourceFailed ? "error" : src ? lifecycle.loadState : "loading";
@@ -93,7 +91,7 @@ export const useQuickPreviewMedia = ({
   return {
     ...derivedState,
     loadState,
-    videoAutoplay,
+    mediaAutoplay,
     analyseAudio,
     playbackKey,
     mediaPaused: lifecycle.mediaPaused,

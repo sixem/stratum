@@ -1,5 +1,5 @@
 // Keep exactly one playback element attached to the current preview grant.
-import { useCallback, useLayoutEffect } from "react";
+import { useCallback, useEffect, useLayoutEffect } from "react";
 import type { CSSProperties, RefObject, SyntheticEvent } from "react";
 import { AudioPreviewSpectrum } from "./AudioPreviewSpectrum";
 
@@ -8,7 +8,7 @@ type Props = {
   audio: boolean;
   analyseAudio: boolean;
   ready: boolean;
-  videoAutoplay: boolean;
+  mediaAutoplay: boolean;
   videoPoster?: string;
   mediaStyle: CSSProperties;
   mediaVolume: number;
@@ -20,7 +20,7 @@ type Props = {
 };
 
 export const PreviewPlaybackMedia = ({
-  src, audio, analyseAudio, ready, videoAutoplay, videoPoster, mediaStyle, mediaVolume, mediaRef,
+  src, audio, analyseAudio, ready, mediaAutoplay, videoPoster, mediaStyle, mediaVolume, mediaRef,
   onMetadata, onPlay, onPause, onError,
 }: Props) => {
   const attach = useCallback((element: HTMLMediaElement | null) => {
@@ -42,10 +42,22 @@ export const PreviewPlaybackMedia = ({
     };
   }, [mediaRef, src]);
 
+  useEffect(() => {
+    const element = mediaRef.current;
+    if (mediaAutoplay && element?.paused) void element.play().catch(() => {});
+  }, [mediaAutoplay, mediaRef, src]);
+
   const events = { onLoadedMetadata: onMetadata, onPlay, onPause, onEnded: onPause, onError };
   return audio ? (
     <>
-      <audio ref={attach} hidden preload="metadata" crossOrigin={analyseAudio ? "anonymous" : undefined} {...events} />
+      <audio
+        ref={attach}
+        hidden
+        preload="metadata"
+        autoPlay={mediaAutoplay}
+        crossOrigin={analyseAudio ? "anonymous" : undefined}
+        {...events}
+      />
       {analyseAudio ? <AudioPreviewSpectrum mediaRef={mediaRef} /> : null}
     </>
   ) : (
@@ -55,7 +67,7 @@ export const PreviewPlaybackMedia = ({
       poster={videoPoster}
       playsInline
       preload="metadata"
-      autoPlay={videoAutoplay}
+      autoPlay={mediaAutoplay}
       loop
       draggable={false}
       data-ready={ready ? "true" : "false"}

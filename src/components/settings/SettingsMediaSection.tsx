@@ -11,10 +11,10 @@ export const MEDIA_SETTINGS_ITEMS = {
     description: "Include supported audio files in Quick Preview and Gallery.",
     keywords: "music playback mp3 wav flac",
   },
-  videoAutoplay: {
-    label: "Autoplay videos",
-    description: "Start videos automatically when opening them in Quick Preview or Gallery.",
-    keywords: "playback open paused",
+  mediaAutoplay: {
+    label: "Autoplay media",
+    description: "Play audio and video automatically in Quick Preview and Gallery.",
+    keywords: "playback open paused music",
   },
   ffmpeg: {
     label: "FFmpeg",
@@ -25,7 +25,7 @@ export const MEDIA_SETTINGS_ITEMS = {
 
 export const SettingsMediaSection = ({ sectionId }: { sectionId: string }) => {
   const galleryAudio = useSettingsStore((state) => state.galleryAudio);
-  const videoAutoplay = useSettingsStore((state) => state.videoAutoplay);
+  const mediaAutoplay = useSettingsStore((state) => state.videoAutoplay);
   const ffmpegPath = useSettingsStore((state) => state.ffmpegPath);
   const updateSettings = useSettingsStore((state) => state.updateSettings);
   const shellAvailability = useShellStore((state) => state.availability);
@@ -100,12 +100,12 @@ export const SettingsMediaSection = ({ sectionId }: { sectionId: string }) => {
           <span aria-hidden="true" />
         </label>
       </SettingsItem>
-      <SettingsItem item={MEDIA_SETTINGS_ITEMS.videoAutoplay}>
+      <SettingsItem item={MEDIA_SETTINGS_ITEMS.mediaAutoplay}>
         <label className="settings-toggle">
           <input
             type="checkbox"
-            aria-label={MEDIA_SETTINGS_ITEMS.videoAutoplay.label}
-            checked={videoAutoplay}
+            aria-label={MEDIA_SETTINGS_ITEMS.mediaAutoplay.label}
+            checked={mediaAutoplay}
             onChange={(event) => updateSettings({ videoAutoplay: event.currentTarget.checked })}
           />
           <span aria-hidden="true" />
