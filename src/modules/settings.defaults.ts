@@ -33,6 +33,7 @@ export const DEFAULT_SETTINGS: Settings = {
   rememberRecentLocations: true,
   showTabNumbers: false,
   fixedWidthTabs: false,
+  animateTabChanges: false,
   tabDropSubfolders: false,
   showRecycleBinButton: false,
   showDriveToggle: true,

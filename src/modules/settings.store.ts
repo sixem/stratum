@@ -105,6 +105,7 @@ useSettingsStore.subscribe((state) => {
     rememberRecentLocations: state.rememberRecentLocations,
     showTabNumbers: state.showTabNumbers,
     fixedWidthTabs: state.fixedWidthTabs,
+    animateTabChanges: state.animateTabChanges,
     tabDropSubfolders: state.tabDropSubfolders,
     showRecycleBinButton: state.showRecycleBinButton,
     showDriveToggle: state.showDriveToggle,

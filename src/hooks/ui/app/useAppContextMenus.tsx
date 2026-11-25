@@ -212,7 +212,7 @@ export const useAppContextMenus = ({
         return contextMenu.target.path ? { paths: [contextMenu.target.path] } : null;
       case "sort":
         return currentPath ? { backgroundPath: currentPath } : null;
-      case "history":
+      case "actions":
         return null;
     }
   }, [contextMenu, currentPath, selected, viewParentPath, windowsMenuEnabled]);
@@ -404,12 +404,12 @@ export const useAppContextMenus = ({
   const columnMenu = useListColumnMenu(contextMenu?.kind === "sort" && contextMenu.listHeader === true);
   const selectionItems = useMemo(() => {
     if (!currentPath || !menuSelectionActions || !contextMenu ||
-        contextMenu.kind === "place-target" || contextMenu.kind === "history") return [];
+        contextMenu.kind === "place-target" || contextMenu.kind === "actions") return [];
     const target = contextMenu.kind === "entry" ? contextMenu.entry : undefined;
     return buildFolderSelectionItems(entryByPath, selected, onSelectionChange, target);
   }, [contextMenu, currentPath, entryByPath, menuSelectionActions, onSelectionChange, selected]);
   const contextMenuItems = useMemo<ContextMenuItem[]>(() => {
-    if (contextMenu?.kind === "history") return contextMenu.items;
+    if (contextMenu?.kind === "actions") return contextMenu.items;
     const items = columnMenu ? [columnMenu, ...baseItems] : baseItems;
     const withSelection = selectionItems.length && items.length
       ? [...items, { kind: "divider" as const, id: "selection-menu-divider" }, ...selectionItems]

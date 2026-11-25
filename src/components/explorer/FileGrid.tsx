@@ -204,6 +204,7 @@ const FileGrid = ({
   return (
     <div
       className="thumb-shell"
+      data-tab-content="thumbs"
       {...dragHandlers}
       inert={view.loading}
       data-category-tint={thumbs.categoryTinting ? "true" : "false"}

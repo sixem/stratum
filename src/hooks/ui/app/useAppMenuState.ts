@@ -2,6 +2,7 @@
 import { useCallback, useState } from "react";
 import type {
   Dispatch,
+  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   SetStateAction,
@@ -15,7 +16,7 @@ type ContextMenuState =
   | ({ kind: "sort"; listHeader?: boolean } & ContextMenuPoint)
   | ({ kind: "entry"; entry: EntryContextTarget } & ContextMenuPoint)
   | ({ kind: "place-target"; target: PlaceContextTarget } & ContextMenuPoint)
-  | ({ kind: "history"; items: ContextMenuItem[] } & ContextMenuPoint)
+  | ({ kind: "actions"; items: ContextMenuItem[]; scrollable?: boolean } & ContextMenuPoint)
   | null;
 
 type MenuPane = "main" | "bottom";
@@ -26,6 +27,26 @@ function usePaneMenuState(pane: MenuPane, active: OwnedMenu | null, setActive: D
   const openContextMenuAt = useCallback((menu: NonNullable<ContextMenuState>) => {
     setActive({ pane, menu });
   }, [pane, setActive]);
+
+  const openActionMenu = useCallback((
+    event: ReactMouseEvent | ReactKeyboardEvent,
+    items: ContextMenuItem[],
+    scrollable = false,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!items.length) return;
+    // Keyboard context menus use their control as an anchor.
+    const anchor = event.currentTarget.getBoundingClientRect();
+    const hasPoint = "clientX" in event && (event.clientX !== 0 || event.clientY !== 0);
+    openContextMenuAt({
+      kind: "actions",
+      items,
+      scrollable,
+      x: hasPoint ? event.clientX : anchor.left,
+      y: hasPoint ? event.clientY : anchor.bottom,
+    });
+  }, [openContextMenuAt]);
 
   const openSortMenu = useCallback((event: ContextMenuEvent) => {
     event.preventDefault();
@@ -63,6 +84,7 @@ function usePaneMenuState(pane: MenuPane, active: OwnedMenu | null, setActive: D
   return {
     contextMenu: active?.pane === pane ? active.menu : null,
     openContextMenuAt,
+    openActionMenu,
     openSortMenu,
     openEntryMenu,
     openPlaceTargetMenu,

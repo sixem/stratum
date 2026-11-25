@@ -6,9 +6,11 @@ import {
   ContextChevronRightIcon,
   ConvertIcon,
   DeleteActionIcon,
+  EyeOffIcon,
   OpenExternalIcon,
   PlusIcon,
   QuickConvertIcon,
+  RefreshIcon,
   TabCloseIcon,
 } from "@/components/icons";
 import {
@@ -70,6 +72,8 @@ const contextIcons = {
   unpin: ContextUnpinIcon,
   add: PlusIcon,
   remove: TabCloseIcon,
+  hide: EyeOffIcon,
+  refresh: RefreshIcon,
   convert: ConvertIcon,
   "quick-convert": QuickConvertIcon,
   cut: ContextCutIcon,

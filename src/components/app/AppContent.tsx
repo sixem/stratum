@@ -7,6 +7,7 @@ import { SidebarDivider } from "@/components/navigation/SidebarDivider";
 import { useSettingsStore } from "@/modules";
 import { focusFilePaneBackground } from "@/hooks/ui/inputs/inputFocus";
 import type { PanePreviewBindings } from "@/hooks/ui/view/useQuickPreview";
+import { useTabReveal } from "@/hooks/ui/view/useTabReveal";
 import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
 
 import {
@@ -27,6 +28,7 @@ type AppContentProps = {
   onRetryFolder: () => void;
   sidebarOpen: boolean;
   sidebarProps: ComponentProps<typeof Sidebar>;
+  activeTabId: string | null;
   mainRef: RefObject<HTMLElement | null>;
   fileViewProps: ComponentProps<typeof FileView>;
   bottomMenu: BottomMenuBindings;
@@ -46,6 +48,7 @@ export const AppContent = ({
   onRetryFolder,
   sidebarOpen,
   sidebarProps,
+  activeTabId,
   mainRef,
   fileViewProps,
   bottomMenu,
@@ -58,6 +61,14 @@ export const AppContent = ({
   const bottomHeight = useBottomPaneStore(state => `${state.height}${state.heightUnit}`);
   const bottomActive = useBottomPaneStore(state => state.open && state.active);
   const sidebarWidth = useSettingsStore(state => state.sidebarWidth);
+  const animateTabChanges = useSettingsStore(state => state.animateTabChanges);
+  useTabReveal(mainRef, {
+    tabId: activeTabId,
+    ready: !folderBusy && !folderFailed && !fileViewProps.loading,
+    enabled: animateTabChanges,
+    view: fileViewProps.showLander ? "lander" : fileViewProps.viewMode,
+    viewKey: fileViewProps.viewKey,
+  });
   const [sidebarResizing, setSidebarResizing] = useState(false);
   const paneViewProps = { ...fileViewProps, gridResizeDeferred: sidebarResizing };
   const upperPath = fileViewProps.loading || fileViewProps.showLander ? "" : fileViewProps.currentPath;

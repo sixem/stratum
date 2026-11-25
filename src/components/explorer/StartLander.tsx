@@ -63,7 +63,7 @@ export const StartLander = ({
   const visiblePlaces = places;
   const locationDrag = useLocationDrag();
   return (
-    <div className="view-lander" {...locationDrag}>
+    <div className="view-lander" data-tab-content="lander" {...locationDrag}>
       <div className="lander-panel">
         <EmptyState
           title="Start browsing"

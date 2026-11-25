@@ -34,6 +34,7 @@ export type Settings = {
   rememberRecentLocations: boolean;
   showTabNumbers: boolean;
   fixedWidthTabs: boolean;
+  animateTabChanges: boolean;
   tabDropSubfolders: boolean;
   showRecycleBinButton: boolean;
   showDriveToggle: boolean;

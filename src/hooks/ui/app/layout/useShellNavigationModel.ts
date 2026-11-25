@@ -61,7 +61,7 @@ export const useShellNavigationModel = ({
     viewState.mainRef.current?.focus({ preventScroll: true });
     navigationController.handleOpenInNewTab(folderPath, { revealPath: entryPath });
   };
-  const handleHistoryMenu = useTabHistoryMenu(tabSession, menuState.openContextMenuAt);
+  const handleHistoryMenu = useTabHistoryMenu(tabSession, menuState.openActionMenu);
 
   const topstackProps = useAppTopstackProps({
     appName: APP_NAME,
@@ -173,6 +173,7 @@ export const useShellNavigationModel = ({
       onPlaceContextMenuDown: shellView.navigationContext.handlePlaceTargetContextMenuDown,
       onRecentContextMenu: shellView.navigationContext.handlePlaceTargetContextMenu,
       onRecentContextMenuDown: shellView.navigationContext.handlePlaceTargetContextMenuDown,
+      onOpenTipsMenu: menuState.openActionMenu,
     },
   };
 };

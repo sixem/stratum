@@ -25,6 +25,11 @@ export const BARS_SETTINGS_ITEMS = {
     label: "Fixed-width tabs",
     description: "Keep every tab the same width instead of sizing to the title.",
   },
+  animateTabChanges: {
+    label: "Animate tab changes",
+    description: "Gently reveal the selected tab’s contents in either pane.",
+    keywords: "animation transition motion fade",
+  },
   tabDropSubfolders: {
     label: "Tab drop subfolders",
     description: "When dragging onto a tab, reveal its direct subfolders as extra drop targets.",
@@ -83,6 +88,7 @@ export const SettingsBarsSection = ({
     (state) => ({
       showTabNumbers: state.showTabNumbers,
       fixedWidthTabs: state.fixedWidthTabs,
+      animateTabChanges: state.animateTabChanges,
       tabDropSubfolders: state.tabDropSubfolders,
       showRecycleBinButton: state.showRecycleBinButton,
       showDriveToggle: state.showDriveToggle,
@@ -97,7 +103,7 @@ export const SettingsBarsSection = ({
     shallow,
   );
   const {
-    showTabNumbers, fixedWidthTabs, tabDropSubfolders, sidebarRecentLimit,
+    showTabNumbers, fixedWidthTabs, animateTabChanges, tabDropSubfolders, sidebarRecentLimit,
     sidebarSectionOrder, sidebarHiddenSections, updateSettings,
   } = settings;
   const normalizedSidebarOrder = normalizeSidebarSectionOrder(sidebarSectionOrder);
@@ -155,6 +161,17 @@ export const SettingsBarsSection = ({
             onChange={(event) =>
               updateSettings({ fixedWidthTabs: event.currentTarget.checked })
             }
+          />
+          <span />
+        </label>
+      </SettingsItem>
+      <SettingsItem item={BARS_SETTINGS_ITEMS.animateTabChanges}>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            aria-label={BARS_SETTINGS_ITEMS.animateTabChanges.label}
+            checked={animateTabChanges}
+            onChange={(event) => updateSettings({ animateTabChanges: event.currentTarget.checked })}
           />
           <span />
         </label>

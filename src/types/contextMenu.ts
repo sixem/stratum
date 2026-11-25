@@ -33,6 +33,8 @@ export type ContextMenuIcon =
   | "unpin"
   | "add"
   | "remove"
+  | "hide"
+  | "refresh"
   | "convert"
   | "quick-convert"
   | "cut"

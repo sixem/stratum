@@ -20,6 +20,7 @@ import { useSmartTabJump } from "@/hooks/ui/selection/useSmartTabJump";
 import { useTypeaheadSelection } from "@/hooks/ui/selection/useTypeaheadSelection";
 import type { PanePreviewBindings, PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
 import { useNavigationReveal } from "@/hooks/ui/view/useNavigationReveal";
+import { useTabReveal } from "@/hooks/ui/view/useTabReveal";
 import { useSettingsStore } from "@/modules";
 import { hideBottomPane, setBottomPaneActive, useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { folderPathKey, getNextTrailPath } from "@/lib";
@@ -51,7 +52,7 @@ type Props = {
 export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, menu, commandsBlocked }: Props) {
   const folder = useBottomFolder();
   const { dir, meta, tabs, model, selection, viewKey, busy } = folder;
-  const handleHistoryMenu = useTabHistoryMenu(tabs, menu.openContextMenuAt);
+  const handleHistoryMenu = useTabHistoryMenu(tabs, menu.openActionMenu);
   const root = useRef<HTMLElement>(null);
   const files = useRef<HTMLDivElement>(null);
   const address = useRef<HTMLInputElement>(null);
@@ -63,6 +64,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   const { scrollRequest, requestScrollToIndex } = useScrollRequest();
   const tabNumbers = useSettingsStore(state => state.showTabNumbers);
   const fixedWidth = useSettingsStore(state => state.fixedWidthTabs);
+  const animateTabChanges = useSettingsStore(state => state.animateTabChanges);
   const active = useBottomPaneStore(state => state.active);
   const showBreadcrumbs = useBottomPaneStore(state => state.showBreadcrumbs);
   const path = dir.currentPath;
@@ -78,6 +80,13 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   }, [onSummary, path, tabs.recentJumps, countLabel, selectionLabel]);
   // The listing can commit one render before its tab is updated.
   const ready = !!path && !busy && !tabs.restoringTabs && folderPathKey(path) === folderPathKey(tabs.displayPath);
+  useTabReveal(files, {
+    tabId: tabs.activeTabId,
+    ready: ready || (!tabs.displayPath && !busy && !tabs.restoringTabs),
+    enabled: animateTabChanges,
+    view: tabs.displayPath ? tabs.viewMode : "lander",
+    viewKey,
+  });
   const viewVisit = useMemo(() => ({ current: false }), [viewKey, tabs.searchValue]);
   useLayoutEffect(() => {
     viewVisit.current = ready;
@@ -334,7 +343,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       x={menu.contextMenu?.x ?? 0}
       y={menu.contextMenu?.y ?? 0}
       items={paneActions.contextMenuItems}
-      scrollable={menu.contextMenu?.kind === "history"}
+      scrollable={menu.contextMenu?.kind === "actions" && menu.contextMenu.scrollable}
       onClose={menu.closeContextMenu}
       onOpenNative={() => paneActions.openKeyboardContextMenu(true)}
     />, document.body)}

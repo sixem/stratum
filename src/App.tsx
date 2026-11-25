@@ -30,6 +30,7 @@ const App = ({ showWelcome }: { showWelcome: boolean }) => {
           onRetryFolder: view.onRetryFolder,
           sidebarOpen: navigation.sidebarOpen,
           sidebarProps: navigation.sidebarProps,
+          activeTabId: view.activeTabId,
           mainRef: view.mainRef,
           onContextMenu: view.onContextMenu,
           onContextMenuDown: view.onContextMenuDown,

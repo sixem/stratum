@@ -121,6 +121,7 @@ const FileList = ({
   return (
     <div
       className="file-list"
+      data-tab-content="list"
       data-density={density}
       data-show-size={showSize}
       data-show-modified={showModified}

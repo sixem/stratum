@@ -165,6 +165,7 @@ export const useShellFileViewAssembly = ({
       folderFailed: resolvedView.viewLoading && fileManager.failedPath === resolvedView.viewPath,
       onRetryFolder: interactionModel.handleManualRefresh,
       mainRef: viewState.mainRef,
+      activeTabId: resolvedView.activeTabId,
       onContextMenu: layoutContextMenu,
       onContextMenuDown: layoutContextMenuDown,
       fileViewProps,

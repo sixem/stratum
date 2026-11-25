@@ -175,6 +175,10 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.fixedWidthTabs === "boolean"
         ? value.fixedWidthTabs
         : DEFAULT_SETTINGS.fixedWidthTabs,
+    animateTabChanges:
+      typeof value?.animateTabChanges === "boolean"
+        ? value.animateTabChanges
+        : DEFAULT_SETTINGS.animateTabChanges,
     tabDropSubfolders:
       typeof value?.tabDropSubfolders === "boolean"
         ? value.tabDropSubfolders

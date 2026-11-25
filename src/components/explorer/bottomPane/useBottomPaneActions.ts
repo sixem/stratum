@@ -103,7 +103,7 @@ export function useBottomPaneActions({
     ...menu,
     pane: "bottom",
     mainRef: files,
-    contextMenu: ready || menu.contextMenu?.kind === "place-target" || menu.contextMenu?.kind === "history"
+    contextMenu: ready || menu.contextMenu?.kind === "place-target" || menu.contextMenu?.kind === "actions"
       ? menu.contextMenu : null,
     onShellCommand: () => {
       void refreshFileClipboard().catch(() => {});
