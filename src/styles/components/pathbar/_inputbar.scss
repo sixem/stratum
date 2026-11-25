@@ -9,10 +9,6 @@
   align-items: center;
   padding: 6px 10px 0 10px;
   background: transparent;
-
-  &:has(> .view-btn) {
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 220px) auto;
-  }
 }
 
 // Scope input bar internals to the bar without increasing specificity.

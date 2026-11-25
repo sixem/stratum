@@ -14,12 +14,12 @@ import { handleMiddleClick, tabLabel } from "@/lib";
 import { registerTabLocationDrop } from "@/lib/tabLocationDrop";
 import { useHorizontalOverflowScroll, useTabDragDrop } from "@/hooks";
 import { DropTargetSubmenu } from "@/components/overlay/DropTargetSubmenu";
-import type { PlaceContextTarget, Tab } from "@/types";
+import type { ContextMenuItem, PlaceContextTarget, Tab } from "@/types";
 import type { TabTransfer } from "@/types/tabs";
 import { PlusIcon, TabCloseIcon } from "@/components/icons";
 import { HorizontalChevronButton, PressButton } from "@/components/primitives";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
-import { useSettingsStore } from "@/modules";
+import { formatKeybind, useSettingsStore } from "@/modules";
 import { getDefaultTabGridSize } from "@/modules/tabGridSize";
 import { cancelSplitPicker, canPairFolder, pairWithFolder, useSplitPicker } from "@/modules/terminalSplit";
 import type { LinkedPane } from "@/lib/paneLink";
@@ -45,6 +45,7 @@ type TabsBarProps = {
   onReceiveTab: (transfer: TabTransfer, toIndex: number) => boolean;
   onSubmenuHoverTargetChange?: (target: DropTarget | null) => void;
   onSubmenuCloseRequest?: () => void;
+  onStripContextMenu: (event: ReactMouseEvent<HTMLDivElement>, items: ContextMenuItem[]) => void;
   onTabContextMenu?: (event: PointerEvent<HTMLDivElement>, target: PlaceContextTarget) => void;
   onTabContextMenuDown?: (
     event: PointerEvent<HTMLDivElement>,
@@ -198,6 +199,7 @@ export const TabsBar = ({
   onReceiveTab,
   onSubmenuHoverTargetChange,
   onSubmenuCloseRequest,
+  onStripContextMenu,
   onTabContextMenu,
   onTabContextMenuDown,
 }: TabsBarProps) => {
@@ -285,7 +287,17 @@ export const TabsBar = ({
   }, [tabDropSubmenu?.hostTabId, tabs]);
 
   return (
-    <div className="tabsbar" data-tab-location-strip="true" data-tab-transfer-hover={receivingTab || undefined} ref={stripRef}>
+    <div className="tabsbar" data-tab-location-strip="true" data-tab-transfer-hover={receivingTab || undefined} ref={stripRef}
+      onContextMenu={event => {
+        const target = event.target;
+        if (event.defaultPrevented || !(target instanceof Element) ||
+            (target !== event.currentTarget && !target.matches(".tabs, .tabs-scroll-wrap"))) return;
+        onStripContextMenu(event, [
+          { id: "strip-new-tab", label: "New tab", icon: "add", onSelect: onNew,
+            hint: formatKeybind(useSettingsStore.getState().keybinds.newTab) || undefined },
+          { id: "strip-new-shell", label: "New PowerShell tab", icon: "terminal", onSelect: onNewPowerShell },
+        ]);
+      }}>
       {leading}
       <div
         className="tabs-scroll-wrap"
@@ -349,10 +361,12 @@ export const TabsBar = ({
       <PressButton type="button" className="tab-new" onClick={onNew} aria-label="New tab">
         <PlusIcon className="tab-new-icon" />
       </PressButton>
-      <PressButton type="button" className="tab-new" aria-label="New PowerShell tab" title="New PowerShell tab"
-        pressOnPointerDown={false} onClick={onNewPowerShell}>
-        <SquareTerminalIcon />
-      </PressButton>
+      <TooltipWrapper text="New PowerShell tab">
+        <PressButton type="button" className="tab-new" aria-label="New PowerShell tab"
+          pressOnPointerDown={false} onClick={onNewPowerShell}>
+          <SquareTerminalIcon />
+        </PressButton>
+      </TooltipWrapper>
       <DropTargetSubmenu
         open={Boolean(submenuAnchorElement && tabDropSubmenu?.hostTabId && (tabDropSubmenu.loading || tabDropSubmenu.items.length > 0))}
         anchorElement={submenuAnchorElement}

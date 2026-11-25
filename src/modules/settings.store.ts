@@ -115,6 +115,7 @@ useSettingsStore.subscribe((state) => {
     smoothScroll: state.smoothScroll,
     smartTabJump: state.smartTabJump,
     accentTheme: state.accentTheme,
+    terminalTheme: state.terminalTheme,
     darkMode: state.darkMode,
     categoryTinting: state.categoryTinting,
     showParentEntry: state.showParentEntry,

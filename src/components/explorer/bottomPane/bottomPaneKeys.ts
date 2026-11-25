@@ -4,6 +4,7 @@ import { REOPEN_CLOSED_TAB_KEYBIND } from "@/constants";
 import { formatDeleteLabel, isEditableElement } from "@/lib";
 import { releaseInputFocusOnEscape } from "@/hooks/ui/inputs/inputFocus";
 import { focusOtherFilePane } from "@/hooks/ui/inputs/focusOtherFilePane";
+import { focusSplitTerminal } from "@/hooks/ui/inputs/focusSplitTerminal";
 import type { PaneFileCommands } from "@/hooks/ui/app/useAppContextMenus";
 import { handleSearchHotkey } from "@/hooks/ui/inputs/useSearchHotkey";
 import { moveFileSelection } from "@/hooks/ui/selection/moveFileSelection";
@@ -86,6 +87,8 @@ export function bottomPaneKeys({
       if (!openContextMenu(binding === "Shift+F10")) return;
     } else if (binding === keybinds.focusOtherPane) {
       if (!focusOtherFilePane("bottom")) return;
+    } else if (binding === keybinds.focusSplitTerminal) {
+      if (!focusSplitTerminal(files.current)) return;
     }
     else if (!ready) return;
     else if (binding === keybinds.quickMove) {

@@ -1,7 +1,9 @@
 // Keeps tab state synced with the current path and persisted history.
 import { useEffect, useLayoutEffect, useRef } from "react";
-import type { ListDirOptions, SortState, Tab } from "@/types";
+import type { SortState, Tab } from "@/types";
+import type { LoadDirOptions } from "@/hooks/domain/filesystem/fileManager.types";
 import { folderPathKey } from "@/lib";
+import { subscribeToFolderRename } from "@/modules/renamedFolderLocations";
 
 type SetTabs = (next: Tab[] | ((prev: Tab[]) => Tab[])) => void;
 
@@ -26,7 +28,7 @@ type UseTabPersistenceOptions = {
   loadingPath: string | null;
   sortState: SortState;
   searchValue: string;
-  loadDir: (path: string, options?: ListDirOptions) => Promise<void>;
+  loadDir: (path: string, options?: LoadDirOptions) => Promise<void>;
   clearDir: (options?: { silent?: boolean }) => void;
   restoreRevision: number;
   setTabs: SetTabs;
@@ -91,6 +93,21 @@ export const useTabPersistence = ({
   const appliedRevisionRef = useRef(restoreRevision);
   // Hold the target until its listing commits, including any pending filter reset.
   const pendingNavigationRef = useRef<PendingNavigation | null>(null);
+
+  useLayoutEffect(() => subscribeToFolderRename((mapPath) => {
+    const pending = pendingNavigationRef.current;
+    if (pending?.revealPath) pending.revealPath = mapPath(pending.revealPath);
+    const path = pending?.path ?? loadingPath ?? activeTab?.path;
+    if (!path) return;
+    const nextPath = mapPath(path);
+    if (path === nextPath) return;
+    pendingNavigationRef.current = { ...pending, tabId: activeTabId, path: nextPath };
+    void loadDir(nextPath, {
+      sort: pending?.sort ?? sortState,
+      search: pending?.resetFilter ? "" : pending?.search ?? searchValue,
+      force: true,
+    });
+  }), [activeTab?.path, activeTabId, loadDir, loadingPath, searchValue, sortState]);
 
   useLayoutEffect(() => {
     if (appliedRevisionRef.current !== restoreRevision) {

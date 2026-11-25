@@ -21,14 +21,13 @@ export const GRID_SETTINGS_ITEMS = {
     keywords: "auto columns",
   },
   rememberTabSize: {
-    label: "Remember thumbnail size per tab",
-    description: "Ctrl + scroll resizes the tab under the pointer. The preset applies to new tabs.",
-    keywords: "fixed grid size workspace",
-    requiresAutoGrid: false,
+    label: "Remember grid size per tab",
+    description: "Save Ctrl + scroll adjustments in each tab.",
+    keywords: "thumbnail preset auto columns workspace",
   },
   autoColumns: {
     label: "Auto columns",
-    description: "Pick how many columns the grid should fit across the view.",
+    description: "With per-tab sizing, this sets the default column count for new tabs.",
     requiresAutoGrid: true,
   },
   gap: {
@@ -136,6 +135,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
             <input
               type="range"
               className="ui-range"
+              aria-label={GRID_SETTINGS_ITEMS.autoColumns.label}
               min={GRID_AUTO_COLUMNS_MIN}
               max={GRID_AUTO_COLUMNS_MAX}
               step={1}
@@ -144,19 +144,18 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
             <span className="settings-value">{autoColumnsRange.draft}</span>
           </div>
         </SettingsItem>
-      ) : (
-        <SettingsItem item={GRID_SETTINGS_ITEMS.rememberTabSize}>
-          <label className="settings-toggle">
-            <input
-              type="checkbox"
-              aria-label={GRID_SETTINGS_ITEMS.rememberTabSize.label}
-              checked={rememberTabGridSize}
-              onChange={(event) => updateSettings({ rememberTabGridSize: event.currentTarget.checked })}
-            />
-            <span />
-          </label>
-        </SettingsItem>
-      )}
+      ) : null}
+      <SettingsItem item={GRID_SETTINGS_ITEMS.rememberTabSize}>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            aria-label={GRID_SETTINGS_ITEMS.rememberTabSize.label}
+            checked={rememberTabGridSize}
+            onChange={(event) => updateSettings({ rememberTabGridSize: event.currentTarget.checked })}
+          />
+          <span />
+        </label>
+      </SettingsItem>
       <SettingsItem item={GRID_SETTINGS_ITEMS.gap}>
         <div className="settings-range">
           <input

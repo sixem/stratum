@@ -6,6 +6,7 @@ import { formatDeleteLabel, getDriveKey, getSelectionTargets, isEditableElement,
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { getFileCommandFocus } from "../menus/keyboardContextMenu";
 import { focusOtherFilePane } from "../inputs/focusOtherFilePane";
+import { focusSplitTerminal } from "../inputs/focusSplitTerminal";
 import { useKeybinds } from "../inputs/useKeybinds";
 import { useIndexedSearchUiStore, usePromptStore, writeFileClipboard } from "@/modules";
 import { openQuickMove } from "@/modules/quickMoveSession";
@@ -310,11 +311,14 @@ export const useAppKeybinds = ({
       selectSameExtension: (event: KeyboardEvent) => canHandlePaneCommand(event) && paneFileCommands.selectSameExtension(getSelectionTarget()?.path),
       invertSelection: (event: KeyboardEvent) => canHandlePaneCommand(event) && paneFileCommands.invertSelection(),
       focusOtherPane: (event: KeyboardEvent) => !event.isComposing && canHandleViewKeybind() && focusOtherFilePane("main"),
+      focusSplitTerminal: (event: KeyboardEvent) => !event.isComposing && canHandleGlobalKeybind() &&
+        !useBottomPaneStore.getState().active && !isEditableElement(document.activeElement) && focusSplitTerminal(mainRef.current),
       previewItem: handlePreviewItemKeybind,
       prevTab: () => handleAdjacentTab(-1),
       nextTab: () => handleAdjacentTab(1),
     }),
     [
+      canHandleGlobalKeybind,
       canHandlePaneCommand,
       canHandleViewKeybind,
       getSelectionTarget,
@@ -328,6 +332,7 @@ export const useAppKeybinds = ({
       handleQuickMoveKeybind,
       handleRenameSelectionKeybind,
       handleUndoKeybind,
+      mainRef,
       paneFileCommands,
       selectionTargets,
     ],

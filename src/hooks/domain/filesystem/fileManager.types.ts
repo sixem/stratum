@@ -39,6 +39,7 @@ export type RenameRequest = {
   path: string;
   nextName: string;
   expectedIdentity?: string;
+  updateFolderLocations?: boolean;
 };
 
 export type RenameFailure = {

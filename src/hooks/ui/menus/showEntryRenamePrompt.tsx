@@ -3,8 +3,9 @@ import { usePromptStore, type PromptConfig } from "@/modules";
 import type { EntryContextTarget } from "@/types";
 
 export const showEntryRenamePrompt = (
-  target: EntryContextTarget,
-  renameEntry: (path: string, name: string) => Promise<unknown>,
+  target: Pick<EntryContextTarget, "path" | "name">,
+  renameEntry: (path: string, name: string) => Promise<unknown> | void,
+  title = "Rename item",
 ) => {
   let name = target.name;
   const rename = () => {
@@ -12,7 +13,7 @@ export const showEntryRenamePrompt = (
     if (next && next !== target.name) void renameEntry(target.path, next);
   };
   const prompt: PromptConfig = {
-    title: "Rename item",
+    title,
     content: (
       <div className="prompt-field">
         <span className="prompt-label">Name</span>

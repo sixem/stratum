@@ -5,6 +5,7 @@ import { renameEntry } from "@/api";
 import { UNDO_STACK_LIMIT } from "@/constants";
 import { getParentPath, tabLabel, toMessage } from "@/lib";
 import { bumpDirectoryChildVersions, usePromptStore } from "@/modules";
+import { updateRenamedFolderLocations } from "@/modules/renamedFolderLocations";
 import { useFileManagerCopy } from "./fileManagerCopy";
 import { useFileManagerCreate } from "./fileManagerCreate";
 import { useFileManagerDelete } from "./fileManagerDelete";
@@ -125,8 +126,14 @@ export const useFileMutations = ({
             const result = await renameEntry(item.path, item.nextName, item.expectedIdentity);
             if (result.path) {
               renamed.set(item.path, result.path);
+              if (item.updateFolderLocations) updateRenamedFolderLocations(item.path, result.path);
               if (options?.recordUndo !== false && result.identity) {
-                undoEntries.push({ from: item.path, to: result.path, identity: result.identity });
+                undoEntries.push({
+                  from: item.path,
+                  to: result.path,
+                  identity: result.identity,
+                  updateFolderLocations: item.updateFolderLocations,
+                });
               }
             }
           } catch (error) {
@@ -176,8 +183,8 @@ export const useFileMutations = ({
   );
 
   const renameEntryInView = useCallback(
-    async (path: string, newName: string) => {
-      const result = await performRenameRequests([{ path, nextName: newName }]);
+    async (path: string, newName: string, options?: Pick<RenameRequest, "updateFolderLocations">) => {
+      const result = await performRenameRequests([{ path, nextName: newName, ...options }]);
       if (!result) return null;
       return result.renamed.get(path) ?? null;
     },

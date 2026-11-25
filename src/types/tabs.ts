@@ -3,7 +3,13 @@ import type { SortState } from "./sort";
 import type { FixedGridSize } from "@/modules/settings.types";
 
 export type TerminalSession = { key: string; directory: string };
-export type TerminalSplit = { terminal: TerminalSession; folderPercent: number; linkDirectory?: boolean };
+export type TerminalSplit = {
+  terminal: TerminalSession;
+  folderPercent: number;
+  linkDirectory?: boolean;
+  terminalFirst?: boolean;
+  stacked?: boolean;
+};
 
 export type Tab = {
   id: string;
@@ -14,6 +20,7 @@ export type Tab = {
   crumbTrailPath: string;
   viewMode: ViewMode;
   gridSize?: FixedGridSize;
+  gridAutoColumns?: number;
   scrollTop: number;
   sort: SortState;
   search: string;

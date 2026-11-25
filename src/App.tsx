@@ -36,7 +36,7 @@ const App = ({ showWelcome }: { showWelcome: boolean }) => {
           onContextMenuDown: view.onContextMenuDown,
           fileViewProps: view.fileViewProps,
           bottomMenu: view.bottomMenu,
-          bottomCommandsBlocked: view.bottomCommandsBlocked,
+          paneCommandsBlocked: view.paneCommandsBlocked,
           bottomPreview: view.bottomPreview,
         }}
         statusbar={{

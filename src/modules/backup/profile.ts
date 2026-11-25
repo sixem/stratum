@@ -169,7 +169,8 @@ export const applyStratumBackup = (backup: StratumBackup, options: BackupImportO
     settings.startupWorkspaceId = importedIds.get(settings.startupWorkspaceId) ?? null;
   }
   const restored = profile && options.openSession ? resolveSession(profile.current) : null;
-  const prepared = restored ? prepareWorkspaceRestore(restored.layout, getDefaultTabGridSize(settings ?? currentSettings)) : null;
+  const defaultGridSize = getDefaultTabGridSize(settings ?? currentSettings);
+  const prepared = restored ? prepareWorkspaceRestore(restored.layout, defaultGridSize) : null;
   // Keep the live layout available if an explicit replacement takes its saved name.
   const outgoingId = state.activeId && replacements.has(state.activeId) ? null : state.activeId;
   const previous = restored
@@ -180,7 +181,7 @@ export const applyStratumBackup = (backup: StratumBackup, options: BackupImportO
     activeId: restored ? restored.id : outgoingId,
     previous,
     drafts: [...drafts].map(([id, layout]) => ({ id, layout })),
-  }, gridSizeOnEnable);
+  }, defaultGridSize);
 
   if (restored && profile?.unnamedRecentMoves.length) {
     recent.set(null, keepRecentMoves([...profile.unnamedRecentMoves, ...(recent.get(null) ?? [])], limit));
@@ -196,8 +197,8 @@ export const applyStratumBackup = (backup: StratumBackup, options: BackupImportO
   ];
   if (prepared) {
     records.push(serializePaneSession("main", prepared.main), serializePaneSession("bottom", prepared.bottom), serializePlaces(prepared.places));
-  } else if (gridSizeOnEnable) {
-    // Applying fixed per-tab sizes also persists the currently open tabs.
+  } else if (gridSizeOnEnable !== undefined) {
+    // Enabling per-tab sizes also persists the currently open tabs.
     for (const pane of ["main", "bottom"] as const) {
       const session = getPaneSessionStore(pane).getState();
       records.push(serializePaneSession(pane, { ...session, tabs: fillTabGridSizes(session.tabs, gridSizeOnEnable) }));

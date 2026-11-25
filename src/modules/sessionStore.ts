@@ -4,8 +4,10 @@ import type { SortDir, SortKey, SortState, Tab, ViewMode } from "@/types";
 import type { TabHistory } from "@/types/tabs";
 import { createTab, DEFAULT_SORT, getDefaultSortDir } from "@/lib";
 import { resolveDefaultViewMode, useSettingsStore } from "./settings.store";
-import type { FixedGridSize } from "./settings.types";
-import { coerceTabGridSize, fillTabGridSizes, getDefaultTabGridSize, getTabGridSizeOnEnable } from "./tabGridSize";
+import {
+  coerceTabAutoColumns, coerceTabGridSize, fillTabGridSizes, getDefaultTabGridSize, getTabGridSizeOnEnable,
+  readTabGridSize, seedTabGridSize, withTabGridSize, type TabGridSize,
+} from "./tabGridSize";
 import {
   SESSION_LEGACY_STORAGE_KEY,
   SESSION_STORAGE_KEY,
@@ -32,7 +34,7 @@ type SessionRuntimeState = SessionState & { closedTabs: ClosedTab[]; restoreRevi
 type SessionStore = SessionRuntimeState & {
   setTabs: (updater: Tab[] | ((prev: Tab[]) => Tab[])) => void;
   setTabSearch: (id: string, search: string) => void;
-  setTabGridSize: (id: string, gridSize: FixedGridSize) => void;
+  setTabGridSize: (id: string, size: TabGridSize) => void;
   setTabScrollTop: (id: string, scrollTop: number) => void;
   setActiveTabId: (id: string | null) => void;
   setRecentJumps: (updater: string[] | ((prev: string[]) => string[])) => void;
@@ -60,14 +62,12 @@ const DEFAULT_SESSION: SessionState = {
 
 export const createSessionTab = (path: string, base?: Partial<Pick<Tab, "sort" | "search">>): Tab => {
   const settings = useSettingsStore.getState();
-  return {
-    ...createTab(path, { ...base, sort: settings.newTabSort ?? base?.sort, viewMode: resolveDefaultViewMode(settings) }),
-    gridSize: getDefaultTabGridSize(settings),
-  };
+  const tab = createTab(path, { ...base, sort: settings.newTabSort ?? base?.sort, viewMode: resolveDefaultViewMode(settings) });
+  return seedTabGridSize(tab, getDefaultTabGridSize(settings));
 };
 
 // A restore is a new visit, even if it opens the same saved tab.
-export const prepareSessionRestore = (layout: SessionState, gridSize: FixedGridSize | undefined): SessionState => {
+export const prepareSessionRestore = (layout: SessionState, gridSize: TabGridSize | undefined): SessionState => {
   const activeIndex = layout.tabs.findIndex((tab) => tab.id === layout.activeTabId);
   const tabs = fillTabGridSizes(layout.tabs, gridSize)
     .map((tab) => ({ ...tab, id: createTab(tab.path).id, sort: { ...tab.sort } }));
@@ -127,6 +127,7 @@ const coerceTabs = (value: unknown) => {
         crumbTrailPath?: unknown;
         viewMode?: unknown;
         gridSize?: unknown;
+        gridAutoColumns?: unknown;
         sort?: unknown;
         search?: unknown;
         scrollTop?: unknown;
@@ -138,6 +139,7 @@ const coerceTabs = (value: unknown) => {
         crumbTrailPath: coerceCrumbTrailPath(tab.crumbTrailPath, tab.path),
         viewMode: coerceViewMode(tab.viewMode),
         gridSize: coerceTabGridSize(tab.gridSize),
+        gridAutoColumns: coerceTabAutoColumns(tab.gridAutoColumns),
         sort: coerceSort(tab.sort),
         search: coerceSearch(tab.search),
         scrollTop: coerceScrollTop(tab.scrollTop),
@@ -268,11 +270,13 @@ const createSessionStore = (key: string) => {
       filterEditTabs = tabs;
       return { tabs };
     }),
-    setTabGridSize: (id, gridSize) => set((state) => {
+    setTabGridSize: (id, size) => set((state) => {
       const index = state.tabs.findIndex(tab => tab.id === id);
-      if (index < 0 || state.tabs[index].gridSize === gridSize) return state;
+      if (index < 0) return state;
+      const tab = withTabGridSize(state.tabs[index], size);
+      if (tab === state.tabs[index]) return state;
       const tabs = state.tabs.slice();
-      tabs[index] = { ...tabs[index], gridSize };
+      tabs[index] = tab;
       return { tabs };
     }),
     setTabScrollTop: (id, scrollTop) => set((state) => {
@@ -313,12 +317,12 @@ const createSessionStore = (key: string) => {
     // Navigation and workspace restores write the latest session immediately.
     writeStoredSession(key, state);
   });
-  const fillGridSizes = (gridSize: FixedGridSize | undefined) => {
-    if (!gridSize) return;
+  const fillGridSizes = (gridSize: TabGridSize | undefined) => {
+    if (gridSize === undefined) return;
     store.setState((state) => {
       const tabs = fillTabGridSizes(state.tabs, gridSize);
-      const closedTabs = state.closedTabs.some(({ tab }) => !tab.gridSize)
-        ? state.closedTabs.map(closed => closed.tab.gridSize ? closed : { ...closed, tab: { ...closed.tab, gridSize } })
+      const closedTabs = state.closedTabs.some(({ tab }) => readTabGridSize(tab, gridSize) === undefined)
+        ? state.closedTabs.map(closed => ({ ...closed, tab: seedTabGridSize(closed.tab, gridSize) }))
         : state.closedTabs;
       return tabs === state.tabs && closedTabs === state.closedTabs ? state : { tabs, closedTabs };
     });

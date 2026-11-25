@@ -7,11 +7,16 @@
 }
 .powershell-surface {
   overflow: hidden;
-  background: #101318;
-  color: #e4e8ef;
+  background: var(--terminal-background, var(--bg));
+  color: var(--terminal-foreground, var(--text));
   padding: 8px;
   border-radius: var(--panel-radius);
 }
 .powershell-viewport .xterm { height: 100%; }
 .powershell-status:empty { display: none; }
-.powershell-status { padding: 4px; font-size: var(--font-size-sm); }
+.powershell-status {
+  border-top: var(--surface-border-width) solid color-mix(in srgb, currentColor 30%, transparent);
+  padding: 6px 4px 0;
+  color: var(--terminal-muted, var(--muted));
+  font-size: var(--font-size-sm);
+}

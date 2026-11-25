@@ -5,17 +5,55 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
-  grid-template: minmax(0, 1fr) / minmax(0, var(--folder-width)) 6px minmax(0, 1fr);
+  grid-template: "folder divider terminal" minmax(0, 1fr) /
+    minmax(0, var(--split-first)) 6px minmax(0, var(--split-second));
+
+  &[data-terminal-first="true"] {
+    grid-template-areas: "terminal divider folder";
+  }
+
+  &[data-stacked="true"] {
+    grid-template:
+      "folder" minmax(0, var(--split-first))
+      "divider" 6px
+      "terminal" minmax(0, var(--split-second)) / minmax(0, 1fr);
+
+    &[data-terminal-first="true"] {
+      grid-template-areas: "terminal" "divider" "folder";
+    }
+  }
+
+  > .main { grid-area: folder; }
 }
 
 .terminal-split-side {
+  grid-area: terminal;
   display: flex;
   min-width: 0;
   min-height: 0;
   padding: var(--main-padding);
 }
 
+.terminal-split-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+
+  .view-btn {
+    width: 22px;
+    height: 22px;
+  }
+
+  .view-btn svg { fill: none; }
+
+  &[data-stacked="true"] .lucide-arrow-left-right {
+    transform: rotate(90deg);
+  }
+}
+
 .terminal-split-divider {
+  grid-area: divider;
   position: relative;
   z-index: 1;
   display: grid;
@@ -23,8 +61,25 @@
   cursor: col-resize;
   touch-action: none;
 
-  &::before { content: ""; width: 1px; background: var(--stroke); transform: translateX(var(--split-offset, 0)); }
-  &:is(:hover, :focus-visible, [data-resizing])::before { background: var(--accent); width: 2px; }
+  &::before {
+    content: "";
+    width: var(--surface-border-width);
+    background: var(--stroke);
+    transform: translateX(var(--split-offset, 0));
+  }
+
+  &[aria-orientation="horizontal"] {
+    place-items: center stretch;
+    cursor: row-resize;
+
+    &::before {
+      width: auto;
+      height: var(--surface-border-width);
+      transform: translateY(var(--split-offset, 0));
+    }
+  }
+
+  &:is(:hover, :focus-visible, [data-resizing])::before { background: var(--accent); }
 }
 
 .tabs .tab[data-split-target] {

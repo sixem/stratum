@@ -7,8 +7,8 @@ import { useStatusLabels } from "@/hooks/domain/metadata/useStatusLabels";
 import { useScrollRequest } from "@/hooks/perf/scroll";
 import type { ScrollAlignment } from "@/hooks/perf/scroll";
 import { TerminalPane } from "@/components/terminal/TerminalPane";
+import { TerminalSplitControls } from "@/components/terminal/TerminalSplitControls";
 import { TerminalSplitView } from "@/components/terminal/TerminalSplitView";
-import { DirectoryLinkButton } from "@/components/terminal/DirectoryLinkButton";
 import { FileView } from "../FileView";
 import { PathCrumbsBar } from "../PathCrumbsBar";
 import { TabsBar } from "@/components/navigation/TabsBar";
@@ -88,7 +88,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     ready: ready || (!tabs.displayPath && !busy && !tabs.restoringTabs),
     enabled: animateTabChanges,
     view: tabs.displayPath ? tabs.viewMode : "lander",
-    viewKey,
+    pathKey: folderPathKey(tabs.displayPath),
   });
   const viewVisit = useMemo(() => ({ current: false }), [viewKey, tabs.searchValue]);
   useLayoutEffect(() => {
@@ -267,6 +267,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
           autoComplete="off"
         />
       </label>
+      {!showBreadcrumbs && tabs.activeTab?.split && <TerminalSplitControls pane="bottom" />}
       <ToolbarIconButton
         label={viewSwitchLabel}
         onClick={() => tabs.setViewMode(nextView)}
@@ -289,7 +290,6 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       <ToolbarIconButton label="Hide bottom pane" onClick={hideBottomPane} pressOnPointerDown={false}>
         <TabCloseIcon />
       </ToolbarIconButton>
-      <DirectoryLinkButton pane="bottom" />
     </nav>
     <TabsBar pane="bottom" tabs={tabs.tabs} activeId={tabs.activeTabId} showTabNumbers={tabNumbers} fixedWidthTabs={fixedWidth}
       onSelect={tabs.selectTab} onClose={closeTab} onNew={tabs.newTab} onNewPowerShell={tabs.newPowerShellTab} onReorder={tabs.reorderTabs}
@@ -302,6 +302,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         return true;
       }}
       onOpenLocation={openLocationTab}
+      onStripContextMenu={menu.openActionMenu}
       onTabContextMenu={paneActions.handlePlaceTargetContextMenu}
       onTabContextMenuDown={paneActions.handlePlaceTargetContextMenuDown}
       dropTargetId={drop.dropTargetTabId} dropTargetPath={drop.dropTargetPath} tabDropSubmenu={drop.tabDropSubmenu}
@@ -313,7 +314,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         onCrumbContextMenu={paneActions.handlePlaceTargetContextMenu}
         onCrumbContextMenuDown={paneActions.handlePlaceTargetContextMenuDown} />
     ) : null}
-    <TerminalSplitView pane="bottom" tab={tabs.activeTab}>
+    <TerminalSplitView pane="bottom" tab={tabs.activeTab} filePaneRef={files} commandsBlocked={commandsBlocked}>
     <div ref={files} className="main bottom-files" tabIndex={-1} aria-busy={busy} data-file-pane="bottom" data-pane-path={ready ? path : ""}
       data-drop-background={drop.backgroundHovered && drop.hoveredPane === "bottom" || undefined}
       onScrollCapture={event => {
@@ -350,7 +351,9 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       x={menu.contextMenu?.x ?? 0}
       y={menu.contextMenu?.y ?? 0}
       items={paneActions.contextMenuItems}
-      scrollable={menu.contextMenu?.kind === "actions" && menu.contextMenu.scrollable}
+      focusFirstItem={menu.contextMenu?.focusFirstItem}
+      scrollable={menu.contextMenu?.kind === "place-target" ||
+        (menu.contextMenu?.kind === "actions" && menu.contextMenu.scrollable)}
       onClose={menu.closeContextMenu}
       onOpenNative={() => paneActions.openKeyboardContextMenu(true)}
     />, document.body)}

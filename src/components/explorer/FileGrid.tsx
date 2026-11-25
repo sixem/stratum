@@ -5,7 +5,7 @@ import { useEntryPresence, useScrollToIndex } from "@/hooks";
 import { useThumbnailScope } from "@/hooks/domain/metadata/useThumbnailScope";
 import { useSettingsStore } from "@/modules";
 import { getPaneSessionStore } from "@/modules/sessionStore";
-import { getDefaultTabGridSize } from "@/modules/tabGridSize";
+import { getDefaultTabGridSize, readTabGridSize } from "@/modules/tabGridSize";
 import { EmptyState } from "@/components/primitives/EmptyState";
 import { EntryCard, ParentCard } from "./fileGrid/index";
 import { ThumbViewport } from "./fileGrid/ThumbViewport";
@@ -37,10 +37,11 @@ const FileGrid = ({
   const isCut = useCutEntries();
   const usePaneSession = getPaneSessionStore(grid.pane);
   const defaultTabGridSize = useSettingsStore(getDefaultTabGridSize);
-  const [tabId, tabGridSize] = usePaneSession(state => [
-    state.activeTabId,
-    defaultTabGridSize ? state.tabs.find(tab => tab.id === state.activeTabId)?.gridSize : undefined,
-  ] as const, shallow);
+  const [tabId, tabGridSize, splitLayout] = usePaneSession(state => {
+    const tab = state.tabs.find(tab => tab.id === state.activeTabId);
+    const layout = tab?.split ? tab.split.stacked ? "stacked" : "side-by-side" : undefined;
+    return [state.activeTabId, readTabGridSize(tab, defaultTabGridSize), layout] as const;
+  }, shallow);
   const {
     isDeletePending,
     isTransferPending,
@@ -91,13 +92,14 @@ const FileGrid = ({
     gridMetaEnabled,
     isResizing,
   } = useGridSizing({
-    gridSize: defaultTabGridSize ? tabGridSize ?? defaultTabGridSize : grid.gridSize,
-    gridAutoColumns: grid.gridAutoColumns,
+    gridSize: typeof tabGridSize === "string" ? tabGridSize : grid.gridSize,
+    gridAutoColumns: typeof tabGridSize === "number" ? tabGridSize : grid.gridAutoColumns,
     gridGap: grid.gridGap,
     gridShowSize: grid.gridShowSize,
     gridShowExtension: grid.gridShowExtension,
     thumbnailFit: thumbs.thumbnailFit,
     resizeDeferred: grid.resizeDeferred,
+    layoutKey: splitLayout,
     viewKey: view.viewKey,
     scrollRestoreKey: view.scrollRestoreKey,
     scrollRestoreTop: view.scrollRestoreTop,

@@ -6,11 +6,11 @@ import { openPathProperties, type ShellMenuTarget } from "@/api";
 import type { BeginFileActivity } from "@/hooks/domain/filesystem/useFileActivity";
 import { getSelectionTargets, isEditableElement, toMessage } from "@/lib";
 import { applyContextMenuVisibility } from "@/lib/contextMenuVisibility";
-import { usePromptStore, useSettingsStore } from "@/modules";
+import { useClipboardStore, usePromptStore, useSettingsStore } from "@/modules";
 import { showBottomPane } from "@/modules/bottomPaneStore";
 import { openQuickMove } from "@/modules/quickMoveSession";
 import { getPaneSessionStore } from "@/modules/sessionStore";
-import { getDefaultTabGridSize } from "@/modules/tabGridSize";
+import { getDefaultTabGridSize, readTabGridSize } from "@/modules/tabGridSize";
 import type {
   ConversionModalRequest,
   ContextMenuItem,
@@ -76,7 +76,9 @@ type UseAppContextMenusOptions = {
   onOpenDirNewTab: (path: string) => void;
   onOpenDirInBackgroundTab: (path: string) => void;
   onOpenDirInMainPane?: (path: string) => void;
+  onSelectTab: (id: string) => void;
   terminalTabs: Pick<ReturnType<typeof useTabSession>, "closeTab" | "endTerminalSplit">;
+  onRenameFolder: (path: string, name: string) => Promise<unknown>;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   confirmDelete: boolean;
   onClearSelection: () => void;
@@ -145,7 +147,9 @@ export const useAppContextMenus = ({
   onOpenDirNewTab,
   onOpenDirInBackgroundTab,
   onOpenDirInMainPane,
+  onSelectTab,
   terminalTabs,
+  onRenameFolder,
   onDeleteEntries,
   confirmDelete,
   onClearSelection,
@@ -173,6 +177,7 @@ export const useAppContextMenus = ({
   const menuOpenBackgroundTab = useSettingsStore((state) => state.menuOpenBackgroundTab);
   const hiddenMenuActions = useSettingsStore((state) => state.hiddenContextMenuActions);
   const keybinds = useSettingsStore((state) => state.keybinds);
+  const canPaste = useClipboardStore((state) => Boolean(state.clipboard?.paths.length));
   // A shortcut remains usable when its menu entry is hidden.
   const transfersEnabled = menuPaneTransfers || Boolean(keybinds.copyToOtherPane || keybinds.moveToOtherPane);
   const transferTarget = usePaneTransferTarget(pane, transfersEnabled ? currentPath : "", onRefreshTransferDestination);
@@ -239,15 +244,15 @@ export const useAppContextMenus = ({
       return openWindowsMenu(target, point, false, galleryAction(entry, target));
     }
     if (place) {
-      openContextMenuAt({ kind: "place-target", target: place, ...point });
+      openContextMenuAt({ kind: "place-target", target: place, ...point, focusFirstItem: true });
     } else if (target && "paths" in target) {
       const entry = entryByPath.get(target.paths[0]);
       if (!entry) return false;
       if (!selected.has(entry.path)) onSelectionChange([entry.path], entry.path);
       if (menuUseWindowsForItems && openWindowsMenu(target, point, false, galleryAction(entry, target))) return true;
-      openContextMenuAt({ kind: "entry", entry, ...point });
+      openContextMenuAt({ kind: "entry", entry, ...point, focusFirstItem: true });
     } else {
-      openContextMenuAt({ kind: "sort", listHeader, ...point });
+      openContextMenuAt({ kind: "sort", listHeader, ...point, focusFirstItem: true });
     }
     return true;
   }, [contextMenu, currentPath, defaultTabGridSize, entryByPath, galleryAction, mainRef, menuTarget, menuUseWindowsForItems,
@@ -382,15 +387,20 @@ export const useAppContextMenus = ({
       { id: "close-split-terminal", label: "Close PowerShell", icon: "remove", onSelect: () => terminalTabs.endTerminalSplit(menuTab.id, "folder") },
       { id: "close-split-folder", label: "Close folder", icon: "remove", onSelect: () => terminalTabs.endTerminalSplit(menuTab.id, "terminal") },
     ] : undefined,
-    tabAction: menuTab && !menuTab.terminal && defaultTabGridSize ? {
+    tabAction: menuTab && !menuTab.terminal && defaultTabGridSize !== undefined ? {
       id: "reset-tab-grid-size",
       label: "Reset thumbnail size",
-      disabled: (menuTab.gridSize ?? defaultTabGridSize) === defaultTabGridSize,
+      disabled: (readTabGridSize(menuTab, defaultTabGridSize) ?? defaultTabGridSize) === defaultTabGridSize,
       onSelect: () => usePaneSession.getState().setTabGridSize(menuTab.id, defaultTabGridSize),
     } : undefined,
     onOpenPath: onOpenDir,
     onOpenPathNewTab: onOpenDirNewTab,
     onOpenPathInBackgroundTab: menuOpenBackgroundTab ? onOpenDirInBackgroundTab : undefined,
+    otherPane,
+    onSelectTab,
+    onRenameFolder,
+    canPaste,
+    onPasteIntoFolder: onPasteEntries,
     onAddPlace,
     onPinPlace,
     onUnpinPlace,

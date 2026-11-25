@@ -89,6 +89,32 @@
     background: transparent;
   }
 
+  .bottom-nav:has(> .terminal-split-actions) > form {
+    // Use the flexible address space first, while keeping the input usable.
+    min-width: 48px;
+  }
+
+  .bottom-nav > .terminal-split-actions {
+    gap: 2px;
+
+    > .view-btn {
+      width: 22px;
+      height: 22px;
+    }
+
+    &::after {
+      content: "";
+      width: var(--surface-border-width);
+      height: 14px;
+      margin-inline: 1px;
+      background: var(--stroke);
+    }
+  }
+
+  .bottom-nav .view-btn .lucide-folder-symlink {
+    fill: none;
+  }
+
   .bottom-nav .nav-arrow.is-back {
     transform: rotate(180deg);
   }

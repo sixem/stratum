@@ -4,9 +4,12 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal.css";
 import { useBottomSessionStore, useSessionStore } from "@/modules/sessionStore";
+import { useSettingsStore } from "@/modules/settings.store";
+import { DEFAULT_TERMINAL_THEME } from "@/modules/terminalThemes";
 import type { Tab } from "@/types";
 import type { LinkedPane } from "@/lib/paneLink";
 import { DirectorySync } from "./directorySync";
+import { readTerminalTheme } from "./terminalTheme";
 
 type Profile = NonNullable<Tab["terminal"]>;
 const sessions = new Map<string, Shell>();
@@ -21,11 +24,7 @@ class Shell {
   readonly element = document.createElement("div");
   private readonly viewport = document.createElement("div");
   private readonly status = document.createElement("div");
-  private readonly term = new Terminal({
-    fontFamily: 'Consolas, "Cascadia Mono", monospace', fontSize: 14,
-    scrollback: 1500, theme: { background: "#101318", foreground: "#e4e8ef" },
-    linkHandler: { activate() {} },
-  });
+  private readonly term: Terminal;
   private id?: number;
   private closed = false;
   private ended = false;
@@ -41,6 +40,11 @@ class Shell {
     this.status.setAttribute("role", "status");
     this.element.append(this.viewport, this.status);
     host.append(this.element);
+    this.term = new Terminal({
+      fontFamily: 'Consolas, "Cascadia Mono", monospace', fontSize: 14,
+      scrollback: 1500, theme: this.applySurfaceTheme(),
+      linkHandler: { activate() {} },
+    });
     this.term.open(this.viewport);
     // Shell output cannot write or query the system clipboard.
     this.term.parser.registerOscHandler(52, () => true);
@@ -52,9 +56,28 @@ class Shell {
   }
 
   attach(host: HTMLElement, autoFocus: boolean) {
-    if (this.element.parentNode !== host) host.append(this.element);
+    if (this.element.parentNode !== host) {
+      host.append(this.element);
+      this.updateTheme();
+    }
     this.fit();
-    if (autoFocus) this.term.focus();
+    if (autoFocus) this.focus();
+  }
+
+  focus() {
+    this.term.focus();
+  }
+
+  updateTheme() {
+    this.term.options.theme = this.applySurfaceTheme();
+  }
+
+  private applySurfaceTheme() {
+    const theme = readTerminalTheme(this.element, useSettingsStore.getState().terminalTheme);
+    this.element.style.setProperty("--terminal-background", theme.background);
+    this.element.style.setProperty("--terminal-foreground", theme.foreground);
+    this.element.style.setProperty("--terminal-muted", theme.brightBlack);
+    return theme;
   }
 
   syncFolder(pane: LinkedPane, tab: Tab) {
@@ -183,9 +206,22 @@ export default function PowerShell({ terminal, autoFocus }: { terminal: Profile;
     const shell = sessions.get(terminal.key) ?? new Shell(container, terminal.directory);
     sessions.set(terminal.key, shell);
     shell.attach(container, autoFocus);
-    return () => { if (shell.element.parentNode === container) shell.element.remove(); };
+    const unsubscribeTheme = useSettingsStore.subscribe((next, previous) => {
+      if (next.terminalTheme !== previous.terminalTheme) shell.updateTheme();
+    });
+    // In Follow app mode, read the shared tokens after the root attributes change.
+    const appearance = new MutationObserver(() => {
+      if (useSettingsStore.getState().terminalTheme === DEFAULT_TERMINAL_THEME) shell.updateTheme();
+    });
+    appearance.observe(document.documentElement, { attributeFilter: ["data-dark-mode", "data-accent"] });
+    return () => {
+      unsubscribeTheme();
+      appearance.disconnect();
+      if (shell.element.parentNode === container) shell.element.remove();
+    };
   }, [terminal, autoFocus]);
-  return <div data-terminal="" className="powershell-host" ref={host} aria-label="PowerShell terminal"
+  return <div data-terminal="" className="powershell-host" ref={host} aria-label="PowerShell terminal" tabIndex={-1}
+    onFocus={event => { if (event.target === event.currentTarget) sessions.get(terminal.key)?.focus(); }}
     onKeyDown={event => { if (!switchTab(event)) event.stopPropagation(); }} onKeyUp={event => event.stopPropagation()}
     onPointerDown={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} />;
 }

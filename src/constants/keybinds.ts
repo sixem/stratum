@@ -14,6 +14,7 @@ export type KeybindAction =
   | "selectSameExtension"
   | "invertSelection"
   | "focusOtherPane"
+  | "focusSplitTerminal"
   | "previewItem"
   | "prevTab"
   | "nextTab";
@@ -122,6 +123,12 @@ export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
     id: "focusOtherPane",
     label: "Focus other pane",
     description: "Move keyboard focus to the other pane when it is open.",
+    default: "",
+  },
+  {
+    id: "focusSplitTerminal",
+    label: "Switch focus between folder and PowerShell",
+    description: "Move keyboard focus between the folder and terminal in the active split tab.",
     default: "",
   },
 ];

@@ -8,27 +8,30 @@ type TabRevealOptions = {
   ready: boolean;
   enabled: boolean;
   view: ViewMode | "lander";
-  viewKey: string;
+  pathKey: string;
 };
 
 const REVEAL_KEYFRAMES = [
-  { opacity: 0.7, transform: "translateY(3px)" },
-  { opacity: 1, transform: "translateY(0)" },
+  { opacity: 0.45, transform: "translateY(8px) scale(0.993)" },
+  { opacity: 1, transform: "translateY(0) scale(1)" },
 ];
 
 export const useTabReveal = (
   paneRef: RefObject<HTMLElement | null>,
-  { tabId, ready, enabled, view, viewKey }: TabRevealOptions,
+  { tabId, ready, enabled, view, pathKey }: TabRevealOptions,
 ) => {
-  const previousTab = useRef(tabId);
+  const previous = useRef({ tabId, pathKey });
   const pending = useRef(false);
 
-  // A changed view key also stops an in-flight reveal during same-tab navigation.
   useLayoutEffect(() => {
-    if (previousTab.current !== tabId) {
-      pending.current = enabled && previousTab.current !== null && tabId !== null;
-      previousTab.current = tabId;
+    const before = previous.current;
+    if (before.tabId !== tabId) {
+      pending.current = enabled && before.tabId !== null && tabId !== null && before.pathKey !== pathKey;
+    } else if (before.pathKey !== pathKey) {
+      // A navigation within the selected tab supersedes any pending tab reveal.
+      pending.current = false;
     }
+    previous.current = { tabId, pathKey };
     if (!enabled) pending.current = false;
 
     const pane = paneRef.current;
@@ -42,8 +45,8 @@ export const useTabReveal = (
       pending.current = false;
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return true;
       animation = content.animate(REVEAL_KEYFRAMES, {
-        duration: 170,
-        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+        duration: 230,
+        easing: "cubic-bezier(0.22, 0.75, 0.21, 1)",
         fill: "backwards",
       });
       return true;
@@ -58,5 +61,5 @@ export const useTabReveal = (
       observer?.disconnect();
       animation?.cancel();
     };
-  }, [enabled, paneRef, ready, tabId, view, viewKey]);
+  }, [enabled, paneRef, pathKey, ready, tabId, view]);
 };

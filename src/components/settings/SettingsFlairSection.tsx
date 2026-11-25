@@ -3,7 +3,9 @@ import { useId } from "react";
 import { shallow } from "zustand/shallow";
 import { ACCENT_THEMES } from "@/constants/settings";
 import { PressButton } from "@/components/primitives/PressButton";
+import { DropdownSelect } from "@/components/primitives/DropdownSelect";
 import { useSettingsStore } from "@/modules";
+import { coerceTerminalTheme, TERMINAL_THEME_OPTIONS } from "@/modules/terminalThemes";
 
 import { SettingsItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
@@ -19,6 +21,11 @@ export const FLAIR_SETTINGS_ITEMS = {
     description: "Tint highlights and accents.",
     keywords: "theme appearance",
   },
+  terminalTheme: {
+    label: "Terminal theme",
+    description: "Choose a color palette for PowerShell tabs.",
+    keywords: "shell console appearance",
+  },
   categoryTints: {
     label: "Category tints",
     description: "Subtle color cues for file types in grid and list views.",
@@ -33,6 +40,8 @@ export const FLAIR_SETTINGS_ITEMS = {
   },
 } satisfies Record<string, SettingsItemText>;
 
+const terminalThemeGroups = [{ id: "terminal-themes", options: [...TERMINAL_THEME_OPTIONS] }];
+
 type SettingsFlairSectionProps = {
   sectionId: string;
 };
@@ -42,6 +51,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
   const darkModeDescriptionId = `${darkModeId}-description`;
   const {
     accentTheme,
+    terminalTheme,
     darkMode,
     categoryTinting,
     ambientBackground,
@@ -50,6 +60,7 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
   } = useSettingsStore(
     (state) => ({
       accentTheme: state.accentTheme,
+      terminalTheme: state.terminalTheme,
       darkMode: state.darkMode,
       categoryTinting: state.categoryTinting,
       ambientBackground: state.ambientBackground,
@@ -94,6 +105,14 @@ export const SettingsFlairSection = ({ sectionId }: SettingsFlairSectionProps) =
             </PressButton>
           ))}
         </div>
+      </SettingsItem>
+      <SettingsItem item={FLAIR_SETTINGS_ITEMS.terminalTheme}>
+        <DropdownSelect
+          value={terminalTheme}
+          ariaLabel={FLAIR_SETTINGS_ITEMS.terminalTheme.label}
+          groups={terminalThemeGroups}
+          onChange={(value) => updateSettings({ terminalTheme: coerceTerminalTheme(value) })}
+        />
       </SettingsItem>
       <SettingsItem item={FLAIR_SETTINGS_ITEMS.categoryTints}>
         <label className="settings-toggle">

@@ -12,8 +12,7 @@ import type { PlacesState } from "./placesStore";
 import { coerceSession, createSessionTab, prepareSessionRestore, serializePaneSession, useBottomSessionStore, useSessionStore } from "./sessionStore";
 import type { SessionState } from "./sessionStore";
 import { useSettingsStore } from "./settings.store";
-import type { FixedGridSize } from "./settings.types";
-import { fillTabGridSizes, getDefaultTabGridSize, getTabGridSizeOnEnable } from "./tabGridSize";
+import { fillTabGridSizes, getDefaultTabGridSize, getTabGridSizeOnEnable, type TabGridSize } from "./tabGridSize";
 
 export type WorkspaceLayout = {
   main: SessionState;
@@ -124,8 +123,8 @@ const persist = (next: WorkspaceState) => {
 };
 
 // Saved layouts must keep their baseline even when the preset changes while they are inactive.
-export const fillWorkspaceStateGridSizes = (state: WorkspaceState, gridSize: FixedGridSize | undefined): WorkspaceState => {
-  if (!gridSize) return state;
+export const fillWorkspaceStateGridSizes = (state: WorkspaceState, gridSize: TabGridSize | undefined): WorkspaceState => {
+  if (gridSize === undefined) return state;
   const fillLayout = <T extends { layout: WorkspaceLayout }>(entry: T): T => {
     const { layout } = entry;
     const main = fillTabGridSizes(layout.main.tabs, gridSize);
@@ -142,7 +141,7 @@ export const fillWorkspaceStateGridSizes = (state: WorkspaceState, gridSize: Fix
   return { ...state, workspaces, drafts, previous: previousLayout };
 };
 
-const fillWorkspaceGridSizes = (gridSize: FixedGridSize | undefined) => {
+const fillWorkspaceGridSizes = (gridSize: TabGridSize | undefined) => {
   const state = useWorkspaceStore.getState();
   const updated = fillWorkspaceStateGridSizes(state, gridSize);
   if (updated === state) return;
@@ -172,7 +171,8 @@ const sameTabs = (saved: SessionState, current: SessionState) =>
   saved.tabs.length === current.tabs.length && saved.tabs.every((tab, index) => {
     const other = current.tabs[index];
     const samePath = tab.path === other.path || folderPathKey(tab.path) === folderPathKey(other.path);
-    return samePath && tab.viewMode === other.viewMode && tab.gridSize === other.gridSize && tab.search === other.search &&
+    return samePath && tab.viewMode === other.viewMode && tab.gridSize === other.gridSize &&
+      tab.gridAutoColumns === other.gridAutoColumns && tab.search === other.search &&
       tab.sort.key === other.sort.key && tab.sort.dir === other.sort.dir;
   });
 
@@ -301,7 +301,7 @@ export const removeWorkspace = (id: string) => {
   });
 };
 
-export const prepareWorkspaceRestore = (layout: WorkspaceLayout, gridSize: FixedGridSize | undefined): WorkspaceLayout => {
+export const prepareWorkspaceRestore = (layout: WorkspaceLayout, gridSize: TabGridSize | undefined): WorkspaceLayout => {
   const main = prepareSessionRestore(layout.main, gridSize);
   const bottom = prepareSessionRestore(layout.bottom, gridSize);
   const link = layout.pane.link;

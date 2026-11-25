@@ -15,6 +15,7 @@ import {
   SIDEBAR_WIDTH_MIN,
 } from "@/constants";
 import { coerceKeybinds } from "./keybinds";
+import { coerceTerminalTheme } from "./terminalThemes";
 import {
   DEFAULT_SETTINGS,
   DEFAULT_SIDEBAR_HIDDEN_SECTIONS,
@@ -209,6 +210,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
         ? value.smartTabJump
         : DEFAULT_SETTINGS.smartTabJump,
     accentTheme: coerceAccentTheme(value?.accentTheme),
+    terminalTheme: coerceTerminalTheme(value?.terminalTheme),
     darkMode:
       typeof value?.darkMode === "boolean" ? value.darkMode : DEFAULT_SETTINGS.darkMode,
     categoryTinting:
@@ -245,6 +247,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
         : DEFAULT_SETTINGS.blurOverlays,
     keybinds: coerceKeybinds(value?.keybinds),
     gridSize: coerceGridSize(value?.gridSize),
+    // Profiles saved before this setting used shared sizing.
     rememberTabGridSize: value?.rememberTabGridSize === true,
     gridAutoColumns: coerceGridAutoColumns(value?.gridAutoColumns),
     gridGap: coerceGridGap(value?.gridGap),

@@ -6,6 +6,7 @@ import {
 } from "@/constants";
 import { DEFAULT_KEYBINDS } from "./keybinds";
 import type { Settings, SidebarSectionId } from "./settings.types";
+import { DEFAULT_TERMINAL_THEME } from "./terminalThemes";
 
 export const SIDEBAR_SECTION_DEFINITIONS: { id: SidebarSectionId; label: string }[] = [
   { id: "places", label: "Places" },
@@ -43,6 +44,7 @@ export const DEFAULT_SETTINGS: Settings = {
   smoothScroll: false,
   smartTabJump: true,
   accentTheme: "red",
+  terminalTheme: DEFAULT_TERMINAL_THEME,
   darkMode: false,
   categoryTinting: false,
   showParentEntry: true,
@@ -54,7 +56,7 @@ export const DEFAULT_SETTINGS: Settings = {
   blurOverlays: true,
   keybinds: DEFAULT_KEYBINDS,
   gridSize: "auto",
-  rememberTabGridSize: false,
+  rememberTabGridSize: true,
   gridAutoColumns: GRID_AUTO_COLUMNS_DEFAULT,
   gridGap: GRID_GAP_DEFAULT,
   gridRounded: true,

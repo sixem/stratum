@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Tab } from "@/types";
 import type { TabHistory, TabHistoryDirection } from "@/types/tabs";
 import { folderPathKey } from "@/lib";
+import { mapTabHistoryLocations, subscribeToFolderRename } from "@/modules/renamedFolderLocations";
 import { jumpThroughTabHistory } from "./tabHistoryStacks";
 
 type UseTabHistoryOptions = {
@@ -33,6 +34,13 @@ export const useTabHistory = ({
   const bump = useCallback(() => {
     forceUpdate((prev) => prev + 1);
   }, []);
+
+  useEffect(() => subscribeToFolderRename((mapPath) => {
+    for (const [id, history] of historyRef.current) {
+      historyRef.current.set(id, mapTabHistoryLocations(history, mapPath));
+    }
+    bump();
+  }), [bump]);
 
   const getHistory = useCallback((tabId: string) => {
     const store = historyRef.current;

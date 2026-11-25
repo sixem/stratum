@@ -36,6 +36,13 @@ export const ContextOpenFolderIcon = ({ className }: IconProps) => (
   </ContextGlyph>
 );
 
+export const FolderSymlinkIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="folder-symlink" className={className}>
+    <path d="M2 9.35V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h7" />
+    <path d="m8 16 3-3-3-3" />
+  </ContextGlyph>
+);
+
 export const ContextOpenWithIcon = ({ className }: IconProps) => (
   <ContextGlyph name="text-align-justify" className={className}>
     <path d="M3 5h18" />
@@ -106,6 +113,33 @@ export const Link2Icon = ({ className }: IconProps) => (
     <path d="M9 17H7A5 5 0 0 1 7 7h2" />
     <path d="M15 7h2a5 5 0 1 1 0 10h-2" />
     <line x1="8" x2="16" y1="12" y2="12" />
+  </ContextGlyph>
+);
+
+export const LinkIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="link" className={className}>
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </ContextGlyph>
+);
+
+export const SwapSidesIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="arrow-left-right" className={className}>
+    <path d="M8 3 4 7l4 4M4 7h16M16 21l4-4-4-4m4 4H4" />
+  </ContextGlyph>
+);
+
+export const PanelBottomIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="panel-bottom" className={className}>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M3 15h18" />
+  </ContextGlyph>
+);
+
+export const PanelRightIcon = ({ className }: IconProps) => (
+  <ContextGlyph name="panel-right" className={className}>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M15 3v18" />
   </ContextGlyph>
 );
 

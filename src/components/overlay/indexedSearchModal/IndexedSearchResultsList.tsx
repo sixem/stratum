@@ -29,7 +29,7 @@ type IndexedSearchResultsListProps = {
   loadingMore: boolean;
   loadMore: () => void;
   onOpenResult: (result: IndexedPathMatch) => void;
-  onOpenContextMenu: (result: IndexedPathMatch, point: { x: number; y: number }, native: boolean) => void;
+  onOpenContextMenu: (result: IndexedPathMatch, point: { x: number; y: number; focusFirstItem?: boolean }, native: boolean) => void;
   onPreviewPress: (path: string) => boolean;
   onResultKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
   onSelectResult: (result: IndexedPathMatch) => void;
@@ -224,7 +224,7 @@ export const IndexedSearchResultsList = ({
                     event.stopPropagation();
                     if (event.repeat) return;
                     const bounds = event.currentTarget.getBoundingClientRect();
-                    onOpenContextMenu(result, { x: bounds.left, y: bounds.bottom }, native);
+                    onOpenContextMenu(result, { x: bounds.left, y: bounds.bottom, focusFirstItem: true }, native);
                   }}
                   onMouseDown={(event) => {
                     if (event.button === 0 && (event.ctrlKey || event.metaKey || event.shiftKey)) {

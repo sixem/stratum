@@ -23,7 +23,7 @@ export type IndexedSearchMenuActions = Pick<Parameters<typeof useEntryMenuItems>
   onRename: (path: string, name: string) => Promise<unknown>;
 };
 
-type MenuPoint = { x: number; y: number };
+type MenuPoint = { x: number; y: number; focusFirstItem?: boolean };
 type MenuRequest = MenuPoint & { path: string };
 
 type Options = {
@@ -126,6 +126,7 @@ export const useIndexedSearchResultMenu = ({
       items: menuItems,
       x: request?.x ?? 0,
       y: request?.y ?? 0,
+      focusFirstItem: request?.focusFirstItem,
       onClose: close,
       onOpenNative,
     },

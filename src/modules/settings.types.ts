@@ -2,6 +2,7 @@
 import type { SortState, ViewMode } from "@/types";
 import type { ContextMenuAction } from "@/lib/contextMenuVisibility";
 import type { KeybindMap } from "./keybinds";
+import type { TerminalThemeId } from "./terminalThemes";
 
 export type ThumbnailFormat = "webp" | "jpeg";
 export type ThumbnailFit = "cover" | "contain";
@@ -44,6 +45,7 @@ export type Settings = {
   smoothScroll: boolean;
   smartTabJump: boolean;
   accentTheme: AccentTheme;
+  terminalTheme: TerminalThemeId;
   darkMode: boolean;
   categoryTinting: boolean;
   showParentEntry: boolean;

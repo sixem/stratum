@@ -43,10 +43,20 @@ export function pairWithFolder(pane: LinkedPane, id: string, selectTab: (id: str
   setBottomPaneActive(pane === "bottom");
 }
 
-export function setSplitWidth(pane: LinkedPane, id: string, folderPercent: number) {
+export function setTerminalSplitSize(pane: LinkedPane, id: string, folderPercent: number) {
   getPaneSessionStore(pane).getState().setTabs(tabs => tabs.map(tab =>
     tab.id === id && tab.split && tab.split.folderPercent !== folderPercent
       ? { ...tab, split: { ...tab.split, folderPercent } } : tab));
+}
+
+export function swapTerminalSplitSides(pane: LinkedPane, id: string) {
+  getPaneSessionStore(pane).getState().setTabs(tabs => tabs.map(tab =>
+    tab.id === id && tab.split ? { ...tab, split: { ...tab.split, terminalFirst: !tab.split.terminalFirst } } : tab));
+}
+
+export function toggleTerminalSplitLayout(pane: LinkedPane, id: string) {
+  getPaneSessionStore(pane).getState().setTabs(tabs => tabs.map(tab =>
+    tab.id === id && tab.split ? { ...tab, split: { ...tab.split, stacked: !tab.split.stacked } } : tab));
 }
 
 export function setDirectoryLinked(pane: LinkedPane, id: string, linked: boolean) {

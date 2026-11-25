@@ -124,7 +124,12 @@ export function useBottomPaneActions({
     onOpenDir: browseFromView,
     onOpenDirNewTab: tabs.openInNewTab,
     onOpenDirInBackgroundTab: tabs.openInBackgroundTab,
+    onSelectTab: tabs.selectTab,
     terminalTabs: tabs,
+    onRenameFolder: async (path, name) => {
+      const result = await actions.renameEntry(path, name, { updateFolderLocations: true });
+      if (result && viewVisit.current) await dir.refreshAfterChange();
+    },
     onDeleteEntries: actions.deleteEntries,
     onClearSelection: clearSelectionForVisit,
     onRenameEntry: selectionHandlers.handleRenameStart,

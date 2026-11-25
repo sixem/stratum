@@ -1,6 +1,7 @@
 // Pending navigation helpers for tab session flows.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { folderPathKey } from "@/lib";
+import { subscribeToFolderRename } from "@/modules/renamedFolderLocations";
 import { useSettingsStore } from "@/modules/settings.store";
 
 type PendingJumpSource = "navigate" | "switch";
@@ -22,6 +23,10 @@ export const usePendingJump = ({
   const pendingSourceRef = useRef<PendingJumpSource | null>(null);
   const pendingTabRef = useRef<string | null>(null);
   const recordRecentRef = useRef(false);
+
+  useEffect(() => subscribeToFolderRename((mapPath) => {
+    setPendingJump((path) => path ? mapPath(path) : path);
+  }), []);
 
   const queuePendingJump = useCallback(
     (path: string, source: PendingJumpSource, tabId?: string | null) => {

@@ -15,6 +15,7 @@ type PlacesStore = {
   places: Place[];
   seedDefaults: (defaults: Place[]) => void;
   addPlace: (path: string, name?: string, options?: { pinned?: boolean }) => void;
+  renamePlace: (path: string, name: string) => void;
   pinPlace: (path: string) => void;
   unpinPlace: (path: string) => void;
   reorderPinnedPlace: (fromPath: string, toPath: string, position: "before" | "after") => void;
@@ -233,6 +234,17 @@ export const usePlacesStore = createWithEqualityFn<PlacesStore>((set) => ({
         initialized: true,
         places: insertPlace([...state.places], nextPlace),
       };
+    }),
+  renamePlace: (path, name) =>
+    set((state) => {
+      const key = toPlaceKey(path);
+      const nextName = name.trim();
+      const index = key ? state.places.findIndex((place) => toPlaceKey(place.path) === key) : -1;
+      if (!nextName || index < 0 || state.places[index].name === nextName) return state;
+      // Editing the display name preserves the place's position.
+      const places = state.places.slice();
+      places[index] = { ...places[index], name: nextName };
+      return { places };
     }),
   pinPlace: (path) =>
     set((state) => ({

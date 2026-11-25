@@ -52,6 +52,7 @@ type ContextMenuProps = {
   onOpenNative?: () => boolean;
   scrollContainer?: RefObject<HTMLElement | null>;
   scrollable?: boolean;
+  focusFirstItem?: boolean;
 };
 
 const MENU_EDGE = CONTEXT_MENU_EDGE;
@@ -95,7 +96,9 @@ const renderContextIcon = (icon: ContextMenuIcon) => {
   return <Icon className="context-check-icon" />;
 };
 
-export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollContainer, scrollable = false }: ContextMenuProps) => {
+export const ContextMenu = ({
+  open, x, y, items, onClose, onOpenNative, scrollContainer, scrollable = false, focusFirstItem = false,
+}: ContextMenuProps) => {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const submenuRef = useRef<HTMLDivElement | null>(null);
@@ -113,7 +116,9 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
     scrollPositionRef.current = element ? { element, top: element.scrollTop, left: element.scrollLeft } : null;
     const previous = document.activeElement;
     if (scrollable && listRef.current) listRef.current.scrollTop = 0;
-    focusFirstMenuItem(menu);
+    // Pointer-opened menus receive keyboard input without highlighting an item.
+    if (focusFirstItem) focusFirstMenuItem(menu);
+    else menu.focus({ preventScroll: true });
     return () => {
       const active = document.activeElement;
       if (previous instanceof HTMLElement && previous.isConnected &&
@@ -121,7 +126,7 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
         previous.focus({ preventScroll: true });
       }
     };
-  }, [open, scrollContainer, scrollable]);
+  }, [focusFirstItem, open, scrollContainer, scrollable]);
 
   const handleScroll = useCallback((event: Event) => {
     if (event.target instanceof Node && menuRef.current?.contains(event.target)) return;
@@ -336,6 +341,7 @@ export const ContextMenu = ({ open, x, y, items, onClose, onOpenNative, scrollCo
       data-scrollable={renderedMenu.scrollable || undefined}
       style={menuStyle}
       role="menu"
+      tabIndex={-1}
       aria-hidden={!open}
       inert={!open}
       onKeyDown={(event) => {

@@ -11,6 +11,7 @@ import { useSettingsStore } from "@/modules";
 import { focusFilePaneBackground } from "@/hooks/ui/inputs/inputFocus";
 import type { PanePreviewBindings } from "@/hooks/ui/view/useQuickPreview";
 import { useTabReveal } from "@/hooks/ui/view/useTabReveal";
+import { folderPathKey } from "@/lib/paths";
 import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
 
 import {
@@ -35,7 +36,7 @@ type AppContentProps = {
   mainRef: RefObject<HTMLElement | null>;
   fileViewProps: ComponentProps<typeof FileView>;
   bottomMenu: BottomMenuBindings;
-  bottomCommandsBlocked: boolean;
+  paneCommandsBlocked: boolean;
   bottomPreview: PanePreviewBindings;
   onContextMenu?: (event: ReactPointerEvent) => void;
   onContextMenuDown?: (event: ReactPointerEvent) => void;
@@ -55,7 +56,7 @@ export const AppContent = ({
   mainRef,
   fileViewProps,
   bottomMenu,
-  bottomCommandsBlocked,
+  paneCommandsBlocked,
   bottomPreview,
   onContextMenu,
   onContextMenuDown,
@@ -72,7 +73,7 @@ export const AppContent = ({
     ready: !folderBusy && !folderFailed && !fileViewProps.loading,
     enabled: animateTabChanges,
     view: fileViewProps.showLander ? "lander" : fileViewProps.viewMode,
-    viewKey: fileViewProps.viewKey,
+    pathKey: folderPathKey(fileViewProps.currentPath),
   });
   const [sidebarResizing, setSidebarResizing] = useState(false);
   const paneViewProps = { ...fileViewProps, gridResizeDeferred: sidebarResizing };
@@ -110,7 +111,7 @@ export const AppContent = ({
           </PerfProfiler>
         ) : null}
         <div className="pane-stack" data-split={split}>
-        <TerminalSplitView pane="main" tab={activeTab}>
+        <TerminalSplitView pane="main" tab={activeTab} filePaneRef={mainRef} commandsBlocked={paneCommandsBlocked}>
         <main className="main upper-files" data-file-pane="main" data-pane-path={terminal ? "" : upperPath}
           data-start-view={fileViewProps.showLander || undefined}
           data-drop-background={fileDrop.backgroundHovered && fileDrop.hoveredPane === "main" || undefined}
@@ -136,7 +137,7 @@ export const AppContent = ({
         {split && <>
           <PaneDivider />
           <Suspense fallback={<div className="pane-loading">Opening bottom pane…</div>}>
-            <BottomPane upper={paneViewProps} actions={paneActions} drop={fileDrop} menu={bottomMenu} commandsBlocked={bottomCommandsBlocked}
+            <BottomPane upper={paneViewProps} actions={paneActions} drop={fileDrop} menu={bottomMenu} commandsBlocked={paneCommandsBlocked}
               onSummary={onBottomSummary} bottomPreview={bottomPreview} />
           </Suspense>
         </>}

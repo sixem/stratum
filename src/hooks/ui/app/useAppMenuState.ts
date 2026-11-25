@@ -9,7 +9,7 @@ import type {
 } from "react";
 import type { ContextMenuItem, EntryContextTarget, PlaceContextTarget } from "@/types";
 
-type ContextMenuPoint = { x: number; y: number };
+type ContextMenuPoint = { x: number; y: number; focusFirstItem?: boolean };
 type ContextMenuEvent = ReactMouseEvent | ReactPointerEvent;
 
 type ContextMenuState =
@@ -43,6 +43,7 @@ function usePaneMenuState(pane: MenuPane, active: OwnedMenu | null, setActive: D
       kind: "actions",
       items,
       scrollable,
+      focusFirstItem: !hasPoint,
       x: hasPoint ? event.clientX : anchor.left,
       y: hasPoint ? event.clientY : anchor.bottom,
     });

@@ -170,7 +170,7 @@ export const useShellFileViewAssembly = ({
       onContextMenuDown: layoutContextMenuDown,
       fileViewProps,
       bottomMenu: interactionModel.bottomMenu,
-      bottomCommandsBlocked: dataPipeline.smartTabBlocked || interactionModel.previewOpen,
+      paneCommandsBlocked: dataPipeline.smartTabBlocked || interactionModel.previewOpen,
       bottomPreview: interactionModel.bottomPreview,
     },
     selection: {

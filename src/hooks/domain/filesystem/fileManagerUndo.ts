@@ -14,7 +14,7 @@ type UndoFileEntry = {
   identity: string;
 };
 
-export type UndoRenameEntry = UndoFileEntry;
+export type UndoRenameEntry = UndoFileEntry & { updateFolderLocations?: boolean };
 export type UndoMoveEntry = UndoFileEntry;
 
 export type UndoTrashEntry = {
@@ -261,6 +261,7 @@ export const useFileManagerUndo = ({
           // Keep the original basename exactly, including legal Unicode whitespace.
           nextName: entry.from.split(/[\\/]/).pop() ?? "",
           expectedIdentity: entry.identity,
+          updateFolderLocations: entry.updateFolderLocations,
         }))
         .filter((item) => item.path && item.nextName);
       // Keep rename undo visually in-place by temporarily disabling

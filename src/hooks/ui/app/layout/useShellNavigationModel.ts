@@ -124,6 +124,7 @@ export const useShellNavigationModel = ({
       onSubmenuCloseRequest: fileDrop.clearDragState,
       showTabNumbers: settings.showTabNumbers,
       fixedWidthTabs: settings.fixedWidthTabs,
+      onStripContextMenu: menuState.openActionMenu,
       onTabContextMenu: shellView.navigationContext.handlePlaceTargetContextMenu,
       onTabContextMenuDown: shellView.navigationContext.handlePlaceTargetContextMenuDown,
     },

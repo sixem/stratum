@@ -44,7 +44,9 @@ export const useShellOverlayModel = ({
         : null,
       open: shellView.overlayContext.contextMenuOpen,
       items: shellView.overlayContext.contextMenuItems,
-      scrollable: menuState.contextMenu?.kind === "actions" && menuState.contextMenu.scrollable,
+      focusFirstItem: menuState.contextMenu?.focusFirstItem,
+      scrollable: menuState.contextMenu?.kind === "place-target" ||
+        (menuState.contextMenu?.kind === "actions" && menuState.contextMenu.scrollable),
       onClose: menuState.closeContextMenu,
     },
     quickPreview: {

@@ -11,7 +11,8 @@ export const CONTEXT_MENU_ACTION_GROUPS = [
       { id: "open-with", label: "Open with", items: ["entry-open-with"] },
       { id: "open-gallery", label: "Open in gallery", items: ["entry-open-gallery"] },
       { id: "open-tab", label: "Open in new tab", items: ["entry-open-new-tab", "place-target-open-new-tab"] },
-      { id: "open-pane", label: "Open in other pane", items: ["entry-open-other-pane"] },
+      { id: "open-pane", label: "Open in other pane", items: ["entry-open-other-pane", "place-target-open-other-pane"] },
+      { id: "open-parent-folder", label: "Open parent folder", items: ["place-target-open-parent"] },
       { id: "open-search-location", label: "Open result location", items: ["indexed-open-current-tab", "indexed-open-containing-folder"] },
     ],
   },
@@ -20,9 +21,9 @@ export const CONTEXT_MENU_ACTION_GROUPS = [
     description: "Choose the clipboard actions shown in the menu.",
     actions: [
       { id: "cut", label: "Cut", items: ["entry-cut"] },
-      { id: "copy", label: "Copy", items: ["entry-copy"] },
-      { id: "copy-text", label: "Copy as text", items: ["entry-copy-as-text"] },
-      { id: "paste", label: "Paste", items: ["entry-paste", "layout-paste"] },
+      { id: "copy", label: "Copy", items: ["entry-copy", "place-target-copy"] },
+      { id: "copy-text", label: "Copy as text", items: ["entry-copy-as-text", "place-target-copy-path"] },
+      { id: "paste", label: "Paste", items: ["entry-paste", "layout-paste", "place-target-paste"] },
     ],
   },
   {
@@ -31,7 +32,7 @@ export const CONTEXT_MENU_ACTION_GROUPS = [
     actions: [
       { id: "move-to", label: "Move to", items: ["entry-move-to"] },
       { id: "group-selection", label: "New folder with selection", items: ["entry-new-folder-with-selection"] },
-      { id: "rename", label: "Rename", items: ["entry-rename"] },
+      { id: "rename", label: "Rename", items: ["entry-rename", "place-target-rename-folder"] },
       { id: "delete", label: "Delete", items: ["entry-delete"] },
       { id: "properties", label: "Properties", items: ["entry-properties", "place-target-properties"] },
     ],
@@ -52,6 +53,7 @@ export const CONTEXT_MENU_ACTION_GROUPS = [
     actions: [
       { id: "add-place", label: "Add to places", items: ["place-target-add"] },
       { id: "pin-place", label: "Pin or unpin", items: ["place-target-pin", "place-target-pin-toggle"] },
+      { id: "rename-place", label: "Rename place", items: ["place-target-rename-place"] },
       { id: "remove-place", label: "Remove from places", items: ["place-target-remove"] },
       { id: "remove-recent", label: "Remove from recent jumps", items: ["place-target-remove-recent"] },
     ],

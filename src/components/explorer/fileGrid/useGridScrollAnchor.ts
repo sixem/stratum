@@ -38,6 +38,16 @@ export const useGridScrollAnchor = ({
 }: UseGridScrollAnchorOptions) => {
   const previousLayoutRef = useRef<GridLayout | null>(null);
   const anchorRef = useRef<ScrollAnchor | null>(null);
+  const lastScrollTopRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    const element = viewportRef.current;
+    if (!element) return;
+    const rememberScroll = () => { lastScrollTopRef.current = element.scrollTop; };
+    rememberScroll();
+    element.addEventListener("scroll", rememberScroll, { passive: true });
+    return () => element.removeEventListener("scroll", rememberScroll);
+  }, [viewportRef]);
 
   useLayoutEffect(() => {
     const previous = previousLayoutRef.current;
@@ -46,6 +56,9 @@ export const useGridScrollAnchor = ({
     };
 
     const element = viewportRef.current;
+    const scrollTop = element?.scrollTop ?? 0;
+    const previousScrollTop = lastScrollTopRef.current ?? scrollTop;
+    lastScrollTopRef.current = scrollTop;
     if (
       !element || !previous || loading || previous.loading ||
       previous.viewKey !== viewKey || previous.scrollRestoreKey !== scrollRestoreKey ||
@@ -69,24 +82,26 @@ export const useGridScrollAnchor = ({
       return;
     }
 
-    const scrollTop = element.scrollTop;
-    // Reuse the original edge or entry across reflows until the user scrolls.
-    const retained = saved?.scrollTop === scrollTop ? saved : null;
     const clientHeight = element.clientHeight;
     const maxScrollTop = Math.max(0, contentHeight - clientHeight);
     const previousMaxScrollTop = Math.max(0, previous.contentHeight - previous.viewportHeight);
+    // The browser can clamp the old offset before we read the resized grid.
+    const anchorTop = previousScrollTop > scrollTop && scrollTop >= maxScrollTop - EDGE_TOLERANCE
+      ? previousScrollTop : scrollTop;
+    const retained = saved?.scrollTop === anchorTop ? saved : null;
     const edge = retained?.kind ?? (
-      scrollTop <= EDGE_TOLERANCE ? "top" :
-      scrollTop >= previousMaxScrollTop - EDGE_TOLERANCE ? "bottom" :
+      anchorTop <= EDGE_TOLERANCE ? "top" :
+      anchorTop >= previousMaxScrollTop - EDGE_TOLERANCE ? "bottom" :
       "entry"
     );
     if (edge !== "entry") {
       element.scrollTop = edge === "top" ? 0 : maxScrollTop;
+      lastScrollTopRef.current = element.scrollTop;
       anchorRef.current = { kind: edge, scrollTop: element.scrollTop };
       return;
     }
 
-    const previousRow = Math.max(0, scrollTop + previous.viewportHeight / 2 - VIEW_INSET) /
+    const previousRow = Math.max(0, anchorTop + previous.viewportHeight / 2 - VIEW_INSET) /
       previous.rowHeight;
     const entryAnchor = retained?.kind === "entry" ? retained : null;
     const previousIndex = entryAnchor?.index ?? Math.min(
@@ -106,6 +121,7 @@ export const useGridScrollAnchor = ({
     const center = (Math.floor(index / columnCount) + rowFraction) * rowHeight + VIEW_INSET;
     const target = Math.min(maxScrollTop, Math.max(0, center - clientHeight / 2));
     if (Math.abs(target - scrollTop) > 0.5) element.scrollTop = target;
+    lastScrollTopRef.current = element.scrollTop;
     anchorRef.current = { kind: "entry", index, rowFraction, scrollTop: element.scrollTop };
   }, [
     columnCount, contentHeight, items, loading, rowHeight, scrollRestoreKey,
