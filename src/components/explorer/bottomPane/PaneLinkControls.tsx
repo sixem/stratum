@@ -1,5 +1,6 @@
 // Link the current two tabs and show when the pair is paused or unavailable.
-import { LinkPanesIcon, RefreshIcon } from "@/components/icons";
+import { RefreshIcon } from "@/components/icons";
+import { ContextUnlinkIcon, Link2Icon } from "@/components/icons/contextMenuIcons";
 import { ToolbarIconButton } from "@/components/primitives/ToolbarIconButton";
 import { coercePaneLink, relativeLinkedPath } from "@/lib/paneLink";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
@@ -36,7 +37,7 @@ export function PaneLinkControls({ mainPath, bottomPath, bottomTabId }: Props) {
       onClick={link ? () => useBottomPaneStore.setState({ link: null }) : relink}
       pressOnPointerDown={false}
     >
-      <LinkPanesIcon paused={Boolean(reason)} />
+      {link ? <ContextUnlinkIcon /> : <Link2Icon />}
     </ToolbarIconButton>
     {link && <ToolbarIconButton label="Relink here" disabled={!canLink} onClick={relink} pressOnPointerDown={false}>
       <RefreshIcon />

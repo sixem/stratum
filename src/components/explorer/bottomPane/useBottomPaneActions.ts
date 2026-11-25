@@ -124,6 +124,7 @@ export function useBottomPaneActions({
     onOpenDir: browseFromView,
     onOpenDirNewTab: tabs.openInNewTab,
     onOpenDirInBackgroundTab: tabs.openInBackgroundTab,
+    terminalTabs: tabs,
     onDeleteEntries: actions.deleteEntries,
     onClearSelection: clearSelectionForVisit,
     onRenameEntry: selectionHandlers.handleRenameStart,

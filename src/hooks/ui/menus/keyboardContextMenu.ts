@@ -32,7 +32,8 @@ export const getKeyboardMenuRequest = (
   parentPath: string | null,
   allowUntitledTab = false,
 ): MenuRequest | null => {
-  const focus = getFileCommandFocus(main, allowUntitledTab);
+  const terminalTab = document.activeElement?.closest('[data-tab-kind="powershell"]');
+  const focus = getFileCommandFocus(main, allowUntitledTab || Boolean(terminalTab));
   if (!focus) return null;
   if (focus !== "view") {
     const rect = focus.element.getBoundingClientRect();

@@ -32,6 +32,8 @@ import {
   ContextSelectSameExtensionIcon,
   ContextTerminalIcon,
   ContextUnpinIcon,
+  ContextUnlinkIcon,
+  Link2Icon,
 } from "@/components/icons/contextMenuIcons";
 import type { ContextMenuIcon, ContextMenuItem } from "@/types";
 import { CONTEXT_MENU_EDGE, CONTEXT_MENU_GAP, CONTEXT_SUBMENU_GAP } from "@/constants";
@@ -68,6 +70,8 @@ const contextIcons = {
   paste: ContextPasteIcon,
   "paste-into-folder": ContextPasteIntoFolderIcon,
   terminal: ContextTerminalIcon,
+  "split-tab": Link2Icon,
+  "separate-tabs": ContextUnlinkIcon,
   pin: ContextPinIcon,
   unpin: ContextUnpinIcon,
   add: PlusIcon,

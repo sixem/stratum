@@ -6,6 +6,7 @@ type BuildPlaceTargetMenuItemsOptions = {
   target: PlaceContextTarget | null;
   places: Place[];
   tabAction?: ContextMenuItem;
+  terminalActions?: ContextMenuItem[];
   onOpenPath?: (path: string) => void;
   onOpenPathNewTab?: (path: string) => void;
   onOpenPathInBackgroundTab?: (path: string) => void;
@@ -44,6 +45,7 @@ export const buildPlaceTargetMenuItems = ({
   target,
   places,
   tabAction,
+  terminalActions,
   onOpenPath,
   onOpenPathNewTab,
   onOpenPathInBackgroundTab,
@@ -56,9 +58,10 @@ export const buildPlaceTargetMenuItems = ({
 }: BuildPlaceTargetMenuItemsOptions): ContextMenuItem[] => {
   if (!target) return [];
   const path = target.path.trim();
-  const items: ContextMenuItem[] = tabAction ? [tabAction] : [];
+  const items: ContextMenuItem[] = [...(terminalActions ?? [])];
+  if (tabAction) items.push(tabAction);
   if (!path) return items;
-  if (tabAction) items.push({ kind: "divider", id: "place-target-divider-tab" });
+  if (items.length) items.push({ kind: "divider", id: "place-target-divider-tab" });
   const key = placeKey(path);
   const map = buildPlacesMap(places);
   const existing = map.get(key) ?? null;

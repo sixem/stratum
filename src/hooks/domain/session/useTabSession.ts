@@ -5,7 +5,8 @@ import type { ListDirOptions, SortState, Tab, ViewMode } from "@/types";
 import type { TabHistoryDirection, TabTransfer } from "@/types/tabs";
 import { DEFAULT_TAB_STATE, makeDebug, folderPathKey, getNextTrailPath } from "@/lib";
 import { useSessionStore } from "@/modules";
-import { createSessionTab, useBottomSessionStore } from "@/modules/sessionStore";
+import { createSessionTab, folderWithoutTerminal, useBottomSessionStore } from "@/modules/sessionStore";
+import { registerShellNavigation, rememberShellDirectory } from "@/modules/terminalSplit";
 import { resolveDefaultViewMode, useSettingsStore } from "@/modules/settings.store";
 import { beginLinkedNavigation, closeLinkedTab, registerPaneLinkReceiver } from "@/modules/paneLinkNavigation";
 import type { LinkedNavigation } from "@/modules/paneLinkNavigation";
@@ -233,6 +234,16 @@ export const useTabSession = ({
   // It currently shares the same behavior as jumpTo, but the alias keeps intent clear.
   const browseTo = jumpTo;
 
+  useLayoutEffect(() => registerShellNavigation(pane, (tab, path) => {
+    if (folderPathKey(tab.path) === folderPathKey(path)) return;
+    recordHistory(tab.id, tab.path, path);
+    if (useStore.getState().activeTabId !== tab.id) {
+      rememberShellDirectory(pane, tab.id, path);
+    } else {
+      performNavigation(path, undefined, "navigate", tab.id);
+    }
+  }), [pane, performNavigation, recordHistory, useStore]);
+
   const updateActiveTab = useCallback(
     (patch: Partial<Tab>) => {
       if (!activeTabId) return;
@@ -402,7 +413,7 @@ export const useTabSession = ({
       session.updateSession({
         tabs: nextTabs,
         activeTabId: wasActive || !fallback ? fallback?.id ?? null : session.activeTabId,
-        ...(receive || tab.terminal ? {} : { closedTabs: [{ tab: savedTab, history, index }, ...session.closedTabs].slice(0, CLOSED_TAB_LIMIT) }),
+        ...(receive || tab.terminal ? {} : { closedTabs: [{ tab: folderWithoutTerminal(savedTab), history, index }, ...session.closedTabs].slice(0, CLOSED_TAB_LIMIT) }),
       });
 
       if (!fallback || (wasActive && !fallback.path.trim())) {
@@ -450,6 +461,27 @@ export const useTabSession = ({
     activateStoredTab(incoming, navigation);
     return true;
   }, [activateStoredTab, restoreHistory, useStore]);
+
+  const endTerminalSplit = (id: string, keep: "both" | "folder" | "terminal") => {
+    const session = useStore.getState();
+    const index = session.tabs.findIndex(tab => tab.id === id);
+    const folder = session.tabs[index];
+    if (!folder?.split) return;
+    const next = [...session.tabs];
+    next[index] = folderWithoutTerminal(folder);
+    const keepShellActive = keep === "terminal" && session.activeTabId === id;
+    if (keep === "folder") {
+      session.setTabs(next);
+      return;
+    }
+    const shell = { ...createSessionTab(""), terminal: folder.split.terminal };
+    next.splice(index + 1, 0, shell);
+    session.updateSession({ tabs: next, activeTabId: keepShellActive ? shell.id : session.activeTabId });
+    if (keep === "terminal") {
+      closeTab(id);
+      if (keepShellActive) activateStoredTab(shell);
+    }
+  };
 
   const reopenClosedTab = useCallback(() => {
     const session = useStore.getState();
@@ -518,6 +550,7 @@ export const useTabSession = ({
     goForward,
     newTab,
     newPowerShellTab,
+    endTerminalSplit,
     openInNewTab,
     openInBackgroundTab,
     selectTab,

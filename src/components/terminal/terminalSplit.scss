@@ -1,0 +1,35 @@
+.terminal-split-layout { display: contents; }
+
+.terminal-split-layout[data-paired] {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  grid-template: minmax(0, 1fr) / minmax(0, var(--folder-width)) 6px minmax(0, 1fr);
+}
+
+.terminal-split-side {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--main-padding);
+}
+
+.terminal-split-divider {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: stretch center;
+  cursor: col-resize;
+  touch-action: none;
+
+  &::before { content: ""; width: 1px; background: var(--stroke); transform: translateX(var(--split-offset, 0)); }
+  &:is(:hover, :focus-visible, [data-resizing])::before { background: var(--accent); width: 2px; }
+}
+
+.tabs .tab[data-split-target] {
+  outline: 1px dashed var(--accent);
+  outline-offset: -2px;
+  cursor: pointer;
+  &:is(:hover, :focus-within) { outline-style: solid; background: rgba(var(--accent-rgb), 0.15); }
+}

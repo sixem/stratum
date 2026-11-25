@@ -21,8 +21,11 @@ import { HorizontalChevronButton, PressButton } from "@/components/primitives";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { useSettingsStore } from "@/modules";
 import { getDefaultTabGridSize } from "@/modules/tabGridSize";
+import { cancelSplitPicker, canPairFolder, pairWithFolder, useSplitPicker } from "@/modules/terminalSplit";
+import type { LinkedPane } from "@/lib/paneLink";
 
 type TabsBarProps = {
+  pane?: LinkedPane;
   leading?: ReactNode;
   tabs: Tab[];
   activeId: string | null;
@@ -50,6 +53,8 @@ type TabsBarProps = {
 };
 
 type TabItemProps = {
+  choosing: boolean;
+  onPick?: () => void;
   tab: Tab;
   isActive: boolean;
   onSelect: (id: string) => void;
@@ -71,6 +76,8 @@ type TabItemProps = {
 };
 
 const TabItem = ({
+  choosing,
+  onPick,
   tab,
   isActive,
   onSelect,
@@ -89,7 +96,7 @@ const TabItem = ({
 }: TabItemProps) => {
   const label = tab.terminal ? "PowerShell" : tabLabel(tab.path);
   const isUntitled = !tab.terminal && tab.path.trim().length === 0;
-  const hasMenu = !tab.terminal && (!isUntitled || untitledMenu);
+  const hasMenu = !isUntitled || untitledMenu;
   const menuTarget: PlaceContextTarget = { name: label, path: tab.path, source: "tab", tabId: tab.id };
   return (
     <div
@@ -99,10 +106,15 @@ const TabItem = ({
       data-drop-id={tab.id}
       data-drop-target={isDropTarget ? "true" : "false"}
       data-tab-id={tab.id}
-      data-context-place={tab.terminal ? undefined : "tab"}
+      data-split-target={onPick ? "true" : undefined}
+      data-context-place="tab"
       data-context-name={label}
       data-tab-kind={tab.terminal ? "powershell" : isUntitled ? "untitled" : "directory"}
       onPointerDown={(event) => {
+        if (choosing && event.button === 0) {
+          event.stopPropagation();
+          return;
+        }
         if (event.button === 2 && hasMenu) {
           onContextMenuDown?.(event, menuTarget);
           return;
@@ -128,16 +140,22 @@ const TabItem = ({
         <button
           type="button"
           className="tab-main"
-          onClickCapture={onSuppressClick}
+          onClickCapture={event => {
+            if (!choosing) return onSuppressClick(event);
+            event.preventDefault();
+            event.stopPropagation();
+            onPick?.();
+          }}
           onKeyDown={(event) => {
             if (event.key !== "Enter" && event.key !== " ") return;
             event.preventDefault();
+            if (choosing) { onPick?.(); return; }
             if (isActive) return;
             onSelect(tab.id);
           }}
         >
           {showIndex ? <span className="tab-index">{index + 1}</span> : null}
-          {tab.terminal && <SquareTerminalIcon />}
+          {(tab.terminal || tab.split) && <SquareTerminalIcon />}
           <span className="tab-title">{label}</span>
         </button>
       </TooltipWrapper>
@@ -160,6 +178,7 @@ const TabItem = ({
 };
 
 export const TabsBar = ({
+  pane = "main",
   leading,
   tabs,
   activeId,
@@ -185,6 +204,30 @@ export const TabsBar = ({
   const untitledMenu = useSettingsStore(state => Boolean(getDefaultTabGridSize(state)));
   // Container ref lets the reorder hook measure tab positions.
   const tabsRef = useRef<HTMLDivElement | null>(null);
+  const source = useSplitPicker(state => state.source);
+  const sourceStillOpen = source?.pane === pane && tabs.some(tab => tab.id === source.id && tab.terminal?.key === source.key);
+  useEffect(() => {
+    if (source?.pane !== pane) return;
+    if (!sourceStillOpen) { cancelSplitPicker(); return; }
+    const cancelOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      cancelSplitPicker();
+      tabsRef.current?.querySelector<HTMLButtonElement>(`[data-tab-id="${CSS.escape(source.id)}"] .tab-main`)?.focus();
+    };
+    const cancelOutside = (event: globalThis.PointerEvent) => {
+      if (event.button !== 0 || !(event.target instanceof Element) ||
+          !event.target.closest('[data-split-target], .tab-scroll-button')) cancelSplitPicker();
+    };
+    window.addEventListener("keydown", cancelOnEscape, true);
+    window.addEventListener("pointerdown", cancelOutside, true);
+    return () => {
+      window.removeEventListener("keydown", cancelOnEscape, true);
+      window.removeEventListener("pointerdown", cancelOutside, true);
+      if (useSplitPicker.getState().source === source) cancelSplitPicker();
+    };
+  }, [pane, source, sourceStillOpen]);
   const stripRef = useRef<HTMLDivElement | null>(null);
   const [submenuAnchorElement, setSubmenuAnchorElement] = useState<HTMLElement | null>(null);
   const {
@@ -265,6 +308,8 @@ export const TabsBar = ({
           {tabs.map((tab, index) => (
             <Fragment key={tab.id}>
               <TabItem
+                choosing={Boolean(source)}
+                onPick={source && canPairFolder(tab) ? () => pairWithFolder(pane, tab.id, onSelect) : undefined}
                 tab={tab}
                 isActive={tab.id === activeId}
                 onSelect={onSelect}

@@ -2,10 +2,14 @@ import type { ViewMode } from "./view";
 import type { SortState } from "./sort";
 import type { FixedGridSize } from "@/modules/settings.types";
 
+export type TerminalSession = { key: string; directory: string };
+export type TerminalSplit = { terminal: TerminalSession; folderPercent: number; linkDirectory?: boolean };
+
 export type Tab = {
   id: string;
   path: string;
-  terminal?: { key: string; directory: string };
+  terminal?: TerminalSession;
+  split?: TerminalSplit;
   // Deepest path visited in this tab's current branch for breadcrumb continuation.
   crumbTrailPath: string;
   viewMode: ViewMode;

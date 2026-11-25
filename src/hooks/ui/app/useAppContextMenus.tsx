@@ -33,6 +33,8 @@ import { withContextMenuShortcuts } from "../menus/contextMenuShortcuts";
 import { resolveContextTargets } from "../menus/entryMenu/shared";
 import type { CreateFolderWithSelection } from "../menus/entryMenu/showFolderWithSelectionPrompt";
 import { getKeyboardMenuRequest } from "../menus/keyboardContextMenu";
+import { beginSplitPicker, hasSplitTarget } from "@/modules/terminalSplit";
+import type { useTabSession } from "@/hooks/domain/session/useTabSession";
 import { useWindowsContextMenu } from "../menus/useWindowsContextMenu";
 import { buildPlaceTargetMenuItems } from "../menus/placeTargetMenuItems";
 import { resolveGalleryStartPath } from "../view/previewGallerySource";
@@ -74,6 +76,7 @@ type UseAppContextMenusOptions = {
   onOpenDirNewTab: (path: string) => void;
   onOpenDirInBackgroundTab: (path: string) => void;
   onOpenDirInMainPane?: (path: string) => void;
+  terminalTabs: Pick<ReturnType<typeof useTabSession>, "closeTab" | "endTerminalSplit">;
   onDeleteEntries: (paths: string[]) => Promise<{ deleted: number } | null>;
   confirmDelete: boolean;
   onClearSelection: () => void;
@@ -142,6 +145,7 @@ export const useAppContextMenus = ({
   onOpenDirNewTab,
   onOpenDirInBackgroundTab,
   onOpenDirInMainPane,
+  terminalTabs,
   onDeleteEntries,
   confirmDelete,
   onClearSelection,
@@ -370,7 +374,15 @@ export const useAppContextMenus = ({
   const placeTargetMenuItems = buildPlaceTargetMenuItems({
     target: contextMenu?.kind === "place-target" ? contextMenu.target : null,
     places,
-    tabAction: menuTab && defaultTabGridSize ? {
+    terminalActions: menuTab?.terminal ? [{
+      id: "split-terminal", label: "Split with…", icon: "split-tab", disabled: !hasSplitTarget(),
+      onSelect: () => beginSplitPicker(pane, menuTab, terminalTabs.closeTab),
+    }] : menuTab?.split ? [
+      { id: "separate-terminal", label: "Separate tabs", icon: "separate-tabs", onSelect: () => terminalTabs.endTerminalSplit(menuTab.id, "both") },
+      { id: "close-split-terminal", label: "Close PowerShell", icon: "remove", onSelect: () => terminalTabs.endTerminalSplit(menuTab.id, "folder") },
+      { id: "close-split-folder", label: "Close folder", icon: "remove", onSelect: () => terminalTabs.endTerminalSplit(menuTab.id, "terminal") },
+    ] : undefined,
+    tabAction: menuTab && !menuTab.terminal && defaultTabGridSize ? {
       id: "reset-tab-grid-size",
       label: "Reset thumbnail size",
       disabled: (menuTab.gridSize ?? defaultTabGridSize) === defaultTabGridSize,

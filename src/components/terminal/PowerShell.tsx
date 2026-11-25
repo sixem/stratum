@@ -5,6 +5,8 @@ import "@xterm/xterm/css/xterm.css";
 import "./terminal.css";
 import { useBottomSessionStore, useSessionStore } from "@/modules/sessionStore";
 import type { Tab } from "@/types";
+import type { LinkedPane } from "@/lib/paneLink";
+import { DirectorySync } from "./directorySync";
 
 type Profile = NonNullable<Tab["terminal"]>;
 const sessions = new Map<string, Shell>();
@@ -15,6 +17,7 @@ const switchTab = (event: Pick<KeyboardEvent, "key" | "ctrlKey" | "altKey" | "me
   event.key === "Tab" && event.ctrlKey && !event.altKey && !event.metaKey;
 
 class Shell {
+  private readonly directorySync = new DirectorySync();
   readonly element = document.createElement("div");
   private readonly viewport = document.createElement("div");
   private readonly status = document.createElement("div");
@@ -48,10 +51,14 @@ class Shell {
     void this.start(directory);
   }
 
-  attach(host: HTMLElement) {
+  attach(host: HTMLElement, autoFocus: boolean) {
     if (this.element.parentNode !== host) host.append(this.element);
     this.fit();
-    this.term.focus();
+    if (autoFocus) this.term.focus();
+  }
+
+  syncFolder(pane: LinkedPane, tab: Tab) {
+    if (this.id !== undefined) this.directorySync.update(this.id, pane, tab, message => { this.status.textContent = message; });
   }
 
   private fit() {
@@ -84,6 +91,7 @@ class Shell {
       const { cols, rows } = this.term;
       this.id = await invoke<number>("terminal_open", { directory, cols, rows });
       if (this.closed) return;
+      reconcileSessions();
       if (cols !== this.term.cols || rows !== this.term.rows) void this.resizeNative();
       void this.flush();
       while (!this.closed) {
@@ -147,11 +155,16 @@ class Shell {
 }
 
 // Moving a tab updates both stores synchronously. Reconcile after the destination owns it.
-function collectClosed() {
+function reconcileSessions() {
   if (!sessions.size) return;
   queueMicrotask(() => {
-    const live = new Set([...useSessionStore.getState().tabs, ...useBottomSessionStore.getState().tabs]
-      .map(tab => tab.terminal?.key));
+    const live = new Set<string>();
+    for (const [pane, store] of [["main", useSessionStore], ["bottom", useBottomSessionStore]] as const) {
+      for (const tab of store.getState().tabs) {
+        const key = (tab.terminal ?? tab.split?.terminal)?.key;
+        if (key) { live.add(key); sessions.get(key)?.syncFolder(pane, tab); }
+      }
+    }
     for (const [key, shell] of sessions) {
       if (live.has(key)) continue;
       sessions.delete(key);
@@ -160,18 +173,18 @@ function collectClosed() {
   });
 }
 for (const store of [useSessionStore, useBottomSessionStore]) {
-  store.subscribe((next, previous) => { if (next.tabs !== previous.tabs) collectClosed(); });
+  store.subscribe((next, previous) => { if (next.tabs !== previous.tabs) reconcileSessions(); });
 }
 
-export default function PowerShell({ terminal }: { terminal: Profile }) {
+export default function PowerShell({ terminal, autoFocus }: { terminal: Profile; autoFocus: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const container = host.current!;
     const shell = sessions.get(terminal.key) ?? new Shell(container, terminal.directory);
     sessions.set(terminal.key, shell);
-    shell.attach(container);
+    shell.attach(container, autoFocus);
     return () => { if (shell.element.parentNode === container) shell.element.remove(); };
-  }, [terminal]);
+  }, [terminal, autoFocus]);
   return <div data-terminal="" className="powershell-host" ref={host} aria-label="PowerShell terminal"
     onKeyDown={event => { if (!switchTab(event)) event.stopPropagation(); }} onKeyUp={event => event.stopPropagation()}
     onPointerDown={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} />;

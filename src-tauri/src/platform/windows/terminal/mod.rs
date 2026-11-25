@@ -1,4 +1,5 @@
 // A bounded pull stream lets a slow or hidden WebView apply backpressure to ConPTY.
+mod directory;
 mod process;
 use std::collections::HashMap;
 use std::io::{PipeWriter, Read, Write};
@@ -13,6 +14,7 @@ const CHUNK: usize = 32 * 1024;
 const MAX_SESSIONS: usize = 16;
 
 struct Session {
+    directory: Option<directory::DirectoryBridge>,
     job: Arc<OwnedHandle>,
     console: Arc<Mutex<Option<process::Console>>>,
     input: Arc<AsyncMutex<PipeWriter>>,
@@ -61,6 +63,7 @@ impl Session {
             drop(console);
         });
         Self {
+            directory: None,
             job,
             console,
             input: Arc::new(AsyncMutex::new(input)),
@@ -169,9 +172,40 @@ fn open(directory: String, cols: u16, rows: u16) -> Result<Session, String> {
         return Err("Working folder unavailable.".into());
     }
     let exe = crate::services::shells::powershell_path().ok_or("PowerShell is unavailable.")?;
-    let process =
-        process::spawn(&exe, "-NoLogo", &directory, cols, rows).map_err(|e| e.to_string())?;
-    Ok(Session::new(process))
+    let bridge = directory::DirectoryBridge::new().ok();
+    let flags = bridge.as_ref().map(|bridge| bridge.arguments());
+    let process = process::spawn(
+        &exe,
+        flags.as_deref().unwrap_or("-NoLogo"),
+        &directory,
+        cols,
+        rows,
+    )
+    .map_err(|e| e.to_string())?;
+    let mut session = Session::new(process);
+    session.directory = bridge;
+    Ok(session)
+}
+
+#[tauri::command]
+pub(crate) async fn terminal_link_directory(
+    webview: Webview,
+    state: State<'_, Terminals>,
+    id: u32,
+    version: u32,
+    path: Option<String>,
+    channel: tauri::ipc::Channel<directory::Location>,
+) -> Result<(), String> {
+    let session = state.get(&webview, id)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        session
+            .directory
+            .as_ref()
+            .ok_or("PowerShell directory linking is unavailable.")?
+            .update(version, path, channel)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

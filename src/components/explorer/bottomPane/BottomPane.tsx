@@ -7,6 +7,8 @@ import { useStatusLabels } from "@/hooks/domain/metadata/useStatusLabels";
 import { useScrollRequest } from "@/hooks/perf/scroll";
 import type { ScrollAlignment } from "@/hooks/perf/scroll";
 import { TerminalPane } from "@/components/terminal/TerminalPane";
+import { TerminalSplitView } from "@/components/terminal/TerminalSplitView";
+import { DirectoryLinkButton } from "@/components/terminal/DirectoryLinkButton";
 import { FileView } from "../FileView";
 import { PathCrumbsBar } from "../PathCrumbsBar";
 import { TabsBar } from "@/components/navigation/TabsBar";
@@ -287,8 +289,9 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       <ToolbarIconButton label="Hide bottom pane" onClick={hideBottomPane} pressOnPointerDown={false}>
         <TabCloseIcon />
       </ToolbarIconButton>
+      <DirectoryLinkButton pane="bottom" />
     </nav>
-    <TabsBar tabs={tabs.tabs} activeId={tabs.activeTabId} showTabNumbers={tabNumbers} fixedWidthTabs={fixedWidth}
+    <TabsBar pane="bottom" tabs={tabs.tabs} activeId={tabs.activeTabId} showTabNumbers={tabNumbers} fixedWidthTabs={fixedWidth}
       onSelect={tabs.selectTab} onClose={closeTab} onNew={tabs.newTab} onNewPowerShell={tabs.newPowerShellTab} onReorder={tabs.reorderTabs}
       onMoveTab={(id, receive) => tabs.moveTab(id, receive, id === activeTabId ? scrollTop.current ?? undefined : undefined)}
       onReceiveTab={(transfer, index) => {
@@ -310,6 +313,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         onCrumbContextMenu={paneActions.handlePlaceTargetContextMenu}
         onCrumbContextMenuDown={paneActions.handlePlaceTargetContextMenuDown} />
     ) : null}
+    <TerminalSplitView pane="bottom" tab={tabs.activeTab}>
     <div ref={files} className="main bottom-files" tabIndex={-1} aria-busy={busy} data-file-pane="bottom" data-pane-path={ready ? path : ""}
       data-drop-background={drop.backgroundHovered && drop.hoveredPane === "bottom" || undefined}
       onScrollCapture={event => {
@@ -340,6 +344,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         onGridColumnsChange={updateGridColumns}
       />}
     </div>
+    </TerminalSplitView>
     {createPortal(<ContextMenu
       open={paneActions.contextMenuOpen}
       x={menu.contextMenu?.x ?? 0}

@@ -159,6 +159,8 @@ pub fn run() {
             #[cfg(windows)]
             platform::windows::terminal::terminal_open,
             #[cfg(windows)]
+            platform::windows::terminal::terminal_link_directory,
+            #[cfg(windows)]
             platform::windows::terminal::terminal_read,
             #[cfg(windows)]
             platform::windows::terminal::terminal_write,

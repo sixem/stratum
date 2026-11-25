@@ -197,9 +197,15 @@ const readStoredSession = (key: string) => {
 };
 
 // A running shell belongs to this window. Only folder tabs can be restored.
+export function folderWithoutTerminal(tab: Tab): Tab {
+  if (!tab.split) return tab;
+  const { split, ...folder } = tab;
+  return folder;
+}
+
 export const folderLayout = ({ tabs, activeTabId }: TabLayout): TabLayout => {
-  if (!tabs.some(tab => tab.terminal)) return { tabs, activeTabId };
-  const folders = tabs.filter(tab => !tab.terminal);
+  if (!tabs.some(tab => tab.terminal || tab.split)) return { tabs, activeTabId };
+  const folders = tabs.filter(tab => !tab.terminal).map(folderWithoutTerminal);
   const activeFolder = folders.find(tab => tab.id === activeTabId) ?? folders[0];
   return { tabs: folders, activeTabId: activeFolder?.id ?? null };
 };

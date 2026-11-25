@@ -334,6 +334,7 @@ export const useShellViewInteractions = ({
     onOpenDir: viewState.browseFromView,
     onOpenDirNewTab: navigationController.handleOpenInNewTab,
     onOpenDirInBackgroundTab: tabSession.openInBackgroundTab,
+    terminalTabs: tabSession,
     onDeleteEntries: fileManager.deleteEntries,
     onClearSelection: handleClearSelection,
     onRenameEntry: handleRenameStart,

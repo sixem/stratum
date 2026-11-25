@@ -4,6 +4,7 @@ import type { FormEvent, KeyboardEvent, RefObject } from "react";
 import { FileFilterHint } from "@/components/primitives/FileFilterHint";
 import { PressButton } from "@/components/primitives/PressButton";
 import { FilterIcon, LibraryIcon, RefreshIcon } from "@/components/icons";
+import { DirectoryLinkButton } from "@/components/terminal/DirectoryLinkButton";
 import { useIndexedSearchUiStore } from "@/modules";
 
 type PathInputsBarProps = {
@@ -95,6 +96,7 @@ export const PathInputsBar = ({
           </PressButton>
         ) : null}
       </div>
+      <DirectoryLinkButton pane="main" />
     </form>
   );
 };
