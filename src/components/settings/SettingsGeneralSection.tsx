@@ -1,10 +1,9 @@
 // General settings and view defaults that shape navigation and layout.
-import { useId } from "react";
 import { shallow } from "zustand/shallow";
 import { PressButton } from "@/components/primitives/PressButton";
 import { resolveDefaultViewMode, useSettingsStore } from "@/modules/settings.store";
 
-import { SettingsItem } from "./SettingsItem";
+import { SettingsItem, SettingsToggleItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
 import { NAVIGATION_SETTINGS_ITEMS, SettingsNavigationDefaults } from "./SettingsNavigationDefaults";
 import { DIAGNOSTICS_SETTINGS_ITEM, SettingsDiagnostics } from "./SettingsDiagnostics";
@@ -56,10 +55,6 @@ type SettingsGeneralSectionProps = {
 };
 
 export const SettingsGeneralSection = ({ sectionId, open }: SettingsGeneralSectionProps) => {
-  const keepFilterId = useId();
-  const keepFilterDescriptionId = useId();
-  const workspaceWarningId = useId();
-  const workspaceWarningDescriptionId = useId();
   const {
     defaultViewMode,
     smoothScroll,
@@ -110,78 +105,36 @@ export const SettingsGeneralSection = ({ sectionId, open }: SettingsGeneralSecti
         </div>
       </SettingsItem>
       <SettingsNavigationDefaults />
-      <SettingsItem item={GENERAL_SETTINGS_ITEMS.smoothScrolling}>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={smoothScroll}
-            onChange={(event) => updateSettings({ smoothScroll: event.currentTarget.checked })}
-          />
-          <span />
-        </label>
-      </SettingsItem>
-      <SettingsItem item={GENERAL_SETTINGS_ITEMS.parentEntry}>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={showParentEntry}
-            onChange={(event) => updateSettings({ showParentEntry: event.currentTarget.checked })}
-          />
-          <span />
-        </label>
-      </SettingsItem>
-      <SettingsItem
+      <SettingsToggleItem
+        item={GENERAL_SETTINGS_ITEMS.smoothScrolling}
+        checked={smoothScroll}
+        onChange={(smoothScroll) => updateSettings({ smoothScroll })}
+      />
+      <SettingsToggleItem
+        item={GENERAL_SETTINGS_ITEMS.parentEntry}
+        checked={showParentEntry}
+        onChange={(showParentEntry) => updateSettings({ showParentEntry })}
+      />
+      <SettingsToggleItem
         item={GENERAL_SETTINGS_ITEMS.keepFilter}
-        labelFor={keepFilterId}
-        descriptionId={keepFilterDescriptionId}
-      >
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            id={keepFilterId}
-            aria-describedby={keepFilterDescriptionId}
-            checked={keepFilterOnNavigation}
-            onChange={(event) => updateSettings({ keepFilterOnNavigation: event.currentTarget.checked })}
-          />
-          <span aria-hidden="true" />
-        </label>
-      </SettingsItem>
-      <SettingsItem item={GENERAL_SETTINGS_ITEMS.confirmDeletes}>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={confirmDelete}
-            onChange={(event) => updateSettings({ confirmDelete: event.currentTarget.checked })}
-          />
-          <span />
-        </label>
-      </SettingsItem>
-      <SettingsItem item={GENERAL_SETTINGS_ITEMS.confirmClose}>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={confirmClose}
-            onChange={(event) => updateSettings({ confirmClose: event.currentTarget.checked })}
-          />
-          <span />
-        </label>
-      </SettingsItem>
-      <SettingsItem
+        checked={keepFilterOnNavigation}
+        onChange={(keepFilterOnNavigation) => updateSettings({ keepFilterOnNavigation })}
+      />
+      <SettingsToggleItem
+        item={GENERAL_SETTINGS_ITEMS.confirmDeletes}
+        checked={confirmDelete}
+        onChange={(confirmDelete) => updateSettings({ confirmDelete })}
+      />
+      <SettingsToggleItem
+        item={GENERAL_SETTINGS_ITEMS.confirmClose}
+        checked={confirmClose}
+        onChange={(confirmClose) => updateSettings({ confirmClose })}
+      />
+      <SettingsToggleItem
         item={GENERAL_SETTINGS_ITEMS.warnOnUnsavedWorkspaces}
-        labelFor={workspaceWarningId}
-        descriptionId={workspaceWarningDescriptionId}
-      >
-        <label className="settings-toggle">
-          <input
-            id={workspaceWarningId}
-            type="checkbox"
-            aria-describedby={workspaceWarningDescriptionId}
-            checked={warnOnUnsavedWorkspaces}
-            onChange={(event) => updateSettings({ warnOnUnsavedWorkspaces: event.currentTarget.checked })}
-          />
-          <span aria-hidden="true" />
-        </label>
-      </SettingsItem>
+        checked={warnOnUnsavedWorkspaces}
+        onChange={(warnOnUnsavedWorkspaces) => updateSettings({ warnOnUnsavedWorkspaces })}
+      />
       <SettingsDiagnostics open={open} />
     </section>
   );

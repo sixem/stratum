@@ -69,7 +69,7 @@ export function bottomPaneKeys({
         binding === keybinds.prevTab || binding === keybinds.nextTab) && tabs.tabs.length) {
       const n = tabs.tabs.length;
       const i = tabs.tabs.findIndex(tab => tab.id === tabs.activeTabId);
-      const backward = event.shiftKey || binding === keybinds.prevTab;
+      const backward = binding === "Control+Shift+Tab" || binding === keybinds.prevTab;
       tabs.selectTab(tabs.tabs[(i + (backward ? n - 1 : 1)) % n].id);
     } else if (cmd && /^[1-9]$/.test(key)) {
       const tab = tabs.tabs[Number(key) - 1];

@@ -112,6 +112,10 @@ export const useAppKeybinds = ({
     return true;
   }, [blockReveal, canHandleGlobalKeybind]);
 
+  const canHandlePaneCommand = useCallback((event: KeyboardEvent) =>
+    !event.isComposing && canHandleViewKeybind() && getFileCommandFocus(mainRef.current) === "view",
+  [canHandleViewKeybind, mainRef]);
+
   // Keybind handlers are kept explicit for readability and testing.
   const handleNewTabKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleGlobalKeybind()) return false;
@@ -132,14 +136,13 @@ export const useAppKeybinds = ({
   }, [canHandleGlobalKeybind, onReopenClosedTab]);
 
   const handleAdjacentTab = useCallback(
-    (_event: KeyboardEvent, direction: -1 | 1) => {
+    (direction: -1 | 1, wrap = false) => {
       if (!canHandleGlobalKeybind()) return false;
       if (!activeTabId || tabs.length < 2) return false;
       const index = tabs.findIndex((tab) => tab.id === activeTabId);
       if (index < 0) return false;
       const nextIndex = index + direction;
-      if (nextIndex < 0 || nextIndex >= tabs.length) return false;
-      const target = tabs[nextIndex];
+      const target = tabs[wrap ? (nextIndex + tabs.length) % tabs.length : nextIndex];
       if (!target) return false;
       onSelectTab(target.id);
       return true;
@@ -165,8 +168,8 @@ export const useAppKeybinds = ({
     return true;
   }, [canHandleViewKeybind, canUndo, undo]);
 
-  const handleDeleteSelectionKeybind = useCallback((_event: KeyboardEvent) => {
-    if (!canHandleViewKeybind()) return false;
+  const handleDeleteSelectionKeybind = useCallback((event: KeyboardEvent) => {
+    if (!canHandlePaneCommand(event)) return false;
     if (selectionTargets.length === 0) return false;
     const runDelete = () => {
       void deleteEntries(selectionTargets).then((report) => {
@@ -188,7 +191,7 @@ export const useAppKeybinds = ({
       onConfirm: runDelete,
     });
     return true;
-  }, [canHandleViewKeybind, confirmDelete, deleteEntries, onClearSelection, selectionTargets]);
+  }, [canHandlePaneCommand, confirmDelete, deleteEntries, onClearSelection, selectionTargets]);
 
   const handleClearSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
@@ -217,14 +220,9 @@ export const useAppKeybinds = ({
   }, [canHandleViewKeybind, onSelectAll]);
 
   const handleRenameSelectionKeybind = useCallback((event: KeyboardEvent) => {
-    if (event.isComposing || !canHandleViewKeybind() || !selectionTargets.length) return false;
-    if (getFileCommandFocus(mainRef.current) !== "view") return false;
+    if (!canHandlePaneCommand(event) || !selectionTargets.length) return false;
     return onRenameSelection(selectionTargets);
-  }, [canHandleViewKeybind, mainRef, onRenameSelection, selectionTargets]);
-
-  const canHandlePaneCommand = useCallback((event: KeyboardEvent) =>
-    !event.isComposing && canHandleViewKeybind() && getFileCommandFocus(mainRef.current) === "view",
-  [canHandleViewKeybind, mainRef]);
+  }, [canHandlePaneCommand, onRenameSelection, selectionTargets]);
 
   const handleDuplicateSelectionKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleViewKeybind()) return false;
@@ -313,8 +311,8 @@ export const useAppKeybinds = ({
       invertSelection: (event: KeyboardEvent) => canHandlePaneCommand(event) && paneFileCommands.invertSelection(),
       focusOtherPane: (event: KeyboardEvent) => !event.isComposing && canHandleViewKeybind() && focusOtherFilePane("main"),
       previewItem: handlePreviewItemKeybind,
-      prevTab: (event: KeyboardEvent) => handleAdjacentTab(event, -1),
-      nextTab: (event: KeyboardEvent) => handleAdjacentTab(event, 1),
+      prevTab: () => handleAdjacentTab(-1),
+      nextTab: () => handleAdjacentTab(1),
     }),
     [
       canHandlePaneCommand,
@@ -344,6 +342,8 @@ export const useAppKeybinds = ({
         "Control+c": () => handleClipboardSelection("copy"),
         "Control+x": () => handleClipboardSelection("move"),
         "Control+v": handlePasteSelectionKeybind,
+        "Control+Tab": () => handleAdjacentTab(1, true),
+        "Control+Shift+Tab": () => handleAdjacentTab(-1, true),
         [REOPEN_CLOSED_TAB_KEYBIND]: handleReopenClosedTabKeybind,
         ContextMenu: () => handleContextMenuKeybind(false),
         "Shift+F10": () => handleContextMenuKeybind(true),
@@ -355,6 +355,7 @@ export const useAppKeybinds = ({
       return map;
     },
     [
+      handleAdjacentTab,
       handleClearSelectionKeybind,
       handleClipboardSelection,
       handleContextMenuKeybind,

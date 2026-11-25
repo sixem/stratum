@@ -21,7 +21,6 @@ type TabSessionOptions = {
   loadDir: (path: string, options?: LoadDirOptions) => Promise<void>;
   clearDir: (options?: { silent?: boolean }) => void;
   keepFilterOnNavigation: boolean;
-  recentJumpsLimit: number;
 };
 
 const log = makeDebug("tabs");
@@ -40,11 +39,11 @@ export const useTabSession = ({
   loadDir,
   clearDir,
   keepFilterOnNavigation,
-  recentJumpsLimit,
 }: TabSessionOptions) => {
   const pane = useStore === useBottomSessionStore ? "bottom" : "main";
   const defaultViewMode = useSettingsStore(resolveDefaultViewMode);
   const rememberRecentLocations = useSettingsStore((state) => state.rememberRecentLocations);
+  const recentJumpsLimit = useSettingsStore((state) => state.sidebarRecentLimit);
   const newTabSort = useSettingsStore((state) => state.newTabSort);
   const {
     tabs,

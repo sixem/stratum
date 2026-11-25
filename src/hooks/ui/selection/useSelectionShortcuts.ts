@@ -113,7 +113,6 @@ export const useSelectionShortcuts = ({
       if (previewOpen || loading || blockReveal || useBottomPaneStore.getState().active) return;
       if (!handleTabJump(event)) return;
 
-      // Suppress normal focus traversal so double-tap stays scoped to the view.
       event.preventDefault();
       event.stopPropagation();
     };

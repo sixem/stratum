@@ -1,5 +1,5 @@
 // The visible label and description also provide the text for settings search.
-import { createContext, useContext } from "react";
+import { createContext, useContext, useId } from "react";
 import type { ReactNode } from "react";
 
 export type SettingsItemText = {
@@ -46,5 +46,30 @@ export const SettingsItem = ({
       </div>
       {children}
     </div>
+  );
+};
+
+type SettingsToggleItemProps = {
+  item: SettingsItemText;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+};
+
+export const SettingsToggleItem = ({ item, checked, onChange }: SettingsToggleItemProps) => {
+  const id = useId();
+  const descriptionId = `${id}-description`;
+  return (
+    <SettingsItem item={item} labelFor={id} descriptionId={descriptionId}>
+      <label className="settings-toggle">
+        <input
+          type="checkbox"
+          id={id}
+          aria-describedby={descriptionId}
+          checked={checked}
+          onChange={(event) => onChange(event.currentTarget.checked)}
+        />
+        <span aria-hidden="true" />
+      </label>
+    </SettingsItem>
   );
 };

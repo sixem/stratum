@@ -27,7 +27,7 @@ export function useBottomFolder() {
   const keepFilterOnNavigation = useSettingsStore(state => state.keepFilterOnNavigation);
   const tabs = useTabSession({
     useStore: useBottomSessionStore, currentPath: dir.currentPath, loadingPath: dir.loadingPath,
-    loadDir: dir.loadDir, clearDir: dir.clearDir, recentJumpsLimit: 12,
+    loadDir: dir.loadDir, clearDir: dir.clearDir,
     keepFilterOnNavigation,
   });
   const navigation = useBottomPaneStore(state => state.navigation);

@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { showShellContextMenu, type ShellMenuTarget } from "@/api";
 import type { BeginFileActivity } from "@/hooks/domain/filesystem/useFileActivity";
 import { toMessage } from "@/lib";
-import { usePromptStore } from "@/modules";
+import { usePromptStore, useSettingsStore } from "@/modules";
 
 type Options = {
   enabled: boolean;
@@ -27,10 +27,12 @@ export const useWindowsContextMenu = ({
     open.current = true;
     flushSync(closeContextMenu);
     const finish = beginFileActivity("Windows context menu");
-    void showShellContextMenu(target, point, extended, onOpenGallery != null)
+    const gallery = useSettingsStore.getState().hiddenContextMenuActions.includes("open-gallery")
+      ? undefined : onOpenGallery;
+    void showShellContextMenu(target, point, extended, gallery != null)
       .then((outcome) => {
         if (outcome === "invoked") onCommand();
-        if (outcome === "gallery") onOpenGallery?.();
+        if (outcome === "gallery") gallery?.();
       })
       .catch((error) => {
         usePromptStore.getState().showPrompt({

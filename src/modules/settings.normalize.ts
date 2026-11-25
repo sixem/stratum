@@ -343,11 +343,13 @@ export const normalizeLegacySettings = (
 ): Partial<Settings> => {
   if (version != null && version >= SETTINGS_STORAGE_VERSION) return settings;
   let next = settings;
-  const legacyGridSize = next.gridSize as string | undefined;
-  if (legacyGridSize === "large") {
-    next = { ...next, gridSize: "normal" };
-  } else if (legacyGridSize === "compact") {
-    next = { ...next, gridSize: "small" };
+  if (version == null || version < 11) {
+    const legacyGridSize = next.gridSize as string | undefined;
+    if (legacyGridSize === "large") {
+      next = { ...next, gridSize: "normal" };
+    } else if (legacyGridSize === "compact") {
+      next = { ...next, gridSize: "small" };
+    }
   }
   if (!("sidebarHiddenSections" in next)) {
     const showTips =

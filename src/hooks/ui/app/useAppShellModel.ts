@@ -35,7 +35,6 @@ export const useAppShellModel = (welcomeOpen = false) => {
     loadDir: fileManager.loadDir,
     clearDir: fileManager.clearDir,
     keepFilterOnNavigation: settings.keepFilterOnNavigation,
-    recentJumpsLimit: settings.sidebarRecentLimit,
   });
   const lastViewRef = useRef<{ tabId: string | null; pathKey: string } | null>(null);
   const resolvedView = resolveShellViewState({ fileManager, settings, tabSession, lastViewRef });
