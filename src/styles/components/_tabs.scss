@@ -384,7 +384,11 @@
     width: 12px;
     height: 12px;
     flex: none;
-    color: var(--muted);
+    color: var(--text);
+
+    polyline {
+      stroke-width: 3;
+    }
   }
 
   .drop-submenu-item[data-drop-target="true"] {
