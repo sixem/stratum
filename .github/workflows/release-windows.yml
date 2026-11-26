@@ -3,29 +3,39 @@ name: Draft Windows Release
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
+
+concurrency:
+  group: stratum-windows-draft
+  cancel-in-progress: false
 
 jobs:
-  build-and-draft-release:
+  build:
     runs-on: windows-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      artifact-id: ${{ steps.artifact.outputs.artifact-id }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           version: 10
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
 
       - name: Install frontend deps
         run: pnpm install --frozen-lockfile
@@ -57,7 +67,6 @@ jobs:
           pnpm tauri build
 
       - name: Collect release files
-        id: collect
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
@@ -107,20 +116,51 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Update signing failed." }
 
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
+        id: artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: stratum-windows-${{ steps.version.outputs.version }}
           path: dist/release/*
           if-no-files-found: error
+          overwrite: true
+
+  draft:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout release scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact-id }}
+          path: dist/release
+
+      - name: Verify the signed release assets
+        env:
+          STRATUM_UPDATER_PUBLIC_KEY: ${{ vars.STRATUM_UPDATER_PUBLIC_KEY }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends minisign
+          python3 scripts/verify_update_installer.py dist/release "$VERSION"
 
       - name: Draft GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          tag_name: v${{ steps.version.outputs.version }}
+          tag_name: v${{ needs.build.outputs.version }}
           target_commitish: ${{ github.sha }}
-          name: Stratum v${{ steps.version.outputs.version }}
-          body: ""
+          name: Stratum v${{ needs.build.outputs.version }}
           draft: true
-          files: dist/release/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/release/Stratum_${{ needs.build.outputs.version }}_x64-setup.exe
+            dist/release/Stratum_${{ needs.build.outputs.version }}_x64-setup.exe.sig
+            dist/release/Stratum_${{ needs.build.outputs.version }}_portable.exe
+            dist/release/Stratum_${{ needs.build.outputs.version }}_x64_en-US.msi
+          token: ${{ secrets.GH_PAT }}
