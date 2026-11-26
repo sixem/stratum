@@ -60,6 +60,7 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             #[cfg(target_os = "windows")]
             if let Err(error) = platform::windows::profile_instance::register_window(app.handle()) {
@@ -82,6 +83,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            app::commands::updates::check_app_update,
+            app::commands::updates::apply_app_update,
             app::commands::open_stratum_backup,
             app::commands::save_stratum_backup,
             app::commands::probe_backup_folders,

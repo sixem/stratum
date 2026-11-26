@@ -49,7 +49,12 @@ jobs:
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Build Tauri bundles
-        run: pnpm tauri build
+        env:
+          STRATUM_UPDATER_PUBLIC_KEY: ${{ vars.STRATUM_UPDATER_PUBLIC_KEY }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:STRATUM_UPDATER_PUBLIC_KEY)) { throw "Release updater public key missing." }
+          pnpm tauri build
 
       - name: Collect release files
         id: collect
@@ -89,6 +94,17 @@ jobs:
           Copy-Item -Path $portablePath -Destination $portableOut -Force
           Copy-Item -Path $nsis.FullName -Destination $nsisOut -Force
           Copy-Item -Path $msi.FullName -Destination $msiOut -Force
+
+      - name: Sign the update installer
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if (!$env:TAURI_SIGNING_PRIVATE_KEY) { throw "Update signing key missing." }
+          pnpm exec tauri signer sign --app-version $env:VERSION "dist/release/Stratum_${env:VERSION}_x64-setup.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Update signing failed." }
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4

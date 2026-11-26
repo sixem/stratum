@@ -106,6 +106,8 @@ export const useSettingsStore = createWithEqualityFn<SettingsStore>((set) => ({
 
 useSettingsStore.subscribe((state) => {
   writeStoredSettings({
+    autoCheckUpdates: state.autoCheckUpdates,
+    updateDelayHours: state.updateDelayHours,
     sidebarOpen: state.sidebarOpen,
     sidebarWidth: state.sidebarWidth,
     sidebarRecentLimit: state.sidebarRecentLimit,

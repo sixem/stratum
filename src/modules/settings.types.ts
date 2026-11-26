@@ -22,6 +22,8 @@ export type SidebarSectionId = "places" | "recent" | "tips";
 export type StartupMode = "resume" | "workspace" | "start";
 
 export type Settings = {
+  autoCheckUpdates: boolean;
+  updateDelayHours: 0 | 24 | 72 | 168;
   sidebarOpen: boolean;
   sidebarWidth: number;
   sidebarRecentLimit: number;

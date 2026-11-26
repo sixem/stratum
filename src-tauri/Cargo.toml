@@ -33,3 +33,7 @@ resvg = "0.38"
 flate2 = "1"
 getrandom = "0.3"
 tokio = { version = "1", features = ["sync", "time"] }
+tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls"] }
+
+[dev-dependencies]
+tauri = { version = "2.11.4", features = ["test"] }

@@ -5,6 +5,7 @@ pub mod indexed_search;
 pub mod media;
 pub mod shell_menu;
 pub mod system;
+pub mod updates;
 
 pub use backup::*;
 pub use filesystem::*;

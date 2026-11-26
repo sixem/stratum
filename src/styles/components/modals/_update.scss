@@ -1,0 +1,53 @@
+// A quiet, user-opened panel above Settings, below blocking prompts.
+@use "./shared" as modal;
+
+.update-modal {
+  @include modal.overlay-shell(2375, 16px);
+  @include modal.overlay-open();
+}
+
+.update-panel {
+  @include modal.panel-shell(min(430px, 100%), calc(100dvh - 32px), 0, 0, 12px, $overflow: auto);
+  @include modal.panel-open();
+
+  .overlay-panel-header { flex: none; }
+  .overlay-panel-header-title { font-size: var(--font-size-lg); }
+  .overlay-panel-header-drag { min-height: auto; }
+}
+
+.update-details, .update-feedback { padding: 16px 20px; }
+.update-details {
+  min-height: 0;
+  overflow-y: auto;
+}
+.update-published, .update-feedback, .update-notes p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.update-published { color: var(--muted); }
+.update-details + .update-feedback { padding-top: 0; }
+.update-notes {
+  margin-top: 15px;
+
+  h3 {
+    margin: 0 0 5px;
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+  }
+  p {
+    color: var(--muted);
+    white-space: pre-wrap;
+    user-select: text;
+  }
+}
+.update-actions {
+  flex: none;
+  padding: 12px 20px;
+  border-top: 1px solid var(--stroke);
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}

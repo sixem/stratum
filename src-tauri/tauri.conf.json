@@ -56,6 +56,13 @@
       }
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "requireSignedVersion": true,
+      "endpoints": ["https://five.sh/stratum/updates/stable.json"]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

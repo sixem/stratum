@@ -11,6 +11,8 @@ import type { SettingsOverlayProps } from "@/components/overlay/SettingsOverlay"
 import type { QuickPreviewOverlayProps } from "@/components/preview/QuickPreviewOverlay";
 import { useBatchRenameStore } from "@/modules/batchRenameStore";
 import { usePromptStore } from "@/modules/promptStore";
+import { useUpdateStore } from "@/modules/updateStore";
+import { UpdateDialog } from "@/components/overlay/UpdateDialog";
 import type { ComponentProps } from "react";
 import { QuickMoveOverlay } from "./QuickMoveOverlay";
 
@@ -128,6 +130,7 @@ export const AppOverlays = ({
   const settingsMounted = useDeferredMount(settings.open, true);
   const Gallery = usePrewarmedGallery(quickPreview.open, quickPreview.onClose);
   const batchRename = useBatchRenameStore((state) => state.session);
+  const updateOpen = useUpdateStore((state) => state.dialogOpen);
 
   return (
     <>
@@ -152,6 +155,7 @@ export const AppOverlays = ({
         </Suspense>
       ) : null}
       <IndexedSearchModal {...indexedSearch} previewOpen={quickPreview.open} />
+      {updateOpen && <UpdateDialog />}
       <QuickMoveOverlay />
       <TooltipDisplay />
       {Gallery && quickPreview.open ? <Gallery {...quickPreview} /> : null}

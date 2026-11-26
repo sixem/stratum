@@ -1,5 +1,6 @@
 // Bottom status line for counts and messages.
 import loader from "@/assets/icons/loaders/ring.svg";
+import { useUpdateStore } from "@/modules/updateStore";
 
 type StatusBarProps = {
   message: string;
@@ -14,6 +15,7 @@ export const StatusBar = ({
   countLabel,
   selectionLabel,
 }: StatusBarProps) => {
+  const updateAvailable = useUpdateStore((state) => state.offerVisible);
   return (
     <footer className="statusbar">
       <div className="status-left">
@@ -38,6 +40,12 @@ export const StatusBar = ({
           ) : null}
         </span>
       </span>
+      {updateAvailable && (
+        <button className="status-update" type="button" aria-haspopup="dialog"
+          onClick={() => useUpdateStore.getState().open()}>
+          Update available
+        </button>
+      )}
     </footer>
   );
 };
