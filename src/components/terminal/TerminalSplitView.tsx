@@ -6,8 +6,12 @@ import { clampTerminalSplit as clamp, TERMINAL_SPLIT_MIN as MIN, TERMINAL_SPLIT_
 import { setBottomPaneActive, useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { setTerminalSplitSize } from "@/modules/terminalSplit";
 import { buildKeybindFromEvent, useIndexedSearchUiStore, usePromptStore, useSettingsStore } from "@/modules";
+import { getTabShortcutDirection } from "@/modules/keybinds";
 import { useQuickMoveSession } from "@/modules/quickMoveSession";
+import { getPaneSessionStore } from "@/modules/sessionStore";
+import { getAdjacentTab } from "@/lib/tabs";
 import { focusOtherFilePane } from "@/hooks/ui/inputs/focusOtherFilePane";
+import { useTabWheelShortcuts } from "@/hooks/ui/inputs/useTabWheelShortcuts";
 import { TerminalDirectoryBar } from "./TerminalDirectoryBar";
 import { TerminalPane } from "./TerminalPane";
 import "./terminalSplit.scss";
@@ -98,11 +102,13 @@ type TerminalSplitViewProps = {
   pane: LinkedPane;
   tab?: Tab | null;
   filePaneRef: RefObject<HTMLElement | null>;
+  onSelectTab: (id: string) => void;
   commandsBlocked: boolean;
   children: ReactNode;
 };
 
-export function TerminalSplitView({ pane, tab, filePaneRef, commandsBlocked, children }: TerminalSplitViewProps) {
+export function TerminalSplitView({ pane, tab, filePaneRef, onSelectTab, commandsBlocked, children }: TerminalSplitViewProps) {
+  const layoutRef = useRef<HTMLDivElement>(null);
   const split = tab?.split;
   const folderPercent = split?.folderPercent ?? 50;
   const terminalFirst = split?.terminalFirst === true;
@@ -110,18 +116,35 @@ export function TerminalSplitView({ pane, tab, filePaneRef, commandsBlocked, chi
   // Keep the folder's share and both mounted surfaces when changing the grid areas.
   const firstPercent = terminalFirst ? 100 - folderPercent : folderPercent;
   const focusPane = () => setBottomPaneActive(pane === "bottom");
+  const canUsePaneShortcuts = () => !commandsBlocked && !usePromptStore.getState().prompt &&
+    !useIndexedSearchUiStore.getState().open && !useQuickMoveSession.getState().request;
+  const switchTab = (direction: -1 | 1) => {
+    const { tabs, activeTabId } = getPaneSessionStore(pane).getState();
+    const target = getAdjacentTab(tabs, activeTabId, direction, useSettingsStore.getState().wrapTabNavigation);
+    if (!target) return;
+    // Retain focus in this pane if the active terminal is about to detach.
+    const focused = document.activeElement;
+    if (focused?.closest("[data-terminal]") && layoutRef.current?.contains(focused)) {
+      filePaneRef.current?.focus({ preventScroll: true });
+    }
+    onSelectTab(target.id);
+  };
+  useTabWheelShortcuts(layoutRef, switchTab, canUsePaneShortcuts);
+
   const handleTerminalFocusKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    // Claim focus shortcuts before xterm receives them as shell input.
+    // Claim enabled navigation and focus shortcuts before xterm receives them.
     if (!(event.target instanceof Element) || !event.target.closest("[data-terminal]")) return;
-    if (event.ctrlKey && !event.altKey && !event.metaKey &&
-        (event.key === "ArrowLeft" || event.key === "ArrowRight")) return;
-    const { keybinds } = useSettingsStore.getState();
-    if ((!keybinds.focusOtherPane && !keybinds.focusSplitTerminal) ||
-        event.defaultPrevented || event.nativeEvent.isComposing || commandsBlocked ||
-        usePromptStore.getState().prompt || useIndexedSearchUiStore.getState().open ||
-        useQuickMoveSession.getState().request) return;
+    if (event.defaultPrevented || event.nativeEvent.isComposing || !canUsePaneShortcuts()) return;
+    const { keybinds, terminalTabNavigation } = useSettingsStore.getState();
     const binding = buildKeybindFromEvent(event.nativeEvent);
-    if (binding === keybinds.focusOtherPane && useBottomPaneStore.getState().open) {
+    const direction = terminalTabNavigation ? getTabShortcutDirection(binding, keybinds) : null;
+    if (direction !== null) {
+      if (!event.repeat) switchTab(direction);
+    } else if (event.ctrlKey && !event.altKey && !event.metaKey &&
+        (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+      // Preserve shell word movement for other shortcuts bound to these keys.
+      return;
+    } else if (binding === keybinds.focusOtherPane && useBottomPaneStore.getState().open) {
       if (!event.repeat && !focusOtherFilePane(pane)) return;
     } else if (split && binding === keybinds.focusSplitTerminal) {
       if (!event.repeat) filePaneRef.current?.focus({ preventScroll: true });
@@ -129,7 +152,7 @@ export function TerminalSplitView({ pane, tab, filePaneRef, commandsBlocked, chi
     event.preventDefault();
     event.stopPropagation();
   };
-  return <div className="terminal-split-layout" data-paired={split ? "true" : undefined}
+  return <div ref={layoutRef} className="terminal-split-layout" data-paired={split ? "true" : undefined}
     onKeyDownCapture={tab?.terminal || split ? handleTerminalFocusKey : undefined}
     data-terminal-first={terminalFirst || undefined}
     data-stacked={stacked || undefined}

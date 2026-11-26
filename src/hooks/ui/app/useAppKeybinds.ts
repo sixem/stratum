@@ -4,6 +4,8 @@ import type { RefObject } from "react";
 import { REOPEN_CLOSED_TAB_KEYBIND } from "@/constants";
 import { formatDeleteLabel, getAdjacentTab, getDriveKey, getSelectionTargets, isEditableElement, normalizeDropPath } from "@/lib";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
+import { resizeThumbnails } from "@/modules/resizeThumbnails";
+import { useSessionStore } from "@/modules/sessionStore";
 import { getFileCommandFocus } from "../menus/keyboardContextMenu";
 import { focusOtherFilePane } from "../inputs/focusOtherFilePane";
 import { focusSplitTerminal } from "../inputs/focusSplitTerminal";
@@ -242,6 +244,11 @@ export const useAppKeybinds = ({
     return false;
   }, []);
 
+  const resizeGrid = useCallback((direction: -1 | 1) =>
+    canHandleViewKeybind() && Boolean(mainRef.current?.querySelector(".thumb-viewport")) &&
+    resizeThumbnails(direction, useSessionStore, activeTabId),
+  [activeTabId, canHandleViewKeybind, mainRef]);
+
   const handleClipboardSelection = useCallback((operation: "copy" | "move") => {
     if (!canHandleViewKeybind()) return false;
     const focus = getFileCommandFocus(mainRef.current);
@@ -318,6 +325,8 @@ export const useAppKeybinds = ({
       previewItem: handlePreviewItemKeybind,
       prevTab: () => !isEditableElement(document.activeElement) && handleAdjacentTab(-1),
       nextTab: () => !isEditableElement(document.activeElement) && handleAdjacentTab(1),
+      increaseThumbnailSize: () => resizeGrid(1),
+      decreaseThumbnailSize: () => resizeGrid(-1),
     }),
     [
       canHandleGlobalKeybind,
@@ -336,6 +345,7 @@ export const useAppKeybinds = ({
       handleUndoKeybind,
       mainRef,
       paneFileCommands,
+      resizeGrid,
       selectionTargets,
     ],
   );

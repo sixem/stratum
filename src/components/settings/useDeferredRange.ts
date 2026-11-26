@@ -69,5 +69,5 @@ export const useDeferredRange = ({ value, onCommit }: UseDeferredRangeOptions) =
     onBlur: handleBlur,
   };
 
-  return { draft, bind };
+  return { draft, bind, commit };
 };

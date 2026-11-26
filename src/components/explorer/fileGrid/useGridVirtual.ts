@@ -89,7 +89,7 @@ export const useGridVirtual = ({
     };
 
     const handleWheel = (event: WheelEvent) => {
-      if (event.ctrlKey) return;
+      if (event.ctrlKey || event.defaultPrevented) return;
       const legacy = event as WheelEvent & { wheelDeltaY?: number; wheelDelta?: number };
       const legacyDelta = legacy.wheelDeltaY ?? legacy.wheelDelta ?? 0;
       const rawDelta =

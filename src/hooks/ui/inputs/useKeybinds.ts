@@ -3,6 +3,7 @@ import { useEffect, useMemo } from "react";
 import { tinykeys } from "tinykeys";
 import type { KeyBindingMap } from "tinykeys";
 import { normalizeKeybind } from "@/modules";
+import { isWheelKeybind } from "@/modules/keybinds";
 import type { KeybindAction, KeybindMap } from "@/modules";
 
 // Return true when the keybind is handled so default shortcuts are blocked.
@@ -28,7 +29,7 @@ export const useKeybinds = ({
       if (!combo) return;
       const normalized = normalizeKeybind(combo);
       if (!normalized) return;
-      if (normalized.split("+").includes("MouseMiddle")) return;
+      if (normalized.split("+").includes("MouseMiddle") || isWheelKeybind(normalized)) return;
       map[normalized] = (event) => {
         if (event.repeat) return;
         const handled = handler(event);

@@ -171,6 +171,21 @@ impl IndexedSearchHandle {
         }
     }
 
+    // ShellExecute can fail after the updater has already stopped the writer.
+    pub fn resume_after_failed_update(&self) {
+        let mut queue = self
+            .inner
+            .work_queue
+            .lock()
+            .expect("indexed search work queue");
+        if self.inner.shutting_down.swap(false, Ordering::SeqCst) && self.is_enabled() {
+            queue.queue_volume_check();
+            queue.queue_search_backfill();
+            queue.queue_size_backfill();
+            let _ = self.start_worker(&mut queue);
+        }
+    }
+
     pub fn drive_statuses(&self) -> Vec<IndexedDriveStatus> {
         if !self.is_enabled() {
             return Vec::new();

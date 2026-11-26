@@ -7,6 +7,9 @@ import {
 import { DEFAULT_KEYBINDS } from "./keybinds";
 import type { Settings, SidebarSectionId } from "./settings.types";
 import { DEFAULT_TERMINAL_THEME } from "./terminalThemes";
+import {
+  DEFAULT_TERMINAL_CURSOR_STYLE, DEFAULT_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_FONT_WEIGHT, DEFAULT_TERMINAL_SCROLLBACK,
+} from "./terminalPreferences";
 
 export const SIDEBAR_SECTION_DEFINITIONS: { id: SidebarSectionId; label: string }[] = [
   { id: "places", label: "Places" },
@@ -21,6 +24,8 @@ export const DEFAULT_SIDEBAR_HIDDEN_SECTIONS: SidebarSectionId[] = [];
 export const DEFAULT_VIEW_MODE = "thumbs";
 
 export const DEFAULT_SETTINGS: Settings = {
+  autoCheckUpdates: true,
+  updateDelayHours: 24,
   sidebarOpen: true,
   sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
   sidebarRecentLimit: 10,
@@ -45,9 +50,14 @@ export const DEFAULT_SETTINGS: Settings = {
   showWorkProgressFill: true,
   smoothScroll: false,
   smartTabJump: true,
+  terminalTabNavigation: false,
   accentTheme: "red",
   terminalTheme: DEFAULT_TERMINAL_THEME,
   terminalFontFamily: null,
+  terminalFontSize: DEFAULT_TERMINAL_FONT_SIZE,
+  terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
+  terminalCursorStyle: DEFAULT_TERMINAL_CURSOR_STYLE,
+  terminalScrollback: DEFAULT_TERMINAL_SCROLLBACK,
   darkMode: false,
   categoryTinting: false,
   showParentEntry: true,

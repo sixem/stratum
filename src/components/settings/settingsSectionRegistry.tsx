@@ -16,6 +16,7 @@ import { MEDIA_SETTINGS_ITEMS, SettingsMediaSection } from "./SettingsMediaSecti
 import { MENUS_SETTINGS_ITEMS, SettingsMenusSection } from "./SettingsMenusSection";
 import { MENU_VISIBILITY_SETTINGS_ITEMS } from "./SettingsMenuVisibility";
 import { THUMBS_SETTINGS_ITEMS, SettingsThumbsSection } from "./SettingsThumbsSection";
+import { UPDATE_SETTINGS_ITEMS, SettingsUpdatesSection } from "./SettingsUpdatesSection";
 
 export type SettingsSectionId =
   | "settings-general"
@@ -28,7 +29,8 @@ export type SettingsSectionId =
   | "settings-media"
   | "settings-keybinds"
   | "settings-cache"
-  | "settings-backup";
+  | "settings-backup"
+  | "settings-updates";
 
 export type SettingsSectionRenderContext = {
   open: boolean;
@@ -130,6 +132,12 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
         onClearCache={onClearCache}
       />
     ),
+  },
+  {
+    id: "settings-updates",
+    label: "Updates",
+    items: Object.values(UPDATE_SETTINGS_ITEMS),
+    render: () => <SettingsUpdatesSection />,
   },
   {
     id: "settings-backup",

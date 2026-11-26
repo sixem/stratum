@@ -33,6 +33,7 @@ type AppContentProps = {
   sidebarOpen: boolean;
   sidebarProps: ComponentProps<typeof Sidebar>;
   activeTabId: string | null;
+  onSelectTab: (id: string) => void;
   mainRef: RefObject<HTMLElement | null>;
   fileViewProps: ComponentProps<typeof FileView>;
   bottomMenu: BottomMenuBindings;
@@ -53,6 +54,7 @@ export const AppContent = ({
   sidebarOpen,
   sidebarProps,
   activeTabId,
+  onSelectTab,
   mainRef,
   fileViewProps,
   bottomMenu,
@@ -111,7 +113,7 @@ export const AppContent = ({
           </PerfProfiler>
         ) : null}
         <div className="pane-stack" data-split={split}>
-        <TerminalSplitView pane="main" tab={activeTab} filePaneRef={mainRef} commandsBlocked={paneCommandsBlocked}>
+        <TerminalSplitView pane="main" tab={activeTab} filePaneRef={mainRef} onSelectTab={onSelectTab} commandsBlocked={paneCommandsBlocked}>
         <main className="main upper-files" data-file-pane="main" data-pane-path={terminal ? "" : upperPath}
           data-start-view={fileViewProps.showLander || undefined}
           data-drop-background={fileDrop.backgroundHovered && fileDrop.hoveredPane === "main" || undefined}

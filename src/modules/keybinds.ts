@@ -30,6 +30,8 @@ const normalizeKeyToken = (token: string) => {
   if (lower === "escape" || lower === "esc") return "Escape";
   if (lower === "delete" || lower === "del") return "Delete";
   if (lower === "space") return "Space";
+  if (lower === "wheelup" || lower === "scroll up") return "WheelUp";
+  if (lower === "wheeldown" || lower === "scroll down") return "WheelDown";
   if (
     [
       "mousemiddle",
@@ -79,6 +81,10 @@ const formatToken = (token: string) => {
       return "Space";
     case "MouseMiddle":
       return "Middle Click";
+    case "WheelUp":
+      return "Scroll Up";
+    case "WheelDown":
+      return "Scroll Down";
     default:
       return token.length === 1 ? token.toUpperCase() : token;
   }
@@ -146,19 +152,35 @@ export const isReservedKeybind = (binding: string) => {
   return Boolean(getReservedKeybindLabel(binding));
 };
 
+const shortcutModifiers = (event: Pick<KeyboardEvent, "ctrlKey" | "altKey" | "shiftKey" | "metaKey">) => {
+  const parts: string[] = [];
+  if (event.ctrlKey) parts.push("Control");
+  if (event.altKey) parts.push("Alt");
+  if (event.shiftKey) parts.push("Shift");
+  if (event.metaKey) parts.push("Meta");
+  return parts;
+};
+
 export const buildKeybindFromEvent = (event: KeyboardEvent) => {
-  const keyToken = event.key === " " ? "Space" : normalizeKeyToken(event.key);
-  if (!keyToken) return null;
-  if (MODIFIER_KEYS.has(keyToken as (typeof MODIFIER_ORDER)[number])) {
-    return null;
-  }
-  const modifiers: string[] = [];
-  if (event.ctrlKey) modifiers.push("Control");
-  if (event.altKey) modifiers.push("Alt");
-  if (event.shiftKey) modifiers.push("Shift");
-  if (event.metaKey) modifiers.push("Meta");
-  const combined = [...modifiers, keyToken].join("+");
-  return normalizeKeybind(combined);
+  const key = event.key === " " ? "Space" : normalizeKeyToken(event.key);
+  if (!key || MODIFIER_KEYS.has(key as (typeof MODIFIER_ORDER)[number])) return null;
+  return normalizeKeybind([...shortcutModifiers(event), key].join("+"));
+};
+
+export const isWheelKeybind = (binding: string) => /(?:^|\+)Wheel(?:Up|Down)$/.test(binding);
+
+export const buildKeybindFromWheel = (event: WheelEvent) => {
+  if (event.buttons || !(event.ctrlKey || event.altKey || event.shiftKey || event.metaKey)) return null;
+  // Ignore horizontal scrolling and ambiguous diagonal gestures.
+  if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return null;
+  return [...shortcutModifiers(event), event.deltaY < 0 ? "WheelUp" : "WheelDown"].join("+");
+};
+
+export const getTabShortcutDirection = (binding: string | null, keybinds: KeybindMap) => {
+  if (!binding) return null;
+  if (binding === keybinds.prevTab) return -1;
+  if (binding === keybinds.nextTab) return 1;
+  return null;
 };
 
 const sanitizeKeybinds = (bindings: KeybindMap) => {
@@ -166,12 +188,13 @@ const sanitizeKeybinds = (bindings: KeybindMap) => {
   const reserved = new Set(RESERVED_KEYBINDS.map((bind) => normalizeKeybind(bind)));
   const next: KeybindMap = { ...DEFAULT_KEYBINDS };
 
-  const isAllowed = (normalized: string, action: KeybindAction) => {
+  const isAllowed = (normalized: string, definition: KeybindDefinition) => {
     if (!normalized) return false;
     if (reserved.has(normalized)) return false;
     if (isSingleCharacterBinding(normalized)) return false;
     if (used.has(normalized)) return false;
-    if (normalized === "MouseMiddle" && action !== "previewItem") return false;
+    if (normalized === "MouseMiddle" && definition.id !== "previewItem") return false;
+    if (isWheelKeybind(normalized) && (!definition.wheel || !normalized.includes("+"))) return false;
     return true;
   };
 
@@ -184,12 +207,12 @@ const sanitizeKeybinds = (bindings: KeybindMap) => {
     }
     const candidate = normalizeKeybind(binding);
     const fallback = normalizeKeybind(definition.default);
-    if (isAllowed(candidate, definition.id)) {
+    if (isAllowed(candidate, definition)) {
       next[definition.id] = candidate;
       used.add(candidate);
       return;
     }
-    if (isAllowed(fallback, definition.id)) {
+    if (isAllowed(fallback, definition)) {
       next[definition.id] = fallback;
       used.add(fallback);
       return;

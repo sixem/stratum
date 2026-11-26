@@ -88,7 +88,7 @@
   gap: 10px;
   padding: 18px 20px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: var(--surface-border-width) solid rgba(255, 255, 255, 0.12);
   background: rgba(10, 12, 18, 0.86);
   @include shell.frosted-backdrop(
     var(--overlay-backdrop-blur-strong),

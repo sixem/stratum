@@ -3,6 +3,7 @@ import type { SortState, ViewMode } from "@/types";
 import type { ContextMenuAction } from "@/lib/contextMenuVisibility";
 import type { KeybindMap } from "./keybinds";
 import type { TerminalThemeId } from "./terminalThemes";
+import type { TerminalCursorStyle, TerminalFontWeight, TerminalScrollback } from "./terminalPreferences";
 
 export type ThumbnailFormat = "webp" | "jpeg";
 export type ThumbnailFit = "cover" | "contain";
@@ -22,6 +23,8 @@ export type SidebarSectionId = "places" | "recent" | "tips";
 export type StartupMode = "resume" | "workspace" | "start";
 
 export type Settings = {
+  autoCheckUpdates: boolean;
+  updateDelayHours: 0 | 24 | 72 | 168;
   sidebarOpen: boolean;
   sidebarWidth: number;
   sidebarRecentLimit: number;
@@ -46,9 +49,14 @@ export type Settings = {
   showWorkProgressFill: boolean;
   smoothScroll: boolean;
   smartTabJump: boolean;
+  terminalTabNavigation: boolean;
   accentTheme: AccentTheme;
   terminalTheme: TerminalThemeId;
   terminalFontFamily: string | null;
+  terminalFontSize: number;
+  terminalFontWeight: TerminalFontWeight;
+  terminalCursorStyle: TerminalCursorStyle;
+  terminalScrollback: TerminalScrollback;
   darkMode: boolean;
   categoryTinting: boolean;
   showParentEntry: boolean;

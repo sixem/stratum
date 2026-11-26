@@ -106,6 +106,8 @@ export const useSettingsStore = createWithEqualityFn<SettingsStore>((set) => ({
 
 useSettingsStore.subscribe((state) => {
   writeStoredSettings({
+    autoCheckUpdates: state.autoCheckUpdates,
+    updateDelayHours: state.updateDelayHours,
     sidebarOpen: state.sidebarOpen,
     sidebarWidth: state.sidebarWidth,
     sidebarRecentLimit: state.sidebarRecentLimit,
@@ -130,9 +132,14 @@ useSettingsStore.subscribe((state) => {
     showWorkProgressFill: state.showWorkProgressFill,
     smoothScroll: state.smoothScroll,
     smartTabJump: state.smartTabJump,
+    terminalTabNavigation: state.terminalTabNavigation,
     accentTheme: state.accentTheme,
     terminalTheme: state.terminalTheme,
     terminalFontFamily: state.terminalFontFamily,
+    terminalFontSize: state.terminalFontSize,
+    terminalFontWeight: state.terminalFontWeight,
+    terminalCursorStyle: state.terminalCursorStyle,
+    terminalScrollback: state.terminalScrollback,
     darkMode: state.darkMode,
     categoryTinting: state.categoryTinting,
     showParentEntry: state.showParentEntry,

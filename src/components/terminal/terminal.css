@@ -13,6 +13,8 @@
   border-radius: var(--panel-radius);
 }
 .powershell-viewport .xterm { height: 100%; }
+/* Use the text cursor for rectangular selections as well. */
+.powershell-viewport .xterm.column-select.focus { cursor: text; }
 .powershell-viewport, .powershell-viewport .xterm-viewport { overflow: clip; }
 /* xterm manages scrollback in its buffer. Keep wheel and keyboard scrolling. */
 .powershell-viewport .xterm-scrollable-element > .scrollbar { display: none; }

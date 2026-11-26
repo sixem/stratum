@@ -62,6 +62,32 @@
     max-width: 100%;
   }
 
+  .status-update {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-block: -2px;
+    padding: 2px 5px;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+
+    &::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    &:hover { background: var(--surface-control); }
+    &:focus-visible { outline: 2px solid var(--accent); }
+  }
+
   .status-text-label {
     min-width: 0;
     overflow: hidden;

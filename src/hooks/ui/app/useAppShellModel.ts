@@ -10,6 +10,7 @@ import { useScrollRequest } from "@/hooks/perf/scroll";
 import { makeDebug } from "@/lib";
 import { useIndexedSearchUiStore, usePlacesStore, usePromptStore } from "@/modules";
 import { useBatchRenameStore } from "@/modules/batchRenameStore";
+import { useUpdateStore } from "@/modules/updateStore";
 import { setWorkspaceDefaultPlaces } from "@/modules/workspaceStore";
 import { useAppMenuState } from "./useAppMenuState";
 import { useAppNavigationController } from "./useAppNavigationController";
@@ -57,6 +58,7 @@ export const useAppShellModel = (welcomeOpen = false) => {
   const menuState = useAppMenuState();
   const promptOpen = usePromptStore((state) => Boolean(state.prompt));
   const batchRenameOpen = useBatchRenameStore((state) => state.session !== null);
+  const updateOpen = useUpdateStore((state) => state.dialogOpen);
   const [, setSuppressExternalPresence] = useState(false);
   const [thumbResetNonce, setThumbResetNonce] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -144,7 +146,7 @@ export const useAppShellModel = (welcomeOpen = false) => {
 
   const shellView = useShellViewModel({
     tauriEnv,
-    promptOpen: promptOpen || batchRenameOpen || welcomeOpen,
+    promptOpen: promptOpen || batchRenameOpen || welcomeOpen || updateOpen,
     aboutOpen,
     menuState,
     fileManager,

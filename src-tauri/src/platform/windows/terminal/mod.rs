@@ -79,6 +79,7 @@ impl Session {
 #[derive(Default)]
 struct Registry {
     next: u32,
+    installing_update: bool,
     sessions: HashMap<u32, Option<Arc<Session>>>,
 }
 
@@ -86,6 +87,24 @@ struct Registry {
 pub(crate) struct Terminals(Mutex<Registry>);
 
 impl Terminals {
+    // Hold the reservation through installer launch, including shells still spawning.
+    pub(crate) fn reserve_update(&self, confirmed: bool) -> Result<(), String> {
+        let mut registry = self.0.lock().map_err(|_| "Terminal state unavailable.")?;
+        if !confirmed && !registry.sessions.is_empty() {
+            return Err("terminal-confirmation-required".into());
+        }
+        registry.installing_update = true;
+        Ok(())
+    }
+
+    pub(crate) fn cancel_update(&self) {
+        self.0.lock().unwrap().installing_update = false;
+    }
+
+    pub(crate) fn requires_confirmation(&self) -> bool {
+        !self.0.lock().unwrap().sessions.is_empty()
+    }
+
     pub(crate) fn clear(&self, label: &str) {
         if label == "main" {
             let sessions = std::mem::take(&mut self.0.lock().unwrap().sessions);
@@ -140,6 +159,9 @@ pub(crate) async fn terminal_open(
     owner(&webview)?;
     let id = {
         let mut registry = state.0.lock().unwrap();
+        if registry.installing_update {
+            return Err("Stratum is restarting for an update.".into());
+        }
         if registry.sessions.len() >= MAX_SESSIONS {
             return Err("Close a terminal before opening another.".into());
         }

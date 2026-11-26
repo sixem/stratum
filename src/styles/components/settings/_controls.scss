@@ -23,12 +23,7 @@
     opacity: 0.5;
   }
 
-  .settings-terminal-theme-select {
-    inline-size: 10rem;
-    max-inline-size: 100%;
-  }
-
-  .settings-terminal-font-select {
+  .settings-terminal-select {
     inline-size: 13rem;
     max-inline-size: 100%;
   }
@@ -39,13 +34,31 @@
     padding: 6px 9px;
     border: var(--surface-border-width) solid var(--stroke);
     border-radius: 6px;
-    font-size: 0.875rem;
     line-height: 1.45;
 
     > div {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: pre;
+    }
+  }
+
+  .settings-terminal-cursor {
+    display: inline-block;
+    inline-size: 1ch;
+    block-size: 1em;
+    vertical-align: -0.15em;
+
+    &[data-shape="block"], &[data-shape="bar"] {
+      background: currentColor;
+    }
+
+    &[data-shape="bar"] {
+      inline-size: 2px;
+    }
+
+    &[data-shape="underline"] {
+      border-block-end: var(--surface-border-width) solid currentColor;
     }
   }
 
@@ -167,6 +180,21 @@
     min-width: 56px;
     text-align: right;
     font-variant-numeric: tabular-nums;
+  }
+
+  .settings-range.settings-terminal-size {
+    inline-size: 13rem;
+    grid-template-columns: minmax(0, 1fr) 2ch auto;
+
+    .ui-range {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .settings-value {
+      min-width: 0;
+      text-align: center;
+    }
   }
 
   .settings-pills {

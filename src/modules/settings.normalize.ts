@@ -17,6 +17,7 @@ import {
 import { coerceKeybinds } from "./keybinds";
 import { coerceTerminalTheme } from "./terminalThemes";
 import { coerceTerminalFont } from "./terminalFonts";
+import { coerceTerminalCursorStyle, coerceTerminalFontSize, coerceTerminalFontWeight, coerceTerminalScrollback } from "./terminalPreferences";
 import {
   DEFAULT_SETTINGS,
   DEFAULT_SIDEBAR_HIDDEN_SECTIONS,
@@ -153,6 +154,9 @@ const coerceSidebarRecentLimit = (value: unknown) => {
 
 export const coerceSettings = (value: Partial<Settings> | null | undefined): Settings => {
   return {
+    autoCheckUpdates: value?.autoCheckUpdates !== false,
+    updateDelayHours: value?.updateDelayHours === 0 || value?.updateDelayHours === 72 || value?.updateDelayHours === 168
+      ? value.updateDelayHours : DEFAULT_SETTINGS.updateDelayHours,
     sidebarOpen:
       typeof value?.sidebarOpen === "boolean" ? value.sidebarOpen : DEFAULT_SETTINGS.sidebarOpen,
     sidebarWidth: clampNumber(value?.sidebarWidth, DEFAULT_SETTINGS.sidebarWidth, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX),
@@ -215,9 +219,14 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.smartTabJump === "boolean"
         ? value.smartTabJump
         : DEFAULT_SETTINGS.smartTabJump,
+    terminalTabNavigation: value?.terminalTabNavigation === true,
     accentTheme: coerceAccentTheme(value?.accentTheme),
     terminalTheme: coerceTerminalTheme(value?.terminalTheme),
     terminalFontFamily: coerceTerminalFont(value?.terminalFontFamily),
+    terminalFontSize: coerceTerminalFontSize(value?.terminalFontSize),
+    terminalFontWeight: coerceTerminalFontWeight(value?.terminalFontWeight),
+    terminalCursorStyle: coerceTerminalCursorStyle(value?.terminalCursorStyle),
+    terminalScrollback: coerceTerminalScrollback(value?.terminalScrollback),
     darkMode:
       typeof value?.darkMode === "boolean" ? value.darkMode : DEFAULT_SETTINGS.darkMode,
     categoryTinting:
