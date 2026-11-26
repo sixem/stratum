@@ -8,6 +8,7 @@ import { ParentUpIcon } from "@/components/icons";
 import type { ParentCardProps } from "./gridCard.types";
 
 export const ParentCard = memo(({
+  remote,
   path,
   index,
   dropTarget,
@@ -48,7 +49,8 @@ export const ParentCard = memo(({
       type="button"
       className="thumb-card is-parent"
       data-selectable="false"
-      data-path={path}
+      data-path={remote ? undefined : path}
+        data-remote-path={remote ? path : undefined}
       data-index={index}
       data-is-dir="true"
       data-drop-target={dropTarget ? "true" : "false"}

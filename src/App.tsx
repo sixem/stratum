@@ -40,6 +40,7 @@ const App = ({ showWelcome }: { showWelcome: boolean }) => {
           fileViewProps: view.fileViewProps,
           bottomMenu: view.bottomMenu,
           paneCommandsBlocked: view.paneCommandsBlocked,
+          mainPreview: view.mainPreview,
           bottomPreview: view.bottomPreview,
         }}
         statusbar={{

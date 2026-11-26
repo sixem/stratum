@@ -181,12 +181,12 @@ export const useQuickPreview = ({
   const getHoveredPreviewTarget = useCallback(() => {
     const pointer = pointerRef.current;
     const element = pointer ? document.elementFromPoint(pointer.x, pointer.y) : null;
-    const entry = element?.closest<HTMLElement>("[data-path]");
+    const entry = element?.closest<HTMLElement>("[data-path], [data-remote-path]");
     if (useIndexedSearchUiStore.getState().open) {
       const source = sourcesRef.current.indexed;
       if (!source?.isCurrent()) return null;
       const active = document.activeElement;
-      const focused = active?.closest<HTMLElement>("[data-path]");
+      const focused = active?.closest<HTMLElement>("[data-path], [data-remote-path]");
       const path = active === source.shortcutInput ? source.getSelectedPath?.()
         : focused && source.filesRoot.contains(focused) ? focused.dataset.path
         : entry && source.filesRoot.contains(entry) ? entry.dataset.path
@@ -195,7 +195,7 @@ export const useQuickPreview = ({
     }
     if (!entry) return null;
     if (entry.dataset.selectable === "false") return null;
-    return resolvePreviewTarget(entry.dataset.path, entry.closest('[data-file-pane="bottom"]') ? "bottom" : "main");
+    return resolvePreviewTarget(entry.dataset.remotePath ?? entry.dataset.path, entry.closest('[data-file-pane="bottom"]') ? "bottom" : "main");
   }, [resolvePreviewTarget]);
 
   const clearHoldTimer = useCallback(() => {

@@ -11,13 +11,16 @@ const captureSession = (session: SessionState, pane: "main" | "bottom"): Session
   const files = document.querySelector<HTMLElement>(`[data-file-pane="${pane}"]`);
   const viewport = files?.querySelector<HTMLElement>(".list-body, .thumb-viewport");
   const displayedPath = folderPathKey(files?.dataset.panePath ?? "");
+  const remote = files?.querySelector<HTMLElement>(".remote-folder");
   return {
     activeTabId,
     recentJumps: [...recentJumps],
     tabs: tabs.map((tab) => ({
       ...tab,
       sort: { ...tab.sort },
-      scrollTop: viewport && displayedPath && tab.id === activeTabId && displayedPath === folderPathKey(tab.path)
+      scrollTop: viewport && tab.id === activeTabId && (tab.kind === "remote"
+        ? remote?.dataset.remoteHost === tab.remote.hostId && remote.dataset.remoteFolderPath === tab.remote.path
+        : Boolean(displayedPath) && displayedPath === folderPathKey(tab.path))
         ? viewport.scrollTop : tab.scrollTop,
     })),
   };

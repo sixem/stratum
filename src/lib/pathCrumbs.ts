@@ -1,4 +1,5 @@
 // Shared breadcrumb helpers used by the crumb bar and trail navigation.
+import { remoteCrumbs } from "./remotePaths";
 import { folderPathKey } from "./paths";
 
 export type PathCrumb = {
@@ -63,30 +64,28 @@ export const buildPathCrumbs = (path: string): PathCrumb[] => {
 export const resolvePathCrumbs = (
   path: string,
   trailPath?: string | null,
+  remoteHost?: string,
 ): PathCrumbsState => {
-  const trimmedPath = path.trim();
-  if (!trimmedPath) {
-    return { crumbs: buildPathCrumbs(path), activeIndex: -1 };
-  }
-  const trimmedTrail = trailPath?.trim();
-  const displayPath = trimmedTrail ? trimmedTrail : path;
-  const trailCrumbs = buildPathCrumbs(displayPath);
-  const currentKey = folderPathKey(trimmedPath);
-  const currentIndex = trailCrumbs.findIndex(
-    (crumb) => folderPathKey(crumb.path) === currentKey,
-  );
+  const build = remoteHost ? (value: string) => remoteCrumbs(value).map(c => ({
+    path: c.path, key: c.path, label: c.path === "/" ? remoteHost : c.name,
+  })) : buildPathCrumbs;
+  const key = remoteHost ? (value: string) => value : folderPathKey;
+  if (!path) return { crumbs: [], activeIndex: -1 };
+  const trailCrumbs = build(trailPath || path);
+  const currentIndex = trailCrumbs.findIndex(crumb => key(crumb.path) === key(path));
   if (currentIndex !== -1) {
     return { crumbs: trailCrumbs, activeIndex: currentIndex };
   }
-  const currentCrumbs = buildPathCrumbs(path);
+  const currentCrumbs = build(path);
   return { crumbs: currentCrumbs, activeIndex: currentCrumbs.length - 1 };
 };
 
 export const getNextTrailPath = (
   path: string,
   trailPath?: string | null,
+  remoteHost?: string,
 ): string | null => {
-  const { crumbs, activeIndex } = resolvePathCrumbs(path, trailPath);
+  const { crumbs, activeIndex } = resolvePathCrumbs(path, trailPath, remoteHost);
   if (activeIndex < 0) return null;
   const next = crumbs[activeIndex + 1];
   return next?.path ?? null;

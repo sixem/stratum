@@ -15,7 +15,8 @@ pub(super) struct TransferStage {
 impl TransferStage {
     pub(super) fn new(destination: &Path) -> Result<Self, String> {
         Ok(Self {
-            directory: StageDirectory::beside(destination, "transfer").map_err(|err| err.to_string())?,
+            directory: StageDirectory::beside(destination, "transfer")
+                .map_err(|err| err.to_string())?,
             partial_copy: None,
             keep_for_recovery: false,
         })

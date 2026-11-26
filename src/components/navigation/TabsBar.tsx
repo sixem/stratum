@@ -1,4 +1,5 @@
 // Tab strip for open folders with drag reordering and pane moves.
+import { FolderNetworkIcon } from "@/components/icons/FolderNetworkIcon";
 import { SquareTerminalIcon } from "@/components/icons/SquareTerminalIcon";
 import type { MouseEvent as ReactMouseEvent, PointerEvent, ReactNode } from "react";
 import {
@@ -21,6 +22,7 @@ import { HorizontalChevronButton, PressButton } from "@/components/primitives";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { formatKeybind, useSettingsStore } from "@/modules";
 import { cancelSplitPicker, canPairFolder, pairWithFolder, useSplitPicker } from "@/modules/terminalSplit";
+import { useRemoteHosts } from "@/modules/remoteHosts";
 import type { LinkedPane } from "@/lib/paneLink";
 
 type TabsBarProps = {
@@ -53,6 +55,7 @@ type TabsBarProps = {
 };
 
 type TabItemProps = {
+  remoteHost?: string;
   choosing: boolean;
   onPick?: () => void;
   tab: Tab;
@@ -76,6 +79,7 @@ type TabItemProps = {
 
 const TabItem = ({
   choosing,
+  remoteHost,
   onPick,
   tab,
   isActive,
@@ -93,13 +97,14 @@ const TabItem = ({
   onContextMenuDown,
 }: TabItemProps) => {
   const location = tab.terminal?.directory.trim() ?? tab.path;
-  const label = tab.terminal && !location ? "PowerShell" : tabLabel(location) || location;
-  const isUntitled = !tab.terminal && tab.path.trim().length === 0;
+  const remote = tab.kind === "remote" ? tab.remote : null;
+  const label = remote ? remote.path.split("/").filter(Boolean).pop() || "/" : tab.terminal && !location ? "PowerShell" : tabLabel(location) || location;
+  const isUntitled = tab.kind === "folder" && tab.path.trim().length === 0;
   const menuTarget: PlaceContextTarget = { name: label, path: tab.path, source: "tab", tabId: tab.id };
   return (
     <div
       className={`tab${isActive ? " is-active" : ""}${isDragging ? " is-dragging" : ""}${isUntitled ? " is-untitled" : ""}`}
-      data-drop-kind={tab.terminal ? undefined : "tab"}
+      data-drop-kind={tab.kind === "folder" ? "tab" : undefined}
       data-drop-path={tab.path}
       data-drop-id={tab.id}
       data-drop-target={isDropTarget ? "true" : "false"}
@@ -108,7 +113,7 @@ const TabItem = ({
       data-split-target={onPick ? "true" : undefined}
       data-context-place="tab"
       data-context-name={label}
-      data-tab-kind={tab.terminal ? "powershell" : isUntitled ? "untitled" : "directory"}
+      data-tab-kind={remote ? "remote" : tab.terminal ? "powershell" : isUntitled ? "untitled" : "directory"}
       onPointerDown={(event) => {
         if (choosing && event.button === 0) {
           event.stopPropagation();
@@ -135,7 +140,7 @@ const TabItem = ({
       }}
       onContextMenu={(event) => event.preventDefault()}
     >
-      <TooltipWrapper text={location}>
+      <TooltipWrapper text={remote ? `${remoteHost ?? "Remote"} · ${remote.path}` : location}>
         <button
           type="button"
           className="tab-main"
@@ -155,6 +160,7 @@ const TabItem = ({
           }}
         >
           {showIndex ? <span className="tab-index">{index + 1}</span> : null}
+          {remote && <FolderNetworkIcon />}
           {(tab.terminal || tab.split) && <SquareTerminalIcon />}
           <span className="tab-title">{label}</span>
         </button>
@@ -204,6 +210,7 @@ export const TabsBar = ({
 }: TabsBarProps) => {
   // Container ref lets the reorder hook measure tab positions.
   const tabsRef = useRef<HTMLDivElement | null>(null);
+  const profiles = useRemoteHosts(state => state.profiles);
   const source = useSplitPicker(state => state.source);
   const sourceStillOpen = source?.pane === pane && tabs.some(tab => tab.id === source.id && tab.terminal?.key === source.key);
   useEffect(() => {
@@ -319,6 +326,7 @@ export const TabsBar = ({
           {tabs.map((tab, index) => (
             <Fragment key={tab.id}>
               <TabItem
+                remoteHost={tab.kind === "remote" ? profiles.find(profile => profile.id === tab.remote.hostId)?.name : undefined}
                 choosing={Boolean(source)}
                 onPick={source && canPairFolder(tab) ? () => pairWithFolder(pane, tab.id, onSelect) : undefined}
                 tab={tab}

@@ -2,6 +2,7 @@
 // by the overlay. The heavy state logic lives in smaller hooks and a pure
 // derived-state builder.
 import { useMemo, useState } from "react";
+import { openRemoteFile } from "@/components/remote/remoteOpen";
 import { useSettingsStore } from "@/modules";
 import type { EntryMeta, ThumbnailLookup } from "@/types";
 import type { RefObject } from "react";
@@ -14,6 +15,7 @@ import { usePreviewVolumeController } from "./usePreviewVolumeController";
 type UseQuickPreviewMediaOptions = {
   open: boolean;
   path: string | null;
+  remote?: { profileId: string; sessionId: number };
   kind: PreviewMediaKind;
   meta?: EntryMeta | null;
   thumbnails: ThumbnailLookup;
@@ -28,6 +30,7 @@ const isTauriEnv = () => "__TAURI_INTERNALS__" in globalThis || "__TAURI__" in g
 export const useQuickPreviewMedia = ({
   open,
   path,
+  remote,
   kind,
   meta,
   thumbnails,
@@ -37,7 +40,7 @@ export const useQuickPreviewMedia = ({
   fitMediaToViewport,
 }: UseQuickPreviewMediaOptions) => {
   const mediaAutoplay = useSettingsStore((state) => state.videoAutoplay);
-  const { src, failed: sourceFailed } = usePreviewSource(open ? path : null);
+  const { src, failed: sourceFailed } = usePreviewSource(open ? path : null, remote);
   const [plainAudioSource, setPlainAudioSource] = useState<string | null>(null);
   const analyseAudio = kind === "audio" && src !== plainAudioSource;
   const playbackKey = analyseAudio ? `${src}#spectrum` : src;
@@ -90,6 +93,7 @@ export const useQuickPreviewMedia = ({
 
   return {
     ...derivedState,
+    canRevealExternal: !remote,
     loadState,
     mediaAutoplay,
     analyseAudio,
@@ -116,7 +120,9 @@ export const useQuickPreviewMedia = ({
       if (analyseAudio) setPlainAudioSource(src);
       else lifecycle.handleMediaError();
     },
-    handleOpenExternal: lifecycle.handleOpenExternal,
+    handleOpenExternal: remote && path
+      ? () => openRemoteFile(remote.profileId, remote.sessionId, path)
+      : lifecycle.handleOpenExternal,
     handleRevealExternal: lifecycle.handleRevealExternal,
   };
 };

@@ -31,6 +31,7 @@ type UseGridThumbRequestsOptions = {
   onRequestThumbs: (requests: ThumbnailRequest[]) => void;
   thumbResetKey?: string;
   thumbnailAppIcons: boolean;
+  lookupExecutableIcons?: boolean;
   thumbnailFolders: boolean;
   thumbnailVideos: boolean;
   thumbnailSvgs: boolean;
@@ -61,6 +62,7 @@ export const useGridThumbRequests = ({
   onRequestThumbs,
   thumbResetKey,
   thumbnailAppIcons,
+  lookupExecutableIcons = true,
   thumbnailFolders,
   thumbnailVideos,
   thumbnailSvgs,
@@ -125,7 +127,7 @@ export const useGridThumbRequests = ({
         size: resolvedSize,
         modified: resolvedModified,
       });
-      if (thumbnailAppIcons && getExtension(item.entry.name) === "exe") {
+      if (thumbnailAppIcons && lookupExecutableIcons && getExtension(item.entry.name) === "exe") {
         nextExecutables.push({
           path,
           size: resolvedSize,
@@ -134,7 +136,7 @@ export const useGridThumbRequests = ({
       }
     }
     return { metaPaths: nextMeta, thumbRequests: nextThumbs, folderPaths: nextFolders, executableFiles: nextExecutables };
-  }, [entryMeta, thumbnailAppIcons, visibleItems]);
+  }, [entryMeta, thumbnailAppIcons, lookupExecutableIcons, visibleItems]);
 
   const gridMetaByPath = useGridDisplayMeta({
     entryMeta,

@@ -1,10 +1,11 @@
 // Request a preview capability for the current selection and release it on exit.
 import { useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { createPreviewGrant, releasePreviewGrant } from "@/api/preview";
 import { buildPreviewUrl } from "@/lib/previewUrl";
 
-export const usePreviewSource = (path: string | null) => {
-  const request = useMemo(() => ({ path }), [path]);
+export const usePreviewSource = (path: string | null, remote?: { profileId: string; sessionId: number }) => {
+  const request = useMemo(() => ({ path, profileId: remote?.profileId, sessionId: remote?.sessionId }), [path, remote?.profileId, remote?.sessionId]);
   const [resolved, setResolved] = useState<{ request: typeof request; src: string } | null>(null);
 
   useEffect(() => {
@@ -23,7 +24,9 @@ export const usePreviewSource = (path: string | null) => {
 
     const authorize = async () => {
       try {
-        const grant = await createPreviewGrant(selectedPath);
+        const grant = request.profileId && request.sessionId !== undefined
+          ? await invoke<string>("create_remote_preview_grant", { path: selectedPath, profileId: request.profileId, sessionId: request.sessionId })
+          : await createPreviewGrant(selectedPath);
         if (!active) {
           void release(grant);
           return;

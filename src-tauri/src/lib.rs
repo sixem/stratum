@@ -21,6 +21,12 @@ pub fn run() {
             }
             tauri::WindowEvent::Destroyed => {
                 window
+                    .state::<services::remotes::open::OpenJobs>()
+                    .cancel_all();
+                window
+                    .state::<services::remotes::Remotes>()
+                    .clear(window.label());
+                window
                     .state::<platform::windows::terminal::Terminals>()
                     .clear(window.label());
                 window
@@ -37,9 +43,17 @@ pub fn run() {
         .plugin(platform::windows::webview_navigation::init())
         .manage(platform::windows::dragdrop::IncomingDrops::default())
         .manage(platform::windows::terminal::Terminals::default())
+        .manage(services::remotes::Remotes::default())
+        .manage(services::remotes::open::OpenJobs::default())
         .manage(platform::windows::menu_host::MenuHost::default())
         .on_page_load(|webview, payload| match payload.event() {
             tauri::webview::PageLoadEvent::Started => {
+                webview
+                    .state::<services::remotes::open::OpenJobs>()
+                    .cancel_all();
+                webview
+                    .state::<services::remotes::Remotes>()
+                    .clear(webview.label());
                 webview
                     .state::<platform::windows::terminal::Terminals>()
                     .clear(webview.label());
@@ -73,6 +87,13 @@ pub fn run() {
                 eprintln!("Failed to install console exit handler: {error}");
             }
 
+            #[cfg(target_os = "windows")]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    services::remotes::open::cleanup(&handle)
+                });
+            }
             let thumbnails = domain::media::thumbs::init(app.handle().clone());
             app.manage(thumbnails);
             app.manage(services::watch::DirWatchHandle::default());
@@ -157,6 +178,17 @@ pub fn run() {
             app::commands::convert_media_entries,
             app::commands::get_file_icons,
             app::commands::get_executable_icons,
+            #[cfg(windows)]
+            services::remotes::remote_connect,
+            #[cfg(windows)]
+            services::remotes::remote_disconnect,
+            #[cfg(windows)]
+            services::remotes::remote_list,
+            #[cfg(windows)]
+            services::remotes::remote_thumbnail,
+            services::remotes::open::remote_start_open,
+            services::remotes::open::remote_cancel_open,
+            services::remotes::create_remote_preview_grant,
             app::commands::get_shell_availability,
             app::commands::open_shell,
             #[cfg(windows)]
@@ -173,7 +205,6 @@ pub fn run() {
             platform::windows::terminal::terminal_resize,
             #[cfg(windows)]
             platform::windows::terminal::terminal_close,
-
             app::commands::is_windows_11,
             app::commands::get_indexing_launch_preferences,
             app::commands::create_preview_grant,

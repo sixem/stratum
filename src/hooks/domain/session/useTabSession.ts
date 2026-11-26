@@ -1,3 +1,5 @@
+import { applyRemoteChange } from "@/modules/remoteTabs";
+import { navigateRemoteTab } from "@/lib/remoteNavigation";
 // Orchestrates tab state, view settings, and navigation flows.
 import { useCallback, useLayoutEffect, useMemo } from "react";
 import { shallow } from "zustand/shallow";
@@ -107,6 +109,14 @@ export const useTabSession = ({
     recentLimit: safeRecentLimit,
     shouldSyncEmptyTab,
   });
+  // A host picker can activate a tab without going through the local navigator.
+  // Cancel any in-flight Windows listing and detach its watcher before paint.
+  const activeRemoteId = activeTab?.kind === "remote" ? activeTab.id : null;
+  useLayoutEffect(() => {
+    if (!activeRemoteId) return;
+    pendingNavigationRef.current = null;
+    clearDir({ silent: true });
+  }, [activeRemoteId, clearDir, pendingNavigationRef]);
   // The folder snapshot can commit one render before its tab is persisted.
   // Keep the submitted target in the address bar across both renders.
   const pendingNavigation = restoringTabs ? null : pendingNavigationRef.current;
@@ -129,7 +139,7 @@ export const useTabSession = ({
 
   const ensureActiveTab = useCallback(
     (path: string) => {
-      if (activeTab && !activeTab.terminal) return activeTab.id;
+      if (activeTab?.kind === "folder") return activeTab.id;
       const next = createSessionTab(path, { sort: sortState, search: activeTab?.terminal ? "" : searchValue });
       const session = useStore.getState();
       session.updateSession({ tabs: [...session.tabs, next], activeTabId: next.id });
@@ -195,7 +205,7 @@ export const useTabSession = ({
   useLayoutEffect(() => registerPaneLinkReceiver(pane, (target, linked) => {
     const session = useStore.getState();
     const tab = session.tabs.find(({ id }) => id === session.activeTabId);
-    if (tab && !tab.terminal && folderPathKey(tab.path) === folderPathKey(currentPath)) {
+    if (tab?.kind === "folder" && folderPathKey(tab.path) === folderPathKey(currentPath)) {
       performNavigation(target, undefined, "navigate", tab.id, { linked });
     }
   }), [currentPath, pane, performNavigation, useStore]);
@@ -305,8 +315,8 @@ export const useTabSession = ({
   );
 
   const getActiveHistoryPaths = useCallback((direction: TabHistoryDirection) => (
-    activeTabId ? getHistoryPaths(activeTabId, direction) : []
-  ), [activeTabId, getHistoryPaths]);
+    activeTab?.kind === "remote" ? activeTab.remoteHistory?.[direction].slice().reverse() ?? [] : activeTabId ? getHistoryPaths(activeTabId, direction) : []
+  ), [activeTab, activeTabId, getHistoryPaths]);
 
   const navigateHistory = useCallback((
     direction: TabHistoryDirection,
@@ -315,6 +325,12 @@ export const useTabSession = ({
   ) => {
     // An open menu belongs to the tab that supplied its history entries.
     if (!activeTabId || useStore.getState().activeTabId !== activeTabId) return;
+    const store = useStore.getState();
+    if (store.tabs.find(tab => tab.id === activeTabId)?.kind === "remote") {
+      store.setTabs(tabs => tabs.map(tab => tab.id === activeTabId && tab.kind === "remote"
+        ? applyRemoteChange(tab, current => navigateRemoteTab(current, direction, offset, expectedPath)) : tab));
+      return;
+    }
     const next = jumpHistory(activeTabId, direction, pathForHistory, offset, expectedPath);
     if (next) performNavigation(next, undefined, "navigate", activeTabId);
   }, [activeTabId, jumpHistory, pathForHistory, performNavigation, useStore]);

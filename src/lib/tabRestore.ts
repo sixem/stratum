@@ -1,8 +1,8 @@
 // Restore tab descriptors while leaving PowerShell processes dormant.
-import type { FolderTab, Tab, TerminalSession, TerminalSplit, TerminalTab } from "@/types/tabs";
+import type { FolderTab, RemoteLocation, RemoteTab, Tab, TerminalSession, TerminalSplit, TerminalTab } from "@/types/tabs";
 
-type SavedTabContent = { kind?: unknown; path?: unknown; terminal?: unknown; split?: unknown };
-type TabContent = Pick<FolderTab, "kind" | "split"> | Pick<TerminalTab, "kind" | "terminal">;
+type SavedTabContent = { kind?: unknown; remote?: unknown; path?: unknown; terminal?: unknown; split?: unknown };
+type TabContent = Pick<FolderTab, "kind" | "split"> | Pick<TerminalTab, "kind" | "terminal"> | Pick<RemoteTab, "kind" | "remote">;
 type TabLayout = { tabs: Tab[]; activeTabId: string | null };
 
 export const TERMINAL_SPLIT_MIN = 20;
@@ -30,7 +30,16 @@ const readSplit = (value: unknown, key: string): TerminalSplit | undefined => {
   };
 };
 
+export function isRemoteLocation(value: unknown): value is RemoteLocation {
+  if (!value || typeof value !== "object" || !("hostId" in value) || !("path" in value)) return false;
+  return typeof value.hostId === "string" && value.hostId.length > 0 &&
+    typeof value.path === "string" && value.path.startsWith("/") && !value.path.includes("\0");
+}
+
 export function readTabContent(saved: SavedTabContent, key: string): TabContent | null {
+  if (saved.kind === "remote") {
+    return isRemoteLocation(saved.remote) ? { kind: "remote", remote: { hostId: saved.remote.hostId, path: saved.remote.path } } : null;
+  }
   // Older sessions inferred a terminal from its descriptor and empty path.
   if (saved.kind === "terminal" || (saved.kind === undefined && saved.path === "" && saved.terminal !== undefined)) {
     const terminal = readTerminal(saved.terminal, key);
@@ -44,7 +53,7 @@ export function selectRestoredFolder(layout: TabLayout): TabLayout {
   const { tabs, activeTabId } = layout;
   if (!tabs.length) return layout;
   const active = tabs.find(tab => tab.id === activeTabId);
-  if (active?.kind === "folder" && !active.split) return layout;
+  if (active?.kind === "remote" || (active?.kind === "folder" && !active.split)) return layout;
 
   const folder = tabs.find(tab => tab.kind === "folder" && !tab.split);
   // With only dormant terminals, show Start without adding a tab to the layout.

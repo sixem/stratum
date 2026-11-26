@@ -4,6 +4,8 @@
 // derivation.
 import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import type { ScrollAlignment } from "@/hooks/perf/scroll";
+import { buildQueryKey } from "@/hooks/domain/filesystem/directoryRequests";
+import { useFilterResultSelection } from "@/hooks/ui/selection/useFilterResultSelection";
 import { useDragOutHandler } from "@/hooks/ui/inputs";
 import { useFileViewInteractions, useFileViewModel } from "@/hooks/ui/view";
 import type { PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
@@ -148,7 +150,7 @@ export const useShellViewInteractions = ({
   const mainLoading = resolvedView.viewLoading;
   useLayoutEffect(() => {
     const root = mainRef.current;
-    if (!root || mainLoading) return;
+    if (!root || mainLoading || tabSession.activeTab?.kind === "remote") return;
     currentMainGallery.current = mainGallery;
     const unregister = registerMainPreview({
       getGallery: () => mainGallery,
@@ -161,7 +163,7 @@ export const useShellViewInteractions = ({
       unregister();
       currentMainGallery.current = null;
     };
-  }, [getSelectionSnapshot, mainGallery, mainLoading, mainRef, registerMainPreview, viewVisit]);
+  }, [getSelectionSnapshot, mainGallery, mainLoading, mainRef, registerMainPreview, tabSession.activeTab?.kind, viewVisit]);
   const closePreviewIfOpen = useCallback(() => {
     if (!previewOpen) return false;
     closePreview();
@@ -209,6 +211,18 @@ export const useShellViewInteractions = ({
     tryStartBatchRename,
     setRenameTarget,
     setRenameValue,
+  });
+
+  const filterSelectionKeys = useFilterResultSelection({
+    viewKey: resolvedView.viewKey,
+    filterKey: !resolvedView.showLander && !resolvedView.viewLoading && tabSession.searchValue.trim()
+      ? buildQueryKey(resolvedView.viewPath, { search: tabSession.searchValue, sort: resolvedView.sortState })
+      : null,
+    displayedQueryKey: fileManager.displayedQueryKey,
+    items: viewModel.items,
+    paneRef: mainRef,
+    setSelection: handleSelectionChange,
+    scrollToIndex: requestScrollToIndexForView,
   });
 
   const handleRenameSelection = useCallback((paths: string[]) => {
@@ -369,6 +383,7 @@ export const useShellViewInteractions = ({
     previewPath,
     previewMeta,
     previewGallery,
+    mainPreview,
     bottomPreview,
     indexedSearch: {
       preview: indexedPreview,
@@ -407,6 +422,7 @@ export const useShellViewInteractions = ({
     handleRenameCommit,
     handleRenameCancel,
     handleSelectionChange,
+    filterSelectionKeys,
     handleClearSelection,
     hasTransientDragUi,
     handleCancelTransientUi,

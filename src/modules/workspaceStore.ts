@@ -208,7 +208,9 @@ const sameTabs = (saved: SessionState, current: SessionState) =>
         Boolean(split.linkDirectory) === Boolean(otherSplit.linkDirectory) &&
         Boolean(split.terminalFirst) === Boolean(otherSplit.terminalFirst) && Boolean(split.stacked) === Boolean(otherSplit.stacked)
       : !split && !otherSplit;
-    return samePath && tab.kind === other.kind && tab.anchored === other.anchored && sameSplit &&
+    const sameRemote = tab.kind !== "remote" || (other.kind === "remote" &&
+      tab.remote.hostId === other.remote.hostId && tab.remote.path === other.remote.path);
+    return sameRemote && samePath && tab.kind === other.kind && tab.anchored === other.anchored && sameSplit &&
       tab.terminal?.directory === other.terminal?.directory &&
       tab.viewMode === other.viewMode && tab.gridSize === other.gridSize &&
       tab.gridAutoColumns === other.gridAutoColumns && tab.search === other.search &&

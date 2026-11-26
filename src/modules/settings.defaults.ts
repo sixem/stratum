@@ -24,6 +24,8 @@ export const DEFAULT_SIDEBAR_HIDDEN_SECTIONS: SidebarSectionId[] = [];
 export const DEFAULT_VIEW_MODE = "thumbs";
 
 export const DEFAULT_SETTINGS: Settings = {
+  remoteThumbnails: false,
+  remoteShowHidden: true,
   autoCheckUpdates: true,
   updateDelayHours: 24,
   sidebarOpen: true,

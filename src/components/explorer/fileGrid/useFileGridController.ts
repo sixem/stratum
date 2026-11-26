@@ -26,7 +26,7 @@ type UseFileGridControllerOptions = {
   selection: FileGridSelectionProps;
   navigation: FileGridNavigationProps;
   contextMenu: FileGridContextMenuProps;
-  creation: FileGridCreationProps;
+  creation?: FileGridCreationProps;
 };
 
 type GridCardDataset = {
@@ -37,7 +37,7 @@ type GridCardDataset = {
 };
 
 const readGridCardDataset = (element: HTMLElement): GridCardDataset => {
-  const path = element.dataset.path ?? null;
+  const path = element.dataset.remotePath ?? element.dataset.path ?? null;
   const rawIndex = element.dataset.index;
   const index = rawIndex == null ? null : Number(rawIndex);
 
@@ -119,7 +119,7 @@ export const useFileGridController = ({
     (event: ReactMouseEvent) => {
       if (!navigation.onOpenDirNewTab) return;
       const dataset = readGridCardDataset(event.currentTarget as HTMLElement);
-      if (!dataset.path || !dataset.isDir) return;
+      if (!dataset.path || (!dataset.isDir && !navigation.canBrowseEntry?.(dataset.path))) return;
       handleMiddleClick(event, () => navigation.onOpenDirNewTab?.(dataset.path!));
     },
     [navigation],
@@ -175,6 +175,7 @@ export const useFileGridController = ({
         onClick: view.onGoUp,
       });
     }
+    if (!creation) return actions;
     actions.push({
       label: "New folder",
       onClick: () =>

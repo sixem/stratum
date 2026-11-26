@@ -2,6 +2,7 @@ import type { Tab } from "@/types/tabs";
 
 // Remap both the folder shown by a tab and the starting folder of its shell.
 export function mapTabLocations(tab: Tab, map: (path: string) => string): Tab {
+  if (tab.kind === "remote") return tab;
   if (tab.kind === "terminal") {
     const directory = map(tab.terminal.directory);
     return directory === tab.terminal.directory ? tab : { ...tab, terminal: { ...tab.terminal, directory } };

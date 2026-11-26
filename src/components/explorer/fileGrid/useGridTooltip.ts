@@ -151,7 +151,7 @@ export const useGridTooltip = ({
       const card = target.closest<HTMLElement>("[data-grid-tooltip=\"true\"]");
       if (!card || !viewport.contains(card)) return null;
       if (card.dataset.tooltipDisabled === "true") return null;
-      const path = card.dataset.path ?? "";
+      const path = card.dataset.remotePath ?? card.dataset.path ?? "";
       if (!path) return null;
       return { card, path };
     };

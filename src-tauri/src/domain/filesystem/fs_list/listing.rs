@@ -281,7 +281,9 @@ mod tests {
             .output()
             .unwrap();
         assert!(result.status.success(), "{result:?}");
-        let entries = list_dir(root.0.to_str().unwrap().into(), None).unwrap().entries;
+        let entries = list_dir(root.0.to_str().unwrap().into(), None)
+            .unwrap()
+            .entries;
         let alias = entries.iter().find(|entry| entry.name == "alias").unwrap();
         assert!(alias.is_dir);
         assert_eq!(

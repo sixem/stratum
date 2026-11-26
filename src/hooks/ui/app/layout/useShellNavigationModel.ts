@@ -83,6 +83,7 @@ export const useShellNavigationModel = ({
       indexedSearchEnabled: settings.indexedSearchEnabled,
       onPathChange: viewState.setPathValue,
       onSearchChange: tabSession.setSearch,
+      filterSelectionKeys: shellView.navigationContext.filterSelectionKeys,
       onSubmit: viewState.handleGo,
       onRefresh: shellView.navigationContext.handleManualRefresh,
       loading: fileManager.loading,

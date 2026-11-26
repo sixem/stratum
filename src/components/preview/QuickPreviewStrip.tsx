@@ -10,10 +10,13 @@ import type { EntryMeta, EntryMetaLookup, FileEntry, RequestScopedThumbnails, Th
 import { formatBytes, formatDate, getFileKind, splitNameExtension } from "@/lib";
 import { useEntryMetaRequest, useThumbnailRequest, useVirtualRange } from "@/hooks";
 import { useThumbnailScope } from "@/hooks/domain/metadata/useThumbnailScope";
+import { useRemoteThumbnails } from "@/components/remote/useRemoteThumbnails";
+import { useSettingsStore } from "@/modules/settings.store";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { FileTypeIcon } from "@/components/icons";
 
 type QuickPreviewStripProps = {
+  remote?: { profileId: string; sessionId: number };
   open: boolean;
   items: FileEntry[];
   activeIndex: number;
@@ -53,6 +56,7 @@ const clamp = (value: number, min: number, max: number) => {
 };
 
 export const QuickPreviewStrip = ({
+  remote,
   open,
   items,
   activeIndex,
@@ -87,6 +91,10 @@ export const QuickPreviewStrip = ({
     () => items.slice(virtual.startIndex, virtual.endIndex),
     [items, virtual.endIndex, virtual.startIndex],
   );
+
+  const remoteThumbnails = useSettingsStore(state => state.remoteThumbnails);
+  const remotePreview = useRemoteThumbnails(remote?.profileId ?? "", remote?.sessionId ?? 0, visibleItems,
+    Boolean(remote && open && remoteThumbnails));
 
   const markStripActive = useCallback(() => {
     if (!open) return;
@@ -305,7 +313,7 @@ export const QuickPreviewStrip = ({
           const opacity =
             isActive || activeIndex < 0 ? 1 : clamp(1 - distance * 0.08, 0.25, 0.9);
           const kind = getFileKind(entry.name);
-          const thumbUrl = kind === "audio" ? undefined : thumbnails.get(entry.path);
+          const thumbUrl = kind === "audio" ? undefined : remote ? remotePreview(entry) || undefined : thumbnails.get(entry.path);
           const thumbReadyKey = thumbUrl ? `${entry.path}|${thumbUrl}` : "";
           const thumbKnownReady = thumbReadyKey
             ? stripThumbReadyCache.has(thumbReadyKey)

@@ -50,14 +50,26 @@ impl Drop for Grant {
 
 pub(super) struct PreviewSource {
     pub(super) content_type: &'static str,
-    pub(super) file: File,
+    pub(super) file: Option<File>,
+    pub(super) remote: Option<RemoteSource>,
     pub(super) read_slot: Arc<Semaphore>,
+}
+
+#[derive(Clone)]
+pub(crate) struct RemoteSource {
+    pub remotes: crate::services::remotes::Remotes,
+    pub profile_id: String,
+    pub session_id: u32,
+    pub path: String,
+    pub size: u64,
+    pub modified: Option<u64>,
 }
 
 impl PreviewSource {
     fn new(file: File, content_type: &'static str) -> Self {
         Self {
-            file,
+            file: Some(file),
+            remote: None,
             content_type,
             read_slot: Arc::new(Semaphore::new(1)),
         }
@@ -89,9 +101,6 @@ impl PreviewGrants {
         }
         let content_type =
             content_type_for_path(path).ok_or("This file type cannot be previewed.")?;
-        let mut random = [0; TOKEN_BYTES];
-        getrandom::fill(&mut random).map_err(|_| "Could not authorize this preview.")?;
-        let token: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
 
         let file =
             File::open(path).map_err(|error| format!("Could not open preview file: {error}"))?;
@@ -102,6 +111,31 @@ impl PreviewGrants {
             return Err("Preview requires a regular file.".into());
         }
 
+        self.insert(request, PreviewSource::new(file, content_type))
+    }
+
+    pub(crate) fn create_remote(
+        &self,
+        request: PreviewRequest,
+        source: RemoteSource,
+    ) -> Result<String, String> {
+        let content_type = content_type_for_path(Path::new(&source.path))
+            .ok_or("This file type cannot be previewed.")?;
+        self.insert(
+            request,
+            PreviewSource {
+                file: None,
+                remote: Some(source),
+                content_type,
+                read_slot: Arc::new(Semaphore::new(1)),
+            },
+        )
+    }
+
+    fn insert(&self, request: PreviewRequest, source: PreviewSource) -> Result<String, String> {
+        let mut random = [0; TOKEN_BYTES];
+        getrandom::fill(&mut random).map_err(|_| "Could not authorize this preview.")?;
+        let token: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
         let mut registry = self
             .registry
             .lock()
@@ -124,7 +158,7 @@ impl PreviewGrants {
             token.clone(),
             Grant {
                 owner: request.owner,
-                source: Arc::new(PreviewSource::new(file, content_type)),
+                source: Arc::new(source),
                 expires_at: now + GRANT_LIFETIME,
             },
         );

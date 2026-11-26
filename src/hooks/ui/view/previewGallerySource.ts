@@ -3,6 +3,7 @@ import { isPreviewableEntry } from "@/lib/fileKind";
 import type { EntryContextTarget, FileEntry } from "@/types";
 
 export type PreviewGallerySource = {
+  remote?: { profileId: string; sessionId: number };
   items: FileEntry[];
   entryByPath: Map<string, FileEntry>;
   onSelectPath?: (path: string) => void;
@@ -32,5 +33,5 @@ export const scopeGalleryToSelection = (
 
   // Keep the displayed order and leave the pane selection intact as the gallery advances.
   const items = gallery.items.filter((entry) => selected.has(entry.path) && isPreviewableEntry(entry, includeAudio));
-  return { items, entryByPath: new Map(items.map((entry) => [entry.path, entry])) };
+  return { remote: gallery.remote, items, entryByPath: new Map(items.map((entry) => [entry.path, entry])) };
 };

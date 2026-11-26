@@ -39,7 +39,7 @@ pub(super) fn render_thumbnail(job: &ThumbJob) -> Result<ThumbRenderOutput, Stri
     })
 }
 
-fn publish_thumbnail(
+pub(super) fn publish_thumbnail(
     path: &Path,
     encode: impl FnOnce(&mut BufWriter<fs::File>) -> io::Result<()>,
 ) -> io::Result<u64> {

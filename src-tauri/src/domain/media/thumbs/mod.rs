@@ -65,6 +65,7 @@ pub struct ThumbnailState {
     trim_state: Mutex<CacheTrimState>,
     // Serialize trimming and clearing without holding the growth accounting lock during I/O.
     cache_maintenance: Mutex<()>,
+    cache_generation: std::sync::atomic::AtomicU64,
 }
 
 pub type ThumbnailHandle = Arc<ThumbnailState>;
@@ -92,6 +93,7 @@ pub fn init(app_handle: AppHandle) -> ThumbnailHandle {
             pending_growth_bytes: 0,
         }),
         cache_maintenance: Mutex::new(()),
+        cache_generation: std::sync::atomic::AtomicU64::new(0),
     });
 
     // Leave room for UI threads by keeping the worker pool intentionally small.
@@ -197,4 +199,60 @@ fn worker_loop(state: ThumbnailHandle) {
             cache::maybe_trim_cache(state.as_ref(), job.options.cache_mb, output.added_bytes);
         }
     }
+}
+
+// Remote previews share the same cache directory, size accounting and clear action.
+pub(crate) fn remote_cached(state: &ThumbnailState, identity: &str) -> Option<Vec<u8>> {
+    let path = remote_cache_path(state, identity);
+    let _guard = state.cache_maintenance.lock().ok()?;
+    let bytes = fs::read(path).ok()?;
+    if bytes.len() > 2 * 1024 * 1024 {
+        return None;
+    }
+    Some(bytes)
+}
+
+pub(crate) fn remote_generation(state: &ThumbnailState) -> u64 {
+    state
+        .cache_generation
+        .load(std::sync::atomic::Ordering::Acquire)
+}
+
+pub(crate) fn store_remote(
+    state: &ThumbnailState,
+    identity: &str,
+    bytes: &[u8],
+    limit_mb: u32,
+    generation: u64,
+) {
+    use std::io::Write;
+    let path = remote_cache_path(state, identity);
+    let added = {
+        let Ok(_guard) = state.cache_maintenance.lock() else {
+            return;
+        };
+        if remote_generation(state) != generation || cache::has_thumbnail(&path) {
+            return;
+        }
+        if let Some(parent) = path.parent() {
+            if fs::create_dir_all(parent).is_err() {
+                return;
+            }
+        }
+        render::publish_thumbnail(&path, |file| file.write_all(bytes)).unwrap_or(0)
+    };
+    if added > 0 {
+        cache::maybe_trim_cache(state, limit_mb, added);
+    }
+}
+
+fn remote_cache_path(state: &ThumbnailState, identity: &str) -> PathBuf {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    identity.hash(&mut hasher);
+    state
+        .cache_dir
+        .join("remote")
+        .join(format!("{:016x}.webp", hasher.finish()))
 }

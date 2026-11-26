@@ -8,11 +8,10 @@ use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::AsRawHandle;
 use std::path::Path;
 use windows_sys::Win32::Storage::FileSystem::{
-    FileBasicInfo, FileDispositionInfo,
-    GetFileInformationByHandleEx, SetFileInformationByHandle, DELETE,
-    FILE_BASIC_INFO, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
-    FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_READ_DATA,
-    FILE_SHARE_DELETE, FILE_SHARE_READ,
+    FileBasicInfo, FileDispositionInfo, GetFileInformationByHandleEx, SetFileInformationByHandle,
+    DELETE, FILE_BASIC_INFO, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_READ_DATA, FILE_SHARE_DELETE,
+    FILE_SHARE_READ,
 };
 
 pub(super) struct SourceFile(File);

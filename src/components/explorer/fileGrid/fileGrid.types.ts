@@ -17,6 +17,7 @@ export type FileGridEntryContextTarget = {
 };
 
 export type FileGridViewProps = {
+  remote?: boolean;
   currentPath: string;
   entryByPath: Map<string, FileEntry>;
   items: EntryItem[];
@@ -44,6 +45,7 @@ export type FileGridSelectionProps = {
 export type FileGridNavigationProps = {
   onOpenDir: (path: string) => void;
   onOpenDirNewTab?: (path: string) => void;
+  canBrowseEntry?: (path: string) => boolean;
   onOpenEntry: (path: string) => void;
 };
 
@@ -61,6 +63,8 @@ export type FileGridMetadataProps = {
 };
 
 export type FileGridThumbProps = {
+  onVisibleEntries?: (entries: FileEntry[]) => void;
+  externalPreview?: (entry: FileEntry) => string | undefined;
   thumbnailsEnabled: boolean;
   thumbnails: ThumbnailLookup;
   onRequestThumbs: RequestScopedThumbnails;
@@ -129,5 +133,5 @@ export type FileGridProps = {
   contextMenu: FileGridContextMenuProps;
   preview: FileGridPreviewProps;
   dragDrop: FileGridDragDropProps;
-  creation: FileGridCreationProps;
+  creation?: FileGridCreationProps;
 };

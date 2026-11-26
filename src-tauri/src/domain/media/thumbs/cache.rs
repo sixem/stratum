@@ -31,6 +31,22 @@ pub(super) fn has_thumbnail(path: &Path) -> bool {
 }
 
 pub(super) fn maybe_trim_cache(state: &ThumbnailState, limit_mb: u32, added_bytes: u64) {
+    maybe_trim_cache_at(
+        &state.cache_dir,
+        &state.trim_state,
+        &state.cache_maintenance,
+        limit_mb,
+        added_bytes,
+    );
+}
+
+fn maybe_trim_cache_at(
+    cache_dir: &Path,
+    trim: &std::sync::Mutex<CacheTrimState>,
+    maintenance_lock: &std::sync::Mutex<()>,
+    limit_mb: u32,
+    added_bytes: u64,
+) {
     if limit_mb == 0 {
         return;
     }
@@ -41,7 +57,7 @@ pub(super) fn maybe_trim_cache(state: &ThumbnailState, limit_mb: u32, added_byte
 
     let now = SystemTime::now();
     let (_maintenance, pending_for_scan) = {
-        let mut trim_state = state.trim_state.lock().expect("thumb trim lock");
+        let mut trim_state = trim.lock().expect("thumb trim lock");
 
         if added_bytes > 0 {
             trim_state.pending_growth_bytes =
@@ -80,16 +96,16 @@ pub(super) fn maybe_trim_cache(state: &ThumbnailState, limit_mb: u32, added_byte
         }
 
         // Other renders keep their growth recorded and can continue without scanning.
-        let Ok(maintenance) = state.cache_maintenance.try_lock() else {
+        let Ok(maintenance) = maintenance_lock.try_lock() else {
             return;
         };
         trim_state.last_trim = Some(now);
         (maintenance, pending_growth)
     };
 
-    let (mut entries, mut total) = collect_cache_entries(&state.cache_dir);
+    let (mut entries, mut total) = collect_cache_entries(cache_dir);
     if total <= limit_bytes {
-        let mut trim_state = state.trim_state.lock().expect("thumb trim lock");
+        let mut trim_state = trim.lock().expect("thumb trim lock");
         trim_state.approx_total_bytes = Some(total);
         trim_state.pending_growth_bytes = trim_state
             .pending_growth_bytes
@@ -107,7 +123,7 @@ pub(super) fn maybe_trim_cache(state: &ThumbnailState, limit_mb: u32, added_byte
         }
     }
 
-    let mut trim_state = state.trim_state.lock().expect("thumb trim lock");
+    let mut trim_state = trim.lock().expect("thumb trim lock");
     trim_state.approx_total_bytes = Some(total);
     trim_state.pending_growth_bytes = trim_state
         .pending_growth_bytes
@@ -123,6 +139,9 @@ pub(super) fn clear_cache(state: &ThumbnailState) -> Result<(), String> {
         .cache_maintenance
         .lock()
         .expect("thumb maintenance lock");
+    state
+        .cache_generation
+        .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     if state.cache_dir.exists() {
         fs::remove_dir_all(&state.cache_dir).map_err(|err| err.to_string())?;
     }
@@ -187,5 +206,36 @@ fn visit_cache_files(cache_dir: &Path, mut visit: impl FnMut(fs::DirEntry, fs::M
                 visit(entry, metadata);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod remote_cache_tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    #[test]
+    fn trim_counts_nested_remote_thumbnails_and_honors_limit() {
+        let mut random = [0; 8];
+        getrandom::fill(&mut random).unwrap();
+        let dir = std::env::temp_dir().join(format!(
+            "stratum-cache-test-{:016x}",
+            u64::from_le_bytes(random)
+        ));
+        fs::create_dir_all(dir.join("remote")).unwrap();
+        fs::write(dir.join("local.webp"), vec![1; 700_000]).unwrap();
+        fs::write(dir.join("remote").join("one.webp"), vec![2; 700_000]).unwrap();
+        let state = Mutex::new(CacheTrimState {
+            last_trim: None,
+            approx_total_bytes: Some(0),
+            pending_growth_bytes: 0,
+        });
+        let maintenance = Mutex::new(());
+        maybe_trim_cache_at(&dir, &state, &maintenance, 1, 1_400_000);
+        let (_, total) = collect_cache_entries(&dir);
+        assert!(total <= 1024 * 1024);
+        reset_trim_state(&state);
+        assert_eq!(state.lock().unwrap().approx_total_bytes, Some(0));
+        fs::remove_dir_all(dir).unwrap();
     }
 }

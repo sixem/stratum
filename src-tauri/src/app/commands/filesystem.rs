@@ -513,8 +513,8 @@ pub async fn rename_entry(
     let renamed = tauri::async_runtime::spawn_blocking(move || {
         fs::rename_entry(path, new_name, expected_identity)
     })
-        .await
-        .map_err(|err| err.to_string())??;
+    .await
+    .map_err(|err| err.to_string())??;
     queue_reconcile_after_move_paths(
         indexed_search,
         vec![reconcile_source],

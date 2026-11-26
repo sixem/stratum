@@ -15,6 +15,7 @@ import { RenameField } from "@/components/primitives/RenameField";
 import { useOverflowEllipsis } from "../fileView/nameEllipsis";
 
 type EntryRowProps = {
+  remote?: boolean;
   entry: FileEntry;
   index: number;
   tooltipText: string;
@@ -46,6 +47,7 @@ type EntryRowProps = {
 };
 
 export const EntryRow = memo(({
+  remote,
   entry,
   index,
   tooltipText,
@@ -165,7 +167,8 @@ export const EntryRow = memo(({
           isTransferring ? " is-transferring" : ""
         }`}
         data-selectable={isSelectable ? "true" : "false"}
-        data-path={entry.path}
+        data-path={remote ? undefined : entry.path}
+        data-remote-path={remote ? entry.path : undefined}
         data-cut={isCut || undefined}
         data-name={entry.name}
         data-index={index}
@@ -197,12 +200,13 @@ export const EntryRow = memo(({
     <TooltipWrapper text={tooltipText} delayMs={FILE_TOOLTIP_DELAY_MS}>
       <button
         type="button"
-        data-drag-source={isInteractive}
+        data-drag-source={remote ? undefined : isInteractive}
         className={`row${entry.isDir ? " is-dir" : ""}${selected ? " is-selected" : ""}${
           isRemoved ? " is-removed" : ""
         }${isDeleting ? " is-deleting" : ""}${isTransferring ? " is-transferring" : ""}`}
         data-selectable={isSelectable ? "true" : "false"}
-        data-path={entry.path}
+        data-path={remote ? undefined : entry.path}
+        data-remote-path={remote ? entry.path : undefined}
         data-cut={isCut || undefined}
         data-name={entry.name}
         data-index={index}

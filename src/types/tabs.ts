@@ -28,7 +28,17 @@ type TabBase = {
 
 export type FolderTab = TabBase & { kind: "folder"; split?: TerminalSplit; terminal?: never };
 export type TerminalTab = TabBase & { kind: "terminal"; terminal: TerminalSession; split?: never };
-export type Tab = FolderTab | TerminalTab;
+// Remote POSIX paths never enter the local path, watcher or transfer pipelines.
+export type RemoteLocation = { hostId: string; path: string };
+export type RemoteTab = TabBase & {
+  kind: "remote";
+  remote: RemoteLocation;
+  refreshVersion?: number;
+  remoteHistory?: TabHistory;
+  split?: never;
+  terminal?: never;
+};
+export type Tab = FolderTab | TerminalTab | RemoteTab;
 
 export type TabHistory = {
   back: string[];

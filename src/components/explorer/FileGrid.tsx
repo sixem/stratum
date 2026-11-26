@@ -1,5 +1,5 @@
 // Virtualized grid view for file entries.
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { shallow } from "zustand/shallow";
 import { useEntryPresence, useScrollToIndex } from "@/hooks";
 import { useThumbnailScope } from "@/hooks/domain/metadata/useThumbnailScope";
@@ -147,6 +147,11 @@ const FileGrid = ({
     applyScrollRequest,
   });
 
+  const onVisibleEntries = thumbs.onVisibleEntries;
+  useEffect(() => {
+    if (onVisibleEntries) onVisibleEntries(visibleItems.flatMap(item => item.type === "entry" ? [item.entry] : []));
+  }, [onVisibleEntries, visibleItems]);
+
   const requestThumbs = useThumbnailScope(
     grid.pane, view.viewKey, thumbs.thumbnailsEnabled, thumbs.onRequestThumbs,
   );
@@ -169,6 +174,7 @@ const FileGrid = ({
     onRequestThumbs: requestThumbs,
     thumbResetKey: thumbs.thumbResetKey,
     thumbnailAppIcons: thumbs.thumbnailAppIcons,
+    lookupExecutableIcons: !view.remote,
     thumbnailFolders: thumbs.thumbnailFolders,
     thumbnailVideos: thumbs.thumbnailVideos,
     thumbnailSvgs: thumbs.thumbnailSvgs,
@@ -237,7 +243,7 @@ const FileGrid = ({
               const isDropTarget = dragDrop.dropTargetPath === item.path;
               const baseIndex = resolvedIndexMap.get(item.path) ?? index;
               return (
-                <ParentCard
+                <ParentCard remote={view.remote}
                   key={item.key}
                   path={item.path}
                   index={baseIndex}
@@ -256,7 +262,7 @@ const FileGrid = ({
             const itemMeta = gridMetaByPath.get(item.entry.path);
             const baseIndex = resolvedIndexMap.get(item.entry.path) ?? index;
             const folderThumb = item.entry.isDir ? folderThumbSource.get(item.entry.path) : undefined;
-            const thumbUrl = thumbs.thumbnailsEnabled
+            const thumbUrl = thumbs.externalPreview ? thumbs.externalPreview(item.entry) : thumbs.thumbnailsEnabled
               ? item.entry.isDir
                 ? folderThumb?.url
                 : thumbSource.get(item.entry.path)
@@ -267,7 +273,7 @@ const FileGrid = ({
                 : undefined;
 
             return (
-              <EntryCard
+              <EntryCard remote={view.remote}
                 key={item.key}
                 entry={item.entry}
                 index={baseIndex}
@@ -278,7 +284,7 @@ const FileGrid = ({
                 thumbPath={item.entry.isDir ? folderThumb?.path : item.entry.path}
                 onThumbError={handleThumbError}
                 appIconUrl={appIconUrl}
-                executableIconUrl={executableIcons.get(item.entry.path)}
+                executableIconUrl={view.remote ? null : executableIcons.get(item.entry.path)}
                 appIconsEnabled={thumbs.thumbnailAppIcons}
                 disableTooltip={interactionActive}
                 showSize={grid.gridShowSize}
@@ -287,7 +293,7 @@ const FileGrid = ({
                 hideExtension={grid.gridNameHideExtension}
                 selected={selection.selectedPaths.has(item.entry.path)}
                 isDeleting={isDeletePending(item.entry.path)}
-                isCut={isCut(item.entry.path)}
+                isCut={!view.remote && isCut(item.entry.path)}
                 isTransferring={isTransferPending(item.entry.path)}
                 dropTarget={isDropTarget}
                 isRenaming={rename.renameTargetPath === item.entry.path}

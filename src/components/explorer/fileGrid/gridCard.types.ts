@@ -25,6 +25,7 @@ export type ThumbnailPreviewProps = {
 };
 
 export type ParentCardProps = {
+  remote?: boolean;
   path: string;
   index: number;
   dropTarget: boolean;
@@ -37,6 +38,7 @@ export type ParentCardProps = {
 };
 
 export type EntryCardProps = {
+  remote?: boolean;
   entry: FileEntry;
   index: number;
   fileKind: FileKind;

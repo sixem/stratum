@@ -20,6 +20,8 @@ import {
 import { PaneDivider } from "../explorer/bottomPane/PaneDivider";
 import type { PaneActions, PaneDrop, PaneSummary } from "../explorer/bottomPane/BottomPane";
 
+const RemoteTabPane = lazy(() => import("../remote/RemoteTabPane").then(m => ({ default: m.RemoteTabPane })));
+
 const BottomPane = lazy(() => import("../explorer/bottomPane/BottomPane").then(module => ({ default: module.BottomPane })));
 
 type AppContentProps = {
@@ -38,6 +40,7 @@ type AppContentProps = {
   fileViewProps: ComponentProps<typeof FileView>;
   bottomMenu: BottomMenuBindings;
   paneCommandsBlocked: boolean;
+  mainPreview: PanePreviewBindings;
   bottomPreview: PanePreviewBindings;
   onContextMenu?: (event: ReactPointerEvent) => void;
   onContextMenuDown?: (event: ReactPointerEvent) => void;
@@ -59,12 +62,14 @@ export const AppContent = ({
   fileViewProps,
   bottomMenu,
   paneCommandsBlocked,
+  mainPreview,
   bottomPreview,
   onContextMenu,
   onContextMenuDown,
 }: AppContentProps) => {
   const activeTab = useSessionStore(state => state.tabs.find(tab => tab.id === activeTabId));
   const terminal = activeTab?.terminal;
+  const remote = activeTab?.kind === "remote" ? activeTab : null;
   const split = useBottomPaneStore(state => state.open);
   const bottomHeight = useBottomPaneStore(state => `${state.height}${state.heightUnit}`);
   const bottomActive = useBottomPaneStore(state => state.open && state.active);
@@ -93,11 +98,11 @@ export const AppContent = ({
           "--main-pane-min-height": `${MIN_MAIN_PANE_HEIGHT}px`,
         } as CSSProperties}
         onPointerDown={(event) => {
-          if (event.button !== 2) return;
+          if (event.button !== 2 || (event.target as Element).closest("[data-remote-pane]")) return;
           onContextMenuDown?.(event);
         }}
         onPointerUp={(event) => {
-          if (event.button !== 2) return;
+          if (event.button !== 2 || (event.target as Element).closest("[data-remote-pane]")) return;
           onContextMenu?.(event);
         }}
         onContextMenu={(event) => event.preventDefault()}
@@ -114,19 +119,21 @@ export const AppContent = ({
         ) : null}
         <div className="pane-stack" data-split={split}>
         <TerminalSplitView pane="main" tab={activeTab} filePaneRef={mainRef} onSelectTab={onSelectTab} commandsBlocked={paneCommandsBlocked}>
-        <main className="main upper-files" data-file-pane="main" data-pane-path={terminal ? "" : upperPath}
-          data-start-view={fileViewProps.showLander || undefined}
+        <main className="main upper-files" data-file-pane="main" data-pane-path={terminal || remote ? "" : upperPath} data-remote-pane={remote ? true : undefined}
+          data-start-view={(!remote && fileViewProps.showLander) || undefined}
           data-drop-background={fileDrop.backgroundHovered && fileDrop.hoveredPane === "main" || undefined}
           onPointerDownCapture={event => {
             setBottomPaneActive(false);
-            if (!terminal) focusFilePaneBackground(event);
+            if (!terminal && !remote) focusFilePaneBackground(event);
           }}
           onFocusCapture={() => setBottomPaneActive(false)} ref={mainRef} tabIndex={-1} aria-busy={folderBusy}>
-          {!terminal && folderBusy && (
+          {!terminal && !remote && folderBusy && (
             <div className="folder-load-progress" role="progressbar" aria-label="Loading folder" />
           )}
           <PerfProfiler id="file-view">
-            {terminal ? <TerminalPane terminal={terminal} /> : folderFailed ? (
+            {remote ? <Suspense fallback={<div className="pane-loading">Opening remote folder…</div>}>
+              <RemoteTabPane key={remote.id} tab={remote} pane="main" preview={mainPreview} onPreviewRelease={fileViewProps.onEntryPreviewRelease} />
+            </Suspense> : terminal ? <TerminalPane terminal={terminal} /> : folderFailed ? (
               <div className="pane-loading">
                 <button className="btn ghost" type="button" onClick={onRetryFolder}>Retry opening folder</button>
               </div>

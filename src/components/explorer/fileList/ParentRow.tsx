@@ -8,6 +8,7 @@ import { FILE_TOOLTIP_DELAY_MS } from "@/constants";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
 
 type ParentRowProps = {
+  remote?: boolean;
   path: string;
   index: number;
   selected: boolean;
@@ -22,6 +23,7 @@ type ParentRowProps = {
 };
 
 export const ParentRow = memo(({
+  remote,
   path,
   index,
   selected,
@@ -71,7 +73,8 @@ export const ParentRow = memo(({
         type="button"
         className={`row is-dir is-parent${selected ? " is-selected" : ""}`}
         data-selectable="true"
-        data-path={path}
+        data-path={remote ? undefined : path}
+        data-remote-path={remote ? path : undefined}
         data-index={index}
         data-is-dir="true"
         data-drop-target={dropTarget ? "true" : "false"}

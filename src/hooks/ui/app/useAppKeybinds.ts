@@ -107,13 +107,14 @@ export const useAppKeybinds = ({
     [modalOpen, contextMenuOpen],
   );
 
+  const remote = tabs.some(tab => tab.id === activeTabId && tab.kind === "remote");
   const canHandleViewKeybind = useCallback(() => {
     if (!canHandleGlobalKeybind()) return false;
-    if (blockReveal || useBottomPaneStore.getState().active) return false;
+    if (remote || blockReveal || useBottomPaneStore.getState().active) return false;
     const active = document.activeElement;
     if (isEditableElement(active)) return false;
     return true;
-  }, [blockReveal, canHandleGlobalKeybind]);
+  }, [remote, blockReveal, canHandleGlobalKeybind]);
 
   const canHandlePaneCommand = useCallback((event: KeyboardEvent) =>
     !event.isComposing && canHandleViewKeybind() && getFileCommandFocus(mainRef.current) === "view",
@@ -282,9 +283,10 @@ export const useAppKeybinds = ({
 
   const handleRefreshKeybind = useCallback((_event: KeyboardEvent) => {
     if (!canHandleGlobalKeybind()) return false;
+    if (remote) return false;
     onRefresh();
     return true;
-  }, [canHandleGlobalKeybind, onRefresh]);
+  }, [canHandleGlobalKeybind, onRefresh, remote]);
 
   const handleOpenIndexedSearchKeybind = useCallback((_event: KeyboardEvent) => {
     if (!indexedSearchEnabled) {

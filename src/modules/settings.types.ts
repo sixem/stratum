@@ -23,6 +23,8 @@ export type SidebarSectionId = "places" | "recent" | "tips";
 export type StartupMode = "resume" | "workspace" | "start";
 
 export type Settings = {
+  remoteThumbnails: boolean;
+  remoteShowHidden: boolean;
   autoCheckUpdates: boolean;
   updateDelayHours: 0 | 24 | 72 | 168;
   sidebarOpen: boolean;

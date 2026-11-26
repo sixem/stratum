@@ -13,6 +13,7 @@ import type { PlaceContextTarget } from "@/types";
 
 type PathCrumbsBarProps = {
   path: string;
+  remoteHost?: string;
   pane?: "main" | "bottom";
   reserveSpace?: boolean;
   // The deepest path visited within the current branch, used to show future crumbs.
@@ -27,6 +28,7 @@ type PathCrumbsBarProps = {
 export const PathCrumbsBar = ({
   path,
   pane = "main",
+  remoteHost,
   reserveSpace = false,
   trailPath,
   dropTargetPath,
@@ -36,8 +38,8 @@ export const PathCrumbsBar = ({
   onCrumbContextMenuDown,
 }: PathCrumbsBarProps) => {
   const { crumbs, activeIndex } = useMemo(
-    () => resolvePathCrumbs(path, trailPath),
-    [path, trailPath],
+    () => resolvePathCrumbs(path, trailPath, remoteHost),
+    [path, trailPath, remoteHost],
   );
   const trimmedPath = path.trim();
   const crumbsRef = useRef<HTMLDivElement>(null);
@@ -61,10 +63,10 @@ export const PathCrumbsBar = ({
       role="navigation"
       aria-label={pane === "bottom" ? "Bottom pane path" : "Current path"}
       data-drop-pane={pane}
-      data-is-dir="true"
-      data-path={path}
+      data-is-dir={remoteHost ? undefined : "true"}
+      data-path={remoteHost ? undefined : path}
       data-drop-target={isBarDropTarget ? "true" : "false"}
-      {...locationDrag}
+      {...(remoteHost ? {} : locationDrag)}
     >
       <div className="crumbs" ref={crumbsRef}>
         {crumbs.map((crumb, index) => (
@@ -72,11 +74,11 @@ export const PathCrumbsBar = ({
             <PressButton
               type="button"
               className="crumb"
-              data-context-place="crumb"
+              data-context-place={remoteHost ? undefined : "crumb"}
               data-context-name={crumb.label}
-              data-is-dir="true"
-              data-path={crumb.path}
-              data-location-path={crumb.path}
+              data-is-dir={remoteHost ? undefined : "true"}
+              data-path={remoteHost ? undefined : crumb.path}
+              data-location-path={remoteHost ? undefined : crumb.path}
               data-drop-target={dropTargetPath === crumb.path ? "true" : "false"}
               data-future={
                 activeIndex >= 0 && index > activeIndex ? "true" : "false"
@@ -106,12 +108,12 @@ export const PathCrumbsBar = ({
               {crumb.label}
             </PressButton>
             {index < crumbs.length - 1 ? (
-              <span className="crumb-sep">{"\\"}</span>
+              <span className="crumb-sep">{remoteHost ? "/" : "\\"}</span>
             ) : null}
           </Fragment>
         ))}
       </div>
-      <TerminalSplitControls pane={pane} />
+      {!remoteHost && <TerminalSplitControls pane={pane} />}
     </div>
   );
 };

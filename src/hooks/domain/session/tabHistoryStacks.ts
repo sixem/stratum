@@ -15,7 +15,7 @@ export const jumpThroughTabHistory = (
   if (!destination || (expectedPath !== undefined && destination !== expectedPath)) return null;
 
   const to = direction === "back" ? history.forward : history.back;
-  const current = currentPath.trim();
+  const current = currentPath;
   if (current) to.push(current);
   for (let i = from.length - 1; i > index; i -= 1) {
     to.push(from[i]);

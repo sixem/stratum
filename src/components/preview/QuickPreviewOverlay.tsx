@@ -25,6 +25,7 @@ const readPreviewStripOpen = () => {
 export type QuickPreviewOverlayProps = {
   open: boolean;
   path: string | null;
+  remote?: { profileId: string; sessionId: number };
   meta?: EntryMeta | null;
   items: FileEntry[];
   entryMeta: EntryMetaLookup;
@@ -46,6 +47,7 @@ type QuickPreviewOverlayContentProps = Omit<QuickPreviewOverlayProps, "path"> & 
 const QuickPreviewOverlayContent = ({
   open,
   path,
+  remote,
   meta,
   items,
   entryMeta,
@@ -104,6 +106,7 @@ const QuickPreviewOverlayContent = ({
   const preview = useQuickPreviewMedia({
     open,
     path,
+    remote,
     kind,
     meta,
     thumbnails,
@@ -229,6 +232,7 @@ const QuickPreviewOverlayContent = ({
             name={preview.name}
             typeLabel={preview.typeLabel}
             canUseExternalActions={preview.canUseExternalActions}
+            canRevealExternal={preview.canRevealExternal}
             externalActionError={preview.externalActionError}
             onOpenExternal={preview.handleOpenExternal}
             onRevealExternal={preview.handleRevealExternal}
@@ -238,6 +242,7 @@ const QuickPreviewOverlayContent = ({
       <div className="quick-preview-strip-panel" id={stripId} hidden={!stripOpen}>
         {stripOpen ? (
           <QuickPreviewStrip
+            remote={remote}
             open={open}
             items={previewItems}
             activeIndex={activePreviewIndex}

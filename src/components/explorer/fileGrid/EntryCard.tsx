@@ -12,6 +12,7 @@ import type { EntryCardProps } from "./gridCard.types";
 import { ThumbnailIcon } from "./ThumbnailIcon";
 
 export const EntryCard = memo(({
+  remote,
   entry,
   index,
   fileKind,
@@ -136,13 +137,14 @@ export const EntryCard = memo(({
   return (
     <div
       className={cardClass}
-      data-drag-source={isInteractive}
+      data-drag-source={remote ? undefined : isInteractive}
       role={isInteractive ? "button" : undefined}
       tabIndex={isInteractive ? 0 : -1}
       data-selectable={!isRemoved && !isBusy ? "true" : "false"}
       data-grid-tooltip={entry.isDir ? "false" : "true"}
       data-tooltip-disabled={tooltipDisabled ? "true" : "false"}
-      data-path={entry.path}
+      data-path={remote ? undefined : entry.path}
+        data-remote-path={remote ? entry.path : undefined}
       data-cut={isCut || undefined}
       data-name={entry.name}
       data-index={index}

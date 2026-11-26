@@ -170,7 +170,7 @@ export const useSelectionDrag = (
       ) {
         const items: CachedItem[] = [];
         element.querySelectorAll<HTMLElement>(itemSelector).forEach((node) => {
-          const path = node.dataset.path;
+          const path = node.dataset.remotePath ?? node.dataset.path;
           if (!path) return;
           items.push({ path, rect: node.getBoundingClientRect() });
         });

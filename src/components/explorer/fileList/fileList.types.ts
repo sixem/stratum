@@ -17,6 +17,7 @@ export type FileListEntryContextTarget = {
 };
 
 export type FileListViewProps = {
+  remote?: boolean;
   currentPath: string;
   entryByPath: Map<string, FileEntry>;
   items: EntryItem[];
@@ -44,6 +45,7 @@ export type FileListSelectionProps = {
 export type FileListNavigationProps = {
   onOpenDir: (path: string) => void;
   onOpenDirNewTab?: (path: string) => void;
+  canBrowseEntry?: (path: string) => boolean;
   onOpenEntry: (path: string) => void;
 };
 
@@ -108,5 +110,5 @@ export type FileListProps = {
   contextMenu: FileListContextMenuProps;
   preview: FileListPreviewProps;
   dragDrop: FileListDragDropProps;
-  creation: FileListCreationProps;
+  creation?: FileListCreationProps;
 };

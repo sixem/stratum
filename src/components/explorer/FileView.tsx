@@ -1,5 +1,5 @@
 // Switches between list and grid file views.
-import { Suspense, lazy, useCallback, useEffect, useRef } from "react";
+import { Suspense, useCallback, useEffect, useRef } from "react";
 import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
@@ -23,10 +23,7 @@ import { LoadingIndicator } from "@/components/primitives/LoadingIndicator";
 import { PerfProfiler } from "@/components/diagnostics/PerfProfiler";
 import { StartLander } from "./StartLander";
 
-const loadFileList = () => import("./FileList");
-const loadFileGrid = () => import("./FileGrid");
-const FileList = lazy(loadFileList);
-const FileGrid = lazy(loadFileGrid);
+import { FileList, FileGrid, loadFileList, loadFileGrid } from "./folderRenderers";
 
 type FileViewProps = {
   pane?: "main" | "bottom";

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import loader from "@/assets/icons/loaders/ring.svg";
 import { hideBottomPane, showBottomPane, useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { PATHBAR_TOOLTIP_DELAY_MS } from "@/constants";
+import { RemoteHostPicker } from "@/components/remotes/RemoteHostPicker";
 import { TransferStatusButton } from "@/components/transfer/TransferStatusButton";
 import { ToolbarIconButton } from "@/components/primitives/ToolbarIconButton";
 import { GridIcon, ListIcon, RecycleBinIcon, SettingsIcon } from "@/components/icons";
@@ -60,6 +61,7 @@ export const PathBarActions = ({
 
   return (
     <div className="pathbar-actions">
+      <RemoteHostPicker />
       <TransferStatusButton onOpenDestination={onOpenJobDestination} />
       <div className="view-switch">
         <ToolbarIconButton

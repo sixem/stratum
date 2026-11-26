@@ -1,3 +1,4 @@
+import { resolveCrumbTrailPath } from "@/lib/crumbTrail";
 // Persistent session state for tabs and view settings.
 import { createWithEqualityFn } from "zustand/traditional";
 import type { SortDir, SortKey, SortState, Tab, ViewMode } from "@/types";
@@ -87,6 +88,7 @@ export const prepareSessionRestore = (layout: SessionState, gridSize: TabGridSiz
       const id = createTab(tab.path).id;
       const copy = { id, sort: { ...tab.sort } };
       if (tab.kind === "terminal") return { ...tab, ...copy, terminal: { ...tab.terminal, key: shells?.get(tab.terminal) ?? id } };
+      if (tab.kind === "remote") return { ...tab, ...copy, remoteHistory: undefined };
       const split = tab.split && { ...tab.split, terminal: { ...tab.split.terminal, key: shells?.get(tab.split.terminal) ?? id } };
       return { ...tab, ...copy, split };
     });
@@ -161,13 +163,13 @@ const coerceTabs = (value: unknown) => {
       if (typeof tab.id !== "string" || typeof tab.path !== "string") return null;
       const content = readTabContent(tab, tab.id);
       if (!content) return null;
-      const path = content.kind === "terminal" ? "" : tab.path;
+      const path = content.kind !== "folder" ? "" : tab.path;
       return {
         id: tab.id,
         ...content,
         path,
         anchored: tab.anchored === true ? true : undefined,
-        crumbTrailPath: content.kind === "terminal" ? "" : coerceCrumbTrailPath(tab.crumbTrailPath, path),
+        crumbTrailPath: content.kind === "remote" ? resolveCrumbTrailPath(content.remote.path, typeof tab.crumbTrailPath === "string" ? tab.crumbTrailPath : "", true) : content.kind !== "folder" ? "" : coerceCrumbTrailPath(tab.crumbTrailPath, path),
         viewMode: coerceViewMode(tab.viewMode),
         gridSize: coerceTabGridSize(tab.gridSize),
         gridAutoColumns: coerceTabAutoColumns(tab.gridAutoColumns),

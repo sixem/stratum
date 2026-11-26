@@ -16,6 +16,7 @@ import { MEDIA_SETTINGS_ITEMS, SettingsMediaSection } from "./SettingsMediaSecti
 import { MENUS_SETTINGS_ITEMS, SettingsMenusSection } from "./SettingsMenusSection";
 import { MENU_VISIBILITY_SETTINGS_ITEMS } from "./SettingsMenuVisibility";
 import { THUMBS_SETTINGS_ITEMS, SettingsThumbsSection } from "./SettingsThumbsSection";
+import { REMOTE_SETTINGS_ITEMS, SettingsRemotesSection } from "./SettingsRemotesSection";
 import { UPDATE_SETTINGS_ITEMS, SettingsUpdatesSection } from "./SettingsUpdatesSection";
 
 export type SettingsSectionId =
@@ -30,6 +31,7 @@ export type SettingsSectionId =
   | "settings-keybinds"
   | "settings-cache"
   | "settings-backup"
+  | "settings-remotes"
   | "settings-updates";
 
 export type SettingsSectionRenderContext = {
@@ -132,6 +134,13 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
         onClearCache={onClearCache}
       />
     ),
+  },
+  {
+    id: "settings-remotes",
+    label: "Remote folders",
+    keywords: "ssh sftp hosts servers",
+    items: Object.values(REMOTE_SETTINGS_ITEMS),
+    render: () => <SettingsRemotesSection />,
   },
   {
     id: "settings-updates",

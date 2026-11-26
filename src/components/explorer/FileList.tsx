@@ -165,7 +165,7 @@ const FileList = ({
                   const isDropTarget = dragDrop.dropTargetPath === row.path;
                   const baseIndex = resolvedIndexMap.get(row.path) ?? index;
                   return (
-                    <ParentRow
+                    <ParentRow remote={view.remote}
                       key={row.key}
                       path={row.path}
                       index={baseIndex}
@@ -185,7 +185,7 @@ const FileList = ({
                 const rowMeta = rowMetaByPath.get(row.entry.path);
                 const baseIndex = resolvedIndexMap.get(row.entry.path) ?? index;
                 return (
-                  <EntryRow
+                  <EntryRow remote={view.remote}
                     key={row.key}
                     entry={row.entry}
                     index={baseIndex}
@@ -199,7 +199,7 @@ const FileList = ({
                     hideExtension={list.hideExtension}
                     selected={selection.selectedPaths.has(row.entry.path)}
                     isDeleting={isDeletePending(row.entry.path)}
-                    isCut={isCut(row.entry.path)}
+                    isCut={!view.remote && isCut(row.entry.path)}
                     isTransferring={isTransferPending(row.entry.path)}
                     dropTarget={isDropTarget}
                     isRenaming={rename.renameTargetPath === row.entry.path}

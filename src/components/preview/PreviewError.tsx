@@ -8,6 +8,7 @@ type PreviewErrorProps = {
   name: string;
   typeLabel: string;
   canUseExternalActions: boolean;
+  canRevealExternal?: boolean;
   externalActionError: string | null;
   onOpenExternal: () => void;
   onRevealExternal: () => void;
@@ -19,6 +20,7 @@ export const PreviewError = ({
   name,
   typeLabel,
   canUseExternalActions,
+  canRevealExternal = true,
   externalActionError,
   onOpenExternal,
   onRevealExternal,
@@ -55,9 +57,9 @@ export const PreviewError = ({
             <PressButton type="button" className="btn" onClick={onOpenExternal}>
               Open in default app
             </PressButton>
-            <PressButton type="button" className="btn ghost" onClick={onRevealExternal}>
+            {canRevealExternal && <PressButton type="button" className="btn ghost" onClick={onRevealExternal}>
               Reveal in folder
-            </PressButton>
+            </PressButton>}
           </div>
         ) : null}
         {externalActionError ? (

@@ -76,13 +76,7 @@ fn legacy_delete_entries(
             continue;
         }
 
-        emit_delete_progress(
-            &mut on_progress,
-            processed,
-            total,
-            Some(path.clone()),
-            None,
-        );
+        emit_delete_progress(&mut on_progress, processed, total, Some(path.clone()), None);
 
         let target = PathBuf::from(&path);
         let metadata = match fs::metadata(&target) {

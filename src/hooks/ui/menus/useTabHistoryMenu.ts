@@ -15,7 +15,7 @@ export const useTabHistoryMenu = (
 ) => useCallback((event: MouseEvent<HTMLButtonElement>, direction: TabHistoryDirection) => {
   const paths = getActiveHistoryPaths(direction);
   const items = paths.map<ContextMenuItem>((path, offset) => {
-    const label = tabLabel(path);
+    const label = path.startsWith("/") ? path.split("/").filter(Boolean).pop() || "/" : tabLabel(path);
     return {
       id: `history-${offset}`,
       label,

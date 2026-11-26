@@ -1,4 +1,5 @@
 // Inspect an import completely before preparing any changes to the running app.
+import { isRemoteLocation } from "@/lib/tabRestore";
 import { SETTINGS_STORAGE_VERSION } from "@/constants";
 import { clampVolume, DEFAULT_PREVIEW_VOLUME } from "@/lib/previewVolume";
 import { readBatchRenamePresets } from "../batchRenamePresetStore";
@@ -42,6 +43,7 @@ const checkSession = (value: unknown) => {
       !pathString(tab.path) || (tab.crumbTrailPath !== undefined && !pathString(tab.crumbTrailPath))) {
       return invalidBackup();
     }
+    if (tab.kind === "remote" && !isRemoteLocation(tab.remote)) return invalidBackup();
     if ((tab.kind === "terminal" || tab.terminal !== undefined) && !shellDescriptor(tab.terminal)) return invalidBackup();
     if (tab.split !== undefined && (!isRecord(tab.split) || !shellDescriptor(tab.split.terminal))) return invalidBackup();
     ids.add(tab.id);

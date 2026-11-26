@@ -1,5 +1,6 @@
 // Builds the topstack props so App.tsx stays focused on data flow.
 import type { ComponentProps } from "react";
+import { updateRemoteTab } from "@/modules/remoteTabs";
 import { PATHBAR_TOOLTIP_DELAY_MS } from "@/constants";
 import {
   DrivePicker,
@@ -44,6 +45,7 @@ export const useAppTopstackProps = ({
   drivePicker,
   pathBarActions,
 }: UseAppTopstackPropsOptions): AppTopstackContainerProps => {
+  const active = tabsBar.tabs.find(tab => tab.id === tabsBar.activeId);
   const leftSlot = (
     <>
       <PressButton
@@ -75,7 +77,8 @@ export const useAppTopstackProps = ({
       ...pathBar,
       leftSlot,
       driveSlot: drivePicker ? <DrivePicker {...drivePicker} /> : null,
-      rightSlot: <PathBarActions {...pathBarActions} />,
+      rightSlot: <PathBarActions {...pathBarActions} {...(active?.kind === "remote" ? { viewMode: active.viewMode,
+        onViewChange: viewMode => updateRemoteTab("main", active.id, tab => ({ ...tab, viewMode })) } : {})} />,
       windowControlsSlot: <WindowControls />,
     },
     pathInputsBar,

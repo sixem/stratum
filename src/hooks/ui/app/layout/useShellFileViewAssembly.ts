@@ -172,6 +172,7 @@ export const useShellFileViewAssembly = ({
       fileViewProps,
       bottomMenu: interactionModel.bottomMenu,
       paneCommandsBlocked: dataPipeline.smartTabBlocked || interactionModel.previewOpen,
+      mainPreview: interactionModel.mainPreview,
       bottomPreview: interactionModel.bottomPreview,
     },
     selection: {
@@ -186,6 +187,7 @@ export const useShellFileViewAssembly = ({
       open: interactionModel.previewOpen,
     },
     navigationContext: {
+      filterSelectionKeys: interactionModel.filterSelectionKeys,
       handleManualRefresh: interactionModel.handleManualRefresh,
       handlePlaceTargetContextMenu: interactionModel.handlePlaceTargetContextMenu,
       handlePlaceTargetContextMenuDown: interactionModel.handlePlaceTargetContextMenuDown,
@@ -198,9 +200,10 @@ export const useShellFileViewAssembly = ({
       previewPath: interactionModel.previewPath,
       previewMeta: interactionModel.previewMeta,
       galleryItems: interactionModel.previewGallery?.items ?? EMPTY_GALLERY,
-      entryMeta: fileManager.entryMeta,
+      remotePreview: interactionModel.previewGallery?.remote,
+      entryMeta: interactionModel.previewGallery?.remote ? interactionModel.previewGallery.entryByPath : fileManager.entryMeta,
       thumbnailsEnabled: settings.thumbnailsEnabled,
-      requestMeta: fileManager.requestEntryMeta,
+      requestMeta: interactionModel.previewGallery?.remote ? async () => [] : fileManager.requestEntryMeta,
       thumbnails: dataPipeline.thumbnails,
       requestThumbnails: dataPipeline.requestThumbnails,
       thumbnailResetKey: dataPipeline.thumbnailResetKey,

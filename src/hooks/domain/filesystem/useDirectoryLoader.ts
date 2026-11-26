@@ -38,6 +38,7 @@ export const useDirectoryLoader = ({
   const [currentPath, setCurrentPath] = useState("");
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [entries, setEntries] = useState<FileEntry[]>([]);
+  const [displayedQueryKey, setDisplayedQueryKey] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [loadingPath, setLoadingPath] = useState<string | null>(null);
   const [failedPath, setFailedPath] = useState<string | null>(null);
@@ -56,6 +57,7 @@ export const useDirectoryLoader = ({
     currentPathRef.current = request.path;
     primeEntryMeta(snapshot.entries, request.path, cached);
     setEntries(snapshot.entries);
+    setDisplayedQueryKey(request.key);
     setTotalCount(snapshot.totalCount);
     setCurrentPath(request.path);
     setParentPath(snapshot.parentPath);
@@ -150,6 +152,7 @@ export const useDirectoryLoader = ({
     primeEntryMeta([], "");
     setMetaListingPending(false);
     setEntries([]);
+    setDisplayedQueryKey(null);
     setTotalCount(0);
     setCurrentPath("");
     setParentPath(null);
@@ -158,7 +161,7 @@ export const useDirectoryLoader = ({
   }, [loadIdRef, primeEntryMeta, requests, setMetaListingPending]);
 
   return {
-    currentPath, parentPath, entries, totalCount, loadingPath, failedPath, currentPathRef,
+    currentPath, parentPath, entries, displayedQueryKey, totalCount, loadingPath, failedPath, currentPathRef,
     loadDir, clearDir, peekDirCache, refresh, refreshAfterChange,
   };
 };

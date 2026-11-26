@@ -94,7 +94,7 @@ export const isUnusedBackupProfile = () => {
   const { volume, audioVolume, stripOpen } = readPreviewPreferences();
   return !workspaces.length && !previous && !useBatchRenamePresetStore.getState().presets.length
     && !getRecentMoveHistory().size && !getQuickMoveWorkspacePreferences().size
-    && ![...live.main.tabs, ...live.bottom.tabs].some(tab => tab.path || tab.terminal)
+    && ![...live.main.tabs, ...live.bottom.tabs].some(tab => tab.kind !== "folder" || tab.path)
     && !live.main.recentJumps.length && !live.bottom.recentJumps.length && !hasCustomWorkspacePlaces(live.places)
     && !live.pane.open && live.pane.height === DEFAULT_BOTTOM_PANE_LAYOUT.height
     && !showBreadcrumbs && volume === DEFAULT_PREVIEW_VOLUME && audioVolume === DEFAULT_PREVIEW_VOLUME && stripOpen

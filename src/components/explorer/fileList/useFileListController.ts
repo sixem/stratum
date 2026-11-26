@@ -26,7 +26,7 @@ type UseFileListControllerOptions = {
   selection: FileListSelectionProps;
   navigation: FileListNavigationProps;
   contextMenu: FileListContextMenuProps;
-  creation: FileListCreationProps;
+  creation?: FileListCreationProps;
 };
 
 type ListRowDataset = {
@@ -37,7 +37,7 @@ type ListRowDataset = {
 };
 
 const readListRowDataset = (element: HTMLElement): ListRowDataset => {
-  const path = element.dataset.path ?? null;
+  const path = element.dataset.remotePath ?? element.dataset.path ?? null;
   const rawIndex = element.dataset.index;
   const index = rawIndex == null ? null : Number(rawIndex);
 
@@ -119,7 +119,7 @@ export const useFileListController = ({
     (event: ReactMouseEvent) => {
       if (!navigation.onOpenDirNewTab) return;
       const dataset = readListRowDataset(event.currentTarget as HTMLElement);
-      if (!dataset.path || !dataset.isDir) return;
+      if (!dataset.path || (!dataset.isDir && !navigation.canBrowseEntry?.(dataset.path))) return;
       handleMiddleClick(event, () => navigation.onOpenDirNewTab?.(dataset.path!));
     },
     [navigation],
@@ -167,6 +167,7 @@ export const useFileListController = ({
         onClick: view.onGoUp,
       });
     }
+    if (!creation) return actions;
     actions.push({
       label: "New folder",
       onClick: () =>

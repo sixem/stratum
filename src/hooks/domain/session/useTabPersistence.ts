@@ -1,3 +1,4 @@
+import { resolveCrumbTrailPath } from "@/lib/crumbTrail";
 // Keeps tab state synced with the current path and persisted history.
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { SortState, Tab } from "@/types";
@@ -35,37 +36,6 @@ type UseTabPersistenceOptions = {
   setRecentJumps: SetRecentJumps;
   recentLimit: number;
   shouldSyncEmptyTab: (tabId: string) => boolean;
-};
-
-// Breadcrumb trail helpers keep future crumbs visible when navigating up.
-const splitPathKey = (pathKey: string) => {
-  if (!pathKey) return [];
-  return pathKey.split("\\").filter(Boolean);
-};
-
-const isPathKeyPrefix = (prefixKey: string, fullKey: string) => {
-  const prefixParts = splitPathKey(prefixKey);
-  const fullParts = splitPathKey(fullKey);
-  if (prefixParts.length === 0) return false;
-  if (prefixParts.length > fullParts.length) return false;
-  return prefixParts.every((part, index) => part === fullParts[index]);
-};
-
-const resolveCrumbTrailPath = (currentPath: string, trailPath: string) => {
-  const trimmedCurrent = currentPath.trim();
-  if (!trimmedCurrent) return "";
-  const trimmedTrail = trailPath.trim();
-  if (!trimmedTrail) return trimmedCurrent;
-  const currentKey = folderPathKey(trimmedCurrent);
-  const trailKey = folderPathKey(trimmedTrail);
-  if (!currentKey || !trailKey) return trimmedCurrent;
-  if (currentKey === trailKey) return trimmedCurrent;
-  // Keep the deepest path when navigating up within the same branch.
-  if (isPathKeyPrefix(currentKey, trailKey)) return trimmedTrail;
-  // Update the trail when navigating deeper under the same branch.
-  if (isPathKeyPrefix(trailKey, currentKey)) return trimmedCurrent;
-  // Reset the trail when the branch changes.
-  return trimmedCurrent;
 };
 
 export const useTabPersistence = ({
@@ -152,7 +122,7 @@ export const useTabPersistence = ({
       const index = prev.findIndex((tab) => tab.id === activeTabId);
       if (index === -1) return prev;
       const tab = prev[index];
-      if (tab.terminal) return prev;
+      if (tab.kind !== "folder") return prev;
       // A search entered during the load belongs to the newly opened folder.
       const reset = pending?.resetFilter;
       const nextSearch =

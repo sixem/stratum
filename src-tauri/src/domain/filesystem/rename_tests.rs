@@ -259,6 +259,11 @@ fn checks_windows_names_and_distinguishes_case_only_changes() {
     };
     assert!(actual_names().contains(&"First.txt".into()));
     assert!(!actual_names().contains(&"first.txt".into()));
-    rename_entry(single.path, "first.txt".into(), Some(single.identity.unwrap())).unwrap();
+    rename_entry(
+        single.path,
+        "first.txt".into(),
+        Some(single.identity.unwrap()),
+    )
+    .unwrap();
     assert!(actual_names().contains(&"first.txt".into()));
 }

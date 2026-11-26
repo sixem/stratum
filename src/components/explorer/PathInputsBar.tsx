@@ -4,12 +4,14 @@ import type { FormEvent, KeyboardEvent, RefObject } from "react";
 import { FileFilterHint } from "@/components/primitives/FileFilterHint";
 import { PressButton } from "@/components/primitives/PressButton";
 import { FilterIcon, LibraryIcon, RefreshIcon } from "@/components/icons";
+import type { useFilterResultSelection } from "@/hooks/ui/selection/useFilterResultSelection";
 import { useIndexedSearchUiStore } from "@/modules";
 
 type PathInputsBarProps = {
   path: string;
   search: string;
   indexedSearchEnabled: boolean;
+  filterSelectionKeys?: ReturnType<typeof useFilterResultSelection>;
   onPathChange: (value: string) => void;
   onSearchChange: (value: string) => void;
   onSubmit: () => void;
@@ -22,6 +24,7 @@ export const PathInputsBar = ({
   path,
   search,
   indexedSearchEnabled,
+  filterSelectionKeys,
   onPathChange,
   onSearchChange,
   onSubmit,
@@ -72,11 +75,7 @@ export const PathInputsBar = ({
           ref={searchInputRef}
           value={search}
           onChange={(event) => onSearchChange(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-            }
-          }}
+          {...filterSelectionKeys}
           placeholder="Search"
           aria-label="Search current folder"
           aria-describedby={filterHintId}

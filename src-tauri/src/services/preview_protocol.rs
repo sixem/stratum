@@ -17,7 +17,8 @@ mod responses;
 use cache::{build_cache_validators, should_return_not_modified};
 pub(crate) use grants::PreviewGrants;
 use grants::PreviewSource;
-use range_requests::{parse_range_header, ByteRange};
+pub(crate) use grants::RemoteSource;
+use range_requests::{parse_range_header, parse_remote_range_header, ByteRange};
 use responses::{
     error_response, head_response, not_modified_response, ok_response, partial_content_response,
     range_not_satisfiable,
@@ -97,16 +98,20 @@ pub fn register_preview_protocol<R: tauri::Runtime>(
                     .and_then(|value| value.to_str().ok())
                     .map(|value| value.to_string());
                 tauri::async_runtime::spawn(async move {
-                    let response = read_preview(source, move |source| {
-                        build_file_response(
-                            source,
-                            head_only,
-                            range_header.as_deref(),
-                            if_none_match.as_deref(),
-                            if_modified_since.as_deref(),
-                        )
-                    })
-                    .await;
+                    let response = if source.remote.is_some() {
+                        read_remote_preview(source, head_only, range_header.as_deref()).await
+                    } else {
+                        read_preview(source, move |source| {
+                            build_file_response(
+                                source,
+                                head_only,
+                                range_header.as_deref(),
+                                if_none_match.as_deref(),
+                                if_modified_since.as_deref(),
+                            )
+                        })
+                        .await
+                    };
                     // Only the issuing app origin can use its audio stream with Web Audio.
                     #[cfg(windows)]
                     let response = if let Some(origin) = audio_origin {
@@ -183,6 +188,99 @@ async fn read_preview(
     })
 }
 
+async fn read_remote_preview(
+    source: Arc<PreviewSource>,
+    head_only: bool,
+    range_header: Option<&str>,
+) -> Response<Vec<u8>> {
+    let Ok(_slot) = source.read_slot.clone().acquire_owned().await else {
+        return unavailable_grant();
+    };
+    let Some(remote) = source.remote.as_ref() else {
+        return unavailable_grant();
+    };
+    let validators = cache::CacheValidators {
+        etag: format!("\"{:x}-{:x}\"", remote.size, remote.modified.unwrap_or(0)),
+        last_modified: None,
+        modified_epoch_seconds: None,
+    };
+    if head_only {
+        return head_response(source.content_type, remote.size, &validators);
+    }
+    let range = if let Some(header) = range_header {
+        match parse_remote_range_header(header, remote.size) {
+            Ok(Some(range)) => Some(range),
+            _ => return range_not_satisfiable(remote.size, &validators),
+        }
+    } else {
+        if remote.size > MAX_WHOLE_PREVIEW_BYTES {
+            return preview_too_large();
+        }
+        None
+    };
+    let start = range.map(|r| r.start).unwrap_or(0);
+    let length = range.map(|r| r.len()).unwrap_or(remote.size);
+    let mut data = Vec::with_capacity(length as usize);
+    while data.len() < length as usize {
+        if source.read_slot.is_closed() {
+            return unavailable_grant();
+        }
+        let count = (length as usize - data.len()).min(crate::services::remotes::file::MAX_READ);
+        // Finish the current bounded SFTP exchange before honoring revocation.
+        // Dropping it mid-packet would retire the connection shared by other tabs.
+        let result = remote
+            .remotes
+            .read_range(
+                &remote.profile_id,
+                remote.session_id,
+                &remote.path,
+                start + data.len() as u64,
+                count,
+            )
+            .await;
+        if source.read_slot.is_closed() {
+            return unavailable_grant();
+        }
+        let Ok(part) = result else {
+            return unavailable_grant();
+        };
+        if part.size != remote.size || part.modified != remote.modified || part.bytes.len() != count
+        {
+            return error_response(
+                StatusCode::CONFLICT,
+                "The remote file changed during preview.".into(),
+            );
+        }
+        data.extend_from_slice(&part.bytes);
+    }
+    match range {
+        Some(range) => partial_content_response(
+            source.content_type,
+            range.start,
+            range.end,
+            remote.size,
+            data,
+            &validators,
+        ),
+        None => ok_response(source.content_type, data, &validators),
+    }
+}
+
+#[cfg(test)]
+pub(crate) async fn test_remote_response(
+    remote: RemoteSource,
+    range: Option<&str>,
+    head: bool,
+) -> Response<Vec<u8>> {
+    let source = Arc::new(PreviewSource {
+        content_type: "video/mp4",
+        file: None,
+        remote: Some(remote),
+        read_slot: Arc::new(Semaphore::new(1)),
+    });
+    read_remote_preview(source, head, range).await
+}
+
 fn build_file_response(
     source: &PreviewSource,
     head_only: bool,
@@ -191,7 +289,9 @@ fn build_file_response(
     if_modified_since: Option<&str>,
 ) -> Response<Vec<u8>> {
     let content_type = source.content_type;
-    let mut file = &source.file;
+    let Some(mut file) = source.file.as_ref() else {
+        return unavailable_grant();
+    };
     let Ok(metadata) = file.metadata() else {
         return error_response(
             StatusCode::NOT_FOUND,

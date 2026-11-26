@@ -1,3 +1,4 @@
+import { clearRemoteThumbnailMemory } from "@/components/remote/remoteThumbnailCache";
 // Centralizes app-level commands so App.tsx stays focused on orchestration.
 import { useCallback } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
@@ -83,6 +84,7 @@ export const useAppCommands = ({
   const handleClearThumbCache = useCallback(async () => {
     try {
       await clearThumbCache();
+      clearRemoteThumbnailMemory();
       setThumbResetNonce((prev) => prev + 1);
     } catch {
       // Ignore cache clear errors.

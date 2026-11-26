@@ -6,6 +6,8 @@ import { useDriveInfo } from "@/hooks/domain/filesystem/useDriveInfo";
 import { useStatusLabels } from "@/hooks/domain/metadata/useStatusLabels";
 import { useScrollRequest } from "@/hooks/perf/scroll";
 import type { ScrollAlignment } from "@/hooks/perf/scroll";
+import { useRemoteNavigation } from "@/components/remote/useRemoteNavigation";
+import { RemoteTabPane } from "@/components/remote/RemoteTabPane";
 import { TerminalPane } from "@/components/terminal/TerminalPane";
 import { TerminalDirectoryBar } from "@/components/terminal/TerminalDirectoryBar";
 import { TerminalSplitControls } from "@/components/terminal/TerminalSplitControls";
@@ -22,6 +24,8 @@ import { useTabHistoryMenu } from "@/hooks/ui/menus/useTabHistoryMenu";
 import type { BottomMenuBindings } from "@/hooks/ui/app/useAppContextMenus";
 import { useSmartTabJump } from "@/hooks/ui/selection/useSmartTabJump";
 import { useTypeaheadSelection } from "@/hooks/ui/selection/useTypeaheadSelection";
+import { useFilterResultSelection } from "@/hooks/ui/selection/useFilterResultSelection";
+import { buildQueryKey } from "@/hooks/domain/filesystem/directoryRequests";
 import type { PanePreviewBindings, PreviewGallerySource } from "@/hooks/ui/view/useQuickPreview";
 import { useNavigationReveal } from "@/hooks/ui/view/useNavigationReveal";
 import { useTabReveal } from "@/hooks/ui/view/useTabReveal";
@@ -56,6 +60,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   const folder = useBottomFolder();
   const { dir, meta, tabs, model, selection, viewKey, busy } = folder;
   const terminal = tabs.activeTab?.terminal;
+  const remote = tabs.activeTab?.kind === "remote" ? tabs.activeTab : null;
   const handleHistoryMenu = useTabHistoryMenu(tabs, menu.openActionMenu);
   const root = useRef<HTMLElement>(null);
   const files = useRef<HTMLDivElement>(null);
@@ -83,7 +88,8 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     onSummary({ path, countLabel, selectionLabel });
   }, [onSummary, path, countLabel, selectionLabel]);
   // The listing can commit one render before its tab is updated.
-  const ready = !!path && !busy && !tabs.restoringTabs && folderPathKey(path) === folderPathKey(tabs.displayPath);
+  const remoteNav = useRemoteNavigation(remote, "bottom");
+  const ready = !remote && !!path && !busy && !tabs.restoringTabs && folderPathKey(path) === folderPathKey(tabs.displayPath);
   useTabReveal(files, {
     tabId: tabs.activeTabId,
     ready: ready || (!tabs.displayPath && !busy && !tabs.restoringTabs),
@@ -177,6 +183,17 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     hideExtension: upper.gridNameHideExtension,
     clearDragState: drop.clearDragState,
   });
+  const filterSelectionKeys = useFilterResultSelection({
+    viewKey,
+    filterKey: ready && tabs.searchValue.trim()
+      ? buildQueryKey(path, { search: tabs.searchValue, sort: tabs.sortState })
+      : null,
+    displayedQueryKey: dir.displayedQueryKey,
+    items: model.items,
+    paneRef: files,
+    setSelection: paneActions.handleSelectionChange,
+    scrollToIndex: scrollTo,
+  });
   const handleTypeahead = useTypeaheadSelection({
     items: model.items,
     resetKeys: [active, ready, viewKey, tabs.searchValue, tabs.viewMode],
@@ -205,7 +222,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     onPointerDownCapture={event => {
       if (!event.currentTarget.contains(event.target as Node)) return;
       setBottomPaneActive(true);
-      if ((event.target as Element).closest("[data-terminal]")) return;
+      if ((event.target as Element).closest("[data-terminal], [data-remote-pane]")) return;
       if (!(event.target as Element).closest("button, input, [tabindex='0']") ||
           (event.button === 2 && !event.currentTarget.contains(document.activeElement))) {
         focusFiles();
@@ -213,11 +230,12 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     }}
     onPointerDown={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()}>
     <nav className="bottom-nav" aria-label="Bottom pane navigation">
+
       <ToolbarIconButton
         label="Back"
         ariaLabel="Bottom pane back"
-        disabled={!tabs.canGoBack}
-        onClick={tabs.goBack}
+        disabled={remote ? !remoteNav.steps.canGoBack : !tabs.canGoBack}
+        onClick={remote ? remoteNav.steps.onBack : tabs.goBack}
         onContextMenu={(event) => handleHistoryMenu(event, "back")}
         pressOnPointerDown={false}
       >
@@ -226,8 +244,8 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       <ToolbarIconButton
         label="Forward"
         ariaLabel="Bottom pane forward"
-        disabled={!tabs.canGoForward}
-        onClick={tabs.goForward}
+        disabled={remote ? !remoteNav.steps.canGoForward : !tabs.canGoForward}
+        onClick={remote ? remoteNav.steps.onForward : tabs.goForward}
         onContextMenu={(event) => handleHistoryMenu(event, "forward")}
         pressOnPointerDown={false}
       >
@@ -236,8 +254,8 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       <ToolbarIconButton
         label="Parent folder"
         ariaLabel="Bottom pane parent folder"
-        disabled={!dir.parentPath || busy}
-        onClick={() => dir.parentPath && navigate(dir.parentPath)}
+        disabled={remote ? !remoteNav.steps.canGoUp : !dir.parentPath || busy}
+        onClick={remote ? remoteNav.steps.onUp : () => dir.parentPath && navigate(dir.parentPath)}
         pressOnPointerDown={false}
       >
         <ChevronUpIcon />
@@ -245,14 +263,14 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       <ToolbarIconButton
         label="Down one level"
         ariaLabel="Bottom pane down one level"
-        disabled={!nextTrailPath}
-        onClick={() => nextTrailPath && navigate(nextTrailPath)}
+        disabled={remote ? !remoteNav.steps.canGoDown : !nextTrailPath}
+        onClick={remote ? remoteNav.steps.onDown : () => nextTrailPath && navigate(nextTrailPath)}
         pressOnPointerDown={false}
       >
         <ChevronDownIcon />
       </ToolbarIconButton>
-      <form onSubmit={event => { event.preventDefault(); navigate(draft); focusFiles(); }}>
-        <input ref={address} aria-label="Bottom pane folder" value={draft} placeholder="Folder path" onChange={event => setDraft(event.target.value)} />
+      <form onSubmit={event => { event.preventDefault(); if (remote) remoteNav.submit(); else navigate(draft); focusFiles(); }}>
+        <input ref={address} aria-label="Bottom pane folder" value={remote ? remoteNav.path : draft} placeholder="Folder path" onChange={event => (remote ? remoteNav.setPath : setDraft)(event.target.value)} />
       </form>
       <label className="bottom-search">
         <FileFilterHint id={filterHintId}><FilterIcon /></FileFilterHint>
@@ -260,10 +278,10 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
           ref={searchInput}
           aria-label="Search bottom folder"
           aria-describedby={filterHintId}
-          value={tabs.searchValue}
-          onChange={event => tabs.setSearch(event.currentTarget.value)}
-          onKeyDown={event => { if (event.key === "Enter") event.preventDefault(); }}
-          disabled={!tabs.activeTab?.path}
+          value={remote ? remote.search : tabs.searchValue}
+          onChange={event => (remote ? remoteNav.setSearch : tabs.setSearch)(event.currentTarget.value)}
+          {...(remote ? {} : filterSelectionKeys)}
+          disabled={!remote && !tabs.activeTab?.path}
           placeholder="Search"
           spellCheck={false}
           autoComplete="off"
@@ -309,7 +327,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       onTabContextMenuDown={paneActions.handlePlaceTargetContextMenuDown}
       dropTargetId={drop.dropTargetTabId} dropTargetPath={drop.dropTargetPath} tabDropSubmenu={drop.tabDropSubmenu}
       dragPoint={drop.dragPoint} onSubmenuHoverTargetChange={drop.setDropTarget} onSubmenuCloseRequest={drop.clearDragState} />
-    {terminal ? <TerminalDirectoryBar directory={terminal.directory} /> : showBreadcrumbs ? (
+    {remote ? showBreadcrumbs && <PathCrumbsBar pane="bottom" remoteHost={remoteNav.host} trailPath={remote.crumbTrailPath} path={remote.remote.path} onNavigate={remoteNav.navigate} onNavigateNewTab={remoteNav.openTab} /> : terminal ? <TerminalDirectoryBar directory={terminal.directory} /> : showBreadcrumbs ? (
       <PathCrumbsBar pane="bottom" path={tabs.displayPath} trailPath={tabs.activeTab?.crumbTrailPath} reserveSpace
         dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null}
         onNavigate={browseFromView} onNavigateNewTab={openLocationTab}
@@ -317,14 +335,14 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         onCrumbContextMenuDown={paneActions.handlePlaceTargetContextMenuDown} />
     ) : null}
     <TerminalSplitView pane="bottom" tab={tabs.activeTab} filePaneRef={files} onSelectTab={tabs.selectTab} commandsBlocked={commandsBlocked}>
-    <div ref={files} className="main bottom-files" tabIndex={-1} aria-busy={busy} data-file-pane="bottom" data-pane-path={ready ? path : ""}
+    <div ref={files} className="main bottom-files" tabIndex={-1} aria-busy={busy} data-file-pane="bottom" data-pane-path={ready ? path : ""} data-remote-pane={remote ? true : undefined}
       data-drop-background={drop.backgroundHovered && drop.hoveredPane === "bottom" || undefined}
       onScrollCapture={event => {
         const el = event.target as HTMLElement;
         if (el.matches(".list-body,.thumb-viewport")) scrollTop.current = el.scrollTop;
       }}>
-      {busy && <div className="folder-load-progress" role="progressbar" aria-label="Loading bottom folder" />}
-      {terminal ? <TerminalPane terminal={terminal} /> : !ready && tabs.displayPath ? <div className="pane-loading">{busy ? "Loading folder…" : <button className="btn ghost" type="button" onClick={() => navigate(tabs.displayPath)}>Retry opening folder</button>}</div> :
+      {!remote && busy && <div className="folder-load-progress" role="progressbar" aria-label="Loading bottom folder" />}
+      {remote ? <RemoteTabPane key={remote.id} tab={remote} pane="bottom" preview={bottomPreview} onPreviewRelease={upper.onEntryPreviewRelease} /> : terminal ? <TerminalPane terminal={terminal} /> : !ready && tabs.displayPath ? <div className="pane-loading">{busy ? "Loading folder…" : <button className="btn ghost" type="button" onClick={() => navigate(tabs.displayPath)}>Retry opening folder</button>}</div> :
       <FileView {...upper} {...model} pane="bottom" dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null} currentPath={path} viewMode={tabs.viewMode} viewKey={viewKey}
         showLander={!path} recentJumps={tabs.recentJumps} onOpenPlace={navigate} onOpenRecent={navigate} onOpenDrive={navigate}
         onOpenDriveNewTab={openNew} onOpenPlaceNewTab={openNew} onOpenRecentNewTab={openNew}

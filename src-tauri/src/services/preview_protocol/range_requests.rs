@@ -4,6 +4,9 @@
 const MAX_RANGE_RESPONSE_BYTES: u64 = 8 * 1024 * 1024;
 // An open-ended request is common even when the player only needs audio metadata.
 const MAX_AUDIO_RANGE_RESPONSE_BYTES: u64 = 1024 * 1024;
+// SFTP reads are sequential, so smaller responses let the player start and
+// react to seeks without waiting for several megabytes over a slow link.
+const MAX_REMOTE_RANGE_RESPONSE_BYTES: u64 = 512 * 1024;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ByteRange {
@@ -22,15 +25,27 @@ pub fn parse_range_header(
     size: u64,
     content_type: &str,
 ) -> Result<Option<ByteRange>, ()> {
-    if size == 0 {
-        return Ok(None);
-    }
     let max_response_bytes = if content_type.starts_with("audio/") {
         MAX_AUDIO_RANGE_RESPONSE_BYTES
     } else {
         MAX_RANGE_RESPONSE_BYTES
     };
 
+    parse_range_with_limit(header_value, size, max_response_bytes)
+}
+
+pub fn parse_remote_range_header(header_value: &str, size: u64) -> Result<Option<ByteRange>, ()> {
+    parse_range_with_limit(header_value, size, MAX_REMOTE_RANGE_RESPONSE_BYTES)
+}
+
+fn parse_range_with_limit(
+    header_value: &str,
+    size: u64,
+    max_response_bytes: u64,
+) -> Result<Option<ByteRange>, ()> {
+    if size == 0 {
+        return Ok(None);
+    }
     let range_set = header_value.trim();
     let range_set = match range_set.strip_prefix("bytes=") {
         Some(value) => value,
@@ -84,4 +99,28 @@ pub fn parse_range_header(
     let end = requested_end.min(max_end);
 
     Ok(Some(ByteRange { start, end }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_ranges_are_bounded_and_suffixes_stay_at_the_end() {
+        let size = 8 * 1024 * 1024;
+        let first = parse_remote_range_header("bytes=0-", size)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (first.start, first.len()),
+            (0, MAX_REMOTE_RANGE_RESPONSE_BYTES)
+        );
+        let suffix = parse_remote_range_header("bytes=-4194304", size)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (suffix.end, suffix.len()),
+            (size - 1, MAX_REMOTE_RANGE_RESPONSE_BYTES)
+        );
+    }
 }
