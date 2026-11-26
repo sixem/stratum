@@ -17,6 +17,7 @@ import {
 import { coerceKeybinds } from "./keybinds";
 import { coerceTerminalTheme } from "./terminalThemes";
 import { coerceTerminalFont } from "./terminalFonts";
+import { coerceTerminalCursorStyle, coerceTerminalFontSize, coerceTerminalFontWeight, coerceTerminalScrollback } from "./terminalPreferences";
 import {
   DEFAULT_SETTINGS,
   DEFAULT_SIDEBAR_HIDDEN_SECTIONS,
@@ -218,9 +219,14 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.smartTabJump === "boolean"
         ? value.smartTabJump
         : DEFAULT_SETTINGS.smartTabJump,
+    terminalTabNavigation: value?.terminalTabNavigation === true,
     accentTheme: coerceAccentTheme(value?.accentTheme),
     terminalTheme: coerceTerminalTheme(value?.terminalTheme),
     terminalFontFamily: coerceTerminalFont(value?.terminalFontFamily),
+    terminalFontSize: coerceTerminalFontSize(value?.terminalFontSize),
+    terminalFontWeight: coerceTerminalFontWeight(value?.terminalFontWeight),
+    terminalCursorStyle: coerceTerminalCursorStyle(value?.terminalCursorStyle),
+    terminalScrollback: coerceTerminalScrollback(value?.terminalScrollback),
     darkMode:
       typeof value?.darkMode === "boolean" ? value.darkMode : DEFAULT_SETTINGS.darkMode,
     categoryTinting:

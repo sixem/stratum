@@ -1,7 +1,7 @@
 // Custom keybind capture and management UI.
 import { useCallback, useEffect, useState } from "react";
 import { shallow } from "zustand/shallow";
-import type { KeybindAction } from "@/modules";
+import type { KeybindAction, KeybindDefinition } from "@/modules";
 import {
   DEFAULT_KEYBINDS,
   KEYBIND_DEFINITIONS,
@@ -13,8 +13,9 @@ import {
   useSettingsStore,
 } from "@/modules";
 import { PressButton } from "@/components/primitives/PressButton";
+import { buildKeybindFromWheel } from "@/modules/keybinds";
 
-import { SettingsItem } from "./SettingsItem";
+import { SettingsGroup, SettingsItem, SettingsToggleItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
 
 export const KEYBINDS_SETTINGS_ITEMS = {
@@ -27,7 +28,18 @@ export const KEYBINDS_SETTINGS_ITEMS = {
     label: "Smart Tab jump",
     description: "Double-tap Tab to jump to the top or bottom of the current view.",
   },
+  terminalTabNavigation: {
+    label: "Tab navigation in terminal",
+    description: "Use the Previous tab and Next tab shortcuts while a terminal has focus.",
+    keywords: "powershell shell override keyboard scroll",
+  },
 } satisfies Record<string, SettingsItemText>;
+
+const tabShortcuts = KEYBIND_DEFINITIONS.filter(({ id }) => id === "prevTab" || id === "nextTab");
+const thumbnailShortcuts = KEYBIND_DEFINITIONS.filter(({ id }) => id === "increaseThumbnailSize" || id === "decreaseThumbnailSize");
+const generalShortcuts = KEYBIND_DEFINITIONS.filter(item => !tabShortcuts.includes(item) && !thumbnailShortcuts.includes(item));
+const generalItems = [KEYBINDS_SETTINGS_ITEMS.customShortcuts, KEYBINDS_SETTINGS_ITEMS.smartTabJump, ...generalShortcuts];
+const tabItems = [KEYBINDS_SETTINGS_ITEMS.terminalTabNavigation, ...tabShortcuts];
 
 type SettingsKeybindsSectionProps = {
   sectionId: string;
@@ -40,16 +52,18 @@ export const SettingsKeybindsSection = ({
   open,
   onCaptureChange,
 }: SettingsKeybindsSectionProps) => {
-  const { keybinds, smartTabJump, updateSettings } = useSettingsStore(
+  const { keybinds, smartTabJump, terminalTabNavigation, updateSettings } = useSettingsStore(
     (state) => ({
       keybinds: state.keybinds,
       smartTabJump: state.smartTabJump,
+      terminalTabNavigation: state.terminalTabNavigation,
       updateSettings: state.updateSettings,
     }),
     shallow,
   );
   const [captureAction, setCaptureAction] = useState<KeybindAction | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
+  const captureDefinition = KEYBIND_DEFINITIONS.find(({ id }) => id === captureAction);
 
   const commitKeybind = useCallback(
     (action: KeybindAction, normalized: string) => {
@@ -67,7 +81,7 @@ export const SettingsKeybindsSection = ({
         return normalizeKeybind(keybinds[definition.id]) === normalized;
       });
       if (conflict) {
-        setCaptureError(`Already used by ${conflict.label}.`);
+        setCaptureError(`Already used by ${conflict.label}. Clear or change that shortcut first.`);
         return false;
       }
       updateSettings({
@@ -119,6 +133,20 @@ export const SettingsKeybindsSection = ({
   }, [captureAction, commitKeybind, open]);
 
   useEffect(() => {
+    if (!open || !captureDefinition?.wheel) return;
+    const handleWheel = (event: WheelEvent) => {
+      const binding = buildKeybindFromWheel(event);
+      if (!binding || !event.cancelable) return;
+      event.preventDefault();
+      event.stopPropagation();
+      commitKeybind(captureDefinition.id, binding);
+    };
+
+    window.addEventListener("wheel", handleWheel, { capture: true, passive: false });
+    return () => window.removeEventListener("wheel", handleWheel, true);
+  }, [captureDefinition, commitKeybind, open]);
+
+  useEffect(() => {
     if (!open || captureAction !== "previewItem") return;
     const handlePointerDown = (event: PointerEvent) => {
       if (event.button !== 1) return;
@@ -152,82 +180,82 @@ export const SettingsKeybindsSection = ({
     updateSettings({ keybinds: { ...DEFAULT_KEYBINDS } });
   };
 
-  return (
-    <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Shortcuts</div>
-      <SettingsItem item={KEYBINDS_SETTINGS_ITEMS.customShortcuts}>
+  const renderShortcut = (definition: KeybindDefinition) => {
+    const current = keybinds[definition.id];
+    const normalizedCurrent = normalizeKeybind(current);
+    const normalizedDefault = normalizeKeybind(DEFAULT_KEYBINDS[definition.id]);
+    const isCapturing = captureAction === definition.id;
+    const showError = isCapturing && Boolean(captureError);
+    const captureLabel = definition.wheel ? "Keys or modified scroll…" : "Press keys…";
+    const displayLabel = isCapturing ? captureLabel : formatKeybind(current) || "Unassigned";
+    return (
+      <SettingsItem
+        item={definition}
+        key={definition.id}
+        details={showError ? <div className="settings-desc settings-desc-error">{captureError}</div> : null}
+      >
         <div className="settings-actions">
-          <PressButton type="button" className="btn ghost" onClick={handleResetKeybinds}>
-            Reset all
+          <PressButton
+            type="button"
+            className={`keybind-button${isCapturing ? " is-capturing" : ""}${
+              showError ? " is-error" : ""
+            }`}
+            onClick={() => handleStartCapture(definition.id)}
+            onBlur={() => {
+              if (!isCapturing) return;
+              setCaptureAction(null);
+              setCaptureError(null);
+            }}
+          >
+            {displayLabel}
+          </PressButton>
+          <PressButton
+            type="button"
+            className="btn ghost"
+            aria-label={`Clear ${definition.label} shortcut`}
+            disabled={!normalizedCurrent}
+            onClick={() => updateSettings({ keybinds: { ...keybinds, [definition.id]: "" } })}
+          >
+            Clear
+          </PressButton>
+          <PressButton
+            type="button"
+            className="btn ghost"
+            aria-label={`Reset ${definition.label} shortcut`}
+            disabled={normalizedCurrent === normalizedDefault || Boolean(normalizedDefault && KEYBIND_DEFINITIONS.some(
+              ({ id }) => id !== definition.id && normalizeKeybind(keybinds[id]) === normalizedDefault,
+            ))}
+            onClick={() => handleResetKeybind(definition.id)}
+          >
+            Reset
           </PressButton>
         </div>
       </SettingsItem>
-      <SettingsItem item={KEYBINDS_SETTINGS_ITEMS.smartTabJump}>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={smartTabJump}
-            onChange={(event) =>
-              updateSettings({ smartTabJump: event.currentTarget.checked })
-            }
-          />
-          <span />
-        </label>
-      </SettingsItem>
-      {KEYBIND_DEFINITIONS.map((definition) => {
-        const current = keybinds[definition.id];
-        const normalizedCurrent = normalizeKeybind(current);
-        const normalizedDefault = normalizeKeybind(DEFAULT_KEYBINDS[definition.id]);
-        const isCapturing = captureAction === definition.id;
-        const showError = isCapturing && Boolean(captureError);
-        const displayLabel = isCapturing
-          ? "Press keys..."
-          : formatKeybind(current) || "Unassigned";
-        return (
-          <SettingsItem
-            item={definition}
-            key={definition.id}
-            details={showError ? <div className="settings-desc settings-desc-error">{captureError}</div> : null}
-          >
-            <div className="settings-actions">
-              <PressButton
-                type="button"
-                className={`keybind-button${isCapturing ? " is-capturing" : ""}${
-                  showError ? " is-error" : ""
-                }`}
-                onClick={() => handleStartCapture(definition.id)}
-                onBlur={() => {
-                  if (!isCapturing) return;
-                  setCaptureAction(null);
-                  setCaptureError(null);
-                }}
-              >
-                {displayLabel}
-              </PressButton>
-              <PressButton
-                type="button"
-                className="btn ghost"
-                aria-label={`Clear ${definition.label} shortcut`}
-                disabled={!normalizedCurrent}
-                onClick={() => updateSettings({ keybinds: { ...keybinds, [definition.id]: "" } })}
-              >
-                Clear
-              </PressButton>
-              <PressButton
-                type="button"
-                className="btn ghost"
-                aria-label={`Reset ${definition.label} shortcut`}
-                disabled={normalizedCurrent === normalizedDefault || Boolean(normalizedDefault && KEYBIND_DEFINITIONS.some(
-                  ({ id }) => id !== definition.id && normalizeKeybind(keybinds[id]) === normalizedDefault,
-                ))}
-                onClick={() => handleResetKeybind(definition.id)}
-              >
-                Reset
-              </PressButton>
-            </div>
-          </SettingsItem>
-        );
-      })}
-    </section>
+    );
+  };
+
+  return (
+    <>
+      <SettingsGroup id={sectionId} title="General" items={generalItems}>
+        <SettingsItem item={KEYBINDS_SETTINGS_ITEMS.customShortcuts}>
+          <div className="settings-actions">
+            <PressButton type="button" className="btn ghost" onClick={handleResetKeybinds}>
+              Reset all
+            </PressButton>
+          </div>
+        </SettingsItem>
+        <SettingsToggleItem item={KEYBINDS_SETTINGS_ITEMS.smartTabJump} checked={smartTabJump}
+          onChange={checked => updateSettings({ smartTabJump: checked })} />
+        {generalShortcuts.map(renderShortcut)}
+      </SettingsGroup>
+      <SettingsGroup id={`${sectionId}-tabs`} title="Tab navigation" items={tabItems}>
+        <SettingsToggleItem item={KEYBINDS_SETTINGS_ITEMS.terminalTabNavigation} checked={terminalTabNavigation}
+          onChange={checked => updateSettings({ terminalTabNavigation: checked })} />
+        {tabShortcuts.map(renderShortcut)}
+      </SettingsGroup>
+      <SettingsGroup id={`${sectionId}-thumbnails`} title="Thumbnail size" items={thumbnailShortcuts}>
+        {thumbnailShortcuts.map(renderShortcut)}
+      </SettingsGroup>
+    </>
   );
 };

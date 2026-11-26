@@ -17,7 +17,9 @@ export type KeybindAction =
   | "focusSplitTerminal"
   | "previewItem"
   | "prevTab"
-  | "nextTab";
+  | "nextTab"
+  | "increaseThumbnailSize"
+  | "decreaseThumbnailSize";
 
 export type KeybindMap = Record<KeybindAction, string>;
 
@@ -26,6 +28,8 @@ export type KeybindDefinition = {
   label: string;
   description: string;
   default: string;
+  keywords?: string;
+  wheel?: true;
 };
 
 export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
@@ -82,12 +86,32 @@ export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
     label: "Previous tab",
     description: "Switch to the tab on the left.",
     default: "Control+ArrowLeft",
+    keywords: "scroll wheel navigation",
+    wheel: true,
   },
   {
     id: "nextTab",
     label: "Next tab",
     description: "Switch to the tab on the right.",
     default: "Control+ArrowRight",
+    keywords: "scroll wheel navigation",
+    wheel: true,
+  },
+  {
+    id: "increaseThumbnailSize",
+    label: "Larger thumbnails",
+    description: "Increase thumbnail size in the grid.",
+    default: "Control+WheelUp",
+    keywords: "resize zoom scroll wheel grid size",
+    wheel: true,
+  },
+  {
+    id: "decreaseThumbnailSize",
+    label: "Smaller thumbnails",
+    description: "Decrease thumbnail size in the grid.",
+    default: "Control+WheelDown",
+    keywords: "resize zoom scroll wheel grid size",
+    wheel: true,
   },
   {
     id: "quickMove",

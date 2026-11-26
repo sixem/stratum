@@ -3,6 +3,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal.css";
+import { writeTextClipboard } from "@/modules/clipboardStore";
 import { useBottomSessionStore, useSessionStore } from "@/modules/sessionStore";
 import { useSettingsStore } from "@/modules/settings.store";
 import { useWorkspaceStore } from "@/modules/workspaceStore";
@@ -19,6 +20,17 @@ import { TerminalInput } from "./terminalInput";
 type OpenedTerminal = { id: number; directory: string };
 const sessions = new Map<string, Shell>();
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, Math.floor(n)));
+
+function readTerminalOptions() {
+  const settings = useSettingsStore.getState();
+  return {
+    fontFamily: terminalFontStack(settings.terminalFontFamily),
+    fontSize: settings.terminalFontSize,
+    fontWeight: settings.terminalFontWeight,
+    cursorStyle: settings.terminalCursorStyle,
+    scrollback: settings.terminalScrollback,
+  };
+}
 
 // Let the existing pane shortcuts switch tabs while the shell owns all editing keys.
 const switchTab = (event: Pick<KeyboardEvent, "key" | "ctrlKey" | "altKey" | "metaKey">) =>
@@ -47,14 +59,14 @@ class Shell {
     this.element.append(this.viewport, this.status);
     host.append(this.element);
     this.term = new Terminal({
-      fontFamily: terminalFontStack(useSettingsStore.getState().terminalFontFamily), fontSize: 14,
-      scrollback: 1500, theme: this.applySurfaceTheme(),
+      ...readTerminalOptions(),
+      theme: this.applySurfaceTheme(),
       linkHandler: { activate() {} },
     });
     this.term.open(this.viewport);
     // Shell output cannot write or query the system clipboard.
     this.term.parser.registerOscHandler(52, () => true);
-    this.term.attachCustomKeyEventHandler(event => !switchTab(event));
+    this.term.attachCustomKeyEventHandler(event => this.handleKey(event));
     this.term.onData(data => this.enqueue(data, false));
     this.term.onBinary(data => this.enqueue(data, true));
     this.observer.observe(this.viewport);
@@ -62,12 +74,25 @@ class Shell {
     void this.start(terminal.directory);
   }
 
+  private handleKey(event: KeyboardEvent): boolean {
+    if (switchTab(event)) return false;
+    if (event.type !== "keydown" || !event.ctrlKey || event.altKey || event.metaKey || event.key.toLowerCase() !== "c") {
+      return true;
+    }
+
+    // Ctrl+C still sends an interrupt when there is no selection.
+    if (!event.shiftKey && !this.term.hasSelection()) return true;
+    event.preventDefault();
+    if (!event.repeat) void writeTextClipboard(this.term.getSelection());
+    return false;
+  }
+
   attach(host: HTMLElement, autoFocus: boolean) {
     if (this.element.parentNode !== host) {
       host.append(this.element);
       this.updateTheme();
     }
-    this.updateFont();
+    this.updateOptions();
     if (autoFocus) this.focus();
   }
 
@@ -81,9 +106,8 @@ class Shell {
     this.term.options.theme = this.applySurfaceTheme();
   }
 
-  updateFont() {
-    const fontFamily = terminalFontStack(useSettingsStore.getState().terminalFontFamily);
-    if (this.term.options.fontFamily !== fontFamily) this.term.options.fontFamily = fontFamily;
+  updateOptions() {
+    this.term.options = readTerminalOptions();
     this.fit();
   }
 
@@ -248,7 +272,13 @@ export default function PowerShell({ terminal, autoFocus }: { terminal: Terminal
     shell.attach(container, autoFocus);
     const unsubscribeAppearance = useSettingsStore.subscribe((next, previous) => {
       if (next.terminalTheme !== previous.terminalTheme) shell.updateTheme();
-      if (next.terminalFontFamily !== previous.terminalFontFamily) shell.updateFont();
+      if (next.terminalFontFamily !== previous.terminalFontFamily ||
+          next.terminalFontSize !== previous.terminalFontSize ||
+          next.terminalFontWeight !== previous.terminalFontWeight ||
+          next.terminalCursorStyle !== previous.terminalCursorStyle ||
+          next.terminalScrollback !== previous.terminalScrollback) {
+        shell.updateOptions();
+      }
     });
     // In Follow app mode, read the shared tokens after the root attributes change.
     const appearance = new MutationObserver(() => {

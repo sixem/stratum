@@ -316,7 +316,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         onCrumbContextMenu={paneActions.handlePlaceTargetContextMenu}
         onCrumbContextMenuDown={paneActions.handlePlaceTargetContextMenuDown} />
     ) : null}
-    <TerminalSplitView pane="bottom" tab={tabs.activeTab} filePaneRef={files} commandsBlocked={commandsBlocked}>
+    <TerminalSplitView pane="bottom" tab={tabs.activeTab} filePaneRef={files} onSelectTab={tabs.selectTab} commandsBlocked={commandsBlocked}>
     <div ref={files} className="main bottom-files" tabIndex={-1} aria-busy={busy} data-file-pane="bottom" data-pane-path={ready ? path : ""}
       data-drop-background={drop.backgroundHovered && drop.hoveredPane === "bottom" || undefined}
       onScrollCapture={event => {

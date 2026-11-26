@@ -10,6 +10,8 @@ import { handleSearchHotkey } from "@/hooks/ui/inputs/useSearchHotkey";
 import { moveFileSelection } from "@/hooks/ui/selection/moveFileSelection";
 import { buildKeybindFromEvent, useIndexedSearchUiStore, useSettingsStore, usePromptStore, writeFileClipboard } from "@/modules";
 import { openQuickMove, useQuickMoveSession } from "@/modules/quickMoveSession";
+import { resizeThumbnails } from "@/modules/resizeThumbnails";
+import { useBottomSessionStore } from "@/modules/sessionStore";
 import type { EntryContextTarget } from "@/types";
 import type { PaneActions } from "./BottomPane";
 import type { useBottomFolder } from "./useBottomFolder";
@@ -95,6 +97,11 @@ export function bottomPaneKeys({
       if (!focusSplitTerminal(files.current)) return;
     }
     else if (!ready) return;
+    else if (binding === keybinds.increaseThumbnailSize || binding === keybinds.decreaseThumbnailSize) {
+      if (!files.current?.querySelector(".thumb-viewport") || !resizeThumbnails(
+        binding === keybinds.increaseThumbnailSize ? 1 : -1, useBottomSessionStore, tabs.activeTabId,
+      )) return;
+    }
     else if (binding === keybinds.quickMove) {
       if (!openQuickMove(paths, moveEntries)) return;
     }

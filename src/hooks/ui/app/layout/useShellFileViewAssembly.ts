@@ -166,6 +166,7 @@ export const useShellFileViewAssembly = ({
       onRetryFolder: interactionModel.handleManualRefresh,
       mainRef: viewState.mainRef,
       activeTabId: resolvedView.activeTabId,
+      onSelectTab: navigationController.handleSelectTab,
       onContextMenu: layoutContextMenu,
       onContextMenuDown: layoutContextMenuDown,
       fileViewProps,

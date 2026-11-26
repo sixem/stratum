@@ -33,6 +33,7 @@ const App = ({ showWelcome }: { showWelcome: boolean }) => {
           sidebarOpen: navigation.sidebarOpen,
           sidebarProps: navigation.sidebarProps,
           activeTabId: view.activeTabId,
+          onSelectTab: view.onSelectTab,
           mainRef: view.mainRef,
           onContextMenu: view.onContextMenu,
           onContextMenuDown: view.onContextMenuDown,

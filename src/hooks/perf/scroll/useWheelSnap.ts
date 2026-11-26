@@ -18,7 +18,7 @@ export function useWheelSnap(
     if (!element || !stepPx) return;
 
     const handleWheel = (event: WheelEvent) => {
-      if (event.ctrlKey) return;
+      if (event.ctrlKey || event.defaultPrevented) return;
 
       // Some inputs report tiny or legacy deltas; fall back to wheelDelta so each tick moves.
       const legacy = event as WheelEvent & { wheelDeltaY?: number; wheelDelta?: number };
