@@ -5,10 +5,10 @@ import { Fragment, useRef, useState } from "react";
 import { usePinnedPlaceDragDrop } from "@/hooks";
 import { useLocationDrag } from "@/hooks/ui/inputs/useLocationDrag";
 import { folderPathKey, handleMiddleClick, tabLabel } from "@/lib";
-import type { SidebarSectionId } from "@/modules";
-import { normalizeSidebarHiddenSections, normalizeSidebarSectionOrder } from "@/modules";
+import type { PinShape, SidebarSectionId } from "@/modules";
+import { normalizeSidebarHiddenSections, normalizeSidebarSectionOrder, useSettingsStore } from "@/modules";
+import { PinShapeIcon } from "@/components/icons/PinShapeIcon";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
-import { PinIcon } from "@/components/icons";
 import { PressButton } from "@/components/primitives/PressButton";
 import { ScrollArea } from "@/components/primitives/ScrollArea";
 import { SidebarSection } from "./SidebarSection";
@@ -41,6 +41,8 @@ type SidebarItemProps = {
   isDropTarget: boolean;
   isRecent?: boolean;
   isPinned?: boolean;
+  pinColor?: string;
+  pinShape?: PinShape;
   isDragging?: boolean;
   pinnedDropPosition?: "before" | "after" | null;
   onReorderPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>, path: string) => void;
@@ -59,6 +61,8 @@ const SidebarItem = ({
   isDropTarget,
   isRecent = false,
   isPinned = false,
+  pinColor,
+  pinShape = "circle",
   isDragging = false,
   pinnedDropPosition = null,
   onReorderPointerDown,
@@ -117,8 +121,8 @@ const SidebarItem = ({
         <span className="place-name">{title}</span>
         {isPinned ? (
           <TooltipWrapper text="Pinned place">
-            <span className="place-pin" aria-hidden="true">
-              <PinIcon className="place-pin-icon" />
+            <span className="place-pin" style={pinColor ? { color: pinColor } : undefined}>
+              <PinShapeIcon shape={pinShape} />
             </span>
           </TooltipWrapper>
         ) : null}
@@ -145,6 +149,7 @@ export const Sidebar = ({
   onRecentContextMenuDown,
   onOpenTipsMenu,
 }: SidebarProps) => {
+  const pinShape = useSettingsStore((state) => state.pinShape);
   const [placesOpen, setPlacesOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
   const placesListRef = useRef<HTMLDivElement | null>(null);
@@ -184,6 +189,8 @@ export const Sidebar = ({
                     isActive={activeKey === folderPathKey(place.path)}
                     isDropTarget={dropTargetKey === folderPathKey(place.path)}
                     isPinned={place.pinned === true}
+                    pinColor={place.pinColor}
+                    pinShape={pinShape}
                     isDragging={draggingPath === place.path}
                     pinnedDropPosition={
                       dropTarget?.path === place.path ? dropTarget.position : null

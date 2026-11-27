@@ -224,6 +224,8 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
         : DEFAULT_SETTINGS.smartTabJump,
     terminalTabNavigation: value?.terminalTabNavigation === true,
     accentTheme: coerceAccentTheme(value?.accentTheme),
+    pinShape: value?.pinShape === "square" || value?.pinShape === "diamond" || value?.pinShape === "asterisk" || value?.pinShape === "pill"
+      ? value.pinShape : DEFAULT_SETTINGS.pinShape,
     terminalTheme: coerceTerminalTheme(value?.terminalTheme),
     terminalFontFamily: coerceTerminalFont(value?.terminalFontFamily),
     terminalFontSize: coerceTerminalFontSize(value?.terminalFontSize),

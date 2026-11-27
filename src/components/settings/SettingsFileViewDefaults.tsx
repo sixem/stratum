@@ -1,4 +1,5 @@
 // Shared browsing defaults for grid and list views in both panes.
+import { SettingsPills } from "./SettingsPills";
 import { shallow } from "zustand/shallow";
 import { PressButton } from "@/components/primitives/PressButton";
 import { resolveDefaultViewMode, useSettingsStore } from "@/modules/settings.store";
@@ -46,7 +47,7 @@ export const SettingsFileViewDefaults = ({ sectionId }: { sectionId: string }) =
   return (
     <SettingsGroup id={sectionId} title="Browsing" items={Object.values(FILE_VIEW_DEFAULTS_ITEMS)}>
       <SettingsItem item={FILE_VIEW_DEFAULTS_ITEMS.defaultView}>
-        <div className="settings-pills" role="group" aria-label="Default view">
+        <SettingsPills aria-label="Default view">
           {DEFAULT_VIEW_OPTIONS.map(({ value, label }) => (
             <PressButton
               key={value}
@@ -66,7 +67,7 @@ export const SettingsFileViewDefaults = ({ sectionId }: { sectionId: string }) =
               {label}
             </PressButton>
           ))}
-        </div>
+        </SettingsPills>
       </SettingsItem>
       <SettingsToggleItem item={FILE_VIEW_DEFAULTS_ITEMS.smoothScrolling} checked={smoothScroll}
         onChange={(smoothScroll) => updateSettings({ smoothScroll })} />

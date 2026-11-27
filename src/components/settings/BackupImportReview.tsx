@@ -1,4 +1,5 @@
 // Review the workspace merge, portable settings, and path remaps before import.
+import { SettingsPills } from "./SettingsPills";
 import { useId, useMemo, useState } from "react";
 import { PressButton } from "@/components/primitives/PressButton";
 import { toMessage } from "@/lib";
@@ -57,14 +58,14 @@ export const BackupImportReview = ({ backup, onCancel, onImported }: Props) => {
       {hasConflicts ? (
         <div className="settings-backup-choice">
           <span id={conflictLabelId} className="settings-desc">Matching workspace names</span>
-          <div className="settings-pills" role="group" aria-labelledby={conflictLabelId}>
+          <SettingsPills aria-labelledby={conflictLabelId}>
             {CONFLICT_OPTIONS.map(({ value, label }) => (
               <PressButton key={value} type="button" className={`settings-pill${value === conflicts ? " is-active" : ""}`}
                 aria-pressed={value === conflicts} onClick={() => setConflicts(value)}>
                 {label}
               </PressButton>
             ))}
-          </div>
+          </SettingsPills>
         </div>
       ) : null}
       {preview.length ? (

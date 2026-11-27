@@ -34,6 +34,7 @@ export type ContextMenuIcon =
   | "separate-tabs"
   | "pin"
   | "unpin"
+  | "pin-shape"
   | "add"
   | "remove"
   | "hide"
@@ -61,6 +62,7 @@ export type ContextMenuItem =
       tooltip?: string;
       disabled?: boolean;
       icon?: ContextMenuIcon;
+      iconColor?: string;
       iconUrl?: string;
     }
   | {
@@ -72,6 +74,7 @@ export type ContextMenuItem =
       hint?: string;
       disabled?: boolean;
       icon?: ContextMenuIcon;
+      iconColor?: string;
     }
   | {
       kind: "divider";

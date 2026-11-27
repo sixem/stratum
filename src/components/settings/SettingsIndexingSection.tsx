@@ -1,4 +1,5 @@
 // Indexed-search settings stay user-facing here without exposing backend jargon.
+import { SettingsPills } from "./SettingsPills";
 import { useCallback, useContext, useEffect, useState } from "react";
 import { shallow } from "zustand/shallow";
 import { getIndexedSearchCatalogPath, openPath } from "@/api";
@@ -104,7 +105,7 @@ export const SettingsIndexingSection = ({
       </SettingsItem>
       <SettingsItem item={INDEXING_SETTINGS_ITEMS.scope} className="is-stacked">
         {roots.length > 0 && (
-          <div className="settings-pills" role="group" aria-label="Indexed drives">
+          <SettingsPills aria-label="Indexed drives">
             {roots.map((root) => {
               const included = !excludedIndexedDrives.includes(root);
               return (
@@ -127,7 +128,7 @@ export const SettingsIndexingSection = ({
                 </PressButton>
               );
             })}
-          </div>
+          </SettingsPills>
         )}
         {driveRoots === undefined && <span className="settings-desc" role="status">Checking drives…</span>}
         {driveRoots === null && <span className="settings-desc" role="status">Unable to check drives.</span>}

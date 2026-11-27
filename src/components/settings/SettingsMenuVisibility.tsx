@@ -1,4 +1,5 @@
 // Group menu visibility controls so each action can be changed independently.
+import { SettingsPills } from "./SettingsPills";
 import { CONTEXT_MENU_ACTION_GROUPS, type ContextMenuAction } from "@/lib/contextMenuVisibility";
 import { useSettingsStore } from "@/modules";
 import { SettingsItem } from "./SettingsItem";
@@ -27,7 +28,7 @@ export function SettingsMenuVisibility() {
 
   return groups.map(({ item, actions }) => (
     <SettingsItem key={item.label} item={item} className="is-stacked">
-      <div className="settings-pills" role="group" aria-label={item.label}>
+      <SettingsPills aria-label={item.label}>
         {actions.map(({ id, label }) => {
           const visible = !hidden.includes(id);
           return (
@@ -37,7 +38,7 @@ export function SettingsMenuVisibility() {
             </label>
           );
         })}
-      </div>
+      </SettingsPills>
     </SettingsItem>
   ));
 }

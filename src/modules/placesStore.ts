@@ -18,6 +18,7 @@ type PlacesStore = {
   renamePlace: (path: string, name: string) => void;
   pinPlace: (path: string) => void;
   unpinPlace: (path: string) => void;
+  setPinColor: (path: string, color?: string) => void;
   reorderPinnedPlace: (fromPath: string, toPath: string, position: "before" | "after") => void;
   removePlace: (path: string) => void;
 };
@@ -48,7 +49,7 @@ const coercePlaceName = (value: unknown, fallbackPath: string) => {
 
 const coercePlaceEntry = (value: unknown): Place | null => {
   if (!value || typeof value !== "object") return null;
-  const raw = value as { name?: unknown; path?: unknown; pinned?: unknown };
+  const raw = value as { name?: unknown; path?: unknown; pinned?: unknown; pinColor?: unknown };
   if (typeof raw.path !== "string") return null;
   const path = raw.path.trim();
   if (!path) return null;
@@ -56,6 +57,7 @@ const coercePlaceEntry = (value: unknown): Place | null => {
     name: coercePlaceName(raw.name, path),
     path,
     pinned: raw.pinned === true,
+    pinColor: typeof raw.pinColor === "string" && /^#[0-9a-f]{6}$/i.test(raw.pinColor) ? raw.pinColor : undefined,
   };
 };
 
@@ -76,6 +78,7 @@ const dedupePlaces = (places: Place[]) => {
       name: coercePlaceName(place.name, place.path),
       path: place.path.trim(),
       pinned: place.pinned === true,
+      pinColor: place.pinColor,
     });
   });
   return orderPlaces(next);
@@ -142,6 +145,7 @@ const updatePlace = (
     name: coercePlaceName(patch.name ?? current.name, current.path),
     path: current.path,
     pinned: patch.pinned ?? current.pinned ?? false,
+    pinColor: current.pinColor,
   };
   const next = [...places];
   next.splice(index, 1);
@@ -199,6 +203,7 @@ export const usePlacesStore = createWithEqualityFn<PlacesStore>((set) => ({
           name: coercePlaceName(place.name, place.path),
           path: place.path.trim(),
           pinned: place.pinned === true,
+          pinColor: place.pinColor,
         })),
       );
       return {
@@ -256,6 +261,9 @@ export const usePlacesStore = createWithEqualityFn<PlacesStore>((set) => ({
       initialized: true,
       places: updatePlace(state.places, path, { pinned: false }),
     })),
+  setPinColor: (path, color) =>
+    set((state) => ({ places: state.places.map((place) =>
+      toPlaceKey(place.path) === toPlaceKey(path) ? { ...place, pinColor: color } : place) })),
   reorderPinnedPlace: (fromPath, toPath, position) =>
     set((state) => ({
       initialized: true,

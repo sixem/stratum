@@ -1,4 +1,5 @@
 // Thumbnail generation and preview tuning.
+import { SettingsPills } from "./SettingsPills";
 import { shallow } from "zustand/shallow";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useSettingsStore } from "@/modules";
@@ -130,7 +131,7 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
         item={THUMBS_SETTINGS_ITEMS.imageFormat}
         className={isThumbsDisabled ? "is-disabled" : undefined}
       >
-        <div className="settings-pills" role="group" aria-label={THUMBS_SETTINGS_ITEMS.imageFormat.label}>
+        <SettingsPills aria-label={THUMBS_SETTINGS_ITEMS.imageFormat.label}>
           {(["webp", "jpeg"] as const).map((format) => (
             <PressButton
               key={format}
@@ -143,7 +144,7 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
               {format === "webp" ? "WebP" : "JPEG"}
             </PressButton>
           ))}
-        </div>
+        </SettingsPills>
       </SettingsItem>
       <SettingsItem
         item={THUMBS_SETTINGS_ITEMS.quality}
@@ -226,7 +227,7 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
         item={THUMBS_SETTINGS_ITEMS.display}
         className={isThumbsDisabled ? "is-disabled" : undefined}
       >
-        <div className="settings-pills" role="group" aria-label="Thumbnail display">
+        <SettingsPills aria-label="Thumbnail display">
           <PressButton
             type="button"
             disabled={isThumbsDisabled}
@@ -243,7 +244,7 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
           >
             Fit
           </PressButton>
-        </div>
+        </SettingsPills>
       </SettingsItem>
     </SettingsGroup>
   );

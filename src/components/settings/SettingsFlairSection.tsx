@@ -1,9 +1,12 @@
 // Visual flair toggles for the palette, accent, and ambient effects.
+import { SettingsPills } from "./SettingsPills";
 import { useId } from "react";
 import { shallow } from "zustand/shallow";
 import { ACCENT_THEMES } from "@/constants/settings";
 import { PressButton } from "@/components/primitives/PressButton";
 import { useSettingsStore } from "@/modules";
+import type { PinShape } from "@/modules";
+import { PinShapeIcon } from "@/components/icons/PinShapeIcon";
 
 import { SettingsGroup, SettingsItem, SettingsToggleItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
@@ -19,6 +22,11 @@ const APPEARANCE_ITEMS = {
     label: "Accent color",
     description: "Tint highlights and accents.",
     keywords: "theme appearance",
+  },
+  pinShape: {
+    label: "Pin shape",
+    description: "Choose the indicator used for pinned places in the sidebar.",
+    keywords: "sidebar places marker circle square diamond asterisk pill",
   },
   categoryTints: {
     label: "Category tints",
@@ -41,6 +49,13 @@ const APPEARANCE_ITEMS = {
 
 export const FLAIR_SETTINGS_ITEMS = { ...APPEARANCE_ITEMS, ...TERMINAL_APPEARANCE_ITEMS };
 const appearanceItems = Object.values(APPEARANCE_ITEMS);
+const PIN_SHAPES: { id: PinShape; label: string }[] = [
+  { id: "circle", label: "Circle" },
+  { id: "square", label: "Square" },
+  { id: "diamond", label: "Diamond" },
+  { id: "asterisk", label: "Asterisk" },
+  { id: "pill", label: "Pill" },
+];
 
 type SettingsFlairSectionProps = {
   sectionId: string;
@@ -52,6 +67,7 @@ export const SettingsFlairSection = ({ sectionId, open }: SettingsFlairSectionPr
   const darkModeDescriptionId = `${darkModeId}-description`;
   const {
     accentTheme,
+    pinShape,
     darkMode,
     categoryTinting,
     ambientBackground,
@@ -61,6 +77,7 @@ export const SettingsFlairSection = ({ sectionId, open }: SettingsFlairSectionPr
   } = useSettingsStore(
     (state) => ({
       accentTheme: state.accentTheme,
+      pinShape: state.pinShape,
       darkMode: state.darkMode,
       categoryTinting: state.categoryTinting,
       ambientBackground: state.ambientBackground,
@@ -91,7 +108,7 @@ export const SettingsFlairSection = ({ sectionId, open }: SettingsFlairSectionPr
           </label>
         </SettingsItem>
         <SettingsItem item={FLAIR_SETTINGS_ITEMS.accentColor}>
-          <div className="settings-pills" role="group" aria-label="Accent color">
+          <SettingsPills aria-label="Accent color">
             {ACCENT_THEMES.map((theme) => (
               <PressButton
                 key={theme.id}
@@ -105,7 +122,23 @@ export const SettingsFlairSection = ({ sectionId, open }: SettingsFlairSectionPr
                 {theme.label}
               </PressButton>
             ))}
-          </div>
+          </SettingsPills>
+        </SettingsItem>
+        <SettingsItem item={FLAIR_SETTINGS_ITEMS.pinShape}>
+          <SettingsPills aria-label="Pin shape">
+            {PIN_SHAPES.map((shape) => (
+              <PressButton
+                key={shape.id}
+                type="button"
+                className={`settings-pill${pinShape === shape.id ? " is-active" : ""}`}
+                aria-pressed={pinShape === shape.id}
+                onClick={() => updateSettings({ pinShape: shape.id })}
+              >
+                <PinShapeIcon shape={shape.id} className="settings-pin-shape" />
+                {shape.label}
+              </PressButton>
+            ))}
+          </SettingsPills>
         </SettingsItem>
         <SettingsItem item={FLAIR_SETTINGS_ITEMS.categoryTints}>
           <label className="settings-toggle">

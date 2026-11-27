@@ -55,6 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
   smartTabJump: true,
   terminalTabNavigation: false,
   accentTheme: "red",
+  pinShape: "circle",
   terminalTheme: DEFAULT_TERMINAL_THEME,
   terminalFontFamily: null,
   terminalFontSize: DEFAULT_TERMINAL_FONT_SIZE,

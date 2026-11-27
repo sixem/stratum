@@ -13,6 +13,7 @@ export type {
   AccentTheme,
   GridNameEllipsis,
   GridSize,
+  PinShape,
   Settings,
   SidebarSectionId,
   ThumbnailFit,

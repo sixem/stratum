@@ -1,4 +1,5 @@
 // Export a whole profile by default, with named workspaces available as a smaller backup.
+import { SettingsPills } from "./SettingsPills";
 import { useState } from "react";
 import { openStratumBackup, saveStratumBackup } from "@/api/backup";
 import { PressButton } from "@/components/primitives/PressButton";
@@ -70,7 +71,7 @@ export const SettingsBackupSection = ({ sectionId }: { sectionId: string }) => {
       <div className="settings-section-title">Backup &amp; restore</div>
       <SettingsItem item={BACKUP_SETTINGS_ITEMS.export} className="is-stacked">
         <div className="settings-backup-export">
-          <div className="settings-pills" role="group" aria-label="Export scope">
+          <SettingsPills aria-label="Export scope">
             <PressButton
               type="button"
               className={`settings-pill${scope === "full" ? " is-active" : ""}`}
@@ -85,7 +86,7 @@ export const SettingsBackupSection = ({ sectionId }: { sectionId: string }) => {
               disabled={busy}
               onClick={() => setScope("workspaces")}
             >Workspaces only</PressButton>
-          </div>
+          </SettingsPills>
           {scope === "workspaces" ? workspaces.length ? (
             <ul className="settings-backup-list" aria-label="Workspaces to export">
               {workspaces.map(({ id, name }) => (

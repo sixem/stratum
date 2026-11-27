@@ -137,6 +137,7 @@ useSettingsStore.subscribe((state) => {
     smartTabJump: state.smartTabJump,
     terminalTabNavigation: state.terminalTabNavigation,
     accentTheme: state.accentTheme,
+    pinShape: state.pinShape,
     terminalTheme: state.terminalTheme,
     terminalFontFamily: state.terminalFontFamily,
     terminalFontSize: state.terminalFontSize,

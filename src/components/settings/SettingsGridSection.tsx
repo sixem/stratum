@@ -1,4 +1,5 @@
 // Grid-specific appearance and content controls.
+import { SettingsPills } from "./SettingsPills";
 import { shallow } from "zustand/shallow";
 import {
   GRID_AUTO_COLUMNS_MAX,
@@ -115,7 +116,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
   return (
     <SettingsGroup id={sectionId} title="Grid" items={Object.values(GRID_SETTINGS_ITEMS)}>
       <SettingsItem item={GRID_SETTINGS_ITEMS.size}>
-        <div className="settings-pills" role="group" aria-label="Grid size">
+        <SettingsPills aria-label="Grid size">
           {GRID_SIZES.map((size) => (
             <PressButton
               key={size.id}
@@ -127,7 +128,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
               {size.label}
             </PressButton>
           ))}
-        </div>
+        </SettingsPills>
       </SettingsItem>
       {gridSize === "auto" ? (
         <SettingsItem item={GRID_SETTINGS_ITEMS.autoColumns}>
@@ -181,7 +182,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
         </label>
       </SettingsItem>
       <SettingsItem item={GRID_SETTINGS_ITEMS.corners}>
-        <div className="settings-pills" role="group" aria-label="Grid corners">
+        <SettingsPills aria-label="Grid corners">
           <PressButton
             type="button"
             className={`settings-pill${gridRounded ? " is-active" : ""}`}
@@ -196,10 +197,10 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
           >
             Straight
           </PressButton>
-        </div>
+        </SettingsPills>
       </SettingsItem>
       <SettingsItem item={GRID_SETTINGS_ITEMS.details}>
-        <div className="settings-pills" role="group" aria-label="Grid details">
+        <SettingsPills aria-label="Grid details">
           <label
             className={`settings-pill settings-pill-check${gridShowSize ? " is-active" : ""}`}
           >
@@ -226,7 +227,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
             />
             <span>Extension</span>
           </label>
-        </div>
+        </SettingsPills>
       </SettingsItem>
       <SettingsItem item={GRID_SETTINGS_ITEMS.hideExtension}>
         <label className="settings-toggle">
@@ -241,7 +242,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
         </label>
       </SettingsItem>
       <SettingsItem item={GRID_SETTINGS_ITEMS.nameTruncation}>
-        <div className="settings-pills" role="group" aria-label="Grid name truncation">
+        <SettingsPills aria-label="Grid name truncation">
           {GRID_NAME_ELLIPSIS.map((mode) => (
             <PressButton
               key={mode.id}
@@ -252,7 +253,7 @@ export const SettingsGridSection = ({ sectionId }: SettingsGridSectionProps) => 
               {mode.label}
             </PressButton>
           ))}
-        </div>
+        </SettingsPills>
       </SettingsItem>
     </SettingsGroup>
   );

@@ -1,4 +1,5 @@
 // List display preferences shared by both file panes.
+import { SettingsPills } from "./SettingsPills";
 import { PressButton } from "@/components/primitives/PressButton";
 import { LIST_COLUMN_OPTIONS } from "@/constants/settings";
 import { useSettingsStore } from "@/modules";
@@ -34,7 +35,7 @@ export const SettingsListSection = ({ sectionId }: { sectionId: string }) => {
   return (
     <SettingsGroup id={sectionId} title="List" items={Object.values(LIST_SETTINGS_ITEMS)}>
       <SettingsItem item={LIST_SETTINGS_ITEMS.density}>
-        <div className="settings-pills" role="group" aria-label="Row spacing">
+        <SettingsPills aria-label="Row spacing">
           {DENSITIES.map(({ value, label }) => (
             <PressButton
               key={value}
@@ -46,10 +47,10 @@ export const SettingsListSection = ({ sectionId }: { sectionId: string }) => {
               {label}
             </PressButton>
           ))}
-        </div>
+        </SettingsPills>
       </SettingsItem>
       <SettingsItem item={LIST_SETTINGS_ITEMS.columns}>
-        <div className="settings-pills" role="group" aria-label="Visible columns">
+        <SettingsPills aria-label="Visible columns">
           {LIST_COLUMN_OPTIONS.map(({ key, label }) => (
             <PressButton
               key={key}
@@ -61,7 +62,7 @@ export const SettingsListSection = ({ sectionId }: { sectionId: string }) => {
               {label}
             </PressButton>
           ))}
-        </div>
+        </SettingsPills>
       </SettingsItem>
     </SettingsGroup>
   );

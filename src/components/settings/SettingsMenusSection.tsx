@@ -1,4 +1,5 @@
 // Context menu customization settings.
+import { SettingsPills } from "./SettingsPills";
 import { useId } from "react";
 import { shallow } from "zustand/shallow";
 import { RECENT_MOVE_LIMIT_MAX, RECENT_MOVE_LIMIT_MIN } from "@/constants";
@@ -170,7 +171,7 @@ export const SettingsMenusSection = ({ sectionId }: SettingsMenusSectionProps) =
         </SettingsItem>
       )}
       <SettingsItem item={MENUS_SETTINGS_ITEMS.backgroundActions}>
-        <div className="settings-pills" role="group" aria-label="Background menu">
+        <SettingsPills aria-label="Background menu">
           <label
             className={`settings-pill settings-pill-check${
               menuOpenPwsh ? " is-active" : ""
@@ -199,7 +200,7 @@ export const SettingsMenusSection = ({ sectionId }: SettingsMenusSectionProps) =
             />
             <span>Open in WSL</span>
           </label>
-        </div>
+        </SettingsPills>
       </SettingsItem>
       <SettingsMenuVisibility />
     </section>

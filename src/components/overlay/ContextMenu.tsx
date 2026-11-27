@@ -43,6 +43,9 @@ import { alignFloatingAxis, clamp, getViewportSize } from "./overlayUtils";
 import { useOverlayDismiss } from "./useOverlayDismiss";
 import { focusFirstMenuItem, handleContextMenuKey } from "./contextMenuKeyboard";
 import { TooltipWrapper } from "./Tooltip";
+import { PinShapeIcon } from "@/components/icons/PinShapeIcon";
+import { useSettingsStore } from "@/modules";
+import type { PinShape } from "@/modules";
 
 type ContextMenuProps = {
   open: boolean;
@@ -91,23 +94,29 @@ const contextIcons = {
   "invert-selection": ContextInvertSelectionIcon,
   properties: ContextPropertiesIcon,
   "more-options": ContextMoreOptionsIcon,
-} satisfies Record<ContextMenuIcon, typeof CopyActionIcon>;
+} satisfies Record<Exclude<ContextMenuIcon, "pin-shape">, typeof CopyActionIcon>;
 
-const renderContextIcon = (icon: ContextMenuIcon) => {
+const renderContextIcon = (icon: ContextMenuIcon, pinShape: PinShape) => {
+  if (icon === "pin-shape") return <PinShapeIcon shape={pinShape} className="context-check-icon" />;
   const Icon = contextIcons[icon];
   return <Icon className="context-check-icon" />;
 };
 
+// Icon colors are independent of the selected label's accent color.
+const iconColorStyle = (color?: string): CSSProperties | undefined =>
+  color ? { "--context-icon-color": color } as CSSProperties : undefined;
+
 export const ContextMenu = ({
   open, x, y, items, onClose, onOpenNative, scrollContainer, scrollable = false, focusFirstItem = false,
 }: ContextMenuProps) => {
+  const pinShape = useSettingsStore((state) => state.pinShape);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const submenuRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState({ x, y });
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null);
   const [submenuSide, setSubmenuSide] = useState<"left" | "right">("right");
-  const [submenuOffset, setSubmenuOffset] = useState(0);
+  const [submenuPosition, setSubmenuPosition] = useState({ x: 0, y: 0 });
   const lastOpenMenuRef = useRef({ items, scrollable });
   const scrollPositionRef = useRef<{ element: HTMLElement; top: number; left: number } | null>(null);
 
@@ -150,7 +159,6 @@ export const ContextMenu = ({
 
   const closeSubmenu = useCallback(() => {
     setOpenSubmenuId(null);
-    setSubmenuOffset(0);
   }, []);
 
   const menuStyle = useMemo<CSSProperties>(
@@ -214,7 +222,10 @@ export const ContextMenu = ({
     const maxTop = viewport.height - MENU_EDGE - submenuRect.height;
     const safeMax = maxTop < minTop ? minTop : maxTop;
     const clampedTop = clamp(anchorRect.top, minTop, safeMax);
-    setSubmenuOffset(clampedTop - anchorRect.top);
+    setSubmenuPosition({
+      x: fitsRight || !fitsLeft ? anchorRect.right + SUBMENU_GAP : anchorRect.left - SUBMENU_GAP - submenuRect.width,
+      y: clampedTop,
+    });
   }, [items, open, openSubmenuId]);
 
   const renderMenuItems = (menuItems: ContextMenuItem[], depth = 0) =>
@@ -247,7 +258,6 @@ export const ContextMenu = ({
                 if (isDisabled) return;
                 setOpenSubmenuId((current) => {
                   if (current === item.id) {
-                    setSubmenuOffset(0);
                     return null;
                   }
                   return item.id;
@@ -258,7 +268,9 @@ export const ContextMenu = ({
               aria-expanded={isOpen}
               disabled={item.disabled}
             >
-              <span className="context-check" aria-hidden="true">{item.icon ? renderContextIcon(item.icon) : null}</span>
+              <span className="context-check" style={iconColorStyle(item.iconColor)} aria-hidden="true">
+                {item.icon ? renderContextIcon(item.icon, pinShape) : null}
+              </span>
               <span className="context-label">{item.label}</span>
               <span className="context-right">
                 {item.hint ? <span className="context-hint">{item.hint}</span> : null}
@@ -273,7 +285,7 @@ export const ContextMenu = ({
                 className={`context-submenu${submenuSide === "left" ? " is-left" : " is-right"}`}
                 data-wide={item.wide || undefined}
                 role="menu"
-                style={{ top: submenuOffset }}
+                style={{ left: submenuPosition.x, top: submenuPosition.y }}
               >
                 <div className="context-submenu-list">
                   {renderMenuItems(item.items, depth + 1)}
@@ -309,7 +321,7 @@ export const ContextMenu = ({
           aria-checked={checked}
           disabled={item.disabled}
         >
-          <span className="context-check" aria-hidden="true">
+          <span className="context-check" style={iconColorStyle(item.iconColor)} aria-hidden="true">
             {item.iconUrl ? (
               <img
                 key={item.iconUrl}
@@ -320,7 +332,7 @@ export const ContextMenu = ({
                 decoding="async"
                 onError={(event) => { event.currentTarget.style.visibility = "hidden"; }}
               />
-            ) : item.icon ? renderContextIcon(item.icon) : checked ? "x" : ""}
+            ) : item.icon ? renderContextIcon(item.icon, pinShape) : checked ? "x" : ""}
           </span>
           {item.disabled && item.tooltip ? (
             <TooltipWrapper text={item.tooltip} withinContextMenu>{label}</TooltipWrapper>
@@ -361,7 +373,7 @@ export const ContextMenu = ({
       }}
       onContextMenu={(event) => event.preventDefault()}
     >
-      <div className="context-menu-list" ref={listRef}>{renderMenuItems(renderedMenu.items)}</div>
+      <div className="context-menu-list" ref={listRef} onScroll={closeSubmenu}>{renderMenuItems(renderedMenu.items)}</div>
     </div>
   );
 };

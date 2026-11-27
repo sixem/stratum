@@ -175,6 +175,22 @@ export const buildPlaceTargetMenuItems = ({
   }
 
   if (existing) {
+    if (target.source === "sidebar-place" && isPinned) {
+      const colors = [
+        ["Default", undefined], ["Red", "#e36b6b"], ["Orange", "#e9a35b"],
+        ["Yellow", "#d8bf62"], ["Green", "#69b985"], ["Blue", "#6c9fe1"], ["Purple", "#ad86d9"],
+      ] as const;
+      const defaultColor = "rgba(var(--accent-rgb), 0.75)";
+      items.push({
+        kind: "submenu", id: "place-pin-color", label: "Pin color",
+        icon: "pin-shape", iconColor: existing.pinColor ?? defaultColor,
+        items: colors.map(([label, color]) => ({
+          id: `place-pin-color-${label}`, label, icon: "pin-shape", iconColor: color ?? defaultColor,
+          checked: existing.pinColor === color,
+          onSelect: () => usePlacesStore.getState().setPinColor(path, color),
+        })),
+      });
+    }
     items.push({
       id: "place-target-pin-toggle",
       label: buildPinLabel(target.source, true, isPinned),

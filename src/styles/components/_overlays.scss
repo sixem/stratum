@@ -102,18 +102,10 @@
 }
 
 .context-submenu {
-  position: absolute;
+  // Fixed positioning lets submenus escape a scrollable parent menu.
+  position: fixed;
   min-width: 180px;
   z-index: 2701;
-}
-
-.context-submenu.is-right {
-  left: calc(100% + 6px);
-}
-
-.context-submenu.is-left {
-  right: calc(100% + 6px);
-  left: auto;
 }
 
 :root:not([data-grid-corners="straight"]) :where(.context-menu, .context-submenu) .context-item {
@@ -257,7 +249,7 @@
     width: 14px;
     height: 14px;
     display: block;
-    color: var(--muted);
+    color: var(--context-icon-color, var(--muted));
   }
 
   .context-label {

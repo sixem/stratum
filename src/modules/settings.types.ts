@@ -11,6 +11,7 @@ export type FixedGridSize = "small" | "normal" | "large";
 export type GridSize = FixedGridSize | "auto";
 export type GridNameEllipsis = "end" | "middle";
 export type ListDensity = "compact" | "comfortable";
+export type PinShape = "circle" | "square" | "diamond" | "asterisk" | "pill";
 export type AccentTheme =
   | "red"
   | "purple"
@@ -54,6 +55,7 @@ export type Settings = {
   smartTabJump: boolean;
   terminalTabNavigation: boolean;
   accentTheme: AccentTheme;
+  pinShape: PinShape;
   terminalTheme: TerminalThemeId;
   terminalFontFamily: string | null;
   terminalFontSize: number;

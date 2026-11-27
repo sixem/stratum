@@ -1,17 +1,21 @@
 // Button helper that fires on pointer down for snappier UI, while keeping keyboard clicks intact.
 import type { ButtonHTMLAttributes, MouseEvent, PointerEvent } from "react";
-import { forwardRef, useRef } from "react";
+import { createContext, forwardRef, useContext, useRef } from "react";
+
+// Scrollable control groups defer activation until pointer release so dragging is safe.
+export const PressOnPointerDownContext = createContext(true);
 
 type PressButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   pressOnPointerDown?: boolean;
 };
 
 export const PressButton = forwardRef<HTMLButtonElement, PressButtonProps>(({
-  pressOnPointerDown = true,
+  pressOnPointerDown,
   onPointerDown,
   onClick,
   ...props
 }, ref) => {
+  const defaultPressOnPointerDown = useContext(PressOnPointerDownContext);
   const handledRef = useRef(false);
   const handledTimerRef = useRef<number | null>(null);
 
@@ -25,7 +29,7 @@ export const PressButton = forwardRef<HTMLButtonElement, PressButtonProps>(({
 
   const handlePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
     onPointerDown?.(event);
-    if (!pressOnPointerDown) return;
+    if (!(pressOnPointerDown ?? defaultPressOnPointerDown)) return;
     if (event.button !== 0) return;
     if (event.defaultPrevented) return;
     handledRef.current = true;

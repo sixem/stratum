@@ -37,6 +37,7 @@ export type Place = {
   path: string;
   // Pinned places are shown before normal places in sidebar lists.
   pinned?: boolean;
+  pinColor?: string;
 };
 
 export type EntryMeta = {

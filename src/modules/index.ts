@@ -50,6 +50,7 @@ export type {
   AccentTheme,
   GridNameEllipsis,
   GridSize,
+  PinShape,
   Settings,
   ThumbnailFit,
   SidebarSectionId,
