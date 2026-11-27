@@ -107,6 +107,7 @@ export const useSettingsStore = createWithEqualityFn<SettingsStore>((set) => ({
 useSettingsStore.subscribe((state) => {
   writeStoredSettings({
     remoteThumbnails: state.remoteThumbnails,
+    confirmRemoteOpen: state.confirmRemoteOpen,
     remoteVideoThumbnails: state.remoteVideoThumbnails,
     remoteShowHidden: state.remoteShowHidden,
     autoCheckUpdates: state.autoCheckUpdates,
@@ -132,6 +133,7 @@ useSettingsStore.subscribe((state) => {
     showDriveToggle: state.showDriveToggle,
     collapseDrivePickerOnBlur: state.collapseDrivePickerOnBlur,
     showTopbarFolderChevrons: state.showTopbarFolderChevrons,
+    fullWidthBreadcrumbs: state.fullWidthBreadcrumbs,
     showWorkProgressFill: state.showWorkProgressFill,
     smoothScroll: state.smoothScroll,
     smartTabJump: state.smartTabJump,

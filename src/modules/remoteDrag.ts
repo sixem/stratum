@@ -2,4 +2,17 @@
 import { create } from "zustand";
 import type { DropTarget } from "@/lib/dropTarget";
 
-export const useRemoteDrag = create<{ target: DropTarget | null; remoteTarget: DropTarget | null }>(() => ({ target: null, remoteTarget: null }));
+export type RemoteDragPreview = {
+  name: string;
+  isDir: boolean;
+  count: number;
+  x: number;
+  y: number;
+  action: "copy" | "move" | "unavailable";
+};
+
+export const useRemoteDrag = create<{
+  target: DropTarget | null;
+  remoteTarget: DropTarget | null;
+  preview: RemoteDragPreview | null;
+}>(() => ({ target: null, remoteTarget: null, preview: null }));

@@ -1,6 +1,7 @@
 // App-scoped connections are keyed by a saved profile, independently of tab lifetime.
 mod browse;
 mod connection;
+pub(crate) mod delete_recovery;
 pub(crate) mod file;
 pub(crate) mod open;
 pub(crate) mod operations;
@@ -241,6 +242,31 @@ impl Remotes {
             omitted_entries,
         })
     }
+    async fn list_for_transfer(
+        &self,
+        id: &str,
+        path: &str,
+        expected: u32,
+        checkpoint: &mut (dyn FnMut() -> Result<(), String> + Send),
+    ) -> Result<Listing, String> {
+        check_path(path, false).map_err(|e| e.message().to_owned())?;
+        let session = self.current(id, Some(expected))?;
+        let mut wire = session.wire.lock().await;
+        let (path, entries, omitted_entries) = session
+            .complete(
+                browse::read_directory_controlled(&mut wire, path, false, &mut || {
+                    checkpoint().map_err(Error::Request)
+                }),
+                60,
+            )
+            .await?;
+        Ok(Listing {
+            path,
+            entries,
+            session_id: session.id,
+            omitted_entries,
+        })
+    }
     async fn stat(&self, id: &str, session_id: u32, path: &str) -> Result<wire::Attrs, String> {
         check_path(path, false).map_err(|e| e.message().to_owned())?;
         let session = self.current(id, Some(session_id))?;
@@ -345,6 +371,20 @@ pub(crate) async fn remote_list(
 ) -> Result<Listing, String> {
     manager(&webview)?
         .list(&profile_id, &path, session_id)
+        .await
+}
+#[tauri::command]
+pub(crate) async fn remote_resolve_target(
+    webview: Webview,
+    profile_id: String,
+    session_id: u32,
+    path: String,
+) -> Result<browse::LinkTarget, String> {
+    check_path(&path, false).map_err(|e| e.message().to_owned())?;
+    let session = manager(&webview)?.current(&profile_id, Some(session_id))?;
+    let mut wire = session.wire.lock().await;
+    session
+        .complete(browse::resolve_target(&mut wire, &path), 20)
         .await
 }
 #[tauri::command]

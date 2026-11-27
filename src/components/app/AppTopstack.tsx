@@ -1,6 +1,7 @@
 // Renders the app header stack (controls, inputs, tabs, crumbs).
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { setBottomPaneActive, useBottomPaneStore } from "@/modules/bottomPaneStore";
+import { useRemoteDrag } from "@/modules/remoteDrag";
 import { useRemoteNavigation } from "../remote/useRemoteNavigation";
 import { PathBar } from "@/components/explorer/PathBar";
 import { PathInputsBar } from "@/components/explorer/PathInputsBar";
@@ -14,6 +15,8 @@ type AppTopstackProps = {
   pathInputsBar: ComponentProps<typeof PathInputsBar>;
   tabsBar: ComponentProps<typeof TabsBar>;
   crumbsBar: ComponentProps<typeof PathCrumbsBar>;
+  crumbsInContent?: boolean;
+  renderContent?: (crumbs: ReactNode) => ReactNode;
 };
 
 export const AppTopstack = ({
@@ -21,8 +24,14 @@ export const AppTopstack = ({
   pathInputsBar,
   tabsBar,
   crumbsBar,
+  crumbsInContent = false,
+  renderContent,
 }: AppTopstackProps) => {
   const split = useBottomPaneStore((state) => state.open);
+  const remoteDropPath = useRemoteDrag(state => state.preview?.action !== "unavailable" && state.preview &&
+    state.target?.kind === "entry" && state.target.pane === "main" ? state.target.path : null);
+  const remoteCrumbDropPath = useRemoteDrag(state => state.remoteTarget?.kind === "remote-crumb" &&
+    state.remoteTarget.pane === "main" ? state.remoteTarget.path : null);
   const activeTab = tabsBar.tabs.find(tab => tab.id === tabsBar.activeId);
   const terminal = activeTab?.terminal;
   const remote = activeTab?.kind === "remote" ? activeTab : null;
@@ -31,7 +40,13 @@ export const AppTopstack = ({
     if (event.target instanceof Element && event.target.closest("[data-workspace-picker], [data-remotes-picker]")) return;
     setBottomPaneActive(false);
   };
+  const crumbs = remote
+    ? <PathCrumbsBar remoteHost={nav.host} remoteProfileId={remote.remote.hostId} dropTargetPath={remoteCrumbDropPath}
+      trailPath={remote.crumbTrailPath} path={remote.remote.path} onNavigate={nav.navigate} onNavigateNewTab={nav.openTab} />
+    : terminal ? <TerminalDirectoryBar directory={terminal.directory} /> : <PathCrumbsBar {...crumbsBar}
+      dropTargetPath={remoteDropPath ?? crumbsBar.dropTargetPath} reserveSpace={split} />;
   return (
+    <>
     <div className="topstack" onPointerDownCapture={focusMain} onFocusCapture={focusMain}>
       <div className="header">
         <PathBar {...pathBar} {...(remote ? nav.steps : {})} />
@@ -43,7 +58,9 @@ export const AppTopstack = ({
           <TabsBar {...tabsBar} leading={<WorkspacePicker />} />
         </div>
       </div>
-      {remote ? <PathCrumbsBar remoteHost={nav.host} trailPath={remote.crumbTrailPath} path={remote.remote.path} onNavigate={nav.navigate} onNavigateNewTab={nav.openTab} /> : terminal ? <TerminalDirectoryBar directory={terminal.directory} /> : <PathCrumbsBar {...crumbsBar} reserveSpace={split} />}
+      {!crumbsInContent && crumbs}
     </div>
+    {renderContent?.(crumbsInContent ? crumbs : null)}
+    </>
   );
 };

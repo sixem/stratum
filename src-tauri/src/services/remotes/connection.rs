@@ -40,8 +40,26 @@ fn executable() -> Result<PathBuf, String> {
 
 pub(super) type Diagnostics = Arc<Mutex<Vec<u8>>>;
 pub(super) fn spawn(host: &str) -> Result<(Child, Wire, Diagnostics), String> {
+    #[cfg(test)]
+    if host == "stratum-disposable" {
+        if let Some(server) = std::env::var_os("STRATUM_SFTP_TEST_SUBSYSTEM") {
+            // The fixture runs OpenSSH's actual subsystem on private pipes.
+            // No listening port, SSH credentials, or external host is needed.
+            let mut cmd = Command::new(server);
+            cmd.arg("-d").arg(
+                std::env::var("STRATUM_SFTP_OPERATIONS_DIR")
+                    .map_err(|_| "Missing test fixture.")?,
+            );
+            return spawn_piped(cmd);
+        }
+    }
     crate::platform::windows::process_token::require_standard_token_for_tools()?;
     let mut cmd = Command::new(executable()?);
+    // Live tests use an isolated SSH configuration instead of the user's hosts.
+    #[cfg(test)]
+    if let Some(config) = std::env::var_os("STRATUM_SFTP_TEST_SSH_CONFIG") {
+        cmd.arg("-F").arg(config);
+    }
     cmd.args([
         "-T",
         "-x",
@@ -61,12 +79,16 @@ pub(super) fn spawn(host: &str) -> Result<(Child, Wire, Diagnostics), String> {
         host,
         "sftp",
     ])
-    .env("SSH_ASKPASS_REQUIRE", "never")
-    .creation_flags(0x08000000)
-    .kill_on_drop(true)
-    .stdin(Stdio::piped())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped());
+    .env("SSH_ASKPASS_REQUIRE", "never");
+    spawn_piped(cmd)
+}
+
+fn spawn_piped(mut cmd: Command) -> Result<(Child, Wire, Diagnostics), String> {
+    cmd.creation_flags(0x08000000)
+        .kill_on_drop(true)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("Could not start Windows OpenSSH: {e}"))?;

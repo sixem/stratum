@@ -20,6 +20,8 @@ impl TransferJobPaths {
         };
         match operation {
             #[cfg(windows)]
+            TransferOperation::RemoteDelete(job) => claims.add_remote(&job.profile, &job.parent),
+            #[cfg(windows)]
             TransferOperation::RemoteBatch(batch) => {
                 for job in &batch.items {
                     let part = Self::from_operation(&TransferOperation::Remote(job.clone()));

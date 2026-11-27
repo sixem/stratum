@@ -32,6 +32,7 @@
 // Scope prompt content styles to the panel without adding specificity.
 :where(.prompt-panel) {
   .prompt-title {
+    overflow-wrap: anywhere;
     font-size: var(--font-size-lg);
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -81,11 +82,27 @@
     color: #000;
   }
 
-  .prompt-actions {
+  .prompt-footer {
     margin-top: 4px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+
+  .prompt-footer-note {
+    font-size: var(--font-size-sm);
+    color: var(--muted);
+  }
+
+  .prompt-actions {
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+  }
+  .prompt-footer > .prompt-actions {
+    margin-inline-start: auto;
+    flex-wrap: wrap;
   }
 
   .workspace-close-choices {

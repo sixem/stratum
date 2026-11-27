@@ -6,7 +6,6 @@ import type {
   TransferJobsSnapshotEvent,
   TransferQueueSnapshot,
 } from "@/types";
-import { selectTransferJobs } from "../transferStore.selectors";
 import type {
   TransferJob,
   TransferJobMetadata,
@@ -188,7 +187,7 @@ export const applyQueueSnapshotTransition = (
   if (snapshot.revision <= state.snapshotRevision) return state;
 
   const previousJobsById = new Map(
-    selectTransferJobs(state).map((job) => [job.id, job]),
+    state.backendJobs.map((job) => [job.id, job]),
   );
   const backendJobs = [...snapshot.activeJobs, ...snapshot.queuedJobs, ...snapshot.completedJobs]
     .filter((job) => {
@@ -207,9 +206,12 @@ export const applyQueueSnapshotTransition = (
       ),
     );
 
+  const nativeIds = new Set(backendJobs.map(job => job.id));
   return {
     ...state,
     snapshotRevision: snapshot.revision,
     backendJobs,
+    // The queue now owns these IDs, including their cancel/pause controls.
+    localJobs: state.localJobs.filter(job => !nativeIds.has(job.id)),
   };
 };

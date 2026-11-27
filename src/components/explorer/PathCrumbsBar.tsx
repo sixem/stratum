@@ -9,11 +9,13 @@ import { useHorizontalWheelScroll } from "@/hooks";
 import { useLocationDrag } from "@/hooks/ui/inputs/useLocationDrag";
 import { PressButton } from "@/components/primitives/PressButton";
 import { TerminalSplitControls } from "@/components/terminal/TerminalSplitControls";
+import { useRemoteCrumbTargets } from "@/components/remote/useRemoteCrumbTargets";
 import type { PlaceContextTarget } from "@/types";
 
 type PathCrumbsBarProps = {
   path: string;
   remoteHost?: string;
+  remoteProfileId?: string;
   pane?: "main" | "bottom";
   reserveSpace?: boolean;
   // The deepest path visited within the current branch, used to show future crumbs.
@@ -29,6 +31,7 @@ export const PathCrumbsBar = ({
   path,
   pane = "main",
   remoteHost,
+  remoteProfileId,
   reserveSpace = false,
   trailPath,
   dropTargetPath,
@@ -42,13 +45,15 @@ export const PathCrumbsBar = ({
     [path, trailPath, remoteHost],
   );
   const trimmedPath = path.trim();
+  const remoteTargets = useRemoteCrumbTargets(pane, remoteProfileId, path, crumbs);
+  const dropPath = (value: string) => remoteHost ? remoteTargets.destination(value) : value;
   const crumbsRef = useRef<HTMLDivElement>(null);
   const locationDrag = useLocationDrag();
   useHorizontalWheelScroll(crumbsRef, Boolean(trimmedPath));
   if (!trimmedPath) {
     return reserveSpace ? <div className="crumbbar" aria-hidden="true" /> : null;
   }
-  const isBarDropTarget = Boolean(trimmedPath && dropTargetPath === trimmedPath);
+  const isBarDropTarget = Boolean(dropTargetPath && dropTargetPath === dropPath(path));
 
   const handleCrumbMouseDown = (event: ReactMouseEvent, crumbPath: string) => {
     if (!onNavigateNewTab) return;
@@ -62,7 +67,11 @@ export const PathCrumbsBar = ({
       className="crumbbar"
       role="navigation"
       aria-label={pane === "bottom" ? "Bottom pane path" : "Current path"}
+      data-breadcrumb-pane={pane}
       data-drop-pane={pane}
+      data-remote-crumb-profile={remoteHost ? remoteProfileId : undefined}
+      data-remote-crumb-session={remoteHost ? remoteTargets.sessionId : undefined}
+      data-remote-crumb-path={remoteHost ? dropPath(path) ?? "" : undefined}
       data-is-dir={remoteHost ? undefined : "true"}
       data-path={remoteHost ? undefined : path}
       data-drop-target={isBarDropTarget ? "true" : "false"}
@@ -78,8 +87,9 @@ export const PathCrumbsBar = ({
               data-context-name={crumb.label}
               data-is-dir={remoteHost ? undefined : "true"}
               data-path={remoteHost ? undefined : crumb.path}
+              data-remote-crumb-path={remoteHost ? dropPath(crumb.path) ?? "" : undefined}
               data-location-path={remoteHost ? undefined : crumb.path}
-              data-drop-target={dropTargetPath === crumb.path ? "true" : "false"}
+              data-drop-target={dropTargetPath && dropTargetPath === dropPath(crumb.path) ? "true" : "false"}
               data-future={
                 activeIndex >= 0 && index > activeIndex ? "true" : "false"
               }

@@ -92,7 +92,7 @@ export type FileListPreviewProps = {
 
 export type FileListDragDropProps = {
   dropTargetPath?: string | null;
-  onStartDragOut?: (paths: string[], folderPath?: string) => void;
+  onStartDragOut?: import("@/types").EntryDragHandler;
 };
 
 export type FileListCreationProps = {

@@ -2,11 +2,12 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { DragEvent, MouseEvent, PointerEvent } from "react";
 import { DRAG_THRESHOLD_PX } from "@/constants";
+import type { EntryDragHandler } from "@/types";
 
 type EntryDragOptions = {
   selected: Set<string>;
   onSetSelection: (paths: string[], anchor?: string) => void;
-  onStartDrag?: (paths: string[], folderPath?: string) => void;
+  onStartDrag?: EntryDragHandler;
   loading: boolean;
 };
 
@@ -83,7 +84,9 @@ export const useEntryDragOut = ({ selected, onSetSelection, onStartDrag, loading
     release();
     suppressClick.current = true;
     if (selection !== selected || !selected.has(start.path)) onSetSelection(paths, start.path);
-    onStartDrag(paths, start.isFolder ? start.path : undefined);
+    onStartDrag(paths, start.isFolder ? start.path : undefined, {
+      x: event.clientX, y: event.clientY, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey, altKey: event.altKey,
+    });
   };
 
   const endPress = (event: PointerEvent) => {

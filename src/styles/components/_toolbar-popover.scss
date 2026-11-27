@@ -3,7 +3,7 @@
 
 .toolbar-popover {
   position: absolute;
-  inset-block-start: calc(100% + 8px);
+  inset-block-start: calc(100% + 12px);
   min-height: 0;
   @include control.floating-panel(
     10px,

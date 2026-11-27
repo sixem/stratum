@@ -32,3 +32,17 @@ test("remote tabs retain their host and destination path", () => {
   globalThis.document = { elementFromPoint: () => element };
   assert.deepEqual(getDropTargetHit(1, 1).target, { kind: "remote-tab", path: "/home/user", profileId: "host-id", tabId: "tab-id" });
 });
+
+test("remote breadcrumb hits retain the exact path, pane and host", () => {
+  const bar = { dataset: { dropPane: "main", remoteCrumbProfile: "host-id", remoteCrumbSession: "7" } };
+  const crumb = { dataset: { remoteCrumbPath: "/home/user/ name " }, closest(selector) {
+    return selector === "[data-remote-crumb-profile][data-drop-pane]" ? bar : null;
+  } };
+  const element = { closest(selector) { return selector === "[data-remote-crumb-path]" ? crumb : null; } };
+  globalThis.document = { elementFromPoint: () => element };
+  assert.deepEqual(getDropTargetHit(1, 1), {
+    target: { kind: "remote-crumb", path: "/home/user/ name ", pane: "main", profileId: "host-id", sessionId: 7 }, element: crumb,
+  });
+  crumb.dataset.remoteCrumbPath = "";
+  assert.deepEqual(getDropTargetHit(1, 1), { target: null, element: crumb });
+});

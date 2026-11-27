@@ -10,6 +10,7 @@ import type { BatchRenameRequest } from "@/lib/batchRename";
 import type { RenameCommitReason } from "@/types";
 import type { RemoteEntry } from "./remoteDirectory";
 import { remoteDirectoryChanged } from "./remoteChanges";
+import { getTransferErrorMessage, isTransferCancelledError } from "@/hooks/domain/filesystem/transferJobErrors";
 
 function showError(title: string, error: unknown) {
   usePromptStore.getState().showPrompt({ title, content: String(error), confirmLabel: "OK", cancelLabel: null });
@@ -90,22 +91,23 @@ export function useRemoteOperations(profileId: string, sessionId: number, parent
       content: `Delete ${label} from the remote host? This cannot be undone.`,
       confirmLabel: "Delete", cancelLabel: "Cancel",
       onConfirm: () => { void (async () => {
-        const failures: string[] = [];
         const work = useTransferStore.getState();
-        const job = work.startJob({ label: "Delete remote items", kind: "delete", total: entries.length });
-        let processed = 0;
-        for (const entry of entries) {
-          work.updateProgress(job.id, { processed, total: entries.length, currentPath: entry.path });
-          try { await invoke("remote_delete_entry", { profileId, sessionId, parent, entry }); }
-          catch (error) { failures.push(`${entry.name}: ${String(error)}`); }
-          processed++;
-          work.updateProgress(job.id, { processed, total: entries.length, currentPath: entry.path });
+        const job = work.registerJob({ label: "Delete remote items", items: entries.map(entry => entry.path) });
+        try {
+          const report = await invoke<{ deleted: number; cancelled: boolean; failures: string[] }>("remote_delete_entries", {
+            profileId, sessionId, parent, entries, transferId: job.id,
+          });
+          work.recordJobOutcome(job.id, { failures: report.failures.length });
+          if (report.deleted) onDeleted();
+          if (report.failures.length) showError("Some items could not be deleted", report.failures.join("\n"));
+        } catch (error) {
+          if (!isTransferCancelledError(error)) {
+            work.recordJobOutcome(job.id, { failures: 1 });
+            showError("Could not delete items", getTransferErrorMessage(error, "Could not delete the selected items."));
+          }
+        } finally {
+          changed(parent);
         }
-        if (failures.length) work.failJob(job.id, { failures: failures.length });
-        else work.completeJob(job.id);
-        changed(parent);
-        onDeleted();
-        if (failures.length) showError("Some items could not be deleted", failures.join("\n"));
       })(); },
     });
   }, [profileId, sessionId, parent, changed, onDeleted]);

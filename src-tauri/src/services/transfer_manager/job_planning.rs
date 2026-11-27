@@ -20,6 +20,8 @@ pub(super) fn plan_job(
 ) -> Result<PlannedTransferJob, String> {
     match operation {
         #[cfg(windows)]
+        TransferOperation::RemoteDelete(job) => Ok(plan_root_only_job(&vec!["remote-file".into(); job.entries.len()])),
+        #[cfg(windows)]
         TransferOperation::Remote(job) => {
             let total = match &job.direction {
                 crate::services::remotes::transfer::Direction::Rename { entries, .. } => {

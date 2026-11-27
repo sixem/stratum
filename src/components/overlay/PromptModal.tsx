@@ -138,31 +138,34 @@ export const PromptModal = () => {
         ) : null}
         <div className="prompt-content">{prompt.content}</div>
         {showActions ? (
-          <div className="prompt-actions">
-            {showCancel ? (
-              <PressButton type="button" className="btn ghost" onClick={handleCancel}>
-                {cancelLabel}
-              </PressButton>
-            ) : null}
-            {actions.map((action, index) => {
-              const variant = action.variant ?? "ghost";
-              const className = variant === "ghost" ? "btn ghost" : "btn";
-              return (
-                <PressButton
-                  key={`${action.label}-${index}`}
-                  type="button"
-                  className={className}
-                  onClick={() => handleAction(action)}
-                >
-                  {action.label}
+          <div className="prompt-footer">
+            {prompt.footerNote && <span className="prompt-footer-note">{prompt.footerNote}</span>}
+            <div className="prompt-actions">
+              {showCancel ? (
+                <PressButton type="button" className="btn ghost" onClick={handleCancel}>
+                  {cancelLabel}
                 </PressButton>
-              );
-            })}
-            {showConfirm ? (
-              <PressButton type="button" className="btn" onClick={handleConfirm}>
-                {confirmLabel}
-              </PressButton>
-            ) : null}
+              ) : null}
+              {actions.map((action, index) => {
+                const variant = action.variant ?? "ghost";
+                const className = variant === "ghost" ? "btn ghost" : "btn";
+                return (
+                  <PressButton
+                    key={`${action.label}-${index}`}
+                    type="button"
+                    className={className}
+                    onClick={() => handleAction(action)}
+                  >
+                    {action.label}
+                  </PressButton>
+                );
+              })}
+              {showConfirm ? (
+                <PressButton type="button" className="btn" onClick={handleConfirm}>
+                  {confirmLabel}
+                </PressButton>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </div>

@@ -25,6 +25,7 @@ export const DEFAULT_VIEW_MODE = "thumbs";
 
 export const DEFAULT_SETTINGS: Settings = {
   remoteThumbnails: false,
+  confirmRemoteOpen: true,
   remoteVideoThumbnails: false,
   remoteShowHidden: true,
   autoCheckUpdates: true,
@@ -50,6 +51,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showDriveToggle: true,
   collapseDrivePickerOnBlur: false,
   showTopbarFolderChevrons: true,
+  fullWidthBreadcrumbs: false,
   showWorkProgressFill: true,
   smoothScroll: false,
   smartTabJump: true,

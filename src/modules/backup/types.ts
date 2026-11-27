@@ -2,6 +2,7 @@ import type { BatchRenamePreset } from "../batchRenamePresetStore";
 import type { QuickMovePreferences } from "../quickMovePreferences";
 import type { Settings } from "../settings.types";
 import type { Workspace, WorkspaceLayout, WorkspaceSession } from "../workspaceStore";
+import type { RemoteProfile } from "../remoteProfiles";
 
 export const BACKUP_FORMAT = "stratum.backup";
 export const BACKUP_VERSION = 1;
@@ -29,6 +30,8 @@ type BackupHeader = {
   version: typeof BACKUP_VERSION;
   createdAt: string;
   workspaces: BackupWorkspace[];
+  // Omitted by older backups or when the user excludes SSH host details.
+  remoteHosts?: RemoteProfile[];
 };
 
 export type StratumBackup = BackupHeader & (

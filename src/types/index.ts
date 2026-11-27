@@ -1,4 +1,5 @@
 // Barrel exports for shared type definitions.
+export type { EntryDragHandler, EntryDragStart } from "./entryDrag";
 export type {
   IndexedDriveState,
   IndexedDriveStatus,

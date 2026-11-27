@@ -10,6 +10,7 @@ import { readWorkspaceLayout } from "../workspaceStore";
 import type { WorkspaceLayout } from "../workspaceStore";
 import { BACKUP_FORMAT, BACKUP_VERSION } from "./types";
 import type { BackupProfile, BackupWorkspace, StratumBackup } from "./types";
+import type { RemoteProfile } from "../remoteProfiles";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -18,6 +19,23 @@ const shellDescriptor = (value: unknown) => isRecord(value) && pathString(value.
 
 const invalidBackup = (): never => {
   throw new Error("This file doesn't contain a valid Stratum backup.");
+};
+
+const importRemoteHosts = (value: unknown): RemoteProfile[] | undefined => {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 100_000) return invalidBackup();
+  const ids = new Set<string>();
+  const destinations = new Set<string>();
+  return value.map((item): RemoteProfile => {
+    if (!isRecord(item) || typeof item.id !== "string" || !/^[\da-f-]{36}$/i.test(item.id) || ids.has(item.id) ||
+      typeof item.destination !== "string" || item.destination.length > 255 || !/^[a-z\d._@:%\[\]-]+$/i.test(item.destination) ||
+      item.destination.startsWith("-") || destinations.has(item.destination) ||
+      typeof item.name !== "string" || item.name.length > 80 || item.name.includes("\0") ||
+      typeof item.startPath !== "string" || item.startPath.length > 8192 || item.startPath.includes("\0")) return invalidBackup();
+    ids.add(item.id);
+    destinations.add(item.destination);
+    return { id: item.id, destination: item.destination, name: item.name, startPath: item.startPath };
+  });
 };
 
 const pathList = (value: unknown): string[] => {
@@ -145,7 +163,8 @@ export const readStratumBackup = (data: string): StratumBackup => {
       quickMove: importQuickMove(entry.quickMove),
     };
   });
-  const header = { format: BACKUP_FORMAT, version: BACKUP_VERSION, createdAt: value.createdAt, workspaces } as const;
+  const header = { format: BACKUP_FORMAT, version: BACKUP_VERSION, createdAt: value.createdAt, workspaces,
+    remoteHosts: importRemoteHosts(value.remoteHosts) } as const;
   if (value.scope === "full") return { ...header, scope: "full", profile: importProfile(value.profile, ids) };
   if (value.scope === "workspaces" && workspaces.length) return { ...header, scope: "workspaces" };
   return invalidBackup();

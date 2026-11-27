@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:fresh": "node scripts/dev-fresh.mjs",
     "build": "tsc && vite build",
+    "test": "node scripts/test-frontend.mjs",
     "build:exe": "tauri build --no-bundle",
     "preview": "vite preview",
     "tauri": "tauri"

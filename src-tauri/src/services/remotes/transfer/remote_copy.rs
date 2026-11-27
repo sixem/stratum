@@ -6,6 +6,7 @@ use super::{
     Remotes,
 };
 use crate::services::remotes::browse::check_path;
+use crate::services::remotes::file;
 
 // A journalled destination stage makes interrupted copies recoverable too.
 pub(crate) async fn copy_transfer(
@@ -97,6 +98,51 @@ mod tests {
         ));
         assert!(invalid_same_host_destination("/file", "/", false));
     }
+
+    #[test]
+    #[ignore = "requires the disposable SFTP range file and transfer folder"]
+    fn pipelined_copy_on_one_session_preserves_every_byte() {
+        tauri::async_runtime::block_on(async {
+            let host = std::env::var("STRATUM_SFTP_TEST_HOST").unwrap();
+            let source = std::env::var("STRATUM_SFTP_TEST_RANGE").unwrap();
+            let folder = std::env::var("STRATUM_SFTP_TEST_FOLDER").unwrap();
+            let remotes = super::Remotes::default();
+            let profile = "copy-window";
+            let connected = remotes
+                .connect(profile, &host, &folder, std::sync::Arc::new(|_| {}))
+                .await
+                .unwrap();
+            let id = connected.session_id;
+            let mut progress = Vec::new();
+            let target = super::copy_file(
+                &remotes,
+                (profile, id),
+                (profile, id),
+                &source,
+                &folder,
+                &mut || Ok(()),
+                &mut |done, _| progress.push(done),
+            )
+            .await
+            .unwrap();
+            let expected = remotes
+                .read_range(profile, id, &source, 0, super::file::MAX_READ)
+                .await
+                .unwrap();
+            assert!(expected.size > super::file::WINDOW_BYTES as u64);
+            assert_eq!(progress.last().copied(), Some(expected.size));
+            let actual = remotes
+                .read_range(profile, id, &target, 0, super::file::MAX_READ)
+                .await
+                .unwrap();
+            assert_eq!(actual.size, expected.size);
+            assert_eq!(actual.bytes, expected.bytes);
+            super::remote_remove(&remotes.current(profile, Some(id)).unwrap(), &target, false)
+                .await
+                .unwrap();
+            remotes.disconnect(profile).await;
+        });
+    }
 }
 
 async fn copy_file(
@@ -115,35 +161,67 @@ async fn copy_file(
         .ok_or("Invalid source name.")?;
     let target = format!("{}/{name}", folder.trim_end_matches('/'));
     check_path(&target, false).map_err(|e| e.message().to_owned())?;
-    let metadata = remotes.read_range(src.0, src.1, source, 0, 0).await?;
-    if metadata.modified.is_none() {
+    let initial = remotes.stat(src.0, src.1, source).await?;
+    let size = initial
+        .size
+        .ok_or("The server did not provide the file size.")?;
+    if initial.modified.is_none() {
         return Err("The server did not provide a modification time.".into());
     }
     let session = remotes.current(dst.0, Some(dst.1))?;
     let mut stage = UploadStage::create(session, folder).await?;
     let result: Result<(), String> = async {
-        let mut offset = 0u64;
-        progress(0, metadata.size);
-        while offset < metadata.size {
-            checkpoint()?;
-            let count = (metadata.size - offset).min(64 * 1024) as usize;
-            let part = remotes
-                .read_range(src.0, src.1, source, offset, count)
-                .await?;
-            if part.size != metadata.size
-                || part.modified != metadata.modified
-                || part.bytes.len() != count
-            {
-                return Err("The remote source changed while copying.".into());
+        let reader = remotes.current(src.0, Some(src.1))?;
+        let handle = {
+            let mut wire = reader.wire.lock().await;
+            reader
+                .complete(file::open_regular(&mut wire, source), 60)
+                .await?
+        };
+        let copied: Result<(), String> = async {
+            let mut offset = 0u64;
+            progress(0, size);
+            loop {
+                checkpoint()?;
+                let attrs = remotes.stat(src.0, src.1, source).await?;
+                if attrs.kind() != 0o100000
+                    || attrs.size != Some(size)
+                    || attrs.modified != initial.modified
+                {
+                    return Err("The remote source changed while copying.".into());
+                }
+                let count = (size - offset).min(file::WINDOW_BYTES as u64) as usize;
+                let bytes = {
+                    let mut wire = reader.wire.lock().await;
+                    if reader
+                        .complete(file::metadata(&mut wire, &handle), 60)
+                        .await?
+                        != (size, initial.modified)
+                    {
+                        return Err("The remote source changed while copying.".into());
+                    }
+                    if count == 0 {
+                        break;
+                    }
+                    reader
+                        .complete(file::read_window(&mut wire, &handle, offset, count), 60)
+                        .await?
+                };
+                // Release the source wire before writing, even on a shared session.
+                checkpoint()?;
+                stage.write(offset, &bytes).await?;
+                offset += bytes.len() as u64;
+                progress(offset, size);
             }
-            stage.write(offset, &part.bytes).await?;
-            offset += count as u64;
-            progress(offset, metadata.size);
+            Ok(())
         }
-        let last = remotes.read_range(src.0, src.1, source, offset, 0).await?;
-        if last.size != metadata.size || last.modified != metadata.modified {
-            return Err("The remote source changed while copying.".into());
-        }
+        .await;
+        let closed = {
+            let mut wire = reader.wire.lock().await;
+            reader.complete(wire.close(&handle), 60).await
+        };
+        copied?;
+        closed?;
         checkpoint()?;
         stage.publish(&target).await?;
         Ok(())

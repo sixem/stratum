@@ -3,6 +3,10 @@ import { useSettingsStore } from "@/modules/settings.store";
 import { SettingsGroup, SettingsToggleItem } from "./SettingsItem";
 
 export const REMOTE_SETTINGS_ITEMS = {
+  confirmOpen: {
+    label: "Ask before opening remote files",
+    description: "Confirm before downloading an SFTP file and opening it in its default app.",
+  },
   thumbnails: {
     label: "Show remote thumbnails",
     description: "Read small images over SFTP to display thumbnails in remote folders.",
@@ -18,12 +22,15 @@ export const REMOTE_SETTINGS_ITEMS = {
 };
 
 export const SettingsRemotesSection = () => {
+  const confirmRemoteOpen = useSettingsStore(state => state.confirmRemoteOpen);
   const remoteThumbnails = useSettingsStore(state => state.remoteThumbnails);
   const remoteVideoThumbnails = useSettingsStore(state => state.remoteVideoThumbnails);
   const remoteShowHidden = useSettingsStore(state => state.remoteShowHidden);
   const updateSettings = useSettingsStore(state => state.updateSettings);
   return (
     <SettingsGroup id="settings-remotes" title="Remote folders" items={Object.values(REMOTE_SETTINGS_ITEMS)}>
+      <SettingsToggleItem item={REMOTE_SETTINGS_ITEMS.confirmOpen} checked={confirmRemoteOpen}
+        onChange={enabled => updateSettings({ confirmRemoteOpen: enabled })} />
       <SettingsToggleItem item={REMOTE_SETTINGS_ITEMS.thumbnails} checked={remoteThumbnails}
         onChange={enabled => updateSettings({ remoteThumbnails: enabled })} />
       <SettingsToggleItem item={REMOTE_SETTINGS_ITEMS.videos} checked={remoteVideoThumbnails}

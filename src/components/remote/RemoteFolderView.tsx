@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/primitives/EmptyState";
 import { useSettingsStore } from "@/modules/settings.store";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
+import { useRemoteDrag } from "@/modules/remoteDrag";
 import { useRemoteStatus } from "@/modules/remoteStatus";
 import { useRemotePaneDirectory } from "@/hooks/ui/menus/usePaneTransferTarget";
 import { useStatusLabels } from "@/hooks/domain/metadata/useStatusLabels";
@@ -14,6 +15,7 @@ import { RemoteEntries } from "./RemoteEntries";
 import { useRemoteListing } from "./useRemoteListing";
 import { listenRemoteDirectoryChanges } from "./remoteChanges";
 import { remoteScrollCache } from "./remoteViewCache";
+import { hasVisibleShortcutOverlay, isRemotePaneActive, isRemotePaneShortcutFocus } from "./remotePaneKeyboard";
 import "./remoteFolder.scss";
 
 type Props = {
@@ -41,8 +43,8 @@ type Props = {
 export function RemoteFolderView(props: Props) {
   const { profile, connection, sessionId, data, error, refresh, reconnect } = useRemoteListing(props.hostId, props.path, props.refreshVersion);
   const transferLocation = useMemo(() => sessionId !== undefined && data ? ({
-    kind: "remote" as const, profileId: props.hostId, sessionId, path: data.path, refresh,
-  }) : undefined, [props.hostId, sessionId, data, refresh]);
+    kind: "remote" as const, profileId: props.hostId, sessionId, path: data.path, displayedPath: props.path, refresh,
+  }) : undefined, [props.hostId, props.path, sessionId, data, refresh]);
   useRemotePaneDirectory(props.pane, transferLocation);
   const showHidden = useSettingsStore(s => s.remoteShowHidden);
   const entries = useMemo(() => data ? displayRemoteEntries(data.entries, props.sort, props.search, showHidden) : [], [data, props.sort, props.search, showHidden]);
@@ -53,14 +55,12 @@ export function RemoteFolderView(props: Props) {
   }), [props.hostId, sessionId, data?.path, refresh]);
   useEffect(() => {
     const onRefresh = (event: globalThis.KeyboardEvent) => {
+      if (useRemoteDrag.getState().preview) return;
       if (event.defaultPrevented || event.altKey || event.metaKey || event.shiftKey) return;
       if (!(event.key === "F5" || (event.ctrlKey && event.key.toLowerCase() === "r"))) return;
-      if ((props.pane === "bottom") !== useBottomPaneStore.getState().active) return;
+      if (!isRemotePaneActive(props.pane, useBottomPaneStore.getState().active)) return;
       const active = document.activeElement;
-      if (active && active !== document.body && active !== document.documentElement &&
-          !active.closest(props.pane === "main" ? ".topstack, [data-file-pane=main]" : ".bottom-pane")) return;
-      if (Array.from(document.querySelectorAll('[role="dialog"], .context-menu[data-open="true"]'))
-        .some(element => !element.closest("[inert]") && element.getClientRects().length > 0)) return;
+      if (!isRemotePaneShortcutFocus(props.pane, active, document) || hasVisibleShortcutOverlay(document)) return;
       if (!connected) return;
       event.preventDefault(); event.stopPropagation(); refresh();
     };
@@ -91,6 +91,7 @@ export function RemoteFolderView(props: Props) {
   return <section className="remote-folder" aria-label={`Remote folder ${props.path}`}
     data-remote-host={props.hostId} data-remote-folder-path={data?.path ?? props.path}
     onContextMenu={e => { e.preventDefault(); e.stopPropagation(); }} onKeyDown={e => {
+      if (useRemoteDrag.getState().preview) return;
       const input = e.target instanceof HTMLInputElement;
       if (!input && (e.key === "F5" || (e.ctrlKey && e.key.toLowerCase() === "r"))) {
         e.preventDefault(); e.stopPropagation();

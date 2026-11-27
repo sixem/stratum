@@ -4,23 +4,43 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { formatBytes } from "@/lib/format";
 import { usePromptStore, type PromptConfig } from "@/modules/promptStore";
+import { useSettingsStore } from "@/modules/settings.store";
+import "./remoteOpen.scss";
 
 type Progress = { id: string; state: "downloading" | "opening" | "done" | "failed" | "cancelled"; done: number; total: number; error?: string };
 
 function ProgressContent({ progress }: { progress: { subscribe: (listener: (value: Progress) => void) => () => void } }) {
   const [value, setValue] = useState<Progress>();
   useEffect(() => progress.subscribe(setValue), [progress]);
-  if (!value) return <span>Connecting…</span>;
-  if (value.state === "failed") return <span role="alert">{value.error || "Could not open the file."}</span>;
-  if (value.state === "opening") return <span>Opening…</span>;
-  return <div>
-    <div>{formatBytes(value.done)} / {formatBytes(value.total)}</div>
-    <progress max={value.total || 1} value={value.done} aria-label="Download progress" />
-    <div>Changes will stay in the local copy.</div>
+  if (value?.state === "failed") return <span role="alert">{value.error || "Could not open the file."}</span>;
+  const label = !value ? "Preparing download…" : value.state === "opening" ? "Opening in default app…" : "Downloading";
+  const percent = value && (value.total ? Math.min(100, Math.round(100 * value.done / value.total)) : 100);
+  const size = value && `${formatBytes(value.done)} / ${formatBytes(value.total)}`;
+  return <div className="remote-open-progress">
+    <div className="remote-open-status">
+      <span role="status">{label}</span>
+      {size && <span className="tnum">{size}</span>}
+    </div>
+    <div className="remote-open-track" role="progressbar" aria-label="Download progress"
+      aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={size}>
+      <span style={percent === undefined ? undefined : { width: `${percent}%` }} />
+    </div>
   </div>;
 }
 
 export function openRemoteFile(profileId: string, sessionId: number, path: string, preview?: () => void) {
+  const title = path.split("/").pop() || "Remote file";
+  const start = () => downloadAndOpen(profileId, sessionId, path, title, preview);
+  if (!useSettingsStore.getState().confirmRemoteOpen) { start(); return; }
+  usePromptStore.getState().showPrompt({
+    title, content: "Download a copy and open it in your default app?", footerNote: "Edits stay local.",
+    confirmLabel: "Download & open", cancelLabel: "Cancel", onConfirm: start,
+    actions: preview ? [{ label: "Preview", variant: "ghost", onClick: preview }] : undefined,
+    aboveOverlays: true, queued: true,
+  });
+}
+
+function downloadAndOpen(profileId: string, sessionId: number, path: string, title: string, preview?: () => void) {
   const id = crypto.randomUUID();
   let cancelled = false;
   let started = false;
@@ -38,11 +58,13 @@ export function openRemoteFile(profileId: string, sessionId: number, path: strin
     if (started) void invoke("remote_cancel_open", { id }).catch(() => {});
   };
   const prompt: PromptConfig = {
-    title: "Opening " + (path.split("/").pop() || "file"),
+    title,
+    footerNote: "Edits stay local.",
     content: <ProgressContent progress={progress} />,
     confirmLabel: null,
     cancelLabel: "Cancel",
     onCancel: cancel,
+    queued: true,
     aboveOverlays: true,
     actions: preview ? [{ label: "Preview", variant: "ghost", onClick: () => { cancel(); preview(); } }] : undefined,
   };

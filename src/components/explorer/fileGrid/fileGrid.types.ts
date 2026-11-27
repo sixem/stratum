@@ -113,7 +113,7 @@ export type FileGridPreviewProps = {
 
 export type FileGridDragDropProps = {
   dropTargetPath?: string | null;
-  onStartDragOut?: (paths: string[], folderPath?: string) => void;
+  onStartDragOut?: import("@/types").EntryDragHandler;
 };
 
 export type FileGridCreationProps = {

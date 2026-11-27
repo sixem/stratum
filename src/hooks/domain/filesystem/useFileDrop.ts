@@ -13,8 +13,7 @@ import {
 } from "@/lib";
 import { usePromptStore, useTransferStore } from "@/modules";
 import { copyRemoteFiles } from "@/modules/remoteTransfer";
-import { connectRemote, useRemoteHosts } from "@/modules/remoteHosts";
-import { getPaneSessionStore } from "@/modules/sessionStore";
+import { prepareRemoteTabDrop } from "@/modules/remoteTabDrop";
 import { getPaneDirectory, type RemotePaneDirectory } from "@/hooks/ui/menus/usePaneTransferTarget";
 import { useRemoteDrag } from "@/modules/remoteDrag";
 import { captureMoveHistoryWorkspace } from "@/modules/recentMoveStore";
@@ -48,6 +47,15 @@ type ClientPoint = {
 };
 
 const log = makeDebug("drop");
+
+function remoteFor(target: DropTarget) {
+  if (!target.pane || (target.kind !== "remote-pane" && target.kind !== "remote-entry" && target.kind !== "remote-crumb")) return;
+  const directory = getPaneDirectory(target.pane);
+  if (directory?.kind !== "remote") return;
+  if (target.kind === "remote-crumb" && (target.profileId !== directory.profileId || target.sessionId !== directory.sessionId)) return;
+  if (target.kind === "remote-pane" && target.path !== directory.path) return;
+  return directory;
+}
 
 const getClientPoint = (position: ClientPoint): ClientPoint => {
   const scale = window.devicePixelRatio || 1;
@@ -95,7 +103,8 @@ export const useFileDrop = ({
   });
 
   const setDropTarget = useCallback((target: DropTarget | null) => {
-    const remoteTarget = target?.kind === "remote-entry" ? target : null;
+    if (target?.kind === "remote-crumb" && !remoteFor(target)) target = null;
+    const remoteTarget = target?.kind === "remote-entry" || target?.kind === "remote-crumb" ? target : null;
     if (useRemoteDrag.getState().remoteTarget !== remoteTarget) useRemoteDrag.setState({ remoteTarget });
     setHoveredPane(target?.pane);
     setBackgroundHovered(target?.kind === "pane" || target?.kind === "remote-pane");
@@ -229,30 +238,23 @@ export const useFileDrop = ({
   }>());
   const onDragEvent = useRef<(event: NativeFileDrag) => void>(() => {});
   useLayoutEffect(() => {
-    const remoteFor = (target: DropTarget | null) => {
-      if (!target || (target.kind !== "remote-pane" && target.kind !== "remote-entry") || !target.pane) return;
-      const location = getPaneDirectory(target.pane);
-      return location?.kind === "remote" ? location : undefined;
-    };
     const dispatch = async (paths: string[], target: DropTarget, mode: TransferMode, stage: number | undefined,
       workspace: ReturnType<typeof captureMoveHistoryWorkspace>, remote?: RemotePaneDirectory) => {
       if (target.kind === "tab-submenu") return;
       if (target.kind === "remote-tab") {
         if (stage != null) { await queueDropError("Save temporary attachments locally before uploading them."); return; }
-        const tab = (["main", "bottom"] as const).flatMap(pane => getPaneSessionStore(pane).getState().tabs).find(tab => tab.id === target.tabId);
-        if (!tab || tab.kind !== "remote" || tab.remote.hostId !== target.profileId || tab.remote.path !== target.path) return;
-        const profile = useRemoteHosts.getState().profiles.find(item => item.id === target.profileId);
-        if (!profile) return;
         try {
-          await connectRemote(profile);
-          const sessionId = useRemoteHosts.getState().connections[profile.id]?.sessionId;
-          if (!sessionId) throw new Error("The destination host is disconnected.");
-          await copyRemoteFiles(paths, { profileId: profile.id, sessionId, path: target.path }, "", "upload", mode === "move");
+          const dest = await prepareRemoteTabDrop(target, paths, mode === "move");
+          if (dest) await copyRemoteFiles(paths, dest, "", "upload", mode === "move", undefined, undefined, dest.transferId);
         } catch (error) { await queueDropError(toMessage(error, "Could not upload the dropped files.")); }
         return;
       }
-      if (target.kind === "remote-pane" || target.kind === "remote-entry") {
-        if (!remote || !target.pane || getPaneDirectory(target.pane) !== remote) return;
+      if (target.kind === "remote-pane" || target.kind === "remote-entry" || target.kind === "remote-crumb") {
+        const current = remoteFor(target);
+        if (!remote || !current || current.profileId !== remote.profileId || current.sessionId !== remote.sessionId || current.path !== remote.path) {
+          await queueDropError("The remote destination changed or disconnected while receiving the files. Drop them again.");
+          return;
+        }
         if (stage != null) {
           await queueDropError("Temporary attachments cannot be copied to remote folders yet. Save them locally first.");
           return;

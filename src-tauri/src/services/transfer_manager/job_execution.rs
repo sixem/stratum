@@ -29,6 +29,10 @@ pub(super) fn run_operation(
         TransferOperation::RemoteBatch(batch) => {
             execute_remote_batch(inner, job_id, plan, event_emitter, control, batch)
         }
+        #[cfg(windows)]
+        TransferOperation::RemoteDelete(job) => {
+            execute_remote_delete(inner, job_id, plan, event_emitter, control, job)
+        }
         TransferOperation::Copy {
             paths,
             destination,
@@ -72,6 +76,78 @@ pub(super) fn run_operation(
 }
 
 #[cfg(windows)]
+fn execute_remote_delete(
+    inner: &Arc<TransferManagerInner>,
+    job_id: &str,
+    plan: &PlannedTransferJob,
+    event_emitter: &TransferEventEmitter,
+    control: TransferJobControlHandle,
+    job: crate::services::remotes::operations::RemoteDelete,
+) -> TransferOperationOutcome {
+    run_with_progress_dispatcher(inner, job_id, plan, event_emitter, move |callback| {
+        let report = tauri::async_runtime::block_on(async {
+            let mut report = fs::DeleteReport {
+                deleted: 0,
+                skipped: 0,
+                cancelled: false,
+                failures: Vec::new(),
+            };
+            for (index, entry) in job.entries.iter().enumerate() {
+                if control.checkpoint().is_err() {
+                    report.cancelled = true;
+                    break;
+                }
+                callback(fs::TransferProgressUpdate {
+                    processed: index,
+                    total: job.entries.len(),
+                    current_path: Some(format!(
+                        "{}/{}",
+                        job.parent.trim_end_matches('/'),
+                        entry.name
+                    )),
+                    status_text: Some("Deleting".into()),
+                    ..Default::default()
+                });
+                match crate::services::remotes::operations::delete_managed(
+                    &job.remotes,
+                    &job.profile,
+                    job.session,
+                    &job.parent,
+                    entry,
+                    &job.journal,
+                    &mut || control.checkpoint(),
+                )
+                .await
+                {
+                    Ok(()) => report.deleted += 1,
+                    Err(error) if error.starts_with(TRANSFER_CANCELLED_MESSAGE) => {
+                        report.cancelled = true;
+                        if error != TRANSFER_CANCELLED_MESSAGE {
+                            report.failures.push(format!("{}: {error}", entry.name));
+                        }
+                        break;
+                    }
+                    Err(error) => report.failures.push(format!("{}: {error}", entry.name)),
+                }
+                (job.source_changed)(job.parent.clone());
+            }
+            (job.source_changed)(job.parent.clone());
+            report
+        });
+        TransferOperationOutcome {
+            terminal_status: if report.cancelled {
+                TransferJobStatus::Cancelled
+            } else if report.failures.is_empty() {
+                TransferJobStatus::Completed
+            } else {
+                TransferJobStatus::Failed
+            },
+            result: Ok(TransferOperationResult::Delete(report)),
+        }
+    })
+}
+
+#[cfg(windows)]
 fn execute_remote_job(
     inner: &Arc<TransferManagerInner>,
     job_id: &str,
@@ -88,10 +164,10 @@ fn execute_remote_job(
             entries,
         } = &job.direction
         {
-            let mut failures = Vec::new();
-            let result = tauri::async_runtime::block_on(async {
-                for (index, entry) in entries.iter().enumerate() {
-                    control.checkpoint()?;
+            let report = crate::services::remotes::transfer::batch_move::collect_moves(
+                entries,
+                || control.checkpoint(),
+                |index, entry| {
                     callback(fs::TransferProgressUpdate {
                         processed: index,
                         total: entries.len(),
@@ -103,37 +179,49 @@ fn execute_remote_job(
                         status_text: Some("Moving".into()),
                         ..Default::default()
                     });
-                    if let Err(error) = crate::services::remotes::operations::move_entry(
-                        &job.remotes,
-                        &job.profile,
-                        job.session,
-                        parent,
-                        destination,
-                        entry,
-                    )
-                    .await
-                    {
-                        failures.push(format!("{}: {error}", entry.name));
-                    }
+                    let result = tauri::async_runtime::block_on(
+                        crate::services::remotes::operations::move_entry(
+                            &job.remotes,
+                            &job.profile,
+                            job.session,
+                            parent,
+                            destination,
+                            entry,
+                        ),
+                    );
                     if let Some(notify) = &job.source_changed {
                         notify(parent.clone());
                         notify(destination.clone());
                     }
-                }
-                if !failures.is_empty() {
-                    return Err(failures.join("\n"));
-                }
-                Ok(TransferResult {
-                    path: destination.clone(),
-                    backup: None,
-                    warning: None,
-                    local_path: None,
-                })
-            })
-            .map(TransferOperationResult::Remote);
+                    callback(fs::TransferProgressUpdate {
+                        processed: index + 1,
+                        total: entries.len(),
+                        current_path: Some(format!(
+                            "{}/{}",
+                            parent.trim_end_matches('/'),
+                            entry.name
+                        )),
+                        status_text: Some("Moving".into()),
+                        ..Default::default()
+                    });
+                    result.map(|()| TransferResult {
+                        path: format!("{}/{}", destination.trim_end_matches('/'), entry.name),
+                        backup: None,
+                        warning: None,
+                        local_path: None,
+                    })
+                },
+            );
+            let failed = report.items.iter().any(|item| item.error.is_some());
             return TransferOperationOutcome {
-                terminal_status: completed_status_for_result(&result),
-                result,
+                terminal_status: if report.cancelled {
+                    TransferJobStatus::Cancelled
+                } else if failed {
+                    TransferJobStatus::Failed
+                } else {
+                    TransferJobStatus::Completed
+                },
+                result: Ok(TransferOperationResult::RemoteBatch(report)),
             };
         }
         let (path, mut label) = match &job.direction {
@@ -188,6 +276,72 @@ fn execute_remote_batch(
         let total = batch.items.len();
         let mut items = Vec::with_capacity(total);
         let mut cancelled = false;
+        callback(fs::TransferProgressUpdate {
+            processed: 0,
+            total,
+            status_text: Some("Checking destinations".into()),
+            ..Default::default()
+        });
+        let checked = crate::services::remotes::transfer::preflight::check_conflicts(
+            &batch.items,
+            &mut || control.checkpoint(),
+            &mut |index| {
+                callback(fs::TransferProgressUpdate {
+                    processed: 0,
+                    total,
+                    status_text: Some(format!("Checking destinations ({}/{total})", index + 1)),
+                    ..Default::default()
+                })
+            },
+        );
+        let checks = match checked {
+            Ok(checks) => checks,
+            Err(error) => {
+                return TransferOperationOutcome {
+                    terminal_status: terminal_status_for_error(&error),
+                    result: Err(error),
+                }
+            }
+        };
+        let conflicts: Vec<usize> = checks
+            .iter()
+            .enumerate()
+            .filter_map(|(index, result)| matches!(result, Ok(true)).then_some(index))
+            .collect();
+        let moving = batch.items[0].moving;
+        let decision = if conflicts.is_empty() || moving {
+            crate::services::remotes::transfer::preflight::Decision::Skip
+        } else {
+            callback(fs::TransferProgressUpdate {
+                processed: 0,
+                total,
+                status_text: Some("Waiting for replacement choice".into()),
+                ..Default::default()
+            });
+            let decision = (batch.request_decision)(conflicts.clone())
+                .and_then(|pending| pending.wait(&mut || control.checkpoint()));
+            match decision {
+                Ok(decision) => decision,
+                Err(error) => {
+                    return TransferOperationOutcome {
+                        terminal_status: terminal_status_for_error(&error),
+                        result: Err(error),
+                    }
+                }
+            }
+        };
+        if matches!(
+            decision,
+            crate::services::remotes::transfer::preflight::Decision::Cancel
+        ) {
+            return TransferOperationOutcome {
+                terminal_status: TransferJobStatus::Cancelled,
+                result: Ok(TransferOperationResult::RemoteBatch(BatchResult {
+                    items,
+                    cancelled: true,
+                })),
+            };
+        }
         let mut last_boundary_flush: Option<std::time::Instant> = None;
         for (index, job) in batch.items.iter().enumerate() {
             if let Err(error) = control.checkpoint() {
@@ -197,10 +351,69 @@ fn execute_remote_batch(
                         index,
                         result: None,
                         error: Some(error),
+                        skipped: false,
                     });
                 }
                 break;
             }
+            let replace = match &checks[index] {
+                Err(error) => {
+                    items.push(BatchItemResult {
+                        index,
+                        result: None,
+                        error: Some(error.clone()),
+                        skipped: false,
+                    });
+                    (batch.item_finished)(index);
+                    callback(fs::TransferProgressUpdate {
+                        processed: index + 1,
+                        total,
+                        status_text: Some("Checking destinations".into()),
+                        ..Default::default()
+                    });
+                    continue;
+                }
+                Ok(true) if moving => {
+                    items.push(BatchItemResult {
+                        index,
+                        result: None,
+                        error: Some(
+                            "An item with this name already exists in the destination.".into(),
+                        ),
+                        skipped: false,
+                    });
+                    (batch.item_finished)(index);
+                    callback(fs::TransferProgressUpdate {
+                        processed: index + 1,
+                        total,
+                        status_text: Some("Checking destinations".into()),
+                        ..Default::default()
+                    });
+                    continue;
+                }
+                Ok(true)
+                    if matches!(
+                        decision,
+                        crate::services::remotes::transfer::preflight::Decision::Skip
+                    ) =>
+                {
+                    items.push(BatchItemResult {
+                        index,
+                        result: None,
+                        error: None,
+                        skipped: true,
+                    });
+                    (batch.item_finished)(index);
+                    callback(fs::TransferProgressUpdate {
+                        processed: index + 1,
+                        total,
+                        status_text: Some("Skipping existing items".into()),
+                        ..Default::default()
+                    });
+                    continue;
+                }
+                Ok(conflict) => *conflict,
+            };
             let path = match &job.direction {
                 Direction::Download { remote_path, .. } | Direction::Remote { remote_path, .. } => {
                     remote_path.clone()
@@ -235,7 +448,9 @@ fn execute_remote_batch(
                     ..Default::default()
                 });
             };
-            let result = run_remote_item(job, &mut on_control, &mut on_progress);
+            let mut prepared = job.clone();
+            prepared.replace = replace;
+            let result = run_remote_item(&prepared, &mut on_control, &mut on_progress);
             let (result, error) = match result {
                 Ok(mut result) => {
                     if matches!(&job.direction, Direction::Download { .. }) {
@@ -253,6 +468,7 @@ fn execute_remote_batch(
                 index,
                 result,
                 error,
+                skipped: false,
             });
             // Keep the first completion responsive without flooding the UI
             // with queue snapshots for large batches of tiny files.
@@ -281,7 +497,7 @@ fn execute_remote_batch(
                 break;
             }
         }
-        let failed = batch.preflight_failures > 0 || items.iter().any(|item| item.error.is_some());
+        let failed = items.iter().any(|item| item.error.is_some());
         let status = if cancelled {
             TransferJobStatus::Cancelled
         } else if failed {

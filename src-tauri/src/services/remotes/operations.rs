@@ -5,19 +5,19 @@ use super::{
     wire::{put_string, Attrs, Error, Fields, Reply, Request, Wire},
     Remotes, Session,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tauri::Webview;
+use tauri::{Emitter, Manager, Webview};
 
 const MAX_DELETE_ENTRIES: usize = 10_000;
 const MAX_DELETE_DEPTH: usize = 64;
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SelectedEntry {
     pub(crate) name: String,
-    is_dir: bool,
-    is_symlink: bool,
+    pub(super) is_dir: bool,
+    pub(super) is_symlink: bool,
     size: Option<u64>,
     modified: Option<u64>,
 }
@@ -293,6 +293,103 @@ async fn remove(session: &Arc<Session>, path: &str, directory: bool) -> Result<(
         .await
 }
 
+// Restore a journalled stage only when its paths and current entries still match.
+pub(super) async fn recover_delete_stage(
+    remotes: &Remotes,
+    profile: &str,
+    id: u32,
+    record: &super::delete_recovery::DeleteStage,
+) -> Result<bool, String> {
+    if record.id.len() != 32 || !record.id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("Invalid delete recovery ID.".into());
+    }
+    let (parent, _) = record
+        .original
+        .rsplit_once('/')
+        .ok_or("Invalid original path.")?;
+    let parent = if parent.is_empty() { "/" } else { parent };
+    if child(parent, &record.selected.name)? != record.original
+        || child(parent, &format!(".stratum-delete-{}", record.id))? != record.stage
+    {
+        return Err("Invalid delete recovery paths.".into());
+    }
+    let staged = child(&record.stage, "item")?;
+    let session = remotes.current(profile, Some(id))?;
+    let mut wire = session.wire.lock().await;
+    session
+        .complete(
+            async {
+                checked_parent(&mut wire, parent).await?;
+                let original = match lstat(&mut wire, &record.original).await {
+                    Ok(attrs) => Some(attrs),
+                    Err(Error::NotFound) => None,
+                    Err(error) => return Err(error),
+                };
+                let stage = match lstat(&mut wire, &record.stage).await {
+                    Ok(attrs) => Some(attrs),
+                    Err(Error::NotFound) => None,
+                    Err(error) => return Err(error),
+                };
+                let Some(stage) = stage else {
+                    return if original
+                        .as_ref()
+                        .is_some_and(|attrs| record.deleting || same_entry(&record.selected, attrs))
+                    {
+                        Ok(false)
+                    } else {
+                        Err(Error::Request(
+                            "Neither the expected original nor its staged item was found.".into(),
+                        ))
+                    };
+                };
+                if stage.kind() != 0o040000 {
+                    return Err(Error::Request("The staging folder changed.".into()));
+                }
+                checked_parent(&mut wire, &record.stage).await?;
+                let item = match lstat(&mut wire, &staged).await {
+                    Ok(attrs) => Some(attrs),
+                    Err(Error::NotFound) => None,
+                    Err(error) => return Err(error),
+                };
+                match (original, item) {
+                    (Some(attrs), None)
+                        if record.deleting || same_entry(&record.selected, &attrs) =>
+                    {
+                        wire.path_request(Request::Rmdir, record.stage.as_bytes(), Reply::Status)
+                            .await?;
+                        Ok(false)
+                    }
+                    (None, Some(attrs)) => {
+                        let expected_kind = if record.selected.is_symlink {
+                            0o120000
+                        } else if record.selected.is_dir {
+                            0o040000
+                        } else {
+                            0o100000
+                        };
+                        if attrs.kind() != expected_kind
+                            || (!record.deleting && !same_entry(&record.selected, &attrs))
+                        {
+                            return Err(Error::Request("The staged item changed.".into()));
+                        }
+                        rename(&mut wire, &staged, &record.original).await?;
+                        wire.path_request(Request::Rmdir, record.stage.as_bytes(), Reply::Status)
+                            .await?;
+                        Ok(true)
+                    }
+                    (Some(_), Some(_)) => Err(Error::Request(
+                        "The original name is occupied; the staged item was kept.".into(),
+                    )),
+                    _ => Err(Error::Request(
+                        "The original or staged item could not be verified.".into(),
+                    )),
+                }
+            },
+            60,
+        )
+        .await
+}
+
 // Remove only the staged tree the user chose. Recheck each parent and entry
 // before mutation; never traverse links or unrepresentable names.
 pub(super) async fn purge_staged(
@@ -378,26 +475,230 @@ pub(super) async fn purge_staged(
     Ok(())
 }
 
+#[derive(Clone)]
+pub(crate) struct RemoteDelete {
+    pub remotes: Remotes,
+    pub profile: String,
+    pub session: u32,
+    pub parent: String,
+    pub entries: Vec<SelectedEntry>,
+    pub journal: super::recovery::RecoveryJournal,
+    pub source_changed: Arc<dyn Fn(String) + Send + Sync>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteDirectoryChange {
+    profile_id: String,
+    session_id: u32,
+    path: String,
+}
+
+// The transfer manager owns admission, cancellation and shutdown for the entire selection.
 #[tauri::command]
-pub(crate) async fn remote_delete_entry(
+pub(crate) async fn remote_delete_entries(
     webview: Webview,
     profile_id: String,
     session_id: u32,
     parent: String,
-    entry: SelectedEntry,
-) -> Result<(), String> {
-    delete(
-        &manager(&webview)?,
-        &profile_id,
-        session_id,
-        &parent,
-        &entry,
-    )
-    .await
+    entries: Vec<SelectedEntry>,
+    transfer_id: Option<String>,
+) -> Result<crate::domain::filesystem::DeleteReport, String> {
+    if entries.is_empty() || entries.len() > 100_000 {
+        return Err("Select between 1 and 100000 items.".into());
+    }
+    browse::check_path(&parent, false).map_err(|e| e.message().to_owned())?;
+    for entry in &entries {
+        child(&parent, &entry.name)?;
+    }
+    let remotes = manager(&webview)?;
+    remotes.current(&profile_id, Some(session_id))?;
+    let journal = super::recovery::RecoveryJournal::for_webview(&webview)?;
+    let queue = webview
+        .state::<crate::services::transfer_manager::TransferManagerHandle>()
+        .inner()
+        .clone();
+    let window = webview.window();
+    let app = webview.app_handle().clone();
+    let notify_profile = profile_id.clone();
+    let source_changed = Arc::new(move |path| {
+        let _ = app.emit_to(
+            "main",
+            "remote-directory-changed",
+            RemoteDirectoryChange {
+                profile_id: notify_profile.clone(),
+                session_id,
+                path,
+            },
+        );
+    });
+    let job = RemoteDelete {
+        remotes,
+        profile: profile_id,
+        session: session_id,
+        parent,
+        entries,
+        journal,
+        source_changed,
+    };
+    tauri::async_runtime::spawn_blocking(move || queue.remote_delete(window, job, transfer_id))
+        .await
+        .map_err(|_| "Could not run the remote deletion.".to_string())?
 }
 
 // Stage the selected item in a private folder before walking it. Never follow
 // symlinks; an interrupted or rejected walk retains the remaining staged data.
+pub(crate) async fn delete_managed(
+    remotes: &Remotes,
+    profile: &str,
+    id: u32,
+    parent: &str,
+    entry: &SelectedEntry,
+    journal: &super::recovery::RecoveryJournal,
+    checkpoint: &mut dyn FnMut() -> Result<(), String>,
+) -> Result<(), String> {
+    checkpoint()?;
+    let original = child(parent, &entry.name)?;
+    let mut random = [0u8; 16];
+    getrandom::fill(&mut random).map_err(|_| "Could not prepare deletion.")?;
+    let stage_id = random
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
+    let _active = super::recovery::ActiveMove::start(&stage_id)?;
+    let stage_name = format!(".stratum-delete-{stage_id}");
+    let stage = child(parent, &stage_name)?;
+    let staged = child(&stage, "item")?;
+    let session = remotes.current(profile, Some(id))?;
+    let mut record = super::delete_recovery::DeleteStage {
+        id: stage_id,
+        host: session.host.clone(),
+        original: original.clone(),
+        stage: stage.clone(),
+        selected: entry.clone(),
+        deleting: false,
+        restored_partial: false,
+    };
+    journal.insert_delete(&record)?;
+    let result = async {
+        checkpoint().map_err(|error| (error, false))?;
+        {
+            let mut wire = session.wire.lock().await;
+            session
+                .complete(
+                    async {
+                        checked_parent(&mut wire, parent).await?;
+                        check_entry(&mut wire, &original, entry).await?;
+                        mkdir(&mut wire, &stage, true).await?;
+                        Ok(())
+                    },
+                    60,
+                )
+                .await
+                .map_err(|error| (error, false))?;
+        }
+        let moved = {
+            let mut wire = session.wire.lock().await;
+            session
+                .complete(
+                    async {
+                        checked_parent(&mut wire, parent).await?;
+                        check_entry(&mut wire, &original, entry).await?;
+                        rename(&mut wire, &original, &staged).await
+                    },
+                    60,
+                )
+                .await
+        };
+        moved.map_err(|error| (error, false))?;
+        checkpoint().map_err(|error| (error, false))?;
+        let mut deleting = false;
+        let result = async {
+            if !entry.is_dir || entry.is_symlink {
+                journal.mark_delete_started(&record.id)?;
+                record.deleting = true;
+                checkpoint()?;
+                deleting = true;
+                return remove(&session, &staged, false).await;
+            }
+            let mut pending = vec![(staged.clone(), 0usize)];
+            let mut files = Vec::new();
+            let mut directories = Vec::new();
+            while let Some((path, depth)) = pending.pop() {
+                checkpoint()?;
+                if depth > MAX_DELETE_DEPTH {
+                    return Err("Folder nesting exceeds the delete limit.".into());
+                }
+                let attrs = remotes.stat(profile, id, &path).await?;
+                if attrs.kind() != 0o040000 {
+                    return Err("A folder changed during deletion.".into());
+                }
+                let listing = remotes.list(profile, &path, Some(id)).await?;
+                if listing.path != path || listing.omitted_entries != 0 {
+                    return Err(
+                        "A folder changed or contains names that cannot be displayed.".into(),
+                    );
+                }
+                directories.push(path);
+                for item in listing.entries {
+                    if files.len() + pending.len() + directories.len() >= MAX_DELETE_ENTRIES {
+                        return Err("The folder contains too many items to delete at once.".into());
+                    }
+                    if item.is_dir && !item.is_symlink {
+                        pending.push((item.path, depth + 1));
+                    } else {
+                        files.push(item.path);
+                    }
+                }
+            }
+            journal.mark_delete_started(&record.id)?;
+            record.deleting = true;
+            for path in files {
+                checkpoint()?;
+                deleting = true;
+                remove(&session, &path, false).await?;
+            }
+            for path in directories.into_iter().rev() {
+                checkpoint()?;
+                deleting = true;
+                remove(&session, &path, true).await?;
+            }
+            Ok(())
+        }
+        .await;
+        if let Err(error) = result {
+            return Err((error, deleting));
+        }
+        remove(&session, &stage, true).await.map_err(|error| {
+            (
+                format!("Deleted the item, but could not remove {stage}: {error}"),
+                true,
+            )
+        })?;
+        Ok::<(), (String, bool)>(())
+    }
+    .await;
+    match result {
+        Ok(()) => journal.remove_delete(&record.id),
+        Err((error, deleting)) => {
+            match recover_delete_stage(remotes, profile, id, &record).await {
+                Ok(restored) => {
+                    if deleting { journal.mark_delete_restored_partial(&record.id)?; }
+                    else { journal.remove_delete(&record.id)?; }
+                    if error == crate::domain::filesystem::transfer::TRANSFER_CANCELLED_MESSAGE && !deleting {
+                        return Err(error);
+                    }
+                    Err(format!("{error} {}", if restored && deleting {
+                        "Remaining contents were restored, but some may already have been deleted."
+                    } else if restored { "The item was restored." } else { "Check the original location." }))
+                }
+                Err(recovery) => Err(format!("{error} Recovery is needed for {original}; check {staged} or reconnect: {recovery}")),
+            }
+        }
+    }
+}
+
+#[cfg(test)]
 async fn delete(
     remotes: &Remotes,
     profile: &str,
@@ -405,125 +706,25 @@ async fn delete(
     parent: &str,
     entry: &SelectedEntry,
 ) -> Result<(), String> {
-    let original = child(parent, &entry.name)?;
     let mut random = [0u8; 16];
-    getrandom::fill(&mut random).map_err(|_| "Could not prepare deletion.")?;
-    let stage_name = format!(
-        ".stratum-delete-{}",
-        random
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect::<String>()
-    );
-    let stage = child(parent, &stage_name)?;
-    let staged = child(&stage, "item")?;
-    let session = remotes.current(profile, Some(id))?;
-    {
-        let mut wire = session.wire.lock().await;
-        session
-            .complete(
-                async {
-                    checked_parent(&mut wire, parent).await?;
-                    check_entry(&mut wire, &original, entry).await?;
-                    mkdir(&mut wire, &stage, true).await?;
-                    Ok(())
-                },
-                60,
-            )
-            .await?;
-    }
-    let moved = {
-        let mut wire = session.wire.lock().await;
-        session
-            .complete(
-                async {
-                    checked_parent(&mut wire, parent).await?;
-                    check_entry(&mut wire, &original, entry).await?;
-                    rename(&mut wire, &original, &staged).await
-                },
-                60,
-            )
-            .await
-    };
-    if let Err(error) = moved {
-        let _ = remove(&session, &stage, true).await;
-        return Err(error);
-    }
-    let mut deleting = false;
-    let result = async {
-        if !entry.is_dir || entry.is_symlink {
-            return remove(&session, &staged, false).await;
-        }
-        let mut pending = vec![(staged.clone(), 0usize)];
-        let mut files = Vec::new();
-        let mut directories = Vec::new();
-        while let Some((path, depth)) = pending.pop() {
-            if depth > MAX_DELETE_DEPTH {
-                return Err("Folder nesting exceeds the delete limit.".into());
-            }
-            let attrs = remotes.stat(profile, id, &path).await?;
-            if attrs.kind() != 0o040000 {
-                return Err("A folder changed during deletion.".into());
-            }
-            let listing = remotes.list(profile, &path, Some(id)).await?;
-            if listing.path != path || listing.omitted_entries != 0 {
-                return Err("A folder changed or contains names that cannot be displayed.".into());
-            }
-            directories.push(path);
-            for item in listing.entries {
-                if files.len() + pending.len() + directories.len() >= MAX_DELETE_ENTRIES {
-                    return Err("The folder contains too many items to delete at once.".into());
-                }
-                if item.is_dir && !item.is_symlink {
-                    pending.push((item.path, depth + 1));
-                } else {
-                    files.push(item.path);
-                }
-            }
-        }
-        for path in files {
-            remove(&session, &path, false).await?;
-            deleting = true;
-        }
-        for path in directories.into_iter().rev() {
-            remove(&session, &path, true).await?;
-            deleting = true;
-        }
-        Ok(())
-    }
+    getrandom::fill(&mut random).map_err(|e| e.to_string())?;
+    let path = std::env::temp_dir().join(format!(
+        "stratum-delete-test-{:032x}.sqlite",
+        u128::from_le_bytes(random)
+    ));
+    let journal = super::recovery::RecoveryJournal::for_test(path.clone());
+    let result = delete_managed(
+        remotes,
+        profile,
+        id,
+        parent,
+        entry,
+        &journal,
+        &mut || Ok(()),
+    )
     .await;
-    if let Err(error) = result {
-        if !deleting {
-            let restored = {
-                let mut wire = session.wire.lock().await;
-                session
-                    .complete(
-                        async {
-                            checked_parent(&mut wire, parent).await?;
-                            match lstat(&mut wire, &original).await {
-                                Err(Error::NotFound) => rename(&mut wire, &staged, &original).await,
-                                Ok(_) => {
-                                    Err(Error::Request("The original name is now occupied.".into()))
-                                }
-                                Err(error) => Err(error),
-                            }
-                        },
-                        60,
-                    )
-                    .await
-            };
-            if restored.is_ok() {
-                if let Err(cleanup) = remove(&session, &stage, true).await {
-                    return Err(format!("{error} The item was restored, but {stage} could not be removed: {cleanup}"));
-                }
-                return Err(format!("{error} The item was restored."));
-            }
-        }
-        return Err(format!("{error} Remaining data is at {staged}."));
-    }
-    remove(&session, &stage, true)
-        .await
-        .map_err(|error| format!("Deleted the item, but could not remove {stage}: {error}"))
+    let _ = std::fs::remove_file(path);
+    result
 }
 
 #[cfg(test)]
@@ -536,6 +737,390 @@ mod tests {
         for name in ["", ".", "..", "a/b", "bad\0name"] {
             assert!(child("/srv", name).is_err());
         }
+    }
+
+    #[test]
+    #[ignore = "set STRATUM_SFTP_TEST_HOST and STRATUM_SFTP_OPERATIONS_DIR to a disposable fixture"]
+    fn managed_delete_recovers_interrupted_stages_and_blocks_shutdown() {
+        use crate::services::transfer_manager::{TransferManagerHandle, TransferShutdownMode};
+        use std::sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc, Mutex,
+        };
+        use std::time::Duration;
+
+        tauri::async_runtime::block_on(async {
+            let host = std::env::var("STRATUM_SFTP_TEST_HOST").unwrap();
+            let base = std::env::var("STRATUM_SFTP_OPERATIONS_DIR").unwrap();
+            let mut random = [0u8; 16];
+            getrandom::fill(&mut random).unwrap();
+            let fixture_name = format!("stratum-delete-test-{:032x}", u128::from_le_bytes(random));
+            let remotes = Remotes::default();
+            let session = remotes
+                .connect("delete-fixture", &host, &base, Arc::new(|_| {}))
+                .await
+                .unwrap();
+            let id = session.session_id;
+            create(&remotes, "delete-fixture", id, &base, &fixture_name, true)
+                .await
+                .unwrap();
+            let parent = child(&base, &fixture_name).unwrap();
+            let journal_path = std::env::temp_dir().join(format!("{fixture_name}.sqlite"));
+            let journal = super::super::recovery::RecoveryJournal::for_test(journal_path.clone());
+            let select = |item: &browse::Entry| SelectedEntry {
+                name: item.name.clone(),
+                is_dir: item.is_dir,
+                is_symlink: item.is_symlink,
+                size: item.size,
+                modified: item.modified,
+            };
+
+            // Recreate crash windows before and after a child was removed.
+            for (name, deleting, stage_id) in [
+                ("untouched", false, "11111111111111111111111111111111"),
+                ("partial", true, "22222222222222222222222222222222"),
+            ] {
+                create(&remotes, "delete-fixture", id, &parent, name, true)
+                    .await
+                    .unwrap();
+                let original = child(&parent, name).unwrap();
+                for file in ["first", "second"] {
+                    create(&remotes, "delete-fixture", id, &original, file, false)
+                        .await
+                        .unwrap();
+                }
+                let listing = remotes
+                    .list("delete-fixture", &parent, Some(id))
+                    .await
+                    .unwrap();
+                let selected = select(
+                    listing
+                        .entries
+                        .iter()
+                        .find(|item| item.name == name)
+                        .unwrap(),
+                );
+                let stage = child(&parent, &format!(".stratum-delete-{stage_id}")).unwrap();
+                let record = super::super::delete_recovery::DeleteStage {
+                    id: stage_id.into(),
+                    host: host.clone(),
+                    original: original.clone(),
+                    stage: stage.clone(),
+                    selected,
+                    deleting: false,
+                    restored_partial: false,
+                };
+                journal.insert_delete(&record).unwrap();
+                let current = remotes.current("delete-fixture", Some(id)).unwrap();
+                {
+                    let mut wire = current.wire.lock().await;
+                    mkdir(&mut wire, &stage, true)
+                        .await
+                        .map_err(|e| e.message().to_owned())
+                        .unwrap();
+                    rename(&mut wire, &original, &child(&stage, "item").unwrap())
+                        .await
+                        .map_err(|e| e.message().to_owned())
+                        .unwrap();
+                }
+                if deleting {
+                    journal.mark_delete_started(stage_id).unwrap();
+                    remove(&current, &format!("{stage}/item/first"), false)
+                        .await
+                        .unwrap();
+                }
+                let mut restored = Vec::new();
+                let mut warnings = Vec::new();
+                let mut notices = Vec::new();
+                super::super::delete_recovery::recover_interrupted_deletes(
+                    &remotes,
+                    &journal,
+                    &host,
+                    "delete-fixture",
+                    id,
+                    &mut restored,
+                    &mut warnings,
+                    &mut notices,
+                )
+                .await
+                .unwrap();
+                assert_eq!(restored, vec![original.clone()]);
+                assert_eq!(!warnings.is_empty(), deleting);
+                assert_eq!(notices.len(), usize::from(deleting));
+                journal.acknowledge_delete_notices(&host, &notices).unwrap();
+                let remaining = remotes
+                    .list("delete-fixture", &original, Some(id))
+                    .await
+                    .unwrap();
+                assert_eq!(remaining.entries.len(), if deleting { 1 } else { 2 });
+            }
+
+            // Cancellation during a recursive delete restores surviving children
+            // and tells the caller that the result can be incomplete.
+            create(&remotes, "delete-fixture", id, &parent, "cancelled", true)
+                .await
+                .unwrap();
+            let cancelled = child(&parent, "cancelled").unwrap();
+            for file in ["first", "second"] {
+                create(&remotes, "delete-fixture", id, &cancelled, file, false)
+                    .await
+                    .unwrap();
+            }
+            let listing = remotes
+                .list("delete-fixture", &parent, Some(id))
+                .await
+                .unwrap();
+            let entry = select(
+                listing
+                    .entries
+                    .iter()
+                    .find(|item| item.name == "cancelled")
+                    .unwrap(),
+            );
+            let mut checkpoints = 0;
+            let error = delete_managed(
+                &remotes,
+                "delete-fixture",
+                id,
+                &parent,
+                &entry,
+                &journal,
+                &mut || {
+                    checkpoints += 1;
+                    if checkpoints == 6 {
+                        Err("Transfer cancelled".into())
+                    } else {
+                        Ok(())
+                    }
+                },
+            )
+            .await
+            .unwrap_err();
+            assert!(error.starts_with("Transfer cancelled"));
+            assert!(error.contains("some may already have been deleted"));
+            assert_eq!(
+                remotes
+                    .list("delete-fixture", &cancelled, Some(id))
+                    .await
+                    .unwrap()
+                    .entries
+                    .len(),
+                1
+            );
+            let (mut restored, mut warnings, mut notices) = (Vec::new(), Vec::new(), Vec::new());
+            super::super::delete_recovery::recover_interrupted_deletes(
+                &remotes,
+                &journal,
+                &host,
+                "delete-fixture",
+                id,
+                &mut restored,
+                &mut warnings,
+                &mut notices,
+            )
+            .await
+            .unwrap();
+            assert!(restored.is_empty());
+            assert_eq!(warnings.len(), 1);
+            assert_eq!(notices.len(), 1);
+            journal
+                .acknowledge_delete_notices("other-host", &notices)
+                .unwrap();
+            warnings.clear();
+            notices.clear();
+            super::super::delete_recovery::recover_interrupted_deletes(
+                &remotes,
+                &journal,
+                &host,
+                "delete-fixture",
+                id,
+                &mut restored,
+                &mut warnings,
+                &mut notices,
+            )
+            .await
+            .unwrap();
+            assert_eq!(warnings.len(), 1);
+            journal.acknowledge_delete_notices(&host, &notices).unwrap();
+
+            // An occupied original name is never overwritten during recovery.
+            create(&remotes, "delete-fixture", id, &parent, "occupied", false)
+                .await
+                .unwrap();
+            let original = child(&parent, "occupied").unwrap();
+            let listing = remotes
+                .list("delete-fixture", &parent, Some(id))
+                .await
+                .unwrap();
+            let selected = select(
+                listing
+                    .entries
+                    .iter()
+                    .find(|item| item.name == "occupied")
+                    .unwrap(),
+            );
+            let stage_id = "33333333333333333333333333333333";
+            let stage = child(&parent, &format!(".stratum-delete-{stage_id}")).unwrap();
+            let record = super::super::delete_recovery::DeleteStage {
+                id: stage_id.into(),
+                host: host.clone(),
+                original: original.clone(),
+                stage: stage.clone(),
+                selected,
+                deleting: false,
+                restored_partial: false,
+            };
+            journal.insert_delete(&record).unwrap();
+            let current = remotes.current("delete-fixture", Some(id)).unwrap();
+            {
+                let mut wire = current.wire.lock().await;
+                mkdir(&mut wire, &stage, true)
+                    .await
+                    .map_err(|e| e.message().to_owned())
+                    .unwrap();
+                rename(&mut wire, &original, &child(&stage, "item").unwrap())
+                    .await
+                    .map_err(|e| e.message().to_owned())
+                    .unwrap();
+            }
+            create(&remotes, "delete-fixture", id, &parent, "occupied", false)
+                .await
+                .unwrap();
+            let (mut restored, mut warnings, mut notices) = (Vec::new(), Vec::new(), Vec::new());
+            super::super::delete_recovery::recover_interrupted_deletes(
+                &remotes,
+                &journal,
+                &host,
+                "delete-fixture",
+                id,
+                &mut restored,
+                &mut warnings,
+                &mut notices,
+            )
+            .await
+            .unwrap();
+            assert!(restored.is_empty());
+            assert_eq!(warnings.len(), 1);
+            assert!(remotes
+                .exists("delete-fixture", id, &child(&stage, "item").unwrap())
+                .await
+                .unwrap());
+            remove(&current, &original, false).await.unwrap();
+            warnings.clear();
+            super::super::delete_recovery::recover_interrupted_deletes(
+                &remotes,
+                &journal,
+                &host,
+                "delete-fixture",
+                id,
+                &mut restored,
+                &mut warnings,
+                &mut notices,
+            )
+            .await
+            .unwrap();
+            assert_eq!(restored, vec![original]);
+            assert!(warnings.is_empty());
+
+            // Pause the worker after one deletion, then cancel it through the
+            // same shutdown gate used by window close and updater handoff.
+            for name in ["queue-first", "queue-second"] {
+                create(&remotes, "delete-fixture", id, &parent, name, false)
+                    .await
+                    .unwrap();
+            }
+            let listing = remotes
+                .list("delete-fixture", &parent, Some(id))
+                .await
+                .unwrap();
+            let entries = ["queue-first", "queue-second"]
+                .iter()
+                .map(|name| {
+                    select(
+                        listing
+                            .entries
+                            .iter()
+                            .find(|item| item.name == *name)
+                            .unwrap(),
+                    )
+                })
+                .collect();
+            let (reached_tx, reached_rx) = mpsc::channel();
+            let (resume_tx, resume_rx) = mpsc::channel();
+            let resume_rx = Mutex::new(resume_rx);
+            let first = AtomicBool::new(true);
+            let job = RemoteDelete {
+                remotes: remotes.clone(),
+                profile: "delete-fixture".into(),
+                session: id,
+                parent: parent.clone(),
+                entries,
+                journal: journal.clone(),
+                source_changed: Arc::new(move |_| {
+                    if first.swap(false, Ordering::SeqCst) {
+                        reached_tx.send(()).unwrap();
+                        resume_rx
+                            .lock()
+                            .unwrap()
+                            .recv_timeout(Duration::from_secs(10))
+                            .unwrap();
+                    }
+                }),
+            };
+            let manager = TransferManagerHandle::init();
+            let completion = manager.remote_delete_fixture(job);
+            reached_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+            assert!(manager
+                .begin_shutdown(TransferShutdownMode::IdleOnly)
+                .unwrap()
+                .is_none());
+            let ticket = manager
+                .begin_shutdown(TransferShutdownMode::Cancel)
+                .unwrap()
+                .unwrap();
+            resume_tx.send(()).unwrap();
+            assert!(manager.wait_for_shutdown(ticket).unwrap());
+            let report = completion
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap()
+                .unwrap();
+            assert!(report.cancelled);
+            assert_eq!(report.deleted, 1);
+            assert!(remotes
+                .exists(
+                    "delete-fixture",
+                    id,
+                    &child(&parent, "queue-second").unwrap()
+                )
+                .await
+                .unwrap());
+            assert!(manager.reopen_queue(ticket).unwrap());
+
+            let listing = remotes
+                .list("delete-fixture", &base, Some(id))
+                .await
+                .unwrap();
+            let fixture = select(
+                listing
+                    .entries
+                    .iter()
+                    .find(|item| item.name == fixture_name)
+                    .unwrap(),
+            );
+            delete_managed(
+                &remotes,
+                "delete-fixture",
+                id,
+                &base,
+                &fixture,
+                &journal,
+                &mut || Ok(()),
+            )
+            .await
+            .unwrap();
+            remotes.disconnect("delete-fixture").await;
+            std::fs::remove_file(journal_path).unwrap();
+        });
     }
 
     #[test]

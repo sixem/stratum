@@ -8,6 +8,9 @@ export type RemoteProfile = {
 
 const STORAGE_KEY = "stratum.remoteHosts";
 
+export const serializeRemoteProfiles = (profiles: readonly RemoteProfile[]) =>
+  [STORAGE_KEY, JSON.stringify(profiles)] as const;
+
 export function loadRemoteProfiles(): RemoteProfile[] {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
@@ -29,5 +32,5 @@ export function loadRemoteProfiles(): RemoteProfile[] {
 }
 
 export function writeRemoteProfiles(profiles: RemoteProfile[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+  localStorage.setItem(...serializeRemoteProfiles(profiles));
 }

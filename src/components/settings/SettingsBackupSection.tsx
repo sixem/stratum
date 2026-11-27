@@ -29,6 +29,7 @@ export const BACKUP_SETTINGS_ITEMS = {
 export const SettingsBackupSection = ({ sectionId }: { sectionId: string }) => {
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const [scope, setScope] = useState<StratumBackup["scope"]>("full");
+  const [includeRemoteHosts, setIncludeRemoteHosts] = useState(true);
   const [selection, setSelection] = useState(() => new Set(workspaces.map(({ id }) => id)));
   const [review, setReview] = useState<{ backup: StratumBackup; key: number } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -39,7 +40,7 @@ export const SettingsBackupSection = ({ sectionId }: { sectionId: string }) => {
     setBusy(true);
     setFeedback(null);
     try {
-      const backup = captureStratumBackup(scope, selection);
+      const backup = captureStratumBackup(scope, selection, includeRemoteHosts);
       if (await saveStratumBackup(backup)) {
         setFeedback({ kind: "success", text: "Backup exported." });
       }
@@ -110,6 +111,14 @@ export const SettingsBackupSection = ({ sectionId }: { sectionId: string }) => {
               ))}
             </ul>
           ) : <p className="settings-desc">Save a named workspace first to export it on its own.</p> : null}
+          <div className="settings-backup-host-option">
+            <SettingsCheckbox checked={includeRemoteHosts} disabled={busy} onChange={event => setIncludeRemoteHosts(event.currentTarget.checked)}>
+              Include remote host details
+            </SettingsCheckbox>
+            <p className="settings-desc">Saves SSH destinations, display names and starting folders in the backup file. Passwords, private keys and SSH configuration are not included.
+              {scope === "workspaces" ? " Only hosts used by the selected workspaces are included." : " All saved hosts are included."}
+            </p>
+          </div>
           <div className="settings-actions">
             <PressButton type="button" className="btn" disabled={busy || (scope === "workspaces" && !selectedWorkspaces.length)} onClick={exportBackup}>
               Export…

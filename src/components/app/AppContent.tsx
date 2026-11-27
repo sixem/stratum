@@ -1,6 +1,6 @@
 // Owns the main layout body (sidebar + file view) and the focusable main container.
 import { lazy, Suspense, useState } from "react";
-import type { CSSProperties, ComponentProps, RefObject } from "react";
+import type { CSSProperties, ComponentProps, ReactNode, RefObject } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { TerminalPane } from "@/components/terminal/TerminalPane";
 import { TerminalSplitView } from "@/components/terminal/TerminalSplitView";
@@ -8,6 +8,7 @@ import { useSessionStore } from "@/modules/sessionStore";
 import { FileView, PerfProfiler, Sidebar } from "@/components";
 import { SidebarDivider } from "@/components/navigation/SidebarDivider";
 import { useSettingsStore } from "@/modules";
+import { useRemoteDrag } from "@/modules/remoteDrag";
 import { focusFilePaneBackground } from "@/hooks/ui/inputs/inputFocus";
 import type { PanePreviewBindings } from "@/hooks/ui/view/useQuickPreview";
 import { useTabReveal } from "@/hooks/ui/view/useTabReveal";
@@ -26,6 +27,8 @@ const BottomPane = lazy(() => import("../explorer/bottomPane/BottomPane").then(m
 
 type AppContentProps = {
   onBottomSummary: (summary: PaneSummary) => void;
+  mainCrumbs?: ReactNode;
+  crumbsInContent?: boolean;
   paneActions: PaneActions;
   fileDrop: PaneDrop;
   layoutClass: string;
@@ -48,6 +51,8 @@ type AppContentProps = {
 
 export const AppContent = ({
   onBottomSummary,
+  mainCrumbs,
+  crumbsInContent = false,
   paneActions,
   fileDrop,
   layoutClass,
@@ -74,6 +79,8 @@ export const AppContent = ({
   const bottomHeight = useBottomPaneStore(state => `${state.height}${state.heightUnit}`);
   const bottomActive = useBottomPaneStore(state => state.open && state.active);
   const sidebarWidth = useSettingsStore(state => state.sidebarWidth);
+  const remoteDrop = useRemoteDrag(state => state.preview?.action !== "unavailable" &&
+    state.preview && state.target?.pane === "main" ? state.target : null);
   const animateTabChanges = useSettingsStore(state => state.animateTabChanges);
   useTabReveal(mainRef, {
     tabId: activeTabId,
@@ -91,6 +98,7 @@ export const AppContent = ({
         className={layoutClass}
         data-split={split}
         data-active-pane={bottomActive ? "bottom" : "main"}
+        data-crumbs-in-content={crumbsInContent || undefined}
         style={{
           "--sidebar-width": `${sidebarWidth}px`,
           "--bottom-height": bottomHeight,
@@ -117,11 +125,19 @@ export const AppContent = ({
             <SidebarDivider width={sidebarWidth} onResizeChange={setSidebarResizing} />
           </PerfProfiler>
         ) : null}
+        {crumbsInContent && <div className="main-crumbs"
+          onPointerDownCapture={() => setBottomPaneActive(false)}
+          onFocusCapture={() => setBottomPaneActive(false)}
+          onPointerDown={(event) => { if (event.button === 2) event.stopPropagation(); }}
+          onPointerUp={(event) => { if (event.button === 2) event.stopPropagation(); }}>
+          {mainCrumbs}
+        </div>}
         <div className="pane-stack" data-split={split}>
         <TerminalSplitView pane="main" tab={activeTab} filePaneRef={mainRef} onSelectTab={onSelectTab} commandsBlocked={paneCommandsBlocked}>
         <main className="main upper-files" data-file-pane="main" data-pane-path={terminal || remote ? "" : upperPath} data-remote-pane={remote ? true : undefined}
           data-start-view={(!remote && fileViewProps.showLander) || undefined}
-          data-drop-background={fileDrop.backgroundHovered && fileDrop.hoveredPane === "main" || undefined}
+          data-drop-background={fileDrop.backgroundHovered && fileDrop.hoveredPane === "main" ||
+            remoteDrop?.kind === "pane" || remoteDrop?.kind === "remote-pane" || undefined}
           onPointerDownCapture={event => {
             setBottomPaneActive(false);
             if (!terminal && !remote) focusFilePaneBackground(event);
@@ -138,7 +154,8 @@ export const AppContent = ({
                 <button className="btn ghost" type="button" onClick={onRetryFolder}>Retry opening folder</button>
               </div>
             ) : (
-              <FileView {...paneViewProps} dropTargetPath={fileDrop.hoveredPane === "main" ? fileDrop.dropTargetPath : null} />
+              <FileView {...paneViewProps} dropTargetPath={remoteDrop?.kind === "entry" ? remoteDrop.path :
+                fileDrop.hoveredPane === "main" ? fileDrop.dropTargetPath : null} />
             )}
           </PerfProfiler>
         </main>

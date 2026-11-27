@@ -25,6 +25,10 @@ import type { Workspace, WorkspaceSession } from "../workspaceStore";
 import { makeImportedName, planBackupWorkspaceNames } from "./mergeWorkspaces";
 import type { BackupConflictPolicy } from "./mergeWorkspaces";
 import { writeBackupRecords } from "./persistence";
+import { planBackupRemoteHosts, selectBackupRemoteHosts } from "./remoteHosts";
+import type { BackupHostMappings } from "./remoteHosts";
+import { serializeRemoteProfiles } from "../remoteProfiles";
+import { useRemoteHosts } from "../remoteHosts";
 import type { BackupStorageRecord } from "./persistence";
 import { BACKUP_FORMAT, BACKUP_VERSION } from "./types";
 import type { StratumBackup } from "./types";
@@ -33,6 +37,7 @@ export type BackupImportOptions = {
   conflicts: BackupConflictPolicy;
   restorePreferences: boolean;
   openSession: boolean;
+  remoteHostMappings?: BackupHostMappings;
 };
 
 const readPreviewPreferences = () => {
@@ -47,7 +52,7 @@ const readPreviewPreferences = () => {
   }
 };
 
-export const captureStratumBackup = (scope: StratumBackup["scope"], selected: ReadonlySet<string>): StratumBackup => {
+export const captureStratumBackup = (scope: StratumBackup["scope"], selected: ReadonlySet<string>, includeRemoteHosts = true): StratumBackup => {
   const state = useWorkspaceStore.getState();
   const live = captureWorkspaceLayout();
   const drafts = new Map(getWorkspaceChanges(live).map(({ id, layout }) => [id, layout]));
@@ -62,12 +67,13 @@ export const captureStratumBackup = (scope: StratumBackup["scope"], selected: Re
   const header = { format: BACKUP_FORMAT, version: BACKUP_VERSION, createdAt: new Date().toISOString(), workspaces } as const;
   if (scope === "workspaces") {
     if (!workspaces.length) throw new Error("Select a workspace to export.");
-    return { ...header, scope };
+    const backup: StratumBackup = { ...header, scope };
+    return includeRemoteHosts ? { ...backup, remoteHosts: selectBackupRemoteHosts(backup, useRemoteHosts.getState().profiles) } : backup;
   }
   const { showBreadcrumbs } = useBottomPaneStore.getState();
   const previous = state.previous;
   const { ffmpegPath: _toolPath, ...settings } = coerceSettings(useSettingsStore.getState());
-  return {
+  const backup: StratumBackup = {
     ...header,
     scope,
     profile: {
@@ -85,6 +91,7 @@ export const captureStratumBackup = (scope: StratumBackup["scope"], selected: Re
       previewPreferences: readPreviewPreferences(),
     },
   };
+  return includeRemoteHosts ? { ...backup, remoteHosts: selectBackupRemoteHosts(backup, useRemoteHosts.getState().profiles) } : backup;
 };
 
 export const isUnusedBackupProfile = () => {
@@ -93,6 +100,7 @@ export const isUnusedBackupProfile = () => {
   const { showBreadcrumbs } = useBottomPaneStore.getState();
   const { volume, audioVolume, stripOpen } = readPreviewPreferences();
   return !workspaces.length && !previous && !useBatchRenamePresetStore.getState().presets.length
+    && !useRemoteHosts.getState().profiles.length
     && !getRecentMoveHistory().size && !getQuickMoveWorkspacePreferences().size
     && ![...live.main.tabs, ...live.bottom.tabs].some(tab => tab.kind !== "folder" || tab.path)
     && !live.main.recentJumps.length && !live.bottom.recentJumps.length && !hasCustomWorkspacePlaces(live.places)
@@ -128,6 +136,9 @@ const keepRecentMoves = (paths: readonly string[], limit: number) => {
 };
 
 export const applyStratumBackup = (backup: StratumBackup, options: BackupImportOptions) => {
+  const currentHosts = useRemoteHosts.getState().profiles;
+  const hostPlan = planBackupRemoteHosts(backup, currentHosts, options.remoteHostMappings);
+  backup = hostPlan.backup;
   const state = useWorkspaceStore.getState();
   const live = captureWorkspaceLayout();
   const profile = backup.scope === "full" ? backup.profile : undefined;
@@ -195,6 +206,7 @@ export const applyStratumBackup = (backup: StratumBackup, options: BackupImportO
   const records: BackupStorageRecord[] = [
     serializeWorkspaceState(next), serializeRecentMoveHistory(recent), serializeQuickMovePreferences(quickMove),
   ];
+  if (hostPlan.profiles.length !== currentHosts.length) records.push(serializeRemoteProfiles(hostPlan.profiles));
   if (prepared) {
     records.push(serializePaneSession("main", prepared.main), serializePaneSession("bottom", prepared.bottom), serializePlaces(prepared.places));
   } else if (gridSizeOnEnable !== undefined) {
@@ -219,6 +231,7 @@ export const applyStratumBackup = (backup: StratumBackup, options: BackupImportO
   }
   writeBackupRecords(records);
 
+  if (hostPlan.profiles.length !== currentHosts.length) useRemoteHosts.setState({ profiles: hostPlan.profiles });
   if (restored && previous?.layout === live) parkPreviousWorkspace(next);
   useWorkspaceStore.setState(next);
   publishRecentMoveHistory(recent);

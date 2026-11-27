@@ -11,6 +11,8 @@ import { applyStratumBackup, isUnusedBackupProfile } from "@/modules/backup/prof
 import type { StratumBackup } from "@/modules/backup/types";
 import { useWorkspaceStore } from "@/modules/workspaceStore";
 import { BackupPathReview } from "./BackupPathReview";
+import { BackupRemoteHostsReview } from "./BackupRemoteHostsReview";
+import type { BackupHostMappings } from "@/modules/backup/remoteHosts";
 import { SettingsCheckbox } from "./SettingsCheckbox";
 
 type Props = { backup: StratumBackup; onCancel: () => void; onImported: () => void };
@@ -31,16 +33,17 @@ export const BackupImportReview = ({ backup, onCancel, onImported }: Props) => {
   const [restorePreferences, setRestorePreferences] = useState(fresh);
   const [openSession, setOpenSession] = useState(fresh);
   const [mappings, setMappings] = useState<BackupPathMapping[]>([]);
+  const [hostMappings, setHostMappings] = useState<BackupHostMappings>(() => Object.create(null) as BackupHostMappings);
   const [error, setError] = useState<string | null>(null);
   const locations = useMemo(() => listBackupLocations(backup), [backup]);
   const preview = useMemo(() => planBackupWorkspaceNames(backup.workspaces, existing, conflicts), [backup, existing, conflicts]);
   const existingNames = new Set(existing.map(({ name }) => name.toLowerCase()));
   const hasConflicts = backup.workspaces.some(({ name }) => existingNames.has(name.toLowerCase()));
-  const canImport = backup.workspaces.length > 0 || restorePreferences || openSession;
+  const canImport = backup.workspaces.length > 0 || restorePreferences || openSession || Boolean(backup.remoteHosts?.length);
 
   const apply = () => {
     try {
-      applyStratumBackup(remapBackupLocations(backup, mappings), { conflicts, restorePreferences, openSession });
+      applyStratumBackup(remapBackupLocations(backup, mappings), { conflicts, restorePreferences, openSession, remoteHostMappings: hostMappings });
       onImported();
     } catch (error) {
       setError(toMessage(error, "Couldn't import the backup."));
@@ -95,6 +98,7 @@ export const BackupImportReview = ({ backup, onCancel, onImported }: Props) => {
           </SettingsCheckbox>
         </div>
       ) : null}
+      <BackupRemoteHostsReview backup={backup} mappings={hostMappings} setMappings={setHostMappings} />
       <BackupPathReview locations={locations} mappings={mappings} setMappings={setMappings} />
       {error ? <p className="settings-desc settings-desc-error" role="alert">{error}</p> : null}
       <div className="settings-actions settings-backup-footer">

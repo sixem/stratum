@@ -30,6 +30,7 @@ import type { PanePreviewBindings, PreviewGallerySource } from "@/hooks/ui/view/
 import { useNavigationReveal } from "@/hooks/ui/view/useNavigationReveal";
 import { useTabReveal } from "@/hooks/ui/view/useTabReveal";
 import { useSettingsStore } from "@/modules";
+import { useRemoteDrag } from "@/modules/remoteDrag";
 import { hideBottomPane, setBottomPaneActive, useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { folderPathKey, getNextTrailPath } from "@/lib";
 import type { useFileManager } from "@/hooks/domain/filesystem/useFileManager";
@@ -75,6 +76,10 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   const fixedWidth = useSettingsStore(state => state.fixedWidthTabs);
   const animateTabChanges = useSettingsStore(state => state.animateTabChanges);
   const active = useBottomPaneStore(state => state.active);
+  const remoteDrop = useRemoteDrag(state => state.preview?.action !== "unavailable" &&
+    state.preview && state.target?.pane === "bottom" ? state.target : null);
+  const remoteCrumbDropPath = useRemoteDrag(state => state.remoteTarget?.kind === "remote-crumb" &&
+    state.remoteTarget.pane === "bottom" ? state.remoteTarget.path : null);
   const showBreadcrumbs = useBottomPaneStore(state => state.showBreadcrumbs);
   const path = dir.currentPath;
   const { currentDriveInfo } = useDriveInfo({
@@ -327,23 +332,26 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
       onTabContextMenuDown={paneActions.handlePlaceTargetContextMenuDown}
       dropTargetId={drop.dropTargetTabId} dropTargetPath={drop.dropTargetPath} tabDropSubmenu={drop.tabDropSubmenu}
       dragPoint={drop.dragPoint} onSubmenuHoverTargetChange={drop.setDropTarget} onSubmenuCloseRequest={drop.clearDragState} />
-    {remote ? showBreadcrumbs && <PathCrumbsBar pane="bottom" remoteHost={remoteNav.host} trailPath={remote.crumbTrailPath} path={remote.remote.path} onNavigate={remoteNav.navigate} onNavigateNewTab={remoteNav.openTab} /> : terminal ? <TerminalDirectoryBar directory={terminal.directory} /> : showBreadcrumbs ? (
+    {remote ? showBreadcrumbs && <PathCrumbsBar pane="bottom" remoteHost={remoteNav.host} remoteProfileId={remote.remote.hostId}
+      dropTargetPath={remoteCrumbDropPath} trailPath={remote.crumbTrailPath} path={remote.remote.path} onNavigate={remoteNav.navigate} onNavigateNewTab={remoteNav.openTab} /> : terminal ? <TerminalDirectoryBar directory={terminal.directory} /> : showBreadcrumbs ? (
       <PathCrumbsBar pane="bottom" path={tabs.displayPath} trailPath={tabs.activeTab?.crumbTrailPath} reserveSpace
-        dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null}
+        dropTargetPath={remoteDrop?.kind === "entry" ? remoteDrop.path : drop.hoveredPane === "bottom" ? drop.dropTargetPath : null}
         onNavigate={browseFromView} onNavigateNewTab={openLocationTab}
         onCrumbContextMenu={paneActions.handlePlaceTargetContextMenu}
         onCrumbContextMenuDown={paneActions.handlePlaceTargetContextMenuDown} />
     ) : null}
     <TerminalSplitView pane="bottom" tab={tabs.activeTab} filePaneRef={files} onSelectTab={tabs.selectTab} commandsBlocked={commandsBlocked}>
     <div ref={files} className="main bottom-files" tabIndex={-1} aria-busy={busy} data-file-pane="bottom" data-pane-path={ready ? path : ""} data-remote-pane={remote ? true : undefined}
-      data-drop-background={drop.backgroundHovered && drop.hoveredPane === "bottom" || undefined}
+      data-drop-background={drop.backgroundHovered && drop.hoveredPane === "bottom" ||
+        remoteDrop?.kind === "pane" || remoteDrop?.kind === "remote-pane" || undefined}
       onScrollCapture={event => {
         const el = event.target as HTMLElement;
         if (el.matches(".list-body,.thumb-viewport")) scrollTop.current = el.scrollTop;
       }}>
       {!remote && busy && <div className="folder-load-progress" role="progressbar" aria-label="Loading bottom folder" />}
       {remote ? <RemoteTabPane key={remote.id} tab={remote} pane="bottom" preview={bottomPreview} onPreviewRelease={upper.onEntryPreviewRelease} /> : terminal ? <TerminalPane terminal={terminal} /> : !ready && tabs.displayPath ? <div className="pane-loading">{busy ? "Loading folder…" : <button className="btn ghost" type="button" onClick={() => navigate(tabs.displayPath)}>Retry opening folder</button>}</div> :
-      <FileView {...upper} {...model} pane="bottom" dropTargetPath={drop.hoveredPane === "bottom" ? drop.dropTargetPath : null} currentPath={path} viewMode={tabs.viewMode} viewKey={viewKey}
+      <FileView {...upper} {...model} pane="bottom" dropTargetPath={remoteDrop?.kind === "entry" ? remoteDrop.path :
+        drop.hoveredPane === "bottom" ? drop.dropTargetPath : null} currentPath={path} viewMode={tabs.viewMode} viewKey={viewKey}
         showLander={!path} recentJumps={tabs.recentJumps} onOpenPlace={navigate} onOpenRecent={navigate} onOpenDrive={navigate}
         onOpenDriveNewTab={openNew} onOpenPlaceNewTab={openNew} onOpenRecentNewTab={openNew}
         searchQuery={tabs.searchValue} loading={busy} scrollRestoreKey={viewKey}

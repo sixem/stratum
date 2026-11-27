@@ -57,11 +57,20 @@ impl UploadStage {
         self.session
             .complete(
                 async {
-                    let mut payload = Vec::with_capacity(handle.len() + bytes.len() + 16);
-                    put_string(&mut payload, handle);
-                    payload.extend_from_slice(&offset.to_be_bytes());
-                    put_string(&mut payload, bytes);
-                    wire.request(Request::Write, &payload, Reply::Status)
+                    let requests = bytes
+                        .chunks(CHUNK)
+                        .enumerate()
+                        .map(|(index, chunk)| {
+                            let mut payload = Vec::with_capacity(handle.len() + chunk.len() + 16);
+                            put_string(&mut payload, handle);
+                            payload.extend_from_slice(
+                                &(offset + (index * CHUNK) as u64).to_be_bytes(),
+                            );
+                            put_string(&mut payload, chunk);
+                            payload
+                        })
+                        .collect::<Vec<_>>();
+                    wire.window(Request::Write, &requests, Reply::Status)
                         .await?;
                     Ok(())
                 },

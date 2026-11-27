@@ -4,6 +4,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStdin, ChildStdout};
 
 pub(super) const MAX_PACKET: usize = 512 * 1024;
+pub(super) const MAX_IN_FLIGHT: usize = 4;
 // SSH File Transfer Protocol v3 (draft-ietf-secsh-filexfer-02).
 // Requests are limited to the operations used by browsing and file transfers.
 #[repr(u8)]
@@ -139,13 +140,16 @@ impl Wire {
             initialized: false,
         }
     }
-    async fn exchange(&mut self, kind: u8, number: u32, payload: &[u8]) -> Result<Vec<u8>> {
+    async fn send(&mut self, kind: u8, number: u32, payload: &[u8]) -> Result<()> {
         let mut packet = Vec::with_capacity(9 + payload.len());
         packet.extend_from_slice(&((5 + payload.len()) as u32).to_be_bytes());
         packet.push(kind);
         packet.extend_from_slice(&number.to_be_bytes());
         packet.extend_from_slice(payload);
         self.input.write_all(&packet).await?;
+        Ok(())
+    }
+    async fn receive(&mut self) -> Result<Vec<u8>> {
         let size = self.output.read_u32().await? as usize;
         if !(5..=MAX_PACKET).contains(&size) {
             return Err(invalid());
@@ -156,7 +160,8 @@ impl Wire {
     }
     pub async fn init(&mut self) -> Result<()> {
         if !self.initialized {
-            let response = self.exchange(Request::Init as u8, 3, &[]).await?;
+            self.send(Request::Init as u8, 3, &[]).await?;
+            let response = self.receive().await?;
             if response[..5] != [Reply::Version as u8, 0, 0, 0, 3] {
                 return Err(Error::Transport(
                     "This server did not negotiate SFTP v3.".into(),
@@ -173,10 +178,52 @@ impl Wire {
         expected: Reply,
     ) -> Result<Vec<u8>> {
         self.seq = self.seq.wrapping_add(1);
-        let mut reply = self.exchange(kind as u8, self.seq, payload).await?;
+        self.send(kind as u8, self.seq, payload).await?;
+        let reply = self.receive().await?;
         if reply[1..5] != self.seq.to_be_bytes() {
             return Err(invalid());
         }
+        Self::decode(reply, expected)
+    }
+
+    // Read and write windows hold the wire only until all their replies arrive.
+    // Drain ordinary request errors too, so the next caller sees its own frame.
+    pub async fn window(
+        &mut self,
+        kind: Request,
+        payloads: &[Vec<u8>],
+        expected: Reply,
+    ) -> Result<Vec<Vec<u8>>> {
+        if payloads.len() > MAX_IN_FLIGHT {
+            return Err(Error::Request("SFTP window is too large.".into()));
+        }
+        let first = self.seq.wrapping_add(1);
+        for payload in payloads {
+            self.seq = self.seq.wrapping_add(1);
+            self.send(kind as u8, self.seq, payload).await?;
+        }
+        let mut replies: Vec<Option<Result<Vec<u8>>>> = (0..payloads.len()).map(|_| None).collect();
+        for _ in payloads {
+            let reply = self.receive().await?;
+            let index =
+                u32::from_be_bytes(reply[1..5].try_into().unwrap()).wrapping_sub(first) as usize;
+            let slot = replies.get_mut(index).ok_or_else(invalid)?;
+            if slot.is_some() {
+                return Err(invalid());
+            }
+            let result = Self::decode(reply, expected);
+            if let Err(error @ Error::Transport(_)) = result {
+                return Err(error);
+            }
+            *slot = Some(result);
+        }
+        replies
+            .into_iter()
+            .map(|slot| slot.ok_or_else(invalid)?)
+            .collect()
+    }
+
+    fn decode(mut reply: Vec<u8>, expected: Reply) -> Result<Vec<u8>> {
         let ty = reply[0];
         if ty == Reply::Status as u8 {
             let mut fields = Fields(&reply[5..]);

@@ -56,10 +56,33 @@ function watchConnections() {
   return listening;
 }
 
-export function connectRemote(profile: RemoteProfile): Promise<string> {
+// Abort a handshake only when its last consumer leaves. Browsing and other
+// drops can share the same SSH connection attempt.
+const connectionWaiters = new WeakMap<Promise<string>, number>();
+export function connectRemote(profile: RemoteProfile, signal?: AbortSignal): Promise<string> {
+  if (signal?.aborted) return Promise.reject(signal.reason);
+  const closing = disconnecting.get(profile.id);
+  if (closing) return closing.then(() => connectRemote(profile, signal));
+  const request = connectShared(profile);
+  connectionWaiters.set(request, (connectionWaiters.get(request) ?? 0) + 1);
+  if (!signal) return request;
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      const remaining = (connectionWaiters.get(request) ?? 1) - 1;
+      connectionWaiters.set(request, remaining);
+      if (!remaining && connecting.get(profile.id) === request && connection(profile.id)?.status === "connecting") {
+        void disconnectRemote(profile.id).catch(() => {});
+      }
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    request.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
+}
+
+function connectShared(profile: RemoteProfile): Promise<string> {
   const { id, destination, startPath } = profile;
-  const closing = disconnecting.get(id);
-  if (closing) return closing.then(() => connectRemote(profile));
   const pending = connecting.get(id);
   if (pending) return pending;
   const existing = connection(id);
@@ -75,11 +98,17 @@ export function connectRemote(profile: RemoteProfile): Promise<string> {
       throw new Error("Connection closed.");
     }
     publish(id, { status: "connected", epoch, ...result });
-    void invoke<{ restored: string[]; warnings: string[] }>("remote_finish_interrupted_transfers", { profileId: id, sessionId: result.sessionId })
-      .then(({ restored, warnings }) => {
+    void invoke<{ restored: string[]; warnings: string[]; deleteNoticeIds: string[] }>("remote_finish_interrupted_transfers", { profileId: id, sessionId: result.sessionId })
+      .then(({ restored, warnings, deleteNoticeIds }) => {
         for (const path of restored) remoteDirectoryChanged({ profileId: id, sessionId: result.sessionId, path: remoteParent(path) });
-        if (warnings.length) usePromptStore.getState().showPrompt({ title: "Interrupted transfer", content: warnings.join("\n\n"), confirmLabel: "OK", cancelLabel: null });
-      }).catch(error => usePromptStore.getState().showPrompt({ title: "Interrupted transfer", content: toMessage(error, "Could not check interrupted transfers."), confirmLabel: "OK", cancelLabel: null }));
+        if (warnings.length) usePromptStore.getState().showPrompt({ title: `Interrupted operations on ${destination}`, content: warnings.join("\n\n"), confirmLabel: "OK", cancelLabel: null,
+          queued: true, blocking: true,
+          onConfirm: () => {
+            if (!deleteNoticeIds.length) return;
+            void invoke("remote_acknowledge_delete_recovery", { profileId: id, sessionId: result.sessionId, ids: deleteNoticeIds })
+              .catch(error => usePromptStore.getState().showPrompt({ title: `Recovery notice for ${destination}`, content: toMessage(error, "Could not acknowledge recovery."), confirmLabel: "OK", cancelLabel: null, queued: true }));
+          } });
+      }).catch(error => usePromptStore.getState().showPrompt({ title: `Interrupted transfer on ${destination}`, content: toMessage(error, "Could not check interrupted transfers."), confirmLabel: "OK", cancelLabel: null, queued: true }));
     return result.path;
   }).catch(error => {
     reportRemoteDisconnect(id, epoch, toMessage(error, "Could not connect to this host."));

@@ -15,7 +15,7 @@ type UseGridSelectionOptions = {
   rowGap: number;
   onSetSelection: (paths: string[], anchor?: string) => void;
   onClearSelection: () => void;
-  onStartDragOut?: (paths: string[], folderPath?: string) => void;
+  onStartDragOut?: import("@/types").EntryDragHandler;
   loading: boolean;
 };
 

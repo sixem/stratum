@@ -45,7 +45,8 @@ export type {
 export { selectTransferJobs } from "./transferStore.selectors";
 
 type TransferStore = TransferStoreState & {
-  startJob: (input: { label: string; total: number; items?: string[]; kind?: TransferJob["kind"] }) => TransferJob;
+  startJob: (input: { label: string; total: number; items?: string[]; kind?: TransferJob["kind"]; cancelPreflight?: () => void }) => TransferJob;
+  finishPreflight: (id: string, outcome: "cancelled" | "failed" | "ready") => void;
   updateProgress: (
     id: string,
     update: {
@@ -62,8 +63,8 @@ type TransferStore = TransferStoreState & {
   updateLabel: (id: string, label: string) => void;
   completeJob: (id: string, patch?: Partial<TransferJob>) => void;
   failJob: (id: string, patch?: Partial<TransferJob>) => void;
-  registerJob: (input: { label: string; items?: string[] }) => TransferJobRegistration;
-  registerFileJob: (input: { label: string; items: string[]; kind: FileJobKind }) => FileJobRegistration;
+  registerJob: (input: { id?: string; label: string; items?: string[] }) => TransferJobRegistration;
+  registerFileJob: (input: { id?: string; label: string; items: string[]; kind: FileJobKind }) => FileJobRegistration;
   settleFilePaths: (settled: SettledFilePaths) => void;
   updateJobLabel: (id: string, label: string) => void;
   recordJobOutcome: (
@@ -90,7 +91,7 @@ const DEFAULT_TRANSFER_STORE_STATE: TransferStoreState = {
 
 export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
   ...DEFAULT_TRANSFER_STORE_STATE,
-  startJob: ({ label, total, items, kind }) => {
+  startJob: ({ label, total, items, kind, cancelPreflight }) => {
     const now = Date.now();
     const { job, state } = startLocalJobTransition(
       useTransferStore.getState(),
@@ -100,12 +101,20 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
         total,
         items,
         kind,
+        cancelPreflight,
       },
       now,
     );
     set(state);
     return job;
   },
+  finishPreflight: (id, outcome) => set(state => ({
+    localJobs: state.localJobs.map(job => {
+      if (job.id !== id) return job;
+      if (outcome === "ready") return { ...job, cancelPreflight: undefined, label: "Preparing transfer", status: "queued" };
+      return { ...job, cancelPreflight: undefined, status: outcome, finishedAt: Date.now() };
+    }),
+  })),
   updateProgress: (id, update) =>
     set((state) => updateLocalJobProgressTransition(state, id, update, Date.now())),
   updateLabel: (id, label) =>
@@ -114,13 +123,11 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
     set((state) => completeLocalJobTransition(state, id, patch, Date.now())),
   failJob: (id, patch) =>
     set((state) => failLocalJobTransition(state, id, patch, Date.now())),
-  registerJob: ({ label, items }) => {
-    const id = createTransferId();
+  registerJob: ({ id = createTransferId(), label, items }) => {
     set((state) => registerJobMetadataTransition(state, id, { label, items }));
     return { id };
   },
-  registerFileJob: ({ label, items, kind }) => {
-    const id = createTransferId();
+  registerFileJob: ({ id = createTransferId(), label, items, kind }) => {
     const paths = new Set(items.map(normalizePath).filter(Boolean));
     set((state) => ({
       ...registerJobMetadataTransition(state, id, { label, items }),

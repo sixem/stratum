@@ -1,0 +1,47 @@
+// This overlay never participates in hit testing for drop destinations.
+.remote-drag-preview {
+  position: fixed;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(240px, calc(100vw - 24px));
+  padding: 7px 10px;
+  border: 1px solid var(--stroke);
+  border-radius: 6px;
+  background: var(--surface-control);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 35%);
+  color: var(--text);
+  pointer-events: none;
+  user-select: none;
+}
+
+.remote-drag-preview > svg {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  color: var(--muted);
+}
+
+.remote-drag-preview-content {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.remote-drag-preview-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.remote-drag-preview-action {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+}
+
+.remote-drag-preview-action[data-action="unavailable"] {
+  color: #e36b6b;
+}

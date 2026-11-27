@@ -34,6 +34,69 @@ impl TransferManagerHandle {
     }
 
     #[cfg(windows)]
+    pub(crate) fn remote_delete(
+        &self,
+        window: tauri::Window,
+        job: crate::services::remotes::operations::RemoteDelete,
+        transfer_id: Option<String>,
+    ) -> Result<fs::DeleteReport, String> {
+        let snapshot = build_initial_snapshot(
+            &self.inner.next_job_id,
+            transfer_id.as_deref(),
+            job.entries.len(),
+            describe_delete_job(),
+        );
+        let event_emitter = build_event_emitter(window, transfer_id);
+        let (completion_tx, completion_rx) = mpsc::channel();
+        self.enqueue(TransferJobRequest {
+            snapshot,
+            event_emitter,
+            operation: TransferOperation::RemoteDelete(job),
+            completion_tx,
+            control: TransferJobControlHandle::new(),
+        })?;
+        match completion_rx
+            .recv()
+            .map_err(|_| "transfer manager unavailable".to_string())??
+        {
+            TransferOperationResult::Delete(report) => Ok(report),
+            _ => Err("transfer manager returned the wrong job result".into()),
+        }
+    }
+
+    #[cfg(all(test, windows))]
+    pub(crate) fn remote_delete_fixture(
+        &self,
+        job: crate::services::remotes::operations::RemoteDelete,
+    ) -> mpsc::Receiver<Result<fs::DeleteReport, String>> {
+        let snapshot = build_initial_snapshot(
+            &self.inner.next_job_id,
+            Some("fixture-delete"),
+            job.entries.len(),
+            describe_delete_job(),
+        );
+        let (completion_tx, completion_rx) = mpsc::channel();
+        self.enqueue(TransferJobRequest {
+            snapshot,
+            event_emitter: super::manager_events::TransferEventEmitter::silent(),
+            operation: TransferOperation::RemoteDelete(job),
+            completion_tx,
+            control: TransferJobControlHandle::new(),
+        })
+        .unwrap();
+        let (result_tx, result_rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let result = match completion_rx.recv() {
+                Ok(Ok(TransferOperationResult::Delete(report))) => Ok(report),
+                Ok(Err(error)) => Err(error),
+                _ => Err("transfer manager returned the wrong job result".into()),
+            };
+            let _ = result_tx.send(result);
+        });
+        result_rx
+    }
+
+    #[cfg(windows)]
     pub(crate) fn remote_batch(
         &self,
         window: tauri::Window,
@@ -71,7 +134,7 @@ impl TransferManagerHandle {
         window: tauri::Window,
         job: crate::services::remotes::transfer::Transfer,
         transfer_id: Option<String>,
-    ) -> Result<crate::services::remotes::transfer::TransferResult, String> {
+    ) -> Result<crate::services::remotes::transfer::BatchResult, String> {
         let total = match &job.direction {
             crate::services::remotes::transfer::Direction::Rename { entries, .. } => entries.len(),
             _ => 1,
@@ -95,9 +158,46 @@ impl TransferManagerHandle {
             .recv()
             .map_err(|_| "transfer manager unavailable".to_string())??
         {
-            TransferOperationResult::Remote(path) => Ok(path),
+            TransferOperationResult::RemoteBatch(report) => Ok(report),
             _ => Err("transfer manager returned the wrong job result".into()),
         }
+    }
+
+    #[cfg(all(test, windows))]
+    pub(crate) fn remote_move_fixture(
+        &self,
+        job: crate::services::remotes::transfer::Transfer,
+        id: &str,
+    ) -> mpsc::Receiver<Result<crate::services::remotes::transfer::BatchResult, String>> {
+        let total = match &job.direction {
+            crate::services::remotes::transfer::Direction::Rename { entries, .. } => entries.len(),
+            _ => panic!("Expected same-host move"),
+        };
+        let snapshot = build_initial_snapshot(
+            &self.inner.next_job_id,
+            Some(id),
+            total,
+            super::manager_state::describe_remote_job(true),
+        );
+        let (completion_tx, completion_rx) = mpsc::channel();
+        self.enqueue(TransferJobRequest {
+            snapshot,
+            event_emitter: super::manager_events::TransferEventEmitter::silent(),
+            operation: TransferOperation::Remote(job),
+            completion_tx,
+            control: TransferJobControlHandle::new(),
+        })
+        .unwrap();
+        let (result_tx, result_rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let result = match completion_rx.recv() {
+                Ok(Ok(TransferOperationResult::RemoteBatch(report))) => Ok(report),
+                Ok(Err(error)) => Err(error),
+                _ => Err("transfer manager returned the wrong job result".into()),
+            };
+            let _ = result_tx.send(result);
+        });
+        result_rx
     }
 
     pub fn copy_entries(

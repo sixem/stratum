@@ -52,6 +52,11 @@ pub(super) async fn link_target(wire: &mut Wire, path: &str) -> Result<LinkTarge
             "The remote entry is no longer a symbolic link.".into(),
         ));
     }
+    resolve_target(wire, path).await
+}
+
+// Breadcrumbs can traverse links in any component of the displayed path.
+pub(super) async fn resolve_target(wire: &mut Wire, path: &str) -> Result<LinkTarget> {
     let target = canonical(wire, path).await?;
     let packet = wire
         .path_request(Request::Stat, target.as_bytes(), Reply::Attrs)
@@ -61,7 +66,7 @@ pub(super) async fn link_target(wire: &mut Wire, path: &str) -> Result<LinkTarge
         0o100000 => "file",
         _ => {
             return Err(Error::Request(
-                "The link target is not a regular file or folder.".into(),
+                "The target is not a regular file or folder.".into(),
             ))
         }
     };
@@ -73,6 +78,17 @@ pub(super) async fn read_directory(
     path: &str,
     probe_only: bool,
 ) -> Result<(String, Vec<Entry>, usize)> {
+    read_directory_controlled(wire, path, probe_only, &mut || Ok(())).await
+}
+
+// Check cancellation between SFTP packets and still close the directory handle.
+pub(super) async fn read_directory_controlled(
+    wire: &mut Wire,
+    path: &str,
+    probe_only: bool,
+    checkpoint: &mut (dyn FnMut() -> Result<()> + Send),
+) -> Result<(String, Vec<Entry>, usize)> {
+    checkpoint()?;
     let path = canonical(wire, if path.is_empty() { "." } else { path }).await?;
     let packet = wire
         .path_request(Request::OpenDir, path.as_bytes(), Reply::Handle)
@@ -83,6 +99,7 @@ pub(super) async fn read_directory(
         let mut omitted = 0;
         let mut bytes = 0;
         loop {
+            checkpoint()?;
             let packet = match wire
                 .path_request(Request::ReadDir, &handle, Reply::Name)
                 .await

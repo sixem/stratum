@@ -63,6 +63,9 @@ impl Drop for ActiveMove {
 }
 
 impl RecoveryJournal {
+    #[cfg(test)]
+    pub(crate) fn for_test(path: PathBuf) -> Self { Self(path) }
+
     pub(crate) fn for_webview(webview: &Webview) -> Result<Self, String> {
         let directory = webview
             .app_handle()
@@ -72,7 +75,7 @@ impl RecoveryJournal {
         Ok(Self(directory.join("remote-move-recovery.sqlite")))
     }
 
-    fn open(&self) -> Result<Connection, String> {
+    pub(super) fn open(&self) -> Result<Connection, String> {
         fs::create_dir_all(self.0.parent().ok_or("Invalid recovery path.")?)
             .map_err(|e| format!("Could not create move recovery folder: {e}"))?;
         let db =
@@ -85,6 +88,9 @@ impl RecoveryJournal {
         ); CREATE TABLE IF NOT EXISTS destination_stages (
             id TEXT PRIMARY KEY, kind TEXT NOT NULL, host TEXT NOT NULL, folder TEXT NOT NULL,
             path TEXT NOT NULL, identity TEXT
+        ); CREATE TABLE IF NOT EXISTS remote_deletes (
+            id TEXT PRIMARY KEY, host TEXT NOT NULL, original TEXT NOT NULL,
+            stage TEXT NOT NULL, selected TEXT NOT NULL, state TEXT NOT NULL
         );").map_err(|e| format!("Could not prepare move recovery: {e}"))?;
         Ok(db)
     }
@@ -540,6 +546,7 @@ pub(super) async fn recover_active(
 pub(crate) struct RecoveredTransfers {
     restored: Vec<String>,
     warnings: Vec<String>,
+    delete_notice_ids: Vec<String>,
 }
 
 // On reconnect, restore interrupted moves before cleaning their temporary copies.
@@ -554,6 +561,10 @@ pub(crate) async fn remote_finish_interrupted_transfers(
     let session = remotes.current(&profile_id, Some(session_id))?;
     let mut restored = Vec::new();
     let mut warnings = Vec::new();
+    let mut delete_notice_ids = Vec::new();
+    super::delete_recovery::recover_interrupted_deletes(
+        &remotes, &journal, &session.host, &profile_id, session_id, &mut restored, &mut warnings, &mut delete_notice_ids,
+    ).await?;
     let mut recovered_ids = HashSet::new();
     for entry in journal
         .list()?
@@ -632,7 +643,7 @@ pub(crate) async fn remote_finish_interrupted_transfers(
             ));
         }
     }
-    Ok(RecoveredTransfers { restored, warnings })
+    Ok(RecoveredTransfers { restored, warnings, delete_notice_ids })
 }
 
 #[tauri::command]

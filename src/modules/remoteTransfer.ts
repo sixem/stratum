@@ -10,7 +10,7 @@ type RemoteDestination = { profileId: string; sessionId: number; path: string };
 type Request = { kind: "upload"; localPath: string; remoteFolder: string } | { kind: "download"; remotePath: string; localFolder: string } |
   { kind: "remote"; remotePath: string; destProfile: string; destSession: number; remoteFolder: string };
 type CopyResult = { path: string; backup?: string | null; warning?: string | null };
-type BatchResult = { items: { index: number; result: CopyResult | null; error: string | null }[]; cancelled: boolean };
+type BatchResult = { items: { index: number; result: CopyResult | null; error: string | null; skipped: boolean }[]; cancelled: boolean };
 type RemoteSelection = { name: string; isDir: boolean; isSymlink?: boolean; size: number | null; modified: number | null };
 const RECOVERY_CANCELLED_PREFIX = "Transfer cancelled; recovery required: ";
 let promptTail: Promise<unknown> = Promise.resolve();
@@ -22,16 +22,24 @@ function queuedPrompt<T>(show: () => Promise<T>): Promise<T> {
   return next;
 }
 
-function confirmReplacement(paths: string[], destination: string): Promise<"replace" | "skip" | "cancel"> {
+function confirmReplacement(paths: string[], destination: string, signal: AbortSignal): Promise<"replace" | "skip" | "cancel"> {
   return queuedPrompt(() => new Promise(resolve => {
+    if (signal.aborted) { resolve("cancel"); return; }
     const names = paths.slice(0, 4).join("\n") + (paths.length > 4 ? `\n…and ${paths.length - 4} more` : "");
-    usePromptStore.getState().showPrompt({
+    const finish = (decision: "replace" | "skip" | "cancel") => {
+      signal.removeEventListener("abort", abort);
+      resolve(decision);
+    };
+    const abort = () => { usePromptStore.getState().hidePrompt(prompt); finish("cancel"); };
+    const prompt = {
       title: "Items already exist",
       content: `Replace items in ${destination}? Folders are replaced as a whole. Existing items will be kept as backups in the destination.\n\n${names}`,
       confirmLabel: "Replace", cancelLabel: "Cancel",
-      actions: [{ label: "Skip existing", variant: "ghost", onClick: () => resolve("skip") }],
-      onConfirm: () => resolve("replace"), onCancel: () => resolve("cancel"),
-    });
+      actions: [{ label: "Skip existing", variant: "ghost" as const, onClick: () => finish("skip") }],
+      onConfirm: () => finish("replace"), onCancel: () => finish("cancel"),
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    usePromptStore.getState().showPrompt(prompt);
   }));
 }
 
@@ -54,114 +62,80 @@ export async function copyRemoteFiles(
   moving = false,
   remoteTarget?: RemoteDestination,
   sourceEntries?: ReadonlyMap<string, RemoteSelection>,
+  transferId?: string,
 ) {
-  const candidates: { path: string; request: Request; conflict: boolean }[] = [];
+  if (!paths.length) return;
+  const candidates = paths.map((path): { path: string; request: Request } => ({ path, request: remoteTarget
+    ? { kind: "remote", remotePath: path, destProfile: remoteTarget.profileId, destSession: remoteTarget.sessionId, remoteFolder: remoteTarget.path }
+    : direction === "upload" ? { kind: "upload", localPath: path, remoteFolder: remote.path }
+    : { kind: "download", remotePath: path, localFolder } }));
   const failures: string[] = [];
-  for (const path of paths) {
-    const request: Request = remoteTarget
-      ? { kind: "remote", remotePath: path, destProfile: remoteTarget.profileId, destSession: remoteTarget.sessionId, remoteFolder: remoteTarget.path }
-      : direction === "upload"
-      ? { kind: "upload", localPath: path, remoteFolder: remote.path }
-      : { kind: "download", remotePath: path, localFolder };
-    try {
-      const conflict = await invoke<boolean>("remote_transfer_conflict", { profileId: remote.profileId, sessionId: remote.sessionId, request });
-      candidates.push({ path, request, conflict });
-    } catch (error) {
-      failures.push(`${path}: ${getTransferErrorMessage(error, "Could not check the destination.")}`);
+  const store = useTransferStore.getState();
+  const label = moving ? "Move" : remoteTarget ? "Copy" : direction === "upload" ? "Upload" : "Download";
+  const fileJob = direction === "upload" ? store.registerFileJob({ id: transferId, label, items: paths, kind: "transfer" }) : undefined;
+  const registration = fileJob ?? store.registerJob({ id: transferId, label, items: paths });
+  const backups: string[] = [], warnings: string[] = [];
+  const unlisteners: (() => void)[] = [];
+  const promptLifetime = new AbortController();
+  const settled = new Set<string>();
+  let settleTimer: number | undefined;
+  const flushSettled = () => {
+    if (settleTimer !== undefined) window.clearTimeout(settleTimer);
+    settleTimer = undefined;
+    if (!settled.size) return;
+    useTransferStore.getState().settleFilePaths(new Map([[registration.id, new Set(settled)]]));
+    settled.clear();
+  };
+  const refresh = (index: number) => {
+    const item = candidates[index];
+    if (item) {
+      if (fileJob) {
+        settled.add(item.path);
+        settleTimer ??= window.setTimeout(flushSettled, 100);
+      }
+      refreshRemoteTransferViews({ sourcePath: item.path, remote, localFolder, direction, moving, remoteTarget });
     }
-  }
-  const conflicts = candidates.filter(item => item.conflict);
-  if (moving) failures.push(...conflicts.map(item => `${item.path}: An item with this name already exists in the destination.`));
-  const decision = conflicts.length && !moving ? await confirmReplacement(conflicts.map(item => item.path), remoteTarget?.path ?? (direction === "upload" ? remote.path : localFolder)) : moving ? "skip" : "replace";
-  if (decision === "cancel") { await reportResults(failures, []); return; }
-  const ready = candidates.filter(item => !item.conflict || decision === "replace");
-  if (ready.length > 0 && paths.length > 1) {
-    const preflightFailures = failures.length;
-    const store = useTransferStore.getState();
-    const label = moving ? "Move" : remoteTarget ? "Copy" : direction === "upload" ? "Upload" : "Download";
-    const fileJob = direction === "upload" ? store.registerFileJob({ label, items: ready.map(item => item.path), kind: "transfer" }) : undefined;
-    const registration = fileJob ?? store.registerJob({ label, items: ready.map(item => item.path) });
-    const backups: string[] = [], warnings: string[] = [];
-    let unlisten: (() => void) | undefined;
-    const settled = new Set<string>();
-    let settleTimer: number | undefined;
-    const flushSettled = () => {
-      if (settleTimer !== undefined) window.clearTimeout(settleTimer);
-      settleTimer = undefined;
-      if (!settled.size) return;
-      useTransferStore.getState().settleFilePaths(new Map([[registration.id, new Set(settled)]]));
-      settled.clear();
-    };
-    const refresh = (index: number) => {
-      const item = ready[index];
-      if (item) {
-        if (fileJob) {
-          settled.add(item.path);
-          settleTimer ??= window.setTimeout(flushSettled, 100);
-        }
-        refreshRemoteTransferViews({ sourcePath: item.path, remote, localFolder, direction, moving, remoteTarget });
-      }
-    };
-    try {
-      unlisten = await listen<{ transferId: string; index: number }>("remote-transfer-batch-item", event => {
-        if (event.payload.transferId === registration.id) refresh(event.payload.index);
-      }).catch(() => undefined);
-      const items = ready.map(({ path, request, conflict }) => {
-        const selected = sourceEntries?.get(path);
-        const expected = selected && { name: selected.name, isDir: selected.isDir, isSymlink: Boolean(selected.isSymlink), size: selected.size, modified: selected.modified };
-        return { request, replace: conflict, expected };
-      });
-      const report = await invoke<BatchResult>("remote_transfer_batch", { profileId: remote.profileId, sessionId: remote.sessionId, items, transferId: registration.id, moving, preflightFailures });
-      let copied = 0, moved = 0, failed = 0;
-      for (const item of report.items) {
-        const path = ready[item.index]?.path ?? "Item";
-        if (item.result) {
-          if (moving && !item.result.warning) moved++; else copied++;
-          if (item.result.backup) backups.push(item.result.backup);
-          if (item.result.warning) warnings.push(item.result.warning);
-        } else if (item.error && !isTransferCancelledError(item.error)) {
-          if (item.error.startsWith(RECOVERY_CANCELLED_PREFIX)) warnings.push(`Move cancelled. Reconnect to restore the original. It may be at ${item.error.slice(RECOVERY_CANCELLED_PREFIX.length)}.`);
-          else { failures.push(`${path}: ${item.error}`); failed++; }
-        }
-      }
-      useTransferStore.getState().recordJobOutcome(registration.id, { copied, moved, failures: failed + preflightFailures });
-    } catch (error) {
-      if (!isTransferCancelledError(error)) {
-        failures.push(getTransferErrorMessage(error, moving ? "Could not move the items." : "Could not copy the items."));
-        useTransferStore.getState().recordJobOutcome(registration.id, { failures: 1 });
-      }
-    } finally {
-      unlisten?.(); ready.forEach((_, index) => refresh(index));
-      flushSettled(); fileJob?.finish();
-    }
-    await reportResults(failures, backups, warnings, moving);
-    return;
-  }
-  const outcomes = await Promise.all(ready.map(async ({ path, request, conflict }) => {
-    const store = useTransferStore.getState();
-    const label = moving ? "Move" : remoteTarget ? "Copy" : direction === "upload" ? "Upload" : "Download";
-    const fileJob = direction === "upload" ? store.registerFileJob({ label, items: [path], kind: "transfer" }) : undefined;
-    const registration = fileJob ?? store.registerJob({ label, items: [path] });
-    try {
+  };
+  try {
+    unlisteners.push(await listen<{ transferId: string; index: number }>("remote-transfer-batch-item", event => {
+      if (event.payload.transferId === registration.id) refresh(event.payload.index);
+    }));
+    unlisteners.push(await listen<{ transferId: string; indices: number[] }>("remote-transfer-conflicts", event => {
+      if (event.payload.transferId !== registration.id) return;
+      const conflictingPaths = event.payload.indices.map(index => candidates[index]?.path).filter((path): path is string => Boolean(path));
+      void confirmReplacement(conflictingPaths, remoteTarget?.path ?? (direction === "upload" ? remote.path : localFolder), promptLifetime.signal)
+        .then(decision => promptLifetime.signal.aborted ? undefined : invoke("remote_transfer_conflict_decision", { transferId: registration.id, decision }))
+        .catch(() => { void invoke("cancel_transfer_job", { jobId: registration.id }).catch(() => {}); });
+    }));
+    const items = candidates.map(({ path, request }) => {
       const selected = sourceEntries?.get(path);
       const expected = selected && { name: selected.name, isDir: selected.isDir, isSymlink: Boolean(selected.isSymlink), size: selected.size, modified: selected.modified };
-      const result = await invoke<CopyResult>("remote_transfer_file", { profileId: remote.profileId, sessionId: remote.sessionId, request, transferId: registration.id, replace: conflict, moving, expected });
-      const moved = moving && !result.warning;
-      useTransferStore.getState().recordJobOutcome(registration.id, moved ? { moved: 1 } : { copied: 1 });
-      return { backup: result.backup ?? undefined, warning: result.warning ?? undefined };
-    } catch (error) {
-      if (isTransferCancelledError(error)) return {};
-      const message = getTransferErrorMessage(error, moving ? "Could not move the file." : "Could not copy the file.");
-      if (moving && message.startsWith(RECOVERY_CANCELLED_PREFIX)) return { warning: `Move cancelled. Reconnect to restore the original. It may be at ${message.slice(RECOVERY_CANCELLED_PREFIX.length)}.` };
-      useTransferStore.getState().recordJobOutcome(registration.id, { failures: 1 });
-      return { error: `${path}: ${message}` };
-    } finally {
-      fileJob?.finish();
-      refreshRemoteTransferViews({ sourcePath: path, remote, localFolder, direction, moving, remoteTarget });
+      return { request, expected };
+    });
+    const report = await invoke<BatchResult>("remote_transfer_batch", { profileId: remote.profileId, sessionId: remote.sessionId, items, transferId: registration.id, moving });
+    let copied = 0, moved = 0, failed = 0, skipped = 0;
+    for (const item of report.items) {
+      const path = candidates[item.index]?.path ?? "Item";
+      if (item.result) {
+        if (moving && !item.result.warning) moved++; else copied++;
+        if (item.result.backup) backups.push(item.result.backup);
+        if (item.result.warning) warnings.push(item.result.warning);
+      } else if (item.skipped) skipped++;
+      else if (item.error && !isTransferCancelledError(item.error)) {
+        if (item.error.startsWith(RECOVERY_CANCELLED_PREFIX)) warnings.push(`Move cancelled. Reconnect to restore the original. It may be at ${item.error.slice(RECOVERY_CANCELLED_PREFIX.length)}.`);
+        else { failures.push(`${path}: ${item.error}`); failed++; }
+      }
     }
-  }));
-  failures.push(...outcomes.flatMap(outcome => outcome.error ? [outcome.error] : []));
-  const backups = outcomes.flatMap(outcome => outcome.backup ? [outcome.backup] : []);
-  const warnings = outcomes.flatMap(outcome => outcome.warning ? [outcome.warning] : []);
+    useTransferStore.getState().recordJobOutcome(registration.id, { copied, moved, skipped, failures: failed });
+  } catch (error) {
+    if (transferId) store.failJob(transferId);
+    if (!isTransferCancelledError(error)) {
+      failures.push(getTransferErrorMessage(error, moving ? "Could not move the items." : "Could not copy the items."));
+      useTransferStore.getState().recordJobOutcome(registration.id, { failures: 1 });
+    }
+  } finally {
+    promptLifetime.abort(); unlisteners.forEach(unlisten => unlisten()); candidates.forEach((_, index) => refresh(index));
+    flushSettled(); fileJob?.finish();
+  }
   await reportResults(failures, backups, warnings, moving);
 }

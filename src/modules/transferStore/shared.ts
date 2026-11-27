@@ -10,6 +10,7 @@ import type {
 } from "../transferStore.types";
 
 export type StartLocalTransferInput = {
+  cancelPreflight?: () => void;
   id: string;
   label: string;
   total: number;

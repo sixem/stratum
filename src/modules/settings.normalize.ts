@@ -155,6 +155,7 @@ const coerceSidebarRecentLimit = (value: unknown) => {
 export const coerceSettings = (value: Partial<Settings> | null | undefined): Settings => {
   return {
     remoteThumbnails: value?.remoteThumbnails === true,
+    confirmRemoteOpen: value?.confirmRemoteOpen !== false,
     remoteVideoThumbnails: value?.remoteVideoThumbnails === true,
     remoteShowHidden: value?.remoteShowHidden !== false,
     autoCheckUpdates: value?.autoCheckUpdates !== false,
@@ -223,6 +224,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
         ? value.smartTabJump
         : DEFAULT_SETTINGS.smartTabJump,
     terminalTabNavigation: value?.terminalTabNavigation === true,
+    fullWidthBreadcrumbs: value?.fullWidthBreadcrumbs === true,
     accentTheme: coerceAccentTheme(value?.accentTheme),
     pinShape: value?.pinShape === "square" || value?.pinShape === "diamond" || value?.pinShape === "asterisk" || value?.pinShape === "pill"
       ? value.pinShape : DEFAULT_SETTINGS.pinShape,

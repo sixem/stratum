@@ -1,0 +1,42 @@
+// Keep the byte counter and track aligned with the dialog's text edges.
+.remote-open-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.remote-open-status {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+
+  [role="status"] { color: var(--text); }
+}
+
+.remote-open-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--stroke);
+
+  > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+  }
+
+  &:not([aria-valuenow]) > span {
+    width: 35%;
+    animation: remote-open-pending 1.3s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes remote-open-pending {
+  to { transform: translateX(185%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remote-open-track:not([aria-valuenow]) > span { animation: none; }
+}

@@ -9,10 +9,12 @@ use std::{
 use tauri::{Emitter, Manager};
 use tokio::io::AsyncWriteExt;
 
+pub(crate) mod batch_move;
 mod destination_stage;
 mod move_remote;
 mod move_source;
 mod move_upload;
+pub(crate) mod preflight;
 mod remote_copy;
 mod replace;
 pub(super) mod tree;
@@ -66,7 +68,9 @@ pub(crate) struct Transfer {
 #[derive(Clone)]
 pub(crate) struct TransferBatch {
     pub items: Vec<Transfer>,
-    pub preflight_failures: usize,
+    pub request_decision: std::sync::Arc<
+        dyn Fn(Vec<usize>) -> Result<preflight::PendingDecision, String> + Send + Sync,
+    >,
     pub item_finished: std::sync::Arc<dyn Fn(usize) + Send + Sync>,
 }
 
@@ -76,6 +80,7 @@ pub(crate) struct BatchItemResult {
     pub index: usize,
     pub result: Option<TransferResult>,
     pub error: Option<String>,
+    pub skipped: bool,
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
@@ -89,7 +94,6 @@ pub(crate) struct BatchResult {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct BatchRequestItem {
     request: TransferRequest,
-    replace: bool,
     expected: Option<super::operations::SelectedEntry>,
 }
 
@@ -197,21 +201,14 @@ fn direction_for(request: TransferRequest) -> Result<Direction, String> {
     }
 }
 
-#[tauri::command]
-pub(crate) async fn remote_transfer_conflict(
-    webview: tauri::Webview,
-    profile_id: String,
-    session_id: u32,
-    request: TransferRequest,
-) -> Result<bool, String> {
-    let remotes = super::manager(&webview)?;
-    remotes.current(&profile_id, Some(session_id))?;
-    match direction_for(request)? {
+async fn conflict_for(job: &Transfer) -> Result<bool, String> {
+    let remotes = &job.remotes;
+    match &job.direction {
         Direction::Download {
             remote_path,
             local_folder,
         } => {
-            let target = destination(&local_folder, &remote_path)?;
+            let target = destination(local_folder, remote_path)?;
             match fs::symlink_metadata(target) {
                 Ok(_) => Ok(true),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
@@ -222,8 +219,8 @@ pub(crate) async fn remote_transfer_conflict(
             local_path,
             remote_folder,
         } => {
-            let target = remote_destination(&local_path, &remote_folder)?;
-            remotes.exists(&profile_id, session_id, &target).await
+            let target = remote_destination(local_path, remote_folder)?;
+            remotes.exists(&job.profile, job.session, &target).await
         }
         Direction::Remote {
             remote_path,
@@ -238,7 +235,7 @@ pub(crate) async fn remote_transfer_conflict(
                 .ok_or("Invalid remote source.")?;
             let target = format!("{}/{name}", remote_folder.trim_end_matches('/'));
             check_path(&target, false).map_err(|e| e.message().to_owned())?;
-            remotes.exists(&dest_profile, dest_session, &target).await
+            remotes.exists(dest_profile, *dest_session, &target).await
         }
         Direction::Rename { .. } => Err("Invalid conflict check.".into()),
     }
@@ -272,7 +269,6 @@ pub(crate) async fn remote_transfer_batch(
     items: Vec<BatchRequestItem>,
     transfer_id: String,
     moving: bool,
-    preflight_failures: Option<usize>,
 ) -> Result<BatchResult, String> {
     if items.is_empty() || items.len() > 100_000 {
         return Err("Select between 1 and 100000 items.".into());
@@ -299,9 +295,6 @@ pub(crate) async fn remote_transfer_batch(
         if matches!(&direction, Direction::Rename { .. }) {
             return Err("Invalid batch item.".into());
         }
-        if moving && item.replace {
-            return Err("This move is not supported; the source was kept.".into());
-        }
         if moving && !matches!(&direction, Direction::Upload { .. }) && item.expected.is_none() {
             return Err("The remote selection is unavailable. Refresh and try again.".into());
         }
@@ -323,7 +316,7 @@ pub(crate) async fn remote_transfer_batch(
             profile: profile_id.clone(),
             session: session_id,
             direction,
-            replace: item.replace,
+            replace: false,
             moving,
             recovery: needs_journal.then(|| journal.clone()),
             expected: item.expected,
@@ -351,13 +344,18 @@ pub(crate) async fn remote_transfer_batch(
             },
         );
     });
+    let decision_app = webview.app_handle().clone();
+    let decision_id = transfer_id.clone();
+    let request_decision = std::sync::Arc::new(move |indices| {
+        preflight::request_decision(&decision_app, &decision_id, indices)
+    });
     let reconcile_jobs = jobs.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         queue.remote_batch(
             window,
             TransferBatch {
                 items: jobs,
-                preflight_failures: preflight_failures.unwrap_or(0),
+                request_decision,
                 item_finished,
             },
             Some(transfer_id),
@@ -402,68 +400,19 @@ pub(crate) async fn remote_transfer_file(
     session_id: u32,
     request: TransferRequest,
     transfer_id: Option<String>,
-    replace: Option<bool>,
-    moving: Option<bool>,
-    expected: Option<super::operations::SelectedEntry>,
-) -> Result<TransferResult, String> {
+) -> Result<BatchResult, String> {
     let remotes = super::manager(&webview)?;
     remotes.current(&profile_id, Some(session_id))?;
     let direction = direction_for(request)?;
-    let moving = moving.unwrap_or(false);
-    if matches!(&direction, Direction::Rename { .. }) && !moving {
+    if !matches!(&direction, Direction::Rename { .. }) {
         return Err("Invalid move request.".into());
     }
-    if moving && replace.unwrap_or(false) {
-        return Err("This move is not supported; the source was kept.".into());
-    }
-    if moving
-        && !matches!(
-            &direction,
-            Direction::Upload { .. } | Direction::Rename { .. }
-        )
-        && expected.is_none()
-    {
-        return Err("The remote selection is unavailable. Refresh and try again.".into());
-    }
-    if let Direction::Remote {
-        dest_profile,
-        dest_session,
-        ..
-    } = &direction
-    {
-        remotes.current(dest_profile, Some(*dest_session))?;
-        if moving && dest_profile == &profile_id && *dest_session == session_id {
-            return Err("Use a same-host move for this destination.".into());
-        }
-    }
-    let recovery = if (moving
-        && matches!(
-            &direction,
-            Direction::Download { .. } | Direction::Remote { .. }
-        ))
-        || matches!(&direction, Direction::Remote { .. })
-    {
-        Some(super::recovery::RecoveryJournal::for_webview(&webview)?)
-    } else {
-        None
-    };
-    let moved_source = match &direction {
-        Direction::Upload { local_path, .. } if moving => {
-            Some(local_path.to_string_lossy().into_owned())
-        }
-        _ => None,
-    };
-    let is_download = matches!(&direction, Direction::Download { .. });
-    let indexed_search = webview
-        .state::<crate::services::indexed_search::IndexedSearchHandle>()
-        .inner()
-        .clone();
     let queue = webview
         .state::<crate::services::transfer_manager::TransferManagerHandle>()
         .inner()
         .clone();
     let window = webview.window();
-    let source_changed = if moving && !matches!(&direction, Direction::Upload { .. }) {
+    let source_changed = {
         let app = webview.app_handle().clone();
         let profile = profile_id.clone();
         Some(std::sync::Arc::new(move |path| {
@@ -477,47 +426,21 @@ pub(crate) async fn remote_transfer_file(
                 },
             );
         }) as std::sync::Arc<dyn Fn(String) + Send + Sync>)
-    } else {
-        None
     };
     let job = Transfer {
         remotes,
         profile: profile_id,
         session: session_id,
         direction,
-        replace: replace.unwrap_or(false),
-        moving,
-        recovery,
-        expected,
+        replace: false,
+        moving: true,
+        recovery: None,
+        expected: None,
         source_changed,
     };
-    let result =
-        tauri::async_runtime::spawn_blocking(move || queue.remote_file(window, job, transfer_id))
-            .await
-            .map_err(|_| "Could not run the remote transfer.".to_owned())?;
-    if is_download {
-        if let Ok(output) = &result {
-            let mut paths = vec![output.path.clone()];
-            if let Some(backup) = &output.backup {
-                paths.push(backup.clone());
-            }
-            if let Err(error) = indexed_search.queue_reconcile_paths(paths) {
-                eprintln!(
-                    "Could not queue indexed search reconciliation after remote download: {error}"
-                );
-            }
-        }
-    }
-    if result.is_ok() {
-        if let Some(source) = moved_source {
-            if let Err(error) = indexed_search.queue_reconcile_paths(vec![source]) {
-                eprintln!(
-                    "Could not queue indexed search reconciliation after remote move: {error}"
-                );
-            }
-        }
-    }
-    result
+    tauri::async_runtime::spawn_blocking(move || queue.remote_file(window, job, transfer_id))
+        .await
+        .map_err(|_| "Could not run the remote transfer.".to_owned())?
 }
 
 // Yield the shared SFTP connection frequently enough for browsing and previews.

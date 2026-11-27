@@ -307,3 +307,52 @@ fn cancelling_to_close_drains_active_and_queued_jobs() {
     assert!(!temp.0.join("target/source.bin").exists());
     assert!(manager.reopen_queue(ticket).unwrap());
 }
+
+#[cfg(windows)]
+#[test]
+fn remote_delete_blocks_idle_shutdown_and_is_cancelled_by_shutdown() {
+    use crate::services::remotes::{
+        operations::{RemoteDelete, SelectedEntry},
+        recovery::RecoveryJournal,
+        Remotes,
+    };
+    let temp = TestDirectory::new();
+    let manager = TransferManagerHandle::init();
+    let entry: SelectedEntry = serde_json::from_value(serde_json::json!({
+        "name": "folder", "isDir": true, "isSymlink": false, "size": null, "modified": null
+    }))
+    .unwrap();
+    let deletion = RemoteDelete {
+        remotes: Remotes::default(),
+        profile: "fixture".into(),
+        session: 1,
+        parent: "/fixture".into(),
+        entries: vec![entry],
+        journal: RecoveryJournal::for_test(temp.0.join("recovery.sqlite")),
+        source_changed: Arc::new(|_| {}),
+    };
+    let (job, completion) = request(
+        &manager,
+        "remote-delete",
+        describe_delete_job(),
+        TransferOperation::RemoteDelete(deletion),
+    );
+    job.control.pause().unwrap();
+    manager.enqueue(job).unwrap();
+    assert!(manager
+        .begin_shutdown(TransferShutdownMode::IdleOnly)
+        .unwrap()
+        .is_none());
+    let ticket = manager
+        .begin_shutdown(TransferShutdownMode::Cancel)
+        .unwrap()
+        .unwrap();
+    assert!(await_shutdown(&manager, ticket)
+        .recv_timeout(TIMEOUT)
+        .unwrap()
+        .unwrap());
+    assert!(
+        matches!(completion.recv_timeout(TIMEOUT).unwrap(), Err(error) if error == TRANSFER_CANCELLED_MESSAGE)
+    );
+    assert!(manager.reopen_queue(ticket).unwrap());
+}

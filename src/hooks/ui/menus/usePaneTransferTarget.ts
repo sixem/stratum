@@ -4,7 +4,7 @@ import { create } from "zustand";
 
 type Pane = "main" | "bottom";
 type PaneDirectory = { kind: "local"; path: string; refresh?: () => Promise<void> };
-export type RemotePaneDirectory = { kind: "remote"; path: string; profileId: string; sessionId: number; refresh: () => void };
+export type RemotePaneDirectory = { kind: "remote"; path: string; displayedPath: string; profileId: string; sessionId: number; refresh: () => void };
 type PaneLocation = PaneDirectory | RemotePaneDirectory;
 const usePaneDirectories = create<Partial<Record<Pane, PaneLocation>>>(() => ({}));
 
@@ -31,6 +31,13 @@ export function isCurrentPaneDirectory(pane: Pane, directory: PaneLocation) {
 
 export function getPaneDirectory(pane: Pane) {
   return usePaneDirectories.getState()[pane];
+}
+
+export function useDisplayedRemoteDirectory(pane: Pane, profileId: string | undefined, path: string) {
+  return usePaneDirectories(state => {
+    const location = state[pane];
+    return location?.kind === "remote" && location.profileId === profileId && location.displayedPath === path ? location : undefined;
+  });
 }
 
 export function usePaneTransferTarget(pane: Pane, path: string, refresh?: PaneDirectory["refresh"]) {

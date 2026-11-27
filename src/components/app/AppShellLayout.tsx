@@ -7,6 +7,7 @@ import type { AppContentContainerProps } from "./AppContentContainer";
 import type { AppTopstackContainerProps } from "./AppTopstackContainer";
 import { AppLayout } from "./AppLayout";
 import { AppStatusbar } from "./AppStatusbar";
+import { RemoteDragPreview } from "@/components/remote/RemoteDragPreview";
 
 type AppShellLayoutProps = {
   topstack: AppTopstackContainerProps;
@@ -33,6 +34,7 @@ export const AppShellLayout = ({
     <div className="app-shell-frame">
       <AppLayout topstack={topstack} content={{ ...content, sidebarProps, onBottomSummary: setBottom }} />
       <AppStatusbar statusBar={{ ...statusbar.statusBar, ...labels }} />
+      <RemoteDragPreview />
     </div>
   );
 };

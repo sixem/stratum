@@ -71,7 +71,7 @@ export const TransferStatusItemActions = ({
     );
   }
 
-  if (!job.backendManaged) {
+  if (!job.backendManaged && !job.cancelPreflight) {
     return null;
   }
 
@@ -95,7 +95,7 @@ export const TransferStatusItemActions = ({
 
   const runAction = async (
     action: Exclude<PendingOperationAction, null>,
-    request: (jobId: string) => Promise<boolean>,
+    request: (jobId: string) => Promise<boolean> | void,
     fallbackMessage: string,
   ) => {
     setPendingAction(action);
@@ -168,7 +168,7 @@ export const TransferStatusItemActions = ({
               onClick={() =>
                 void runAction(
                   "cancel",
-                  cancelTransferJob,
+                  job.cancelPreflight ?? cancelTransferJob,
                   "Unable to cancel the selected operation.",
                 )
               }

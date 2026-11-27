@@ -78,6 +78,8 @@ pub(super) enum TransferOperation {
     Remote(crate::services::remotes::transfer::Transfer),
     #[cfg(windows)]
     RemoteBatch(crate::services::remotes::transfer::TransferBatch),
+    #[cfg(windows)]
+    RemoteDelete(crate::services::remotes::operations::RemoteDelete),
     Copy {
         paths: Vec<String>,
         destination: String,
@@ -512,6 +514,7 @@ mod stage_tests {
         let item = |index, path: Option<std::path::PathBuf>| BatchItemResult {
             index,
             error: None,
+            skipped: false,
             result: Some(TransferResult {
                 path: String::new(),
                 backup: None,

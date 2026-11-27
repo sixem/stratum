@@ -25,6 +25,7 @@ export type StartupMode = "resume" | "workspace" | "start";
 
 export type Settings = {
   remoteThumbnails: boolean;
+  confirmRemoteOpen: boolean;
   remoteVideoThumbnails: boolean;
   remoteShowHidden: boolean;
   autoCheckUpdates: boolean;
@@ -50,6 +51,7 @@ export type Settings = {
   showDriveToggle: boolean;
   collapseDrivePickerOnBlur: boolean;
   showTopbarFolderChevrons: boolean;
+  fullWidthBreadcrumbs: boolean;
   showWorkProgressFill: boolean;
   smoothScroll: boolean;
   smartTabJump: boolean;

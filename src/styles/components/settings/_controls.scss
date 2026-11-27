@@ -207,6 +207,12 @@
     min-width: 0;
     max-width: 100%;
     justify-self: start;
+    border-radius: 9px;
+    overflow: hidden;
+  }
+
+  .settings-item:not(.is-stacked) > .settings-pills-shell {
+    justify-self: end;
   }
 
   .settings-pills {
@@ -241,17 +247,17 @@
     width: 18px;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.12s ease;
+    transition: opacity 0.2s ease;
   }
 
   .settings-pills-shell::before {
     left: 1px;
-    background: linear-gradient(to right, #101521, transparent);
+    background: linear-gradient(to right, #000, transparent);
   }
 
   .settings-pills-shell::after {
     right: 1px;
-    background: linear-gradient(to left, #101521, transparent);
+    background: linear-gradient(to left, #000, transparent);
   }
 
   .settings-pills-shell[data-overflow-left="true"]::before,

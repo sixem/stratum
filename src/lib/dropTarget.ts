@@ -3,8 +3,9 @@ export type DropTarget = {
   tabId?: string | null;
   pane?: "main" | "bottom";
   profileId?: string;
+  sessionId?: number;
 } & (
-  | { kind: "entry" | "tab" | "tab-destination" | "pane" | "remote-pane" | "remote-entry" | "remote-tab"; path: string }
+  | { kind: "entry" | "tab" | "tab-destination" | "pane" | "remote-pane" | "remote-entry" | "remote-crumb" | "remote-tab"; path: string }
   | { kind: "tab-submenu" }
 );
 
@@ -65,6 +66,19 @@ export const getDropTargetHit = (x: number, y: number): DropTargetHit => {
   const remoteTab = element?.closest<HTMLElement>('[data-drop-kind="remote-tab"][data-drop-path][data-drop-profile]');
   if (remoteTab?.dataset.dropPath && remoteTab.dataset.dropProfile) {
     return { target: { kind: "remote-tab", path: remoteTab.dataset.dropPath, profileId: remoteTab.dataset.dropProfile, tabId: remoteTab.dataset.dropId }, element: remoteTab };
+  }
+  // Remote breadcrumbs are outside the file pane and must never be treated
+  // as local Windows paths. Keep their exact POSIX spelling and host identity.
+  const remoteCrumb = element?.closest<HTMLElement>("[data-remote-crumb-path]");
+  const remoteCrumbBar = remoteCrumb?.closest<HTMLElement>("[data-remote-crumb-profile][data-drop-pane]");
+  const crumbPane = remoteCrumbBar?.dataset.dropPane;
+  const crumbPath = remoteCrumb?.dataset.remoteCrumbPath;
+  const crumbProfile = remoteCrumbBar?.dataset.remoteCrumbProfile;
+  if (remoteCrumb) {
+    const sessionId = Number(remoteCrumbBar?.dataset.remoteCrumbSession);
+    const target: DropTarget | null = crumbPath && crumbProfile && Number.isInteger(sessionId) && (crumbPane === "main" || crumbPane === "bottom")
+      ? { kind: "remote-crumb", path: crumbPath, pane: crumbPane, profileId: crumbProfile, sessionId } : null;
+    return { target, element: remoteCrumb };
   }
   const pane = element?.closest<HTMLElement>("[data-pane-path]");
   const paneId = pane?.dataset.filePane === "bottom" ? "bottom" : "main";

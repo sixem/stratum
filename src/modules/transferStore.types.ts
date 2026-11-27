@@ -26,6 +26,7 @@ export type TransferJob = {
   label: string;
   kind: TransferJobKind;
   backendManaged: boolean;
+  cancelPreflight?: () => void;
   capabilities: TransferJobCapabilities;
   status: TransferStatus;
   phase: TransferJobPhase;

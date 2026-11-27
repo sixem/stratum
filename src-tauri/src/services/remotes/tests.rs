@@ -35,17 +35,19 @@ fn browse_two_remote_folders_on_one_sftp_process() {
             "Connected with zero tabs; SSH process {}",
             connection.session_id
         );
+        let second_folder =
+            std::env::var("STRATUM_SFTP_OPERATIONS_DIR").unwrap_or_else(|_| "/var".into());
         let (root, var) = tokio::join!(
             remotes.list("smoke", "/", Some(connection.session_id)),
-            remotes.list("smoke", "/var", Some(connection.session_id))
+            remotes.list("smoke", &second_folder, Some(connection.session_id))
         );
         let (root, var) = (root.unwrap(), var.unwrap());
         assert_eq!(root.path, "/");
-        assert_eq!(var.path, "/var");
+        assert_eq!(var.path, second_folder);
         assert_eq!(root.session_id, var.session_id);
         assert!(!root.entries.is_empty() && !var.entries.is_empty());
         eprintln!(
-            "/ ({} entries) and /var ({} entries) shared SSH process {}.",
+            "/ ({} entries) and {second_folder} ({} entries) shared SFTP process {}.",
             root.entries.len(),
             var.entries.len(),
             root.session_id

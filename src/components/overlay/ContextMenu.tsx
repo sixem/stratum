@@ -57,6 +57,8 @@ type ContextMenuProps = {
   scrollContainer?: RefObject<HTMLElement | null>;
   scrollable?: boolean;
   focusFirstItem?: boolean;
+  horizontalAnchor?: { left: number; right: number };
+  dismissIgnoreRef?: RefObject<HTMLElement | null>;
 };
 
 const MENU_EDGE = CONTEXT_MENU_EDGE;
@@ -108,6 +110,7 @@ const iconColorStyle = (color?: string): CSSProperties | undefined =>
 
 export const ContextMenu = ({
   open, x, y, items, onClose, onOpenNative, scrollContainer, scrollable = false, focusFirstItem = false,
+  horizontalAnchor, dismissIgnoreRef,
 }: ContextMenuProps) => {
   const pinShape = useSettingsStore((state) => state.pinShape);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -149,7 +152,7 @@ export const ContextMenu = ({
 
   useOverlayDismiss({
     enabled: open,
-    refs: [menuRef],
+    refs: dismissIgnoreRef ? [menuRef, dismissIgnoreRef] : [menuRef],
     onEscape: onClose,
     onPointerDownOutside: onClose,
     pointerDownCapture: true,
@@ -195,10 +198,17 @@ export const ContextMenu = ({
     const rect = menu.getBoundingClientRect();
     const viewport = getViewportSize();
     // Align toward the cursor, flipping when space runs out.
-    const nextX = alignFloatingAxis(x, rect.width, viewport.width, MENU_EDGE, MENU_GAP);
+    // Anchored menus open beside the entire parent surface when space allows.
+    const nextX = horizontalAnchor
+      ? clamp(
+        horizontalAnchor.right + MENU_GAP + rect.width <= viewport.width - MENU_EDGE
+          ? horizontalAnchor.right + MENU_GAP : horizontalAnchor.left - MENU_GAP - rect.width,
+        MENU_EDGE, Math.max(MENU_EDGE, viewport.width - MENU_EDGE - rect.width),
+      )
+      : alignFloatingAxis(x, rect.width, viewport.width, MENU_EDGE, MENU_GAP);
     const nextY = alignFloatingAxis(y, rect.height, viewport.height, MENU_EDGE, MENU_GAP);
     setPosition({ x: nextX, y: nextY });
-  }, [items, open, scrollable, x, y]);
+  }, [horizontalAnchor, items, open, scrollable, x, y]);
 
   useLayoutEffect(() => {
     if (!open || !openSubmenuId) return;
@@ -369,7 +379,8 @@ export const ContextMenu = ({
       onPointerDown={(event) => { if (event.button === 2) event.stopPropagation(); }}
       onPointerUp={(event) => { if (event.button === 2) event.stopPropagation(); }}
       onBlur={(event) => {
-        if (open && event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) onClose();
+        if (open && event.relatedTarget && !event.currentTarget.contains(event.relatedTarget) &&
+          !dismissIgnoreRef?.current?.contains(event.relatedTarget as Node)) onClose();
       }}
       onContextMenu={(event) => event.preventDefault()}
     >

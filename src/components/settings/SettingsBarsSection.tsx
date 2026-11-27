@@ -86,6 +86,12 @@ const TOPBAR_SETTINGS_OPTIONS = [
     description: "Show the folder-level navigation buttons next to Back and Forward.",
   },
   {
+    key: "fullWidthBreadcrumbs",
+    label: "Full-width breadcrumb bar",
+    description: "Extend the breadcrumb bar above the sidebar.",
+    keywords: "path crumbs sidebar layout width",
+  },
+  {
     key: "showWorkProgressFill",
     label: "Work button progress",
     description: "Show job progress as a background fill on the Work button.",
@@ -114,6 +120,7 @@ export const SettingsBarsSection = ({
       showDriveToggle: state.showDriveToggle,
       collapseDrivePickerOnBlur: state.collapseDrivePickerOnBlur,
       showTopbarFolderChevrons: state.showTopbarFolderChevrons,
+      fullWidthBreadcrumbs: state.fullWidthBreadcrumbs,
       showWorkProgressFill: state.showWorkProgressFill,
       sidebarRecentLimit: state.sidebarRecentLimit,
       sidebarSectionOrder: state.sidebarSectionOrder,

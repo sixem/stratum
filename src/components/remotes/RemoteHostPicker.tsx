@@ -1,6 +1,9 @@
 // Remote profiles live outside the tab strip. Connecting alone keeps both panes intact.
 import { useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
+import { ContextMenu } from "@/components/overlay/ContextMenu";
+import { ContextMoreOptionsIcon, ContextOpenFolderIcon } from "@/components/icons/contextMenuIcons";
 import { PATHBAR_TOOLTIP_DELAY_MS } from "@/constants";
 import { NetworkIcon } from "@/components/icons/NetworkIcon";
 import { PlusIcon, ServerIcon } from "@/components/icons";
@@ -18,10 +21,14 @@ export function RemoteHostPicker() {
   const { profiles, connections } = useRemoteHosts();
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState<Page>({ kind: "list" });
-  const [menu, setMenu] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{
+    profile: RemoteProfile; x: number; y: number; anchor: { left: number; right: number };
+  } | null>(null);
   const [error, setError] = useState("");
   const [working, setWorking] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const menuRoot = useRef<HTMLDivElement>(null);
+  const menuTrigger = useRef<HTMLElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const pane = useRef<"main" | "bottom">("main");
   const interaction = useRef(0);
@@ -30,10 +37,14 @@ export function RemoteHostPicker() {
   const reset = () => { setPage({ kind: "list" }); setMenu(null); setError(""); };
   const close = () => { interaction.current++; setOpen(false); reset(); };
 
-  useOverlayDismiss({ enabled: open, refs: [root], onPointerDownOutside: close, keydownCapture: true,
+  useOverlayDismiss({ enabled: open, refs: [root, menuRoot], onPointerDownOutside: close, keydownCapture: true,
     onEscape: event => {
       event.preventDefault();
       event.stopPropagation();
+      if (menu) {
+        setMenu(null);
+        return;
+      }
       close();
       button.current?.focus({ preventScroll: true });
     } });
@@ -95,35 +106,50 @@ export function RemoteHostPicker() {
           {profiles.map(profile => {
             const status = connections[profile.id]?.status ?? "disconnected";
             const busy = Boolean(working) || status === "connecting";
-            const selected = menu === profile.id;
+            const selected = menu?.profile.id === profile.id;
             return <li key={profile.id}>
               <div className="remote-row">
-                <TooltipWrapper text={`Open folder on ${profile.destination}`}>
-                <button type="button" className="remote-open" disabled={busy}
-                  aria-label={`Open folder on ${profile.name}`}
-                  onClick={() => void run(profile, "open")}>
+                <div className="remote-host">
                   <ServerIcon />
                   <span className="remote-name">{profile.name}</span>
-                  <small className="remote-state" data-connected={status === "connected"}>
-                    {status === "connected" ? "Connected" : status === "connecting" ? "Connecting…" : "Disconnected"}
-                  </small>
-                </button>
+                </div>
+                <small className="remote-state" data-status={status}>
+                  {status === "connected" ? "Connected" : status === "connecting" ? "Connecting…" : "Disconnected"}
+                </small>
+                <TooltipWrapper text={`Open folder on ${profile.name}`} delayMs={PATHBAR_TOOLTIP_DELAY_MS}>
+                  <button type="button" className="remote-action" disabled={busy}
+                    aria-label={`Open folder on ${profile.name}`} onClick={() => void run(profile, "open")}>
+                    <ContextOpenFolderIcon />
+                  </button>
                 </TooltipWrapper>
                 {status === "connecting" ? <button type="button" className="remote-action"
                   onClick={() => void run(profile, "disconnect")}>Cancel</button> :
-                <button type="button" aria-label={`Actions for ${profile.name}`} aria-expanded={selected}
-                  className="remote-action" disabled={busy} onClick={() => { setMenu(selected ? null : profile.id); setError(""); }}>•••</button>}
+                <button type="button" aria-label={`Actions for ${profile.name}`} aria-haspopup="menu" aria-expanded={selected}
+                  className="remote-action" disabled={busy} onClick={event => {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const parent = event.currentTarget.closest(".remote-popover")?.getBoundingClientRect() ?? rect;
+                    menuTrigger.current = event.currentTarget;
+                    setMenu(selected ? null : {
+                      profile, x: rect.right, y: rect.top, anchor: { left: parent.left, right: parent.right },
+                    });
+                    setError("");
+                  }}><ContextMoreOptionsIcon /></button>}
               </div>
-              {selected && <div className="remote-row-actions">
-                <button type="button" className="remote-action" onClick={() => void run(profile, status === "connected" ? "disconnect" : "connect")}>
-                  {status === "connected" ? "Disconnect" : "Connect"}</button>
-                <button type="button" className="remote-action" onClick={() => setPage({ kind: "edit", profile })}>Edit</button>
-                <button type="button" className="remote-action" onClick={() => setPage({ kind: "remove", profile })}>Remove</button>
-              </div>}
             </li>;
           })}
         </ul> : <p className="remote-placeholder">No saved hosts.</p>}
       {error && <p role="alert" className="remote-error">{error}</p>}
     </ToolbarPopover>}
+    {open && menu && createPortal(<div ref={menuRoot} data-remotes-picker="true">
+      <ContextMenu open x={menu.x} y={menu.y} horizontalAnchor={menu.anchor} dismissIgnoreRef={menuTrigger} focusFirstItem items={[
+        {
+          id: "remote-toggle-connection",
+          label: connections[menu.profile.id]?.status === "connected" ? "Disconnect" : "Connect",
+          onSelect: () => void run(menu.profile, connections[menu.profile.id]?.status === "connected" ? "disconnect" : "connect"),
+        },
+        { id: "remote-edit", label: "Edit", icon: "rename", onSelect: () => setPage({ kind: "edit", profile: menu.profile }) },
+        { id: "remote-remove", label: "Remove", icon: "remove", onSelect: () => setPage({ kind: "remove", profile: menu.profile }) },
+      ]} onClose={() => setMenu(null)} />
+    </div>, document.body)}
   </div>;
 }
