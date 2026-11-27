@@ -6,6 +6,8 @@ import type { EntryContextTarget } from "@/types";
 type BatchRenameSession = {
   items: readonly EntryContextTarget[];
   onApply: (requests: BatchRenameRequest[]) => Promise<void>;
+  remote?: boolean;
+  onValidate?: (requests: BatchRenameRequest[]) => Promise<ReadonlyMap<string, string>>;
 };
 
 type BatchRenameStore = {

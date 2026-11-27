@@ -13,6 +13,7 @@ import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { MetadataLabel } from "@/components/primitives/MetadataLabel";
 import { RenameField } from "@/components/primitives/RenameField";
 import { useOverflowEllipsis } from "../fileView/nameEllipsis";
+import { SymlinkIcon } from "@/components/icons/SymlinkIcon";
 
 type EntryRowProps = {
   remote?: boolean;
@@ -169,6 +170,7 @@ export const EntryRow = memo(({
         data-selectable={isSelectable ? "true" : "false"}
         data-path={remote ? undefined : entry.path}
         data-remote-path={remote ? entry.path : undefined}
+        data-remote-symlink={remote && entry.isSymlink ? "true" : undefined}
         data-cut={isCut || undefined}
         data-name={entry.name}
         data-index={index}
@@ -182,7 +184,7 @@ export const EntryRow = memo(({
         aria-hidden={isRemoved ? "true" : "false"}
       >
         <span className="name">
-          <span className="name-marker" aria-hidden="true" />
+          {entry.isSymlink ? <SymlinkIcon directory={entry.isDir} className="name-symlink" /> : <span className="name-marker" aria-hidden="true" />}
           <RenameField
             value={renameValue}
             isDir={entry.isDir}
@@ -200,13 +202,14 @@ export const EntryRow = memo(({
     <TooltipWrapper text={tooltipText} delayMs={FILE_TOOLTIP_DELAY_MS}>
       <button
         type="button"
-        data-drag-source={remote ? undefined : isInteractive}
+        data-drag-source={isInteractive}
         className={`row${entry.isDir ? " is-dir" : ""}${selected ? " is-selected" : ""}${
           isRemoved ? " is-removed" : ""
         }${isDeleting ? " is-deleting" : ""}${isTransferring ? " is-transferring" : ""}`}
         data-selectable={isSelectable ? "true" : "false"}
         data-path={remote ? undefined : entry.path}
         data-remote-path={remote ? entry.path : undefined}
+        data-remote-symlink={remote && entry.isSymlink ? "true" : undefined}
         data-cut={isCut || undefined}
         data-name={entry.name}
         data-index={index}
@@ -228,7 +231,7 @@ export const EntryRow = memo(({
         onContextMenu={(event) => event.preventDefault()}
       >
         <span className="name">
-          <span className="name-marker" aria-hidden="true" />
+          {entry.isSymlink ? <SymlinkIcon directory={entry.isDir} className="name-symlink" /> : <span className="name-marker" aria-hidden="true" />}
           <span className="name-label" data-ellipsis={nameEllipsisMode} ref={nameRef}>
             {nameNodes}
             {nameEllipsis === "middle" ? (

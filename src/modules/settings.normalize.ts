@@ -155,6 +155,7 @@ const coerceSidebarRecentLimit = (value: unknown) => {
 export const coerceSettings = (value: Partial<Settings> | null | undefined): Settings => {
   return {
     remoteThumbnails: value?.remoteThumbnails === true,
+    remoteVideoThumbnails: value?.remoteVideoThumbnails === true,
     remoteShowHidden: value?.remoteShowHidden !== false,
     autoCheckUpdates: value?.autoCheckUpdates !== false,
     updateDelayHours: value?.updateDelayHours === 0 || value?.updateDelayHours === 72 || value?.updateDelayHours === 168

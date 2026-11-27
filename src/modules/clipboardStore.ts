@@ -1,13 +1,18 @@
 // The store mirrors Windows for menu availability and Cut highlighting. Paste
 // always reads the system clipboard, including changes from other applications.
 import { createWithEqualityFn } from "zustand/traditional";
-import { getFileClipboard, setFileClipboard, setTextClipboard } from "@/api/clipboard";
+import { getFileClipboard, setFileClipboard, setRemoteClipboard, setTextClipboard } from "@/api/clipboard";
 import type { FileClipboard, FileClipboardMode } from "@/api/clipboard";
 import { toMessage } from "@/lib/fsUtils";
 import { usePromptStore } from "./promptStore";
+import type { RemoteEntry } from "@/components/remote/remoteDirectory";
+import { isRemoteClipboardCurrent } from "@/lib/remoteClipboardState";
 
-export const useClipboardStore = createWithEqualityFn<{ clipboard: FileClipboard | null }>(() => ({
+export type RemoteClipboard = { profileId: string; host: string; path: string; entries: RemoteEntry[]; sequence: number };
+
+export const useClipboardStore = createWithEqualityFn<{ clipboard: FileClipboard | null; remote: RemoteClipboard | null }>(() => ({
   clipboard: null,
+  remote: null,
 }));
 
 let pendingWrite: Promise<void> | null = null;
@@ -23,6 +28,8 @@ export const refreshFileClipboard = async () => {
     if (current?.sequence !== next?.sequence || next?.sequence === 0) {
       useClipboardStore.setState({ clipboard: next });
     }
+    const remote = useClipboardStore.getState().remote;
+    if (remote && !isRemoteClipboardCurrent(remote.sequence, selection.sequence)) useClipboardStore.setState({ remote: null });
   }
   return selection;
 };
@@ -60,5 +67,23 @@ export const writeFileClipboard = async (paths: string[], mode: FileClipboardMod
 
 export const writeTextClipboard = async (text: string) => {
   if (!text) return;
-  await writeClipboard(() => setTextClipboard(text), "Couldn't copy text");
+  await writeClipboard(async () => { await setTextClipboard(text); }, "Couldn't copy text");
 };
+
+// Remote paths are text on the Windows clipboard, never fake local file paths.
+// The sequence binds the in-app selection to that exact clipboard write.
+export async function writeRemoteClipboard(input: Omit<RemoteClipboard, "sequence">) {
+  if (!input.entries.length) return;
+  await writeClipboard(async () => {
+    const text = input.entries.map(entry => `${input.host}:${entry.path}`).join("\r\n");
+    const sequence = await setRemoteClipboard(text, crypto.randomUUID());
+    if (!sequence) throw new Error("Windows did not provide a clipboard sequence.");
+    useClipboardStore.setState({ remote: { ...input, entries: [...input.entries], sequence }, clipboard: null });
+  }, "Couldn't copy items");
+}
+
+export async function readRemoteClipboard() {
+  const selection = await refreshFileClipboard();
+  const remote = useClipboardStore.getState().remote;
+  return remote && isRemoteClipboardCurrent(remote.sequence, selection.sequence) ? remote : null;
+}

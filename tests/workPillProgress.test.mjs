@@ -73,3 +73,11 @@ test("item jobs and conversions use their own counters while planning stays unfi
   assert.equal(advanceWorkPillProgress(null, [planning, deletion], 4).fraction, 0.25);
   assert.equal(advanceWorkPillProgress(null, [conversion], 4).fraction, 0.375);
 });
+
+test("single-item remote work uses its current file bytes when the job has no estimate", () => {
+  const remote = copy("remote", 1, 0, { kind: "move", total: 1, bytesTotal: undefined, currentBytes: 250, currentTotalBytes: 1000 });
+  assert.equal(advanceWorkPillProgress(null, [remote], 2).fraction, 0.25);
+  const multi = { ...remote, total: 4, processed: 1 };
+  assert.equal(advanceWorkPillProgress(null, [multi], 2).fraction, 0.25);
+  assert.equal(advanceWorkPillProgress(null, [{ ...remote, currentBytes: 100, currentTotalBytes: 0, statusText: "Moving" }], 2), null);
+});

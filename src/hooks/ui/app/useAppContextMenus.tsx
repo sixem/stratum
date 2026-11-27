@@ -27,7 +27,8 @@ import { useEntryMenuItems } from "../menus/useEntryMenuItems";
 import { appendWindowsMenuItem } from "../menus/appendWindowsMenuItem";
 import { useLayoutMenuItems } from "../menus/useLayoutMenuItems";
 import { useListColumnMenu } from "../menus/useListColumnMenu";
-import { usePaneTransferTarget } from "../menus/usePaneTransferTarget";
+import { isCurrentPaneDirectory, useOtherPaneDirectory, usePaneTransferTarget } from "../menus/usePaneTransferTarget";
+import { copyRemoteFiles } from "@/modules/remoteTransfer";
 import { buildFolderSelectionItems, invertFolderSelection, selectFolderExtension } from "../menus/entryMenu/buildFolderSelectionItems";
 import { canTransferToPane, type PaneTransfer } from "../menus/entryMenu/buildPaneTransferItems";
 import { withContextMenuShortcuts } from "../menus/contextMenuShortcuts";
@@ -180,23 +181,32 @@ export const useAppContextMenus = ({
   const menuOpenBackgroundTab = useSettingsStore((state) => state.menuOpenBackgroundTab);
   const hiddenMenuActions = useSettingsStore((state) => state.hiddenContextMenuActions);
   const keybinds = useSettingsStore((state) => state.keybinds);
-  const canPaste = useClipboardStore((state) => Boolean(state.clipboard?.paths.length));
+  const canPaste = useClipboardStore((state) => Boolean(state.clipboard?.paths.length || state.remote?.entries.length));
   // A shortcut remains usable when its menu entry is hidden.
   const transfersEnabled = menuPaneTransfers || Boolean(keybinds.copyToOtherPane || keybinds.moveToOtherPane);
-  const transferTarget = usePaneTransferTarget(pane, transfersEnabled ? currentPath : "", onRefreshTransferDestination);
+  const transferTarget = usePaneTransferTarget(pane, currentPath, onRefreshTransferDestination);
+  const otherTransferPane = useOtherPaneDirectory(pane);
+  const remoteTarget = currentPath && transfersEnabled && otherTransferPane?.kind === "remote" ? otherTransferPane : undefined;
   const transfer = useCallback<PaneFileCommands["transfer"]>((mode, paths) => {
-    if (!transferTarget) return false;
     const visiblePaths = paths.filter((path) => entryByPath.has(path));
+    if (remoteTarget) {
+      if (!visiblePaths.length ||
+          !isCurrentPaneDirectory(pane, remoteTarget)) return false;
+      void copyRemoteFiles(visiblePaths, remoteTarget, currentPath, "upload", mode === "move");
+      return true;
+    }
+    if (!transferTarget) return false;
     if (!canTransferToPane(visiblePaths, transferTarget.path)) return false;
     void transferTarget.run((destination) => mode === "copy"
       ? onCopyEntries(visiblePaths, destination)
       : onMoveEntries(visiblePaths, destination));
     return true;
-  }, [entryByPath, onCopyEntries, onMoveEntries, transferTarget]);
-  const paneTransfer = useMemo<PaneTransfer | undefined>(() => transferTarget && ({
-    destination: transferTarget.path,
+  }, [entryByPath, onCopyEntries, onMoveEntries, transferTarget, remoteTarget, pane, currentPath]);
+  const paneTransfer = useMemo<PaneTransfer | undefined>(() => (transferTarget || remoteTarget) && ({
+    destination: remoteTarget?.path ?? transferTarget!.path,
     run: transfer,
-  }), [transfer, transferTarget]);
+    accepts: remoteTarget ? paths => paths.length > 0 && paths.every(path => entryByPath.has(path)) : undefined,
+  }), [transfer, transferTarget, remoteTarget, entryByPath]);
   const paneFileCommands = useMemo<PaneFileCommands>(() => ({
     transfer,
     selectSameExtension: (path) => Boolean(currentPath) && selectFolderExtension(entryByPath, onSelectionChange, path),

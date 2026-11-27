@@ -10,6 +10,7 @@ import { RenameField } from "@/components/primitives/RenameField";
 import { useOverflowEllipsis } from "../fileView/nameEllipsis";
 import type { EntryCardProps } from "./gridCard.types";
 import { ThumbnailIcon } from "./ThumbnailIcon";
+import { SymlinkIcon } from "@/components/icons/SymlinkIcon";
 
 export const EntryCard = memo(({
   remote,
@@ -137,7 +138,7 @@ export const EntryCard = memo(({
   return (
     <div
       className={cardClass}
-      data-drag-source={remote ? undefined : isInteractive}
+      data-drag-source={isInteractive}
       role={isInteractive ? "button" : undefined}
       tabIndex={isInteractive ? 0 : -1}
       data-selectable={!isRemoved && !isBusy ? "true" : "false"}
@@ -145,6 +146,7 @@ export const EntryCard = memo(({
       data-tooltip-disabled={tooltipDisabled ? "true" : "false"}
       data-path={remote ? undefined : entry.path}
         data-remote-path={remote ? entry.path : undefined}
+      data-remote-symlink={remote && entry.isSymlink ? "true" : undefined}
       data-cut={isCut || undefined}
       data-name={entry.name}
       data-index={index}
@@ -165,7 +167,7 @@ export const EntryCard = memo(({
       onContextMenu={(event) => event.preventDefault()}
     >
       <div className="thumb-icon" data-has-thumb-preview={thumbUrl ? "true" : "false"}>
-        <ThumbnailIcon
+        {entry.isSymlink ? <SymlinkIcon directory={entry.isDir} className={entry.isDir ? "thumb-svg is-dir" : "thumb-svg"} /> : <ThumbnailIcon
           isDir={entry.isDir}
           fileKind={fileKind}
           extension={extension}
@@ -174,7 +176,7 @@ export const EntryCard = memo(({
           appIconUrl={appIconUrl}
           executableIconUrl={executableIconUrl}
           appIconsEnabled={appIconsEnabled}
-        />
+        />}
       </div>
       <div className="thumb-meta">
         {isRenaming ? (

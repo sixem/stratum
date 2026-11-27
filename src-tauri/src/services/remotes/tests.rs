@@ -125,6 +125,8 @@ fn browse_two_remote_folders_on_one_sftp_process() {
                 path: path.clone(),
                 size: combined.size,
                 modified: combined.modified,
+                cache_generation: 0,
+                thumbnail: None,
             };
             let response = crate::services::preview_protocol::test_remote_response(
                 source.clone(),
@@ -244,6 +246,8 @@ fn browse_two_remote_folders_on_one_sftp_process() {
                 path,
                 size: 1024,
                 modified: None,
+                cache_generation: 0,
+                thumbnail: None,
             };
             let response = crate::services::preview_protocol::test_remote_response(
                 source,

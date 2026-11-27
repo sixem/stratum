@@ -76,7 +76,7 @@ export const ThumbnailIcon = ({
 
   const [embeddedDecode, setEmbeddedDecode] = useState<IconDecode>();
   const [typeDecode, setTypeDecode] = useState<IconDecode>();
-  const useNativeIcons = !isDir && appIconsEnabled && Boolean(extension) && !thumbReady;
+  const useNativeIcons = !isDir && appIconsEnabled && !thumbReady;
   const embeddedUrl = useNativeIcons && extension === "exe" ? executableIconUrl : null;
   const typeUrl = useNativeIcons ? appIconUrl : null;
   const embeddedState = getIconState(embeddedUrl, embeddedDecode);

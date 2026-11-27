@@ -43,6 +43,41 @@ impl StageDirectory {
             handle,
         })
     }
+
+    #[cfg(windows)]
+    pub(crate) fn open_existing(path: PathBuf) -> io::Result<Self> {
+        let handle = pin_directory(&path)?;
+        Ok(Self { path, handle })
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn identity(&self) -> io::Result<String> {
+        let (volume, file) = super::file_identity::file_id(&self.handle)?;
+        Ok(format!("{volume:016x}:{file:032x}"))
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn remove_contents(&self) -> io::Result<()> {
+        use std::os::windows::fs::MetadataExt;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
+        };
+        for entry in fs::read_dir(&self.path)? {
+            let entry = entry?;
+            let metadata = fs::symlink_metadata(entry.path())?;
+            let attributes = metadata.file_attributes();
+            if attributes & FILE_ATTRIBUTE_DIRECTORY != 0
+                && attributes & FILE_ATTRIBUTE_REPARSE_POINT == 0
+            {
+                fs::remove_dir_all(entry.path())?;
+            } else if attributes & FILE_ATTRIBUTE_DIRECTORY != 0 {
+                fs::remove_dir(entry.path())?;
+            } else {
+                fs::remove_file(entry.path())?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Drop for StageDirectory {

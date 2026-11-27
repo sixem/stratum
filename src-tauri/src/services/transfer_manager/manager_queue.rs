@@ -33,6 +33,73 @@ impl TransferManagerHandle {
         Self { inner }
     }
 
+    #[cfg(windows)]
+    pub(crate) fn remote_batch(
+        &self,
+        window: tauri::Window,
+        batch: crate::services::remotes::transfer::TransferBatch,
+        transfer_id: Option<String>,
+    ) -> Result<crate::services::remotes::transfer::BatchResult, String> {
+        let first = batch.items.first().ok_or("Select at least one item.")?;
+        let snapshot = build_initial_snapshot(
+            &self.inner.next_job_id,
+            transfer_id.as_deref(),
+            batch.items.len(),
+            super::manager_state::describe_remote_job(first.moving),
+        );
+        let event_emitter = build_event_emitter(window, transfer_id);
+        let (completion_tx, completion_rx) = mpsc::channel();
+        self.enqueue(TransferJobRequest {
+            snapshot,
+            event_emitter,
+            operation: TransferOperation::RemoteBatch(batch),
+            completion_tx,
+            control: TransferJobControlHandle::new(),
+        })?;
+        match completion_rx
+            .recv()
+            .map_err(|_| "transfer manager unavailable".to_string())??
+        {
+            TransferOperationResult::RemoteBatch(report) => Ok(report),
+            _ => Err("transfer manager returned the wrong job result".into()),
+        }
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn remote_file(
+        &self,
+        window: tauri::Window,
+        job: crate::services::remotes::transfer::Transfer,
+        transfer_id: Option<String>,
+    ) -> Result<crate::services::remotes::transfer::TransferResult, String> {
+        let total = match &job.direction {
+            crate::services::remotes::transfer::Direction::Rename { entries, .. } => entries.len(),
+            _ => 1,
+        };
+        let snapshot = build_initial_snapshot(
+            &self.inner.next_job_id,
+            transfer_id.as_deref(),
+            total,
+            super::manager_state::describe_remote_job(job.moving),
+        );
+        let event_emitter = build_event_emitter(window, transfer_id);
+        let (completion_tx, completion_rx) = mpsc::channel();
+        self.enqueue(TransferJobRequest {
+            snapshot,
+            event_emitter,
+            operation: TransferOperation::Remote(job),
+            completion_tx,
+            control: TransferJobControlHandle::new(),
+        })?;
+        match completion_rx
+            .recv()
+            .map_err(|_| "transfer manager unavailable".to_string())??
+        {
+            TransferOperationResult::Remote(path) => Ok(path),
+            _ => Err("transfer manager returned the wrong job result".into()),
+        }
+    }
+
     pub fn copy_entries(
         &self,
         window: tauri::Window,

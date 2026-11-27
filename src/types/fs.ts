@@ -5,6 +5,8 @@ export type FileEntry = {
   name: string;
   path: string;
   isDir: boolean;
+  isSymlink?: boolean;
+  symlinkTarget?: "file" | "directory" | "unavailable";
   size: number | null;
   modified: number | null;
 };

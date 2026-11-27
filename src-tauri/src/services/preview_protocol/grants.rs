@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 use tokio::sync::Semaphore;
@@ -63,6 +64,14 @@ pub(crate) struct RemoteSource {
     pub path: String,
     pub size: u64,
     pub modified: Option<u64>,
+    pub cache_generation: u64,
+    pub thumbnail: Option<Arc<VideoThumbnail>>,
+}
+
+pub(crate) struct VideoThumbnail {
+    pub identity: String,
+    pub generation: u64,
+    pub remaining: AtomicU64,
 }
 
 impl PreviewSource {
@@ -184,6 +193,16 @@ impl PreviewGrants {
         entries.retain(|_, grant| grant.expires_at > now);
         let grant = entries.get(token)?;
         (grant.owner == owner).then(|| Arc::clone(&grant.source))
+    }
+
+    pub(crate) fn thumbnail_source(&self, owner: &str, token: &str) -> Option<RemoteSource> {
+        let remote = self.remote_source(owner, token)?;
+        remote.thumbnail.as_ref()?;
+        Some(remote)
+    }
+
+    pub(crate) fn remote_source(&self, owner: &str, token: &str) -> Option<RemoteSource> {
+        self.resolve(owner, &format!("/{token}"))?.remote.clone()
     }
 
     pub(crate) fn release(&self, owner: &str, token: &str) {

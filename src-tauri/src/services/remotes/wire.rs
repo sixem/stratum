@@ -5,7 +5,7 @@ use tokio::process::{ChildStdin, ChildStdout};
 
 pub(super) const MAX_PACKET: usize = 512 * 1024;
 // SSH File Transfer Protocol v3 (draft-ietf-secsh-filexfer-02).
-// Keep the request vocabulary restricted to read-only operations.
+// Requests are limited to the operations used by browsing and file transfers.
 #[repr(u8)]
 #[derive(Copy, Clone)]
 pub(super) enum Request {
@@ -13,11 +13,17 @@ pub(super) enum Request {
     Open = 3,
     Close = 4,
     Read = 5,
+    Write = 6,
     Lstat = 7,
     Fstat = 8,
     OpenDir = 11,
     ReadDir = 12,
+    Remove = 13,
+    Mkdir = 14,
+    Rmdir = 15,
     Realpath = 16,
+    Stat = 17,
+    Rename = 18,
 }
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq)]
@@ -33,12 +39,14 @@ pub(super) type Result<T> = std::result::Result<T, Error>;
 pub(super) enum Error {
     Transport(String), // The next frame cannot be trusted; discard the session.
     Request(String),   // The server rejected this operation; the session is usable.
+    NotFound,
     Eof,
 }
 impl Error {
     pub(super) fn message(&self) -> &str {
         match self {
             Self::Transport(s) | Self::Request(s) => s,
+            Self::NotFound => "The remote path does not exist.",
             Self::Eof => "The server reached the end of the file.",
         }
     }
@@ -175,7 +183,7 @@ impl Wire {
             return match fields.number()? {
                 0 if expected == Reply::Status => Ok(vec![]),
                 1 => Err(Error::Eof),
-                2 => Err(Error::Request("The remote path does not exist.".into())),
+                2 => Err(Error::NotFound),
                 3 => Err(Error::Request(
                     "Permission denied by the remote server.".into(),
                 )),

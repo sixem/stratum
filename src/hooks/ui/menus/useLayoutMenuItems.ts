@@ -9,7 +9,8 @@ type UseLayoutMenuItemsOptions = {
   currentPath: string;
   sortState: SortState;
   onSortChange: (next: SortState) => void;
-  onPaste: (destination: string) => void;
+  onPaste?: (destination: string) => void;
+  preserveWhitespace?: boolean;
   onCreateFolder?: (parentPath: string, name: string) => Promise<unknown> | void;
   onCreateFolderAndGo?: (parentPath: string, name: string) => Promise<unknown> | void;
   onCreateFile?: (parentPath: string, name: string) => Promise<unknown> | void;
@@ -24,6 +25,7 @@ export const useLayoutMenuItems = ({
   sortState,
   onSortChange,
   onPaste,
+  preserveWhitespace = false,
   onCreateFolder,
   onCreateFolderAndGo,
   onCreateFile,
@@ -33,12 +35,13 @@ export const useLayoutMenuItems = ({
   onOpenShell,
 }: UseLayoutMenuItemsOptions) => {
   const clipboard = useClipboardStore((state) => state.clipboard);
+  const remoteClipboard = useClipboardStore((state) => state.remote);
   const sortItems = useSortMenuItems(sortState, onSortChange);
   const openCreatePrompt = useCreateEntryPrompt();
 
   return useMemo<ContextMenuItem[]>(() => {
-    const targetPath = currentPath.trim();
-    const canPaste = Boolean(clipboard?.paths.length && targetPath);
+    const targetPath = preserveWhitespace ? currentPath : currentPath.trim();
+    const canPaste = Boolean(onPaste && (clipboard?.paths.length || remoteClipboard?.entries.length) && targetPath);
     const canCreate = Boolean(targetPath && (onCreateFolder || onCreateFile));
     const showPwsh = Boolean(menuOpenPwsh && shellAvailability?.pwsh);
     const showWsl = Boolean(menuOpenWsl && shellAvailability?.wsl);
@@ -82,6 +85,7 @@ export const useLayoutMenuItems = ({
                   parentPath: targetPath,
                   onCreate: onCreateFolder,
                   onCreateAndGo: onCreateFolderAndGo,
+                  preserveWhitespace,
                 });
               },
               disabled: !targetPath || !onCreateFolder,
@@ -96,14 +100,15 @@ export const useLayoutMenuItems = ({
                   kind: "file",
                   parentPath: targetPath,
                   onCreate: onCreateFile,
+                  preserveWhitespace,
                 });
               },
               disabled: !targetPath || !onCreateFile,
             },
-            { kind: "divider", id: "layout-divider-create" } as ContextMenuItem,
+            ...(onPaste || shellItems.length ? [{ kind: "divider", id: "layout-divider-create" } as ContextMenuItem] : []),
           ] as ContextMenuItem[])
         : []),
-      {
+      ...(onPaste ? [{
         id: "layout-paste",
         label: "Paste",
         icon: "paste",
@@ -111,7 +116,7 @@ export const useLayoutMenuItems = ({
           if (targetPath) onPaste(targetPath);
         },
         disabled: !canPaste,
-      },
+      } as ContextMenuItem] : []),
       ...(shellItems.length > 0
         ? [{ kind: "divider", id: "layout-divider-shells" } as ContextMenuItem]
         : []),
@@ -121,6 +126,7 @@ export const useLayoutMenuItems = ({
     ];
   }, [
     clipboard,
+    remoteClipboard,
     currentPath,
     openCreatePrompt,
     onCreateFile,
@@ -130,6 +136,7 @@ export const useLayoutMenuItems = ({
     menuOpenWsl,
     onOpenShell,
     onPaste,
+    preserveWhitespace,
     shellAvailability?.pwsh,
     shellAvailability?.wsl,
     sortItems,

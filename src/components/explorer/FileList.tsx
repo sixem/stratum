@@ -1,5 +1,5 @@
 // Virtualized list view for file entries.
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useEntryPresence, useScrollToIndex } from "@/hooks";
 import { useSettingsStore } from "@/modules";
 import { EmptyState } from "@/components/primitives/EmptyState";
@@ -91,6 +91,10 @@ const FileList = ({
     rows,
     applyScrollRequest,
   });
+  const onVisibleEntries = list.onVisibleEntries;
+  useEffect(() => {
+    onVisibleEntries?.(visibleRows.flatMap(row => row.type === "entry" ? [row.entry] : []));
+  }, [onVisibleEntries, visibleRows]);
   // The full scroll area must exist on the first layout, before measuring the visible range.
   const contentHeight = rows.length * itemHeight + VIEW_INSET * 2;
 

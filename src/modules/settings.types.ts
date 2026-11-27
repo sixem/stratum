@@ -24,6 +24,7 @@ export type StartupMode = "resume" | "workspace" | "start";
 
 export type Settings = {
   remoteThumbnails: boolean;
+  remoteVideoThumbnails: boolean;
   remoteShowHidden: boolean;
   autoCheckUpdates: boolean;
   updateDelayHours: 0 | 24 | 72 | 168;

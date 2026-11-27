@@ -13,6 +13,7 @@ export type StartLocalTransferInput = {
   id: string;
   label: string;
   total: number;
+  kind?: TransferJob["kind"];
   items?: string[];
 };
 

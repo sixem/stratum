@@ -36,6 +36,7 @@ type PreviewStageProps = {
   onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerCancel: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onImageLoad: (event: ReactSyntheticEvent<HTMLImageElement>) => void;
+  imageCrossOrigin?: boolean;
   onPlaybackMetadata: (event: ReactSyntheticEvent<HTMLMediaElement>) => void;
   onPlaybackPlay: () => void;
   onPlaybackPause: () => void;
@@ -66,6 +67,7 @@ export const PreviewStage = ({
   onPointerUp,
   onPointerCancel,
   onImageLoad,
+  imageCrossOrigin,
   onPlaybackMetadata,
   onPlaybackPlay,
   onPlaybackPause,
@@ -117,6 +119,7 @@ export const PreviewStage = ({
           <img
             key={src}
             className="quick-preview-media is-image"
+            crossOrigin={imageCrossOrigin ? "anonymous" : undefined}
             src={src}
             alt={label}
             draggable={false}

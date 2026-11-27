@@ -74,6 +74,10 @@ pub(super) enum QueuedTransferPlanningState {
 
 #[derive(Clone)]
 pub(super) enum TransferOperation {
+    #[cfg(windows)]
+    Remote(crate::services::remotes::transfer::Transfer),
+    #[cfg(windows)]
+    RemoteBatch(crate::services::remotes::transfer::TransferBatch),
     Copy {
         paths: Vec<String>,
         destination: String,
@@ -100,6 +104,10 @@ pub(super) enum TransferOperation {
 }
 
 pub(super) enum TransferOperationResult {
+    #[cfg(windows)]
+    Remote(crate::services::remotes::transfer::TransferResult),
+    #[cfg(windows)]
+    RemoteBatch(crate::services::remotes::transfer::BatchResult),
     Copy(fs::CopyReport),
     Transfer(fs::TransferReport),
     Delete(fs::DeleteReport),
@@ -121,6 +129,31 @@ impl TransferOperationOutcome {
             TransferOperationResult::Copy(report) => report.destination.target(),
             TransferOperationResult::Transfer(report) => report.destination.target(),
             TransferOperationResult::Conversion(report) => report.destination.target(),
+            #[cfg(windows)]
+            TransferOperationResult::Remote(result) => {
+                let path = result.local_path.as_ref()?;
+                let parent = path.parent().filter(|parent| parent.is_absolute())?;
+                Some(TransferDestination {
+                    folder_path: parent.to_owned(),
+                    entry_path: Some(path.clone()),
+                })
+            }
+            #[cfg(windows)]
+            TransferOperationResult::RemoteBatch(report) => {
+                let mut paths = report
+                    .items
+                    .iter()
+                    .map(|item| item.result.as_ref()?.local_path.as_ref());
+                let first = paths.next()??;
+                let parent = first.parent().filter(|parent| parent.is_absolute())?;
+                if paths.any(|path| path.and_then(|path| path.parent()) != Some(parent)) {
+                    return None;
+                }
+                Some(TransferDestination {
+                    folder_path: parent.to_owned(),
+                    entry_path: (report.items.len() == 1).then(|| first.clone()),
+                })
+            }
             _ => None,
         }
     }
@@ -366,6 +399,18 @@ pub(super) fn describe_copy_job() -> TransferJobDescriptor {
     }
 }
 
+#[cfg(windows)]
+pub(super) fn describe_remote_job(moving: bool) -> TransferJobDescriptor {
+    TransferJobDescriptor {
+        kind: if moving {
+            TransferJobKind::Move
+        } else {
+            TransferJobKind::Copy
+        },
+        capabilities: transfer_job_capabilities(),
+    }
+}
+
 pub(super) fn describe_transfer_job(
     options: Option<&fs::TransferOptions>,
 ) -> TransferJobDescriptor {
@@ -430,6 +475,80 @@ mod stage_tests {
     use super::*;
     use crate::platform::windows::dragdrop::claimed_test_file;
     use std::{fs, path::Path};
+
+    #[test]
+    fn remote_jobs_report_their_actual_operation_and_controls() {
+        let copy = describe_remote_job(false);
+        let moved = describe_remote_job(true);
+        assert!(matches!(copy.kind, TransferJobKind::Copy));
+        assert!(matches!(moved.kind, TransferJobKind::Move));
+        assert!(moved.capabilities.can_pause && moved.capabilities.can_cancel);
+    }
+
+    #[test]
+    fn remote_download_exposes_only_a_local_destination() {
+        let path = std::env::temp_dir().join("download.txt");
+        let mut result = crate::services::remotes::transfer::TransferResult {
+            path: path.to_string_lossy().into_owned(),
+            backup: None,
+            warning: None,
+            local_path: Some(path.clone()),
+        };
+        let outcome = |result| TransferOperationOutcome {
+            result: Ok(TransferOperationResult::Remote(result)),
+            terminal_status: TransferJobStatus::Completed,
+        };
+        let destination = outcome(result.clone()).destination().unwrap();
+        assert_eq!(destination.entry_path.as_deref(), Some(path.as_path()));
+        assert_eq!(destination.folder_path, path.parent().unwrap());
+        result.local_path = None;
+        assert!(outcome(result).destination().is_none());
+    }
+
+    #[test]
+    fn remote_batch_opens_the_shared_local_folder_only() {
+        use crate::services::remotes::transfer::{BatchItemResult, BatchResult, TransferResult};
+        let folder = std::env::temp_dir();
+        let item = |index, path: Option<std::path::PathBuf>| BatchItemResult {
+            index,
+            error: None,
+            result: Some(TransferResult {
+                path: String::new(),
+                backup: None,
+                warning: None,
+                local_path: path,
+            }),
+        };
+        let outcome = |items, status| TransferOperationOutcome {
+            result: Ok(TransferOperationResult::RemoteBatch(BatchResult {
+                items,
+                cancelled: false,
+            })),
+            terminal_status: status,
+        };
+        let one = folder.join("one.txt");
+        let two = folder.join("two.txt");
+        let target = outcome(
+            vec![item(0, Some(one.clone())), item(1, Some(two))],
+            TransferJobStatus::Completed,
+        )
+        .destination()
+        .unwrap();
+        assert_eq!(target.folder_path, folder);
+        assert!(target.entry_path.is_none());
+        assert!(outcome(
+            vec![item(0, Some(one)), item(1, None)],
+            TransferJobStatus::Completed
+        )
+        .destination()
+        .is_none());
+        assert!(outcome(
+            vec![item(0, Some(folder.join("one.txt")))],
+            TransferJobStatus::Cancelled
+        )
+        .destination()
+        .is_none());
+    }
 
     #[test]
     fn cancelling_a_queued_transfer_keeps_staged_data_alive_for_its_planner() {

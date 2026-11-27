@@ -98,6 +98,80 @@ impl SourceSnapshot {
     }
 }
 
+// Keep the exact source locked against replacement while a caller copies it.
+// The snapshot is later checked again by the existing verified move cleanup.
+#[cfg(windows)]
+pub(crate) struct PinnedMoveSource {
+    _guard: SourceFile,
+    entry: TransferManifestEntry,
+    snapshot: SourceSnapshot,
+}
+
+#[cfg(windows)]
+impl PinnedMoveSource {
+    pub(crate) fn open(path: &Path, directory: bool) -> Result<Self, String> {
+        let entry = TransferManifestEntry {
+            source: path.to_owned(),
+            destination: path.to_owned(),
+            kind: if directory {
+                TransferEntryKind::Directory
+            } else {
+                TransferEntryKind::File
+            },
+            bytes_total: 0,
+        };
+        let guard = SourceFile::open(path, false)
+            .map_err(|error| format!("Could not lock {}: {error}", path.display()))?;
+        let snapshot = SourceSnapshot::read(&guard, &entry)
+            .map_err(|error| format!("Could not inspect {}: {error}", path.display()))?;
+        if snapshot.kind != entry.kind {
+            return Err(format!("Source changed before copying {}", path.display()));
+        }
+        Ok(Self {
+            _guard: guard,
+            entry,
+            snapshot,
+        })
+    }
+
+    pub(crate) fn matches(&self, file: &std::fs::File) -> Result<(), String> {
+        let identity = crate::domain::filesystem::file_identity::file_id(file)
+            .map_err(|error| format!("Could not verify the source folder: {error}"))?;
+        if identity != self.snapshot.identity {
+            return Err("The source folder changed while opening it.".into());
+        }
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+#[derive(Default)]
+pub(crate) struct CopiedMoveSources(Vec<(TransferManifestEntry, SourceSnapshot)>);
+
+#[cfg(windows)]
+impl CopiedMoveSources {
+    pub(crate) fn record(&mut self, source: PinnedMoveSource) {
+        self.0.push((source.entry, source.snapshot));
+    }
+
+    pub(crate) fn remove(mut self, destination: &str) -> Result<(), String> {
+        // Preorder groups each directory's children directly after their parent.
+        self.0
+            .sort_unstable_by(|a, b| a.0.source.components().cmp(b.0.source.components()));
+        let (entries, snapshots): (Vec<_>, Vec<_>) = self.0.into_iter().unzip();
+        let first = entries.first().ok_or("No copied sources to clean up.")?;
+        let root = TransferManifestRoot {
+            source: first.source.clone(),
+            destination: destination.into(),
+            kind: first.kind,
+            entries,
+            file_count: 0,
+            byte_count: 0,
+        };
+        remove_manifest_source(&root, &snapshots)
+    }
+}
+
 // A verified cross-volume move copies from the exact source root. Windows
 // denies renames while this read handle is open. Cleanup checks the copied
 // identity again with the delete handle after the read handle is released.

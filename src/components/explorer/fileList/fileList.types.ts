@@ -63,6 +63,7 @@ export type FileListMetadataProps = {
 };
 
 export type FileListListProps = {
+  onVisibleEntries?: (entries: FileEntry[]) => void;
   sortState: SortState;
   onSortChange: (next: SortState) => void;
   categoryTinting: boolean;
@@ -95,6 +96,7 @@ export type FileListDragDropProps = {
 };
 
 export type FileListCreationProps = {
+  preserveWhitespace?: boolean;
   onCreateFolder: (parentPath: string, name: string) => Promise<unknown> | void;
   onCreateFolderAndGo?: (parentPath: string, name: string) => Promise<unknown> | void;
   onCreateFile: (parentPath: string, name: string) => Promise<unknown> | void;

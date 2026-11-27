@@ -340,7 +340,7 @@ export const useShellViewInteractions = ({
     selected,
     entryByPath: viewModel.entryByPath,
     onSelectionChange: handleSelectionChange,
-    currentPath: resolvedView.viewLoading ? "" : resolvedView.viewPath,
+    currentPath: resolvedView.viewLoading || (tabSession.activeTab && tabSession.activeTab.kind !== "folder") ? "" : resolvedView.viewPath,
     viewParentPath: dataPipeline.viewParentPath,
     sortState: resolvedView.sortState,
     onSortChange: navigationController.handleSortChange,

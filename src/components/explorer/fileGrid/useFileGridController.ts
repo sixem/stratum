@@ -182,6 +182,7 @@ export const useFileGridController = ({
         showCreatePrompt({
           kind: "folder",
           parentPath: view.currentPath,
+          preserveWhitespace: creation.preserveWhitespace,
           onCreate: creation.onCreateFolder,
           onCreateAndGo: creation.onCreateFolderAndGo,
         }),
@@ -192,6 +193,7 @@ export const useFileGridController = ({
         showCreatePrompt({
           kind: "file",
           parentPath: view.currentPath,
+          preserveWhitespace: creation.preserveWhitespace,
           onCreate: creation.onCreateFile,
         }),
     });

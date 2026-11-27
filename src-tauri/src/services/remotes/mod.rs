@@ -3,7 +3,10 @@ mod browse;
 mod connection;
 pub(crate) mod file;
 pub(crate) mod open;
+pub(crate) mod operations;
+pub(crate) mod recovery;
 mod thumbnail;
+pub(crate) mod transfer;
 mod wire;
 
 use browse::{check_path, read_directory, Entry};
@@ -238,6 +241,42 @@ impl Remotes {
             omitted_entries,
         })
     }
+    async fn stat(&self, id: &str, session_id: u32, path: &str) -> Result<wire::Attrs, String> {
+        check_path(path, false).map_err(|e| e.message().to_owned())?;
+        let session = self.current(id, Some(session_id))?;
+        let mut wire = session.wire.lock().await;
+        session
+            .complete(
+                async {
+                    let packet = wire
+                        .path_request(wire::Request::Lstat, path.as_bytes(), wire::Reply::Attrs)
+                        .await?;
+                    wire::Fields(&packet).attrs()
+                },
+                60,
+            )
+            .await
+    }
+    async fn exists(&self, id: &str, session_id: u32, path: &str) -> Result<bool, String> {
+        check_path(path, false).map_err(|e| e.message().to_owned())?;
+        let session = self.current(id, Some(session_id))?;
+        let mut wire = session.wire.lock().await;
+        session
+            .complete(
+                async {
+                    match wire
+                        .path_request(wire::Request::Lstat, path.as_bytes(), wire::Reply::Attrs)
+                        .await
+                    {
+                        Ok(_) => Ok(true),
+                        Err(wire::Error::NotFound) => Ok(false),
+                        Err(error) => Err(error),
+                    }
+                },
+                60,
+            )
+            .await
+    }
     // The caller may cancel by dropping the future. An interrupted packet retires
     // the session, while cancellation before the stream is acquired leaves it usable.
     #[allow(dead_code)]
@@ -306,6 +345,20 @@ pub(crate) async fn remote_list(
 ) -> Result<Listing, String> {
     manager(&webview)?
         .list(&profile_id, &path, session_id)
+        .await
+}
+#[tauri::command]
+pub(crate) async fn remote_link_target(
+    webview: Webview,
+    profile_id: String,
+    session_id: u32,
+    path: String,
+) -> Result<browse::LinkTarget, String> {
+    check_path(&path, false).map_err(|e| e.message().to_owned())?;
+    let session = manager(&webview)?.current(&profile_id, Some(session_id))?;
+    let mut wire = session.wire.lock().await;
+    session
+        .complete(browse::link_target(&mut wire, &path), 20)
         .await
 }
 #[tauri::command]
@@ -402,6 +455,9 @@ pub(crate) async fn create_remote_preview_grant(
         .inner()
         .clone();
     let request = grants.begin(webview.label(), webview.window().label())?;
+    let cache_generation = crate::domain::media::thumbs::remote_generation(
+        &webview.state::<crate::domain::media::thumbs::ThumbnailHandle>(),
+    );
     let metadata = remotes
         .read_range(&profile_id, session_id, &path, 0, 0)
         .await?;
@@ -414,8 +470,219 @@ pub(crate) async fn create_remote_preview_grant(
             path,
             size: metadata.size,
             modified: metadata.modified,
+            cache_generation,
+            thumbnail: None,
         },
     )
+}
+
+// A gallery image was already decoded by the WebView. Store only its small,
+// revalidated frame; never download the original again for this operation.
+#[tauri::command]
+pub(crate) async fn store_remote_gallery_thumbnail(
+    webview: Webview,
+    token: String,
+    image: String,
+    cache_mb: u32,
+) -> Result<bool, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let grants = webview
+        .state::<crate::services::preview_protocol::PreviewGrants>()
+        .inner()
+        .clone();
+    let remote = grants
+        .remote_source(webview.label(), &token)
+        .ok_or("Preview has expired.")?;
+    if remote.thumbnail.is_some()
+        || !thumbnail::supported(&remote.path)
+        || remote.modified.is_none()
+    {
+        return Ok(false);
+    }
+    let encoded = image
+        .strip_prefix("data:image/jpeg;base64,")
+        .ok_or("Invalid thumbnail.")?;
+    if encoded.len() > 256 * 1024 {
+        return Err("Thumbnail is too large.".into());
+    }
+    let bytes = STANDARD.decode(encoded).map_err(|_| "Invalid thumbnail.")?;
+    let metadata = remote
+        .remotes
+        .read_range(&remote.profile_id, remote.session_id, &remote.path, 0, 0)
+        .await?;
+    if metadata.size != remote.size || metadata.modified != remote.modified {
+        return Ok(false);
+    }
+    let session = remote
+        .remotes
+        .current(&remote.profile_id, Some(remote.session_id))?;
+    let identity = format!(
+        "v1\0{}\0{}\0{}\0{}",
+        session.host,
+        remote.path,
+        remote.size,
+        remote.modified.unwrap()
+    );
+    let state = webview
+        .state::<crate::domain::media::thumbs::ThumbnailHandle>()
+        .inner()
+        .clone();
+    tokio::task::spawn_blocking(move || {
+        let Some(image) = thumbnail::decode(bytes) else {
+            return false;
+        };
+        let Some(encoded) = image.strip_prefix("data:image/webp;base64,") else {
+            return false;
+        };
+        let Ok(bytes) = STANDARD.decode(encoded) else {
+            return false;
+        };
+        crate::domain::media::thumbs::store_remote(
+            &state,
+            &identity,
+            &bytes,
+            cache_mb,
+            remote.cache_generation,
+        );
+        crate::domain::media::thumbs::remote_generation(&state) == remote.cache_generation
+    })
+    .await
+    .map_err(|_| "Could not store thumbnail.".into())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct VideoThumbnailRequest {
+    token: Option<String>,
+    cached: Option<String>,
+}
+
+#[tauri::command]
+pub(crate) async fn prepare_remote_video_thumbnail(
+    webview: Webview,
+    profile_id: String,
+    session_id: u32,
+    path: String,
+) -> Result<VideoThumbnailRequest, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    check_path(&path, false).map_err(|e| e.message().to_owned())?;
+    let is_video = crate::services::preview_protocol::content_types::content_type_for_path(
+        std::path::Path::new(&path),
+    )
+    .is_some_and(|kind| kind.starts_with("video/"));
+    if !is_video {
+        return Err("Unsupported video.".into());
+    }
+    let remotes = manager(&webview)?;
+    let session = remotes.current(&profile_id, Some(session_id))?;
+    let state = webview
+        .state::<crate::domain::media::thumbs::ThumbnailHandle>()
+        .inner()
+        .clone();
+    let generation = crate::domain::media::thumbs::remote_generation(&state);
+    let grants = webview
+        .state::<crate::services::preview_protocol::PreviewGrants>()
+        .inner()
+        .clone();
+    let request = grants.begin(webview.label(), webview.window().label())?;
+    let metadata = remotes
+        .read_range(&profile_id, session_id, &path, 0, 0)
+        .await?;
+    let modified = metadata.modified.ok_or("Video metadata is unavailable.")?;
+    if metadata.size == 0 {
+        return Err("The video is empty.".into());
+    }
+    let identity = format!(
+        "video-v1\0{}\0{}\0{}\0{}",
+        session.host, path, metadata.size, modified
+    );
+    let cache = state.clone();
+    let key = identity.clone();
+    if let Ok(Some(bytes)) = tokio::task::spawn_blocking(move || {
+        crate::domain::media::thumbs::remote_cached(&cache, &key)
+    })
+    .await
+    {
+        return Ok(VideoThumbnailRequest {
+            token: None,
+            cached: Some(format!("data:image/webp;base64,{}", STANDARD.encode(bytes))),
+        });
+    }
+    let token = grants.create_remote(
+        request,
+        crate::services::preview_protocol::RemoteSource {
+            remotes,
+            profile_id,
+            session_id,
+            path,
+            size: metadata.size,
+            modified: metadata.modified,
+            cache_generation: generation,
+            thumbnail: Some(Arc::new(
+                crate::services::preview_protocol::VideoThumbnail {
+                    identity,
+                    generation,
+                    remaining: std::sync::atomic::AtomicU64::new(8 * 1024 * 1024),
+                },
+            )),
+        },
+    )?;
+    Ok(VideoThumbnailRequest {
+        token: Some(token),
+        cached: None,
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn store_remote_video_thumbnail(
+    webview: Webview,
+    token: String,
+    image: String,
+    cache_mb: u32,
+) -> Result<Option<String>, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let grants = webview
+        .state::<crate::services::preview_protocol::PreviewGrants>()
+        .inner()
+        .clone();
+    let remote = grants
+        .thumbnail_source(webview.label(), &token)
+        .ok_or("Thumbnail has expired.")?;
+    let encoded = image
+        .strip_prefix("data:image/jpeg;base64,")
+        .ok_or("Invalid thumbnail.")?;
+    if encoded.len() > 256 * 1024 {
+        return Err("Thumbnail is too large.".into());
+    }
+    let bytes = STANDARD.decode(encoded).map_err(|_| "Invalid thumbnail.")?;
+    let metadata = remote
+        .remotes
+        .read_range(&remote.profile_id, remote.session_id, &remote.path, 0, 0)
+        .await?;
+    if metadata.size != remote.size || metadata.modified != remote.modified {
+        return Ok(None);
+    }
+    let state = webview
+        .state::<crate::domain::media::thumbs::ThumbnailHandle>()
+        .inner()
+        .clone();
+    let thumb = remote.thumbnail.ok_or("Thumbnail has expired.")?;
+    tokio::task::spawn_blocking(move || {
+        let image = thumbnail::decode(bytes)?;
+        let bytes = STANDARD
+            .decode(image.strip_prefix("data:image/webp;base64,")?)
+            .ok()?;
+        crate::domain::media::thumbs::store_remote(
+            &state,
+            &thumb.identity,
+            &bytes,
+            cache_mb,
+            thumb.generation,
+        );
+        Some(image)
+    })
+    .await
+    .map_err(|_| "Could not store thumbnail.".into())
 }
 
 #[cfg(test)]

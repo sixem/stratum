@@ -109,6 +109,8 @@ pub(crate) struct TransferProgressUpdate {
     pub rate_text: Option<String>,
     pub completed_item: Option<CompletedTransferItem>,
     pub completed_file_work: Option<CompletedFileWork>,
+    // Publish an item boundary before notifying views that the item settled.
+    pub flush_snapshot: bool,
 }
 
 // Optional per-item progress reporting for copy/transfer commands.

@@ -54,8 +54,8 @@ export const useEntryDragOut = ({ selected, onSetSelection, onStartDrag, loading
     const source = event.target;
     if (loading || !onStartDrag || !(source instanceof Element)) return;
     const entry = source.closest<HTMLElement>('[data-drag-source="true"]');
-    const path = entry?.dataset.path;
-    if (!path) return;
+    const path = entry?.dataset.remotePath ?? entry?.dataset.path;
+    if (!entry || !path) return;
 
     // Capture on the original child so a fast exit still delivers movement and
     // ordinary clicks, double-clicks and row selection keep their original target.

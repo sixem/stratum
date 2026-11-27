@@ -6,13 +6,15 @@ import type { ContextMenuItem } from "@/types";
 export type PaneTransfer = {
   destination: string;
   run: (mode: "copy" | "move", paths: string[]) => void;
+  copyOnly?: boolean;
+  accepts?: (paths: string[]) => boolean;
 };
 
 export const canTransferToPane = (paths: string[], destination: string) =>
   paths.length > 0 && !createMoveDestinationGuard(paths)(destination);
 
-export function buildPaneTransferItems(paths: string[], { destination, run }: PaneTransfer): ContextMenuItem[] {
-  if (!canTransferToPane(paths, destination)) return [];
+export function buildPaneTransferItems(paths: string[], { destination, run, copyOnly, accepts }: PaneTransfer): ContextMenuItem[] {
+  if (accepts ? !accepts(paths) : !canTransferToPane(paths, destination)) return [];
   const name = getPathName(destination) || destination;
   return [
     {
@@ -22,12 +24,12 @@ export function buildPaneTransferItems(paths: string[], { destination, run }: Pa
       icon: "copy",
       onSelect: () => run("copy", paths),
     },
-    {
+    ...(!copyOnly ? [{
       id: "entry-move-to-other-pane",
       label: `Move to ${name}`,
       tooltip: destination,
-      icon: "paste-into-folder",
+      icon: "paste-into-folder" as const,
       onSelect: () => run("move", paths),
-    },
+    }] : []),
   ];
 }

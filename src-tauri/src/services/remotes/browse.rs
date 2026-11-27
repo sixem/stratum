@@ -14,15 +14,15 @@ pub(super) fn check_path(path: &str, allow_relative: bool) -> Result<()> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Entry {
-    name: String,
-    path: String,
-    is_dir: bool,
-    is_symlink: bool,
-    size: Option<u64>,
-    modified: Option<u64>,
+    pub(super) name: String,
+    pub(super) path: String,
+    pub(super) is_dir: bool,
+    pub(super) is_symlink: bool,
+    pub(super) size: Option<u64>,
+    pub(super) modified: Option<u64>,
 }
 
-async fn canonical(wire: &mut Wire, path: &str) -> Result<String> {
+pub(super) async fn canonical(wire: &mut Wire, path: &str) -> Result<String> {
     let packet = wire
         .path_request(Request::Realpath, path.as_bytes(), Reply::Name)
         .await?;
@@ -34,6 +34,38 @@ async fn canonical(wire: &mut Wire, path: &str) -> Result<String> {
         .map_err(|_| Error::Request("Remote path is not UTF-8.".into()))?;
     check_path(value, false)?;
     Ok(value.to_owned())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LinkTarget {
+    pub kind: &'static str,
+    pub path: String,
+}
+
+pub(super) async fn link_target(wire: &mut Wire, path: &str) -> Result<LinkTarget> {
+    let packet = wire
+        .path_request(Request::Lstat, path.as_bytes(), Reply::Attrs)
+        .await?;
+    if Fields(&packet).attrs()?.kind() != 0o120000 {
+        return Err(Error::Request(
+            "The remote entry is no longer a symbolic link.".into(),
+        ));
+    }
+    let target = canonical(wire, path).await?;
+    let packet = wire
+        .path_request(Request::Stat, target.as_bytes(), Reply::Attrs)
+        .await?;
+    let kind = match Fields(&packet).attrs()?.kind() {
+        0o040000 => "directory",
+        0o100000 => "file",
+        _ => {
+            return Err(Error::Request(
+                "The link target is not a regular file or folder.".into(),
+            ))
+        }
+    };
+    Ok(LinkTarget { kind, path: target })
 }
 
 pub(super) async fn read_directory(

@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/primitives/EmptyState";
 import { useSettingsStore } from "@/modules/settings.store";
 import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { useRemoteStatus } from "@/modules/remoteStatus";
+import { useRemotePaneDirectory } from "@/hooks/ui/menus/usePaneTransferTarget";
 import { useStatusLabels } from "@/hooks/domain/metadata/useStatusLabels";
 import type { PanePreviewBindings } from "@/hooks/ui/view/useQuickPreview";
 import type { LinkedPane } from "@/lib/paneLink";
@@ -11,12 +12,15 @@ import type { ViewMode, SortState } from "@/types";
 import { displayRemoteEntries } from "./remoteDirectory";
 import { RemoteEntries } from "./RemoteEntries";
 import { useRemoteListing } from "./useRemoteListing";
+import { listenRemoteDirectoryChanges } from "./remoteChanges";
+import { remoteScrollCache } from "./remoteViewCache";
 import "./remoteFolder.scss";
 
 type Props = {
   preview: PanePreviewBindings;
   onPreviewRelease?: (path: string) => boolean;
   pane: LinkedPane;
+  tabId: string;
   path: string;
   search: string;
   viewMode: ViewMode;
@@ -35,10 +39,18 @@ type Props = {
 };
 
 export function RemoteFolderView(props: Props) {
-  const { profile, connection, data, error, refresh, reconnect } = useRemoteListing(props.hostId, props.path, props.refreshVersion);
+  const { profile, connection, sessionId, data, error, refresh, reconnect } = useRemoteListing(props.hostId, props.path, props.refreshVersion);
+  const transferLocation = useMemo(() => sessionId !== undefined && data ? ({
+    kind: "remote" as const, profileId: props.hostId, sessionId, path: data.path, refresh,
+  }) : undefined, [props.hostId, sessionId, data, refresh]);
+  useRemotePaneDirectory(props.pane, transferLocation);
   const showHidden = useSettingsStore(s => s.remoteShowHidden);
   const entries = useMemo(() => data ? displayRemoteEntries(data.entries, props.sort, props.search, showHidden) : [], [data, props.sort, props.search, showHidden]);
   const connected = connection?.status === "connected";
+  const scrollKey = JSON.stringify([props.tabId, props.hostId, sessionId, connection?.epoch, props.path, props.sort.key, props.sort.dir, props.viewMode]);
+  useEffect(() => listenRemoteDirectoryChanges(change => {
+    if (change.profileId === props.hostId && change.sessionId === sessionId && change.path === data?.path) refresh();
+  }), [props.hostId, sessionId, data?.path, refresh]);
   useEffect(() => {
     const onRefresh = (event: globalThis.KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey || event.metaKey || event.shiftKey) return;
@@ -74,9 +86,10 @@ export function RemoteFolderView(props: Props) {
   else if (connection?.status === "disconnected") content = <EmptyState title="Disconnected" subtitle={connection.error} actions={[{ label: "Reconnect", onClick: reconnect }]} />;
   else if (error) content = <EmptyState title="Couldn't open folder" subtitle={error} actions={[{ label: "Retry", onClick: refresh }]} />;
   else if (!data) content = <div className="remote-loading" role="status">{connected ? "Loading folder…" : "Connecting…"}</div>;
-  else content = <RemoteEntries {...props} onSelection={setSelected} key={JSON.stringify([props.hostId, data.sessionId, props.path])} entries={entries} sessionId={data.sessionId} />;
+  else content = <RemoteEntries {...props} directoryPath={data.path} onSelection={setSelected} key={JSON.stringify([props.hostId, data.sessionId, connection?.epoch, props.path])} entries={entries} sessionId={data.sessionId} sessionEpoch={connection?.epoch ?? 0}
+    scrollTop={remoteScrollCache.get(scrollKey) ?? props.scrollTop} onScrollTop={top => { remoteScrollCache.set(scrollKey, top, 1); props.onScrollTop?.(top); }} />;
   return <section className="remote-folder" aria-label={`Remote folder ${props.path}`}
-    data-remote-host={props.hostId} data-remote-folder-path={props.path}
+    data-remote-host={props.hostId} data-remote-folder-path={data?.path ?? props.path}
     onContextMenu={e => { e.preventDefault(); e.stopPropagation(); }} onKeyDown={e => {
       const input = e.target instanceof HTMLInputElement;
       if (!input && (e.key === "F5" || (e.ctrlKey && e.key.toLowerCase() === "r"))) {

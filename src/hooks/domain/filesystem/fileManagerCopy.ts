@@ -11,6 +11,8 @@ import type { BeginFileActivity } from "./useFileActivity";
 import { planDropTransfer, resolveDropTransferConflicts } from "./dropTransferPlanning";
 import { runDropTransfer } from "./runDropTransfer";
 import { resolveCopyConflicts } from "@/hooks/domain/filesystem/copyConflictResolution";
+import { readRemoteClipboard } from "@/modules/clipboardStore";
+import { pasteRemoteClipboardToLocal } from "@/modules/remoteClipboard";
 import {
   getTransferErrorMessage,
   isTransferCancelledError,
@@ -257,6 +259,8 @@ export const useFileManagerCopy = ({
       let moved = false;
       const finishPreparing = beginFileActivity(`Preparing to paste into ${target}`);
       try {
+        const remote = await readRemoteClipboard();
+        if (remote) { await pasteRemoteClipboardToLocal(target, remote); return; }
         const clipboard = await refreshFileClipboard();
         if (!clipboard.paths.length) return;
         if (clipboard.mode === "copy") return copyEntriesToFolder(clipboard.paths, target);

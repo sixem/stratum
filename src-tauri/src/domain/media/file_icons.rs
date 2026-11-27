@@ -143,7 +143,11 @@ fn render_extension_icon(extension: &str) -> Result<image::DynamicImage, String>
     use windows::Win32::UI::Shell::{
         SHGetFileInfoW, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON, SHGFI_USEFILEATTRIBUTES,
     };
-    let name = format!("placeholder.{}", extension);
+    let name = if extension == "__stratum_default_file__" {
+        "placeholder".to_owned()
+    } else {
+        format!("placeholder.{extension}")
+    };
     let wide: Vec<u16> = OsStr::new(&name).encode_wide().chain(once(0)).collect();
     let mut info = SHFILEINFOW::default();
     let flags = SHGFI_ICON | SHGFI_USEFILEATTRIBUTES | SHGFI_LARGEICON;

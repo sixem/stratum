@@ -2,8 +2,9 @@
 export type DropTarget = {
   tabId?: string | null;
   pane?: "main" | "bottom";
+  profileId?: string;
 } & (
-  | { kind: "entry" | "tab" | "tab-destination" | "pane"; path: string }
+  | { kind: "entry" | "tab" | "tab-destination" | "pane" | "remote-pane" | "remote-entry" | "remote-tab"; path: string }
   | { kind: "tab-submenu" }
 );
 
@@ -61,8 +62,20 @@ export const getDropTargetHit = (x: number, y: number): DropTargetHit => {
       element: tabTarget ?? null,
     };
   }
+  const remoteTab = element?.closest<HTMLElement>('[data-drop-kind="remote-tab"][data-drop-path][data-drop-profile]');
+  if (remoteTab?.dataset.dropPath && remoteTab.dataset.dropProfile) {
+    return { target: { kind: "remote-tab", path: remoteTab.dataset.dropPath, profileId: remoteTab.dataset.dropProfile, tabId: remoteTab.dataset.dropId }, element: remoteTab };
+  }
   const pane = element?.closest<HTMLElement>("[data-pane-path]");
   const paneId = pane?.dataset.filePane === "bottom" ? "bottom" : "main";
+  const remoteFolder = element?.closest<HTMLElement>(".remote-folder[data-remote-folder-path]");
+  if (pane && remoteFolder && pane.contains(remoteFolder)) {
+    const directory = element?.closest<HTMLElement>('[data-is-dir="true"][data-remote-path]');
+    // Following a remote link is an explicit navigation action, not a drop target.
+    if (directory?.dataset.remoteSymlink === "true") return { target: null, element: directory };
+    const path = directory?.dataset.remotePath ?? remoteFolder.dataset.remoteFolderPath;
+    if (path) return { target: { kind: directory ? "remote-entry" : "remote-pane", pane: paneId, path }, element: directory ?? remoteFolder };
+  }
   if (pane && !pane.dataset.panePath) return { target: null, element: null };
   const entryTarget = element?.closest<HTMLElement>("[data-is-dir=\"true\"][data-path]");
   const path = entryTarget?.dataset.path ?? "";

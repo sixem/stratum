@@ -19,6 +19,74 @@ impl TransferJobPaths {
             unresolved: false,
         };
         match operation {
+            #[cfg(windows)]
+            TransferOperation::RemoteBatch(batch) => {
+                for job in &batch.items {
+                    let part = Self::from_operation(&TransferOperation::Remote(job.clone()));
+                    claims.paths.extend(part.paths);
+                    claims.unresolved |= part.unresolved;
+                }
+            }
+            #[cfg(windows)]
+            TransferOperation::Remote(job) => {
+                use crate::services::remotes::transfer::Direction;
+                match &job.direction {
+                    Direction::Download {
+                        remote_path,
+                        local_folder,
+                    } => {
+                        claims.add_remote(&job.profile, remote_path);
+                        match remote_path
+                            .rsplit('/')
+                            .next()
+                            .filter(|name| !name.is_empty())
+                        {
+                            Some(name) => claims.add_path(&local_folder.join(name)),
+                            None => claims.unresolved = true,
+                        }
+                    }
+                    Direction::Upload {
+                        local_path,
+                        remote_folder,
+                    } => {
+                        claims.add_path(local_path);
+                        match local_path.file_name().and_then(|name| name.to_str()) {
+                            Some(name) if !name.is_empty() => claims.add_remote(
+                                &job.profile,
+                                &format!("{}/{name}", remote_folder.trim_end_matches('/')),
+                            ),
+                            _ => claims.unresolved = true,
+                        }
+                    }
+                    Direction::Remote {
+                        remote_path,
+                        dest_profile,
+                        remote_folder,
+                        ..
+                    } => {
+                        claims.add_remote(&job.profile, remote_path);
+                        match remote_path
+                            .rsplit('/')
+                            .next()
+                            .filter(|name| !name.is_empty())
+                        {
+                            Some(name) => claims.add_remote(
+                                dest_profile,
+                                &format!("{}/{name}", remote_folder.trim_end_matches('/')),
+                            ),
+                            None => claims.unresolved = true,
+                        }
+                    }
+                    Direction::Rename {
+                        parent,
+                        destination,
+                        ..
+                    } => {
+                        claims.add_remote(&job.profile, parent);
+                        claims.add_remote(&job.profile, destination);
+                    }
+                }
+            }
             TransferOperation::Copy {
                 paths, destination, ..
             }
@@ -60,6 +128,23 @@ impl TransferJobPaths {
         claims.paths.sort_unstable();
         claims.paths.dedup();
         claims
+    }
+
+    #[cfg(windows)]
+    fn add_remote(&mut self, profile: &str, path: &str) {
+        if profile.is_empty()
+            || profile.contains('\0')
+            || !path.starts_with('/')
+            || path.contains('\0')
+            || path.split('/').any(|part| part == "." || part == "..")
+        {
+            self.unresolved = true;
+            return;
+        }
+        // Remote aliases and symlinks can name the same directory. Reserve the
+        // host as a whole until the scheduler can resolve those aliases safely.
+        self.paths
+            .push(format!("\0remote:{}:{profile}/", profile.len()));
     }
 
     fn add_path(&mut self, path: &Path) {
@@ -144,6 +229,38 @@ mod tests {
         TransferJobPaths::from_operation(&TransferOperation::Delete {
             paths: vec![path.to_string_lossy().into_owned()],
         })
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn remote_jobs_reserve_the_host_and_their_local_file() {
+        use crate::services::remotes::{
+            transfer::{Direction, Transfer},
+            Remotes,
+        };
+        let root = std::env::temp_dir().join("stratum-remote-claims");
+        let download = |profile: &str, remote: &str, folder: &Path| {
+            TransferJobPaths::from_operation(&TransferOperation::Remote(Transfer {
+                remotes: Remotes::default(),
+                profile: profile.into(),
+                session: 1,
+                replace: false,
+                moving: false,
+                recovery: None,
+                expected: None,
+                source_changed: None,
+                direction: Direction::Download {
+                    remote_path: remote.into(),
+                    local_folder: folder.into(),
+                },
+            }))
+        };
+        let first = download("host-a", "/one/file.txt", &root.join("downloads"));
+        let same_host = download("host-a", "/elsewhere/other.txt", &root.join("other"));
+        let other_host = download("host-b", "/other/different.txt", &root.join("other"));
+        assert!(first.overlaps(&same_host));
+        assert!(!first.overlaps(&other_host));
+        assert!(first.overlaps(&delete(&root.join("downloads"))));
     }
 
     #[test]

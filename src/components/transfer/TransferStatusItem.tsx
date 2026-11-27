@@ -20,7 +20,7 @@ export const TransferStatusItem = ({ job, now, onOpenDestination }: TransferStat
   });
   const progressValue =
     view.indeterminate ? undefined : view.progressPercentValue ?? undefined;
-  const progressText = view.progressPercentText ?? view.statusLabel;
+  const progressText = view.indeterminate ? view.statusLabel : view.progressPercentText ?? view.statusLabel;
 
   return (
     <div

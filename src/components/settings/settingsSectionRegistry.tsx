@@ -29,7 +29,6 @@ export type SettingsSectionId =
   | "settings-thumbnails"
   | "settings-media"
   | "settings-keybinds"
-  | "settings-cache"
   | "settings-backup"
   | "settings-remotes"
   | "settings-updates";
@@ -119,20 +118,17 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
   {
     id: "settings-thumbnails",
     label: "Thumbnails",
-    items: Object.values(THUMBS_SETTINGS_ITEMS),
-    render: () => <SettingsThumbsSection sectionId="settings-thumbnails" />,
-  },
-  {
-    id: "settings-cache",
-    label: "Thumbnail cache",
-    items: Object.values(CACHE_SETTINGS_ITEMS),
+    items: [...Object.values(THUMBS_SETTINGS_ITEMS), ...Object.values(CACHE_SETTINGS_ITEMS)],
     render: ({ open, onOpenCacheLocation, onClearCache }) => (
-      <SettingsCacheSection
-        sectionId="settings-cache"
-        open={open}
-        onOpenCacheLocation={onOpenCacheLocation}
-        onClearCache={onClearCache}
-      />
+      <>
+        <SettingsThumbsSection sectionId="settings-thumbnails" />
+        <SettingsCacheSection
+          sectionId="settings-cache"
+          open={open}
+          onOpenCacheLocation={onOpenCacheLocation}
+          onClearCache={onClearCache}
+        />
+      </>
     ),
   },
   {

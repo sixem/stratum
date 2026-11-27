@@ -19,6 +19,14 @@ const getJobFraction = (job: TransferJob): number | null => {
   // Delete and trash jobs have byte estimates, but report progress in items.
   const bytesTotal = job.bytesTotal ?? 0;
   const useBytes = job.kind !== "delete" && job.kind !== "trash" && bytesTotal > 0;
+  // Remote single-item transfers may know the current file size without a
+  // whole-job estimate. Show that progress instead of a motionless 0/1.
+  if (!useBytes && job.kind !== "delete" && job.kind !== "trash" && job.total === 1 &&
+      job.currentTotalBytes != null && job.currentTotalBytes > 0 && job.currentBytes != null) {
+    return Math.min(Math.max(job.currentBytes / job.currentTotalBytes, 0), 1);
+  }
+  if (!useBytes && job.total === 1 && job.processed === 0 && job.statusText &&
+      (job.currentTotalBytes == null || job.currentTotalBytes <= 0)) return null;
   const total = useBytes ? bytesTotal : job.total;
   const completed = useBytes ? job.bytesCompleted ?? 0 : job.processed;
   return Number.isFinite(total) && total > 0 && Number.isFinite(completed)

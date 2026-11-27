@@ -4,6 +4,8 @@
 mod copy;
 mod manifest_roots;
 mod move_source;
+#[cfg(windows)]
+pub(crate) use move_source::{CopiedMoveSources, PinnedMoveSource};
 mod paths;
 mod progress;
 #[cfg(test)]

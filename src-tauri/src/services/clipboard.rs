@@ -20,7 +20,10 @@ pub struct FileClipboard {
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
-pub use windows::{finish_file_cut, get_file_clipboard, set_clipboard_paths, set_clipboard_text};
+pub use windows::{
+    finish_file_cut, get_file_clipboard, set_clipboard_paths, set_clipboard_text,
+    set_remote_clipboard,
+};
 
 #[cfg(not(windows))]
 pub fn get_file_clipboard() -> Result<FileClipboard, String> {
@@ -34,6 +37,11 @@ pub fn set_clipboard_paths(_: usize, _: Vec<String>, _: ClipboardMode) -> Result
 
 #[cfg(not(windows))]
 pub fn set_clipboard_text(_: usize, _: String) -> Result<(), String> {
+    Err("Clipboard integration requires Windows.".into())
+}
+
+#[cfg(not(windows))]
+pub fn set_remote_clipboard(_: usize, _: String, _: String) -> Result<u32, String> {
     Err("Clipboard integration requires Windows.".into())
 }
 

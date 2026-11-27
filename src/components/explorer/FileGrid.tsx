@@ -4,6 +4,7 @@ import { shallow } from "zustand/shallow";
 import { useEntryPresence, useScrollToIndex } from "@/hooks";
 import { useThumbnailScope } from "@/hooks/domain/metadata/useThumbnailScope";
 import { useSettingsStore } from "@/modules";
+import { DEFAULT_FILE_ICON_KEY } from "@/constants/fileIcons";
 import { getPaneSessionStore } from "@/modules/sessionStore";
 import { getDefaultTabGridSize, readTabGridSize } from "@/modules/tabGridSize";
 import { EmptyState } from "@/components/primitives/EmptyState";
@@ -267,10 +268,11 @@ const FileGrid = ({
                 ? folderThumb?.url
                 : thumbSource.get(item.entry.path)
               : undefined;
-            const appIconUrl =
-              thumbs.thumbnailAppIcons && itemMeta?.extension
-                ? fileIcons.get(itemMeta.extension)
-                : undefined;
+            const iconKey = itemMeta?.extension ?? DEFAULT_FILE_ICON_KEY;
+            const typeIcon = thumbs.thumbnailAppIcons && !item.entry.isDir ? fileIcons.get(iconKey) : undefined;
+            const appIconUrl = typeIcon === null && iconKey !== DEFAULT_FILE_ICON_KEY
+              ? fileIcons.get(DEFAULT_FILE_ICON_KEY)
+              : typeIcon;
 
             return (
               <EntryCard remote={view.remote}

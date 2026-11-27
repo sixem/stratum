@@ -221,6 +221,7 @@ const QuickPreviewOverlayContent = ({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         onImageLoad={preview.handleImageLoad}
+        imageCrossOrigin={preview.imageCrossOrigin}
         onPlaybackMetadata={preview.handlePlaybackMetadata}
         onPlaybackPlay={preview.handlePlaybackPlay}
         onPlaybackPause={preview.handlePlaybackPause}

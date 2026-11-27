@@ -11,6 +11,8 @@ import type { PreviewMediaKind } from "./quickPreviewDerivedState";
 import { usePreviewMediaLifecycle } from "./usePreviewMediaLifecycle";
 import { usePreviewSource } from "./usePreviewSource";
 import { usePreviewVolumeController } from "./usePreviewVolumeController";
+import { cacheRemoteGalleryImage } from "./cacheRemoteGalleryImage";
+import type { SyntheticEvent } from "react";
 
 type UseQuickPreviewMediaOptions = {
   open: boolean;
@@ -40,7 +42,8 @@ export const useQuickPreviewMedia = ({
   fitMediaToViewport,
 }: UseQuickPreviewMediaOptions) => {
   const mediaAutoplay = useSettingsStore((state) => state.videoAutoplay);
-  const { src, failed: sourceFailed } = usePreviewSource(open ? path : null, remote);
+  const remoteThumbnails = useSettingsStore((state) => state.remoteThumbnails);
+  const { src, token, failed: sourceFailed } = usePreviewSource(open ? path : null, remote);
   const [plainAudioSource, setPlainAudioSource] = useState<string | null>(null);
   const analyseAudio = kind === "audio" && src !== plainAudioSource;
   const playbackKey = analyseAudio ? `${src}#spectrum` : src;
@@ -113,7 +116,11 @@ export const useQuickPreviewMedia = ({
     handleVolumeHoverStart: volume.handleVolumeHoverStart,
     handleVolumeHoverEnd: volume.handleVolumeHoverEnd,
     scheduleVolumePickerClose: volume.scheduleVolumePickerClose,
-    handleImageLoad: lifecycle.handleImageLoad,
+    imageCrossOrigin: Boolean(remote && remoteThumbnails),
+    handleImageLoad: (event: SyntheticEvent<HTMLImageElement>) => {
+      lifecycle.handleImageLoad(event);
+      if (remote && remoteThumbnails && token) cacheRemoteGalleryImage(event.currentTarget, token);
+    },
     handlePlaybackMetadata: lifecycle.handlePlaybackMetadata,
     handleMediaError: () => {
       // If the WebView cannot load a CORS-enabled audio source, retry plain playback.

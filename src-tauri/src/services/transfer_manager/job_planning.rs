@@ -19,6 +19,21 @@ pub(super) fn plan_job(
     on_control: Option<&mut fs::TransferControlCallback>,
 ) -> Result<PlannedTransferJob, String> {
     match operation {
+        #[cfg(windows)]
+        TransferOperation::Remote(job) => {
+            let total = match &job.direction {
+                crate::services::remotes::transfer::Direction::Rename { entries, .. } => {
+                    entries.len()
+                }
+                _ => 1,
+            };
+            Ok(plan_root_only_job(&vec!["remote-file".into(); total]))
+        }
+        #[cfg(windows)]
+        TransferOperation::RemoteBatch(batch) => Ok(plan_root_only_job(&vec![
+            "remote-file".into();
+            batch.items.len()
+        ])),
         TransferOperation::Copy {
             paths,
             destination,

@@ -25,6 +25,7 @@ export const DEFAULT_VIEW_MODE = "thumbs";
 
 export const DEFAULT_SETTINGS: Settings = {
   remoteThumbnails: false,
+  remoteVideoThumbnails: false,
   remoteShowHidden: true,
   autoCheckUpdates: true,
   updateDelayHours: 24,

@@ -45,7 +45,7 @@ export type {
 export { selectTransferJobs } from "./transferStore.selectors";
 
 type TransferStore = TransferStoreState & {
-  startJob: (input: { label: string; total: number; items?: string[] }) => TransferJob;
+  startJob: (input: { label: string; total: number; items?: string[]; kind?: TransferJob["kind"] }) => TransferJob;
   updateProgress: (
     id: string,
     update: {
@@ -90,7 +90,7 @@ const DEFAULT_TRANSFER_STORE_STATE: TransferStoreState = {
 
 export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
   ...DEFAULT_TRANSFER_STORE_STATE,
-  startJob: ({ label, total, items }) => {
+  startJob: ({ label, total, items, kind }) => {
     const now = Date.now();
     const { job, state } = startLocalJobTransition(
       useTransferStore.getState(),
@@ -99,6 +99,7 @@ export const useTransferStore = createWithEqualityFn<TransferStore>((set) => ({
         label,
         total,
         items,
+        kind,
       },
       now,
     );

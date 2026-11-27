@@ -2,6 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "@/modules/settings.store";
 import type { RemoteEntry } from "./remoteDirectory";
+import { requestRemoteVideoThumbnail } from "./remoteVideoThumbnail";
 
 const MAX_ENTRIES = 256;
 const MAX_BYTES = 16 * 1024 * 1024;
@@ -11,6 +12,7 @@ let cacheBytes = 0;
 let generation = 0;
 export const remoteThumbnailGeneration = () => generation;
 export const REMOTE_THUMBNAILS_CLEARED = "stratum-remote-thumbnails-cleared";
+export const REMOTE_THUMBNAIL_UPDATED = "stratum-remote-thumbnail-updated";
 
 export function clearRemoteThumbnailMemory() {
   generation++;
@@ -34,18 +36,20 @@ export function getRemoteThumbnail(profileId: string, sessionId: number, entry: 
   return image;
 }
 
-export function requestRemoteThumbnail(profileId: string, sessionId: number, entry: RemoteEntry) {
+export function requestRemoteThumbnail(profileId: string, sessionId: number, entry: RemoteEntry, videoSignal?: AbortSignal) {
   const cached = getRemoteThumbnail(profileId, sessionId, entry);
   if (cached) return Promise.resolve(cached);
   const key = keyFor(profileId, sessionId, entry);
-  const existing = pending.get(key);
+  const existing = videoSignal ? undefined : pending.get(key);
   if (existing) return existing;
   const requestGeneration = generation;
-  const request = invoke<string | null>("remote_thumbnail", { profileId, sessionId, path: entry.path, cacheMb: useSettingsStore.getState().thumbnailCacheMb })
+  const request = (videoSignal ? requestRemoteVideoThumbnail(profileId, sessionId, entry, videoSignal) : invoke<string | null>("remote_thumbnail", { profileId, sessionId, path: entry.path, cacheMb: useSettingsStore.getState().thumbnailCacheMb }))
     .then(image => {
       if (generation !== requestGeneration || !image || !/^data:image\/webp;base64,/.test(image)) return null;
       // Missing metadata cannot reliably identify an unchanged remote file.
       if (generation === requestGeneration && entry.size !== null && entry.modified !== null && image.length <= MAX_BYTES) {
+        const previous = cache.get(key);
+        if (previous) cacheBytes -= previous.length;
         cache.set(key, image);
         cacheBytes += image.length;
         while (cache.size > MAX_ENTRIES || cacheBytes > MAX_BYTES) {
@@ -57,6 +61,6 @@ export function requestRemoteThumbnail(profileId: string, sessionId: number, ent
       }
       return image;
     }).finally(() => { if (pending.get(key) === request) pending.delete(key); });
-  pending.set(key, request);
+  if (!videoSignal) pending.set(key, request);
   return request;
 }

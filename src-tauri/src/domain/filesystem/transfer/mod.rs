@@ -19,6 +19,8 @@ pub(crate) use common::same_path;
 #[cfg(windows)]
 pub(crate) use common::windows_extended_path;
 pub use execute::{copy_entries, transfer_entries};
+#[cfg(windows)]
+pub(crate) use execute::{CopiedMoveSources, PinnedMoveSource};
 pub use plan::plan_copy_entries;
 
 pub(crate) const TRANSFER_CANCELLED_MESSAGE: &str = "Transfer cancelled";

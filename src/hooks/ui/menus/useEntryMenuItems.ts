@@ -92,6 +92,7 @@ export const useEntryMenuItems = ({
   menuShowConvert,
 }: UseEntryMenuItemsOptions) => {
   const clipboard = useClipboardStore((state) => state.clipboard);
+  const remoteClipboard = useClipboardStore((state) => state.remote);
   const { workspaceId, destinations } = useRecentMoveDestinations();
   const showOpenWith = useSettingsStore((state) => !state.hiddenContextMenuActions.includes("open-with"));
   const includeAudio = useSettingsStore((state) => state.galleryAudio);
@@ -108,7 +109,7 @@ export const useEntryMenuItems = ({
     const canGroupSelection = hasTargets && currentFolderKey && actionTargets.every((path) =>
       folderPathKey(getParentPath(path) ?? "") === currentFolderKey);
     const pasteTarget = (target.isDir ? target.path : currentPath).trim();
-    const canPaste = Boolean(clipboard?.paths.length && pasteTarget);
+    const canPaste = Boolean((clipboard?.paths.length || remoteClipboard?.entries.length) && pasteTarget);
 
     const handleDeleteEntries = async (paths: string[]) => {
       const report = await onDeleteEntries(paths);
@@ -233,7 +234,7 @@ export const useEntryMenuItems = ({
       }),
     ];
   }, [
-    clipboard,
+    clipboard, remoteClipboard,
     currentPath,
     destinations,
     entryByPath,

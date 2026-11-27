@@ -4,7 +4,7 @@ import { PressButton } from "@/components/primitives/PressButton";
 import { useSettingsStore } from "@/modules";
 import { useDeferredRange } from "./useDeferredRange";
 
-import { SettingsItem } from "./SettingsItem";
+import { SettingsGroup, SettingsItem } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
 
 export const THUMBS_SETTINGS_ITEMS = {
@@ -99,8 +99,7 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
     thumbnailFormat === "jpeg" ? `${qualityRange.draft}%` : "Lossless";
 
   return (
-    <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Thumbnails</div>
+    <SettingsGroup id={sectionId} title="Thumbnails" items={Object.values(THUMBS_SETTINGS_ITEMS)}>
       <SettingsItem item={THUMBS_SETTINGS_ITEMS.enable}>
         <label className="settings-toggle">
           <input
@@ -246,6 +245,6 @@ export const SettingsThumbsSection = ({ sectionId }: SettingsThumbsSectionProps)
           </PressButton>
         </div>
       </SettingsItem>
-    </section>
+    </SettingsGroup>
   );
 };

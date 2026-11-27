@@ -135,6 +135,54 @@ pub fn set_clipboard_text(owner: usize, text: String) -> Result<(), String> {
     text.publish(CF_UNICODETEXT.0.into())
 }
 
+// Windows updates the sequence when the writing clipboard lock closes. A
+// private marker lets us verify our write after reopening without accepting a
+// different application's clipboard contents in the intervening window.
+pub fn set_remote_clipboard(owner: usize, text: String, token: String) -> Result<u32, String> {
+    if text.contains('\0')
+        || token.len() != 36
+        || !token.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')
+    {
+        return Err("Invalid remote clipboard selection.".into());
+    }
+    let format =
+        unsafe { RegisterClipboardFormatW(::windows::core::w!("Stratum.RemoteSelection")) };
+    if format == 0 {
+        return Err("Could not register the remote clipboard format.".into());
+    }
+    let data = Memory::from_text(&text)?;
+    let marker = Memory::from_bytes(token.as_bytes())?;
+    {
+        let _guard = OpenGuard::open(Some(HWND(owner as _)))?;
+        unsafe { EmptyClipboard() }.map_err(|e| e.to_string())?;
+        marker.publish(format)?;
+        data.publish(CF_UNICODETEXT.0.into())?;
+    }
+    let _guard = OpenGuard::open(None)?;
+    let handle = unsafe { GetClipboardData(format) }
+        .map_err(|_| "The clipboard changed; copy the selection again.")?;
+    let block = HGLOBAL(handle.0);
+    if unsafe { GlobalSize(block) } < token.len() {
+        return Err("The clipboard changed; copy the selection again.".into());
+    }
+    let ptr = unsafe { GlobalLock(block) }.cast::<u8>();
+    if ptr.is_null() {
+        return Err("Could not read the remote clipboard marker.".into());
+    }
+    let matches = unsafe { std::slice::from_raw_parts(ptr, token.len()) } == token.as_bytes();
+    unsafe {
+        let _ = GlobalUnlock(block);
+    }
+    if !matches {
+        return Err("The clipboard changed; copy the selection again.".into());
+    }
+    let sequence = unsafe { GetClipboardSequenceNumber() };
+    if sequence == 0 {
+        return Err("Windows did not provide a clipboard sequence.".into());
+    }
+    Ok(sequence)
+}
+
 fn validate_path(path: &str) -> Result<(), String> {
     if !Path::new(path).is_absolute() || path.trim() != path || path.contains('\0') {
         return Err(format!(

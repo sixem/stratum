@@ -2,6 +2,7 @@
 import type { EntryContextTarget } from "@/types";
 import { splitNameExtension } from "./fileName.ts";
 import { getParentPath, normalizePath } from "./paths.ts";
+import { remoteParent } from "./remotePaths.ts";
 
 export type BatchRenameRequest = { path: string; nextName: string };
 export type BatchRenameMode = "number" | "replace" | "affix";
@@ -62,7 +63,12 @@ export type BatchRenamePreviewRow = {
 const reservedStem = /^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|(?:COM|LPT)[1-9¹²³])$/i;
 const invalidCharacter = /[\\/:*?"<>|\u0000-\u001f]/u;
 
-const validateName = (name: string) => {
+const validateName = (name: string, remote: boolean) => {
+  if (remote) {
+    if (!name || name === "." || name === "..") return "Enter a name.";
+    if (name.includes("/") || name.includes("\0")) return "A remote name cannot contain a slash or NUL.";
+    return;
+  }
   if (!name.trim()) return "Enter a name.";
   if (name.length > 255) return "The name exceeds 255 characters.";
   if (invalidCharacter.test(name)) return "The name contains a character Windows disallows.";
@@ -102,23 +108,24 @@ type PreparedBatchRenameItem = {
 type BatchRenameSelection = {
   entries: readonly PreparedBatchRenameItem[];
   sourcePaths: ReadonlyMap<string, string>;
+  remote: boolean;
 };
 
 // Prepare the dialog's selection once so editing a rule only evaluates new names.
-export const prepareBatchRenameSelection = (items: readonly EntryContextTarget[]): BatchRenameSelection => {
+export const prepareBatchRenameSelection = (items: readonly EntryContextTarget[], remote = false): BatchRenameSelection => {
   const sourcePaths = new Map<string, string>();
   const entries = items.map((item) => {
-    const parentPrefix = `${normalizePath(getParentPath(item.path) ?? "")}\\`;
-    const nameKey = item.name.toLowerCase();
+    const parentPrefix = remote ? `${remoteParent(item.path)}/` : `${normalizePath(getParentPath(item.path) ?? "")}\\`;
+    const nameKey = remote ? item.name : item.name.toLowerCase();
     const parts = item.isDir ? null : splitNameExtension(item.name);
     sourcePaths.set(parentPrefix + nameKey, item.path);
     return { item, parentPrefix, nameKey, stem: parts?.base ?? item.name, dotExtension: parts?.dotExtension ?? "" };
   });
-  return { entries, sourcePaths };
+  return { entries, sourcePaths, remote };
 };
 
 export const buildBatchRenamePreview = (
-  { entries, sourcePaths }: BatchRenameSelection,
+  { entries, sourcePaths, remote }: BatchRenameSelection,
   rule: BatchRenameRule,
   preserveExtensions: boolean,
 ): BatchRenamePreviewRow[] => {
@@ -164,9 +171,9 @@ export const buildBatchRenamePreview = (
 
     const row: BatchRenamePreviewRow = { item, nextName };
     if (nextName === item.name) return row;
-    const error = validateName(nextName);
+    const error = validateName(nextName, remote);
     if (error) return { ...row, error };
-    const nextNameKey = nextName.toLowerCase();
+    const nextNameKey = remote ? nextName : nextName.toLowerCase();
     const key = parentPrefix + nextNameKey;
     const previous = destinations.get(key);
     if (previous) {

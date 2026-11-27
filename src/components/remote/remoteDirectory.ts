@@ -22,8 +22,13 @@ export function displayRemoteEntries(entries: RemoteEntry[], sort: SortState, se
     });
 }
 
-export const canBrowseEntry = (entry: RemoteEntry) => entry.isDir || Boolean(entry.isSymlink);
+export const canBrowseEntry = (entry: RemoteEntry) => entry.isDir;
 
-// Match the native raster decoder's input budget before sending any content requests.
+// Large images can use a cached gallery thumbnail; the backend only reads
+// original image bytes automatically when the file is within its limit.
 export const canPreviewRemote = (entry: RemoteEntry) => !entry.isDir && !entry.isSymlink &&
-  entry.size !== null && entry.size > 0 && entry.size <= 1024 * 1024 && /\.(?:jpe?g|png|webp)$/i.test(entry.name);
+  entry.size !== null && entry.size > 0 && /\.(?:jpe?g|jpe|jfif|png|webp|gif|bmp|tiff?|ico)$/i.test(entry.name);
+
+export const canPreviewRemoteVideo = (entry: RemoteEntry) => !entry.isDir && !entry.isSymlink &&
+  entry.size !== null && entry.size > 0 && entry.modified !== null &&
+  /\.(?:mp4|m4v|webm|mov|mkv|avi|wmv|mpeg|mpg|mpe|flv|3gp|ogv)$/i.test(entry.name);

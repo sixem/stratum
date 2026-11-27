@@ -12,6 +12,7 @@ import {
 import { getExtension, makeDebug } from "@/lib";
 import type { EntryItem } from "@/lib";
 import { THUMB_INTERACTION_COOLDOWN_MS, THUMB_TYPING_PAUSE_MS } from "@/constants";
+import { DEFAULT_FILE_ICON_KEY } from "@/constants/fileIcons";
 import { useDirectoryChildStateRevision } from "@/modules";
 import type { EntryMeta, EntryMetaLookup, ThumbnailLookup, ThumbnailRequest } from "@/types";
 import { useGridDisplayMeta } from "./useGridDisplayMeta";
@@ -182,8 +183,14 @@ export const useGridThumbRequests = ({
       if (item.type !== "entry") continue;
       if (item.presence === "removed") continue;
       if (item.entry.isDir) continue;
+      // Keep one generic Windows icon available when an extension has no icon.
+      if (!seen.has(DEFAULT_FILE_ICON_KEY)) {
+        seen.add(DEFAULT_FILE_ICON_KEY);
+        requests.push(DEFAULT_FILE_ICON_KEY);
+      }
       const extension = getExtension(item.entry.name);
-      if (!extension || seen.has(extension)) continue;
+      if (!extension) continue;
+      if (seen.has(extension)) continue;
       seen.add(extension);
       requests.push(extension);
     }

@@ -174,6 +174,7 @@ export const useFileListController = ({
         showCreatePrompt({
           kind: "folder",
           parentPath: view.currentPath,
+          preserveWhitespace: creation.preserveWhitespace,
           onCreate: creation.onCreateFolder,
           onCreateAndGo: creation.onCreateFolderAndGo,
         }),
@@ -184,6 +185,7 @@ export const useFileListController = ({
         showCreatePrompt({
           kind: "file",
           parentPath: view.currentPath,
+          preserveWhitespace: creation.preserveWhitespace,
           onCreate: creation.onCreateFile,
         }),
     });

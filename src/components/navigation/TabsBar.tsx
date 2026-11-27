@@ -23,6 +23,7 @@ import { TooltipWrapper } from "@/components/overlay/Tooltip";
 import { formatKeybind, useSettingsStore } from "@/modules";
 import { cancelSplitPicker, canPairFolder, pairWithFolder, useSplitPicker } from "@/modules/terminalSplit";
 import { useRemoteHosts } from "@/modules/remoteHosts";
+import { useRemoteDrag } from "@/modules/remoteDrag";
 import type { LinkedPane } from "@/lib/paneLink";
 
 type TabsBarProps = {
@@ -104,8 +105,9 @@ const TabItem = ({
   return (
     <div
       className={`tab${isActive ? " is-active" : ""}${isDragging ? " is-dragging" : ""}${isUntitled ? " is-untitled" : ""}`}
-      data-drop-kind={tab.kind === "folder" ? "tab" : undefined}
-      data-drop-path={tab.path}
+      data-drop-kind={tab.kind === "folder" ? "tab" : remote ? "remote-tab" : undefined}
+      data-drop-path={remote?.path ?? tab.path}
+      data-drop-profile={remote?.hostId}
       data-drop-id={tab.id}
       data-drop-target={isDropTarget ? "true" : "false"}
       data-tab-id={tab.id}
@@ -211,6 +213,7 @@ export const TabsBar = ({
   // Container ref lets the reorder hook measure tab positions.
   const tabsRef = useRef<HTMLDivElement | null>(null);
   const profiles = useRemoteHosts(state => state.profiles);
+  const remoteDropTabId = useRemoteDrag(state => state.target?.tabId);
   const source = useSplitPicker(state => state.source);
   const sourceStillOpen = source?.pane === pane && tabs.some(tab => tab.id === source.id && tab.terminal?.key === source.key);
   useEffect(() => {
@@ -336,7 +339,7 @@ export const TabsBar = ({
                 onPointerDown={handlePointerDown}
                 onSuppressClick={handleSuppressClick}
                 isDragging={draggingId === tab.id}
-                isDropTarget={dropTargetId === tab.id}
+                isDropTarget={dropTargetId === tab.id || remoteDropTabId === tab.id}
                 index={index}
                 showIndex={showTabNumbers}
                 showClose={!tab.anchored && tab.id === activeId}

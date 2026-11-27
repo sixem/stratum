@@ -8,7 +8,7 @@ use tauri::Manager;
 use tokio::sync::Semaphore;
 
 mod cache;
-mod content_types;
+pub(crate) mod content_types;
 mod grants;
 mod http_dates;
 mod range_requests;
@@ -17,7 +17,7 @@ mod responses;
 use cache::{build_cache_validators, should_return_not_modified};
 pub(crate) use grants::PreviewGrants;
 use grants::PreviewSource;
-pub(crate) use grants::RemoteSource;
+pub(crate) use grants::{RemoteSource, VideoThumbnail};
 use range_requests::{parse_range_header, parse_remote_range_header, ByteRange};
 use responses::{
     error_response, head_response, not_modified_response, ok_response, partial_content_response,
@@ -66,7 +66,14 @@ pub fn register_preview_protocol<R: tauri::Runtime>(
                     .headers()
                     .get(header::ORIGIN)
                     .filter(|origin| {
-                        if !source.content_type.starts_with("audio/") {
+                        if !source.content_type.starts_with("audio/")
+                            && !(source.content_type.starts_with("image/")
+                                && source.remote.is_some())
+                            && !source
+                                .remote
+                                .as_ref()
+                                .is_some_and(|remote| remote.thumbnail.is_some())
+                        {
                             return false;
                         }
                         let url = origin
@@ -112,7 +119,7 @@ pub fn register_preview_protocol<R: tauri::Runtime>(
                         })
                         .await
                     };
-                    // Only the issuing app origin can use its audio stream with Web Audio.
+                    // Only the issuing app origin can use audio or thumbnail frames.
                     #[cfg(windows)]
                     let response = if let Some(origin) = audio_origin {
                         let mut response = response;
@@ -220,6 +227,21 @@ async fn read_remote_preview(
     };
     let start = range.map(|r| r.start).unwrap_or(0);
     let length = range.map(|r| r.len()).unwrap_or(remote.size);
+    if let Some(thumbnail) = &remote.thumbnail {
+        use std::sync::atomic::Ordering;
+        if thumbnail
+            .remaining
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
+                remaining.checked_sub(length)
+            })
+            .is_err()
+        {
+            return error_response(
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "Thumbnail read limit reached.".into(),
+            );
+        }
+    }
     let mut data = Vec::with_capacity(length as usize);
     while data.len() < length as usize {
         if source.read_slot.is_closed() {
@@ -402,6 +424,33 @@ mod tests {
 
     use super::content_types::content_type_for_path;
     use super::*;
+
+    #[test]
+    fn video_thumbnail_budget_rejects_overlarge_ranges_before_remote_reads() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let budget = Arc::new(VideoThumbnail {
+            identity: "test".into(),
+            generation: 0,
+            remaining: AtomicU64::new(100),
+        });
+        let remote = RemoteSource {
+            remotes: crate::services::remotes::Remotes::default(),
+            profile_id: "missing".into(),
+            session_id: 1,
+            path: "/movie.mp4".into(),
+            size: 1024,
+            modified: Some(1),
+            cache_generation: 0,
+            thumbnail: Some(budget.clone()),
+        };
+        tauri::async_runtime::block_on(async {
+            let head = test_remote_response(remote.clone(), None, true).await;
+            assert_eq!(head.status(), StatusCode::OK);
+            let response = test_remote_response(remote, Some("bytes=0-100"), false).await;
+            assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+        });
+        assert_eq!(budget.remaining.load(Ordering::Acquire), 100);
+    }
 
     pub(super) struct PreviewFixture {
         directory: PathBuf,

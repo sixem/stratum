@@ -67,6 +67,19 @@ pub async fn set_clipboard_text(window: tauri::Window, text: String) -> Result<(
 }
 
 #[tauri::command]
+pub async fn set_remote_clipboard(
+    window: tauri::Window,
+    text: String,
+    token: String,
+) -> Result<u32, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        clipboard::set_remote_clipboard(clipboard_owner(&window)?, text, token)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
 pub async fn get_clipboard_paths() -> Result<Vec<String>, String> {
     Ok(get_file_clipboard().await?.paths)
 }

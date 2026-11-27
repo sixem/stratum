@@ -33,6 +33,8 @@ type BatchRenameDialogProps = {
   items: readonly EntryContextTarget[];
   onClose: () => void;
   onApply: (requests: BatchRenameRequest[]) => Promise<void>;
+  remote?: boolean;
+  onValidate?: (requests: BatchRenameRequest[]) => Promise<ReadonlyMap<string, string>>;
 };
 
 type Validation = {
@@ -58,7 +60,7 @@ const errorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialogProps) => {
+export const BatchRenameDialog = ({ items, onClose, onApply, remote = false, onValidate = validateRequests }: BatchRenameDialogProps) => {
   const first = items[0];
   const [mode, setMode] = useState<BatchRenameMode>("number");
   const [rules, setRules] = useState<{ [M in BatchRenameMode]: Extract<BatchRenameRule, { mode: M }> }>(() => ({
@@ -81,7 +83,7 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
 
   const rule = rules[mode];
   const updateRule = (next: BatchRenameRule) => setRules((current) => ({ ...current, [next.mode]: next }));
-  const selection = useMemo(() => prepareBatchRenameSelection(items), [items]);
+  const selection = useMemo(() => prepareBatchRenameSelection(items, remote), [items, remote]);
   const rows = useMemo(() => buildBatchRenamePreview(selection, rule, preserveExtensions), [selection, rule, preserveExtensions]);
   const requests = useMemo(() => rows.flatMap(({ item, nextName }) =>
     nextName !== item.name ? [{ path: item.path, nextName }] : [],
@@ -96,7 +98,7 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
     if (requests.length === 0 || hasLocalErrors) return;
     let active = true;
     const timer = window.setTimeout(() => {
-      void validateRequests(requests).then(
+      void onValidate(requests).then(
         (errors) => { if (active) setValidation({ requests, errors }); },
         (error: unknown) => {
           if (active) setValidation({
@@ -110,7 +112,7 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
       active = false;
       window.clearTimeout(timer);
     };
-  }, [hasLocalErrors, requests]);
+  }, [hasLocalErrors, requests, onValidate]);
 
   const close = () => {
     if (!applyingRef.current) onClose();
@@ -129,7 +131,7 @@ export const BatchRenameDialog = ({ items, onClose, onApply }: BatchRenameDialog
     setApplying(true);
     try {
       // The directory may have changed since the preview was checked.
-      const errors = await validateRequests(requests);
+      const errors = await onValidate(requests);
       if (errors.size > 0) {
         setValidation({ requests, errors });
         return;

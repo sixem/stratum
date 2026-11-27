@@ -145,6 +145,8 @@ export const AppOverlays = ({
         <BatchRenameDialog
           items={batchRename.items}
           onApply={batchRename.onApply}
+          remote={batchRename.remote}
+          onValidate={batchRename.onValidate}
           onClose={() => useBatchRenameStore.getState().close(batchRename)}
         />
       ) : null}

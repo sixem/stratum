@@ -228,7 +228,9 @@ export const buildTransferItemView = (
         : isPlanning
           ? job.statusText ?? "Planning..."
         : job.statusText
-          ? job.statusText
+          ? hasByteProgress
+            ? `${job.statusText} · ${formatBytes(job.currentBytes ?? 0)} / ${formatBytes(job.currentTotalBytes ?? null)}`
+            : job.statusText
         : hasByteProgress
           ? `${formatBytes(job.currentBytes ?? 0)} / ${formatBytes(
               job.currentTotalBytes ?? null,

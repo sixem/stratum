@@ -4,6 +4,15 @@ import { buildBatchRenamePreview, prepareBatchRenameSelection } from "../src/lib
 
 const entry = (parent, name, isDir = false) => ({ path: parent + name, name, isDir });
 
+test("remote batch rename uses case-sensitive POSIX names", () => {
+  const items = [entry('/srv/', 'file.txt'), entry('/srv/', 'FILE.txt')];
+  const selection = prepareBatchRenameSelection(items, true);
+  const rows = buildBatchRenamePreview(selection, { mode: 'affix', prefix: 'x:', suffix: '' }, true);
+  assert.deepEqual(rows.map(row => row.error), [undefined, undefined]);
+  assert.deepEqual(rows.map(row => row.nextName), ['x:file.txt', 'x:FILE.txt']);
+  assert.ok(buildBatchRenamePreview(selection, { mode: 'affix', prefix: '/', suffix: '' }, true).every(row => row.error));
+});
+
 test("batch rename reuses a selection across rules and checks collisions within each parent", () => {
   const items = [
     entry("C:\\Photos\\", "same_.txt"),

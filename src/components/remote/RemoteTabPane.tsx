@@ -33,7 +33,7 @@ export function RemoteTabPane({ pane, tab, preview, onPreviewRelease }: { pane: 
     } };
   }, [pane, id, remote.path]);
   useEffect(() => scroll.flush, [scroll]);
-  return <RemoteFolderView preview={preview} onPreviewRelease={onPreviewRelease} pane={pane} refreshVersion={tab.refreshVersion} hostId={remote.hostId} path={remote.path} sort={tab.sort} search={tab.search}
+  return <RemoteFolderView preview={preview} onPreviewRelease={onPreviewRelease} pane={pane} tabId={id} refreshVersion={tab.refreshVersion} hostId={remote.hostId} path={remote.path} sort={tab.sort} search={tab.search}
     viewMode={tab.viewMode} scrollTop={tab.scrollTop} onScrollTop={scroll.save}
     canBack={!!remoteHistory?.back.length} canForward={!!remoteHistory?.forward.length}
     onBack={() => updateRemoteTab(pane, id, current => navigateRemoteTab(current, "back"))}

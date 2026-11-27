@@ -10,25 +10,26 @@ type CreateEntryPromptOptions = {
   onCreate: (parentPath: string, name: string) => Promise<unknown> | void;
   // Optional "create and open" helper (used for folders).
   onCreateAndGo?: (parentPath: string, name: string) => Promise<unknown> | void;
+  preserveWhitespace?: boolean;
 };
 
 export const useCreateEntryPrompt = () => {
   return useCallback(
-    ({ kind, parentPath, onCreate, onCreateAndGo }: CreateEntryPromptOptions) => {
-      const target = parentPath.trim();
+    ({ kind, parentPath, onCreate, onCreateAndGo, preserveWhitespace = false }: CreateEntryPromptOptions) => {
+      const target = preserveWhitespace ? parentPath : parentPath.trim();
       if (!target) return;
       const defaultName = kind === "folder" ? "New folder" : "New file.txt";
       const nameRef = { current: defaultName };
       const runCreate = () => {
-        const trimmed = nameRef.current.trim();
-        if (!trimmed) return;
-        void onCreate(target, trimmed);
+        const name = preserveWhitespace ? nameRef.current : nameRef.current.trim();
+        if (!name) return;
+        void onCreate(target, name);
       };
       const runCreateAndGo = () => {
         if (!onCreateAndGo) return;
-        const trimmed = nameRef.current.trim();
-        if (!trimmed) return;
-        void onCreateAndGo(target, trimmed);
+        const name = preserveWhitespace ? nameRef.current : nameRef.current.trim();
+        if (!name) return;
+        void onCreateAndGo(target, name);
       };
       const extraActions = onCreateAndGo
         ? [

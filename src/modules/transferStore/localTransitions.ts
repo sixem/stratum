@@ -28,7 +28,7 @@ export const startLocalJobTransition = (
   const nextJob: TransferJob = {
     id: input.id,
     label: input.label,
-    kind: "conversion",
+    kind: input.kind ?? "conversion",
     backendManaged: false,
     capabilities: NO_TRANSFER_CONTROLS,
     status: "running",

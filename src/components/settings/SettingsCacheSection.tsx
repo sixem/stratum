@@ -7,7 +7,7 @@ import { PressButton } from "@/components/primitives/PressButton";
 import { useSettingsStore } from "@/modules";
 import { useDeferredRange } from "./useDeferredRange";
 
-import { SettingsItem, SettingsSearchMatches } from "./SettingsItem";
+import { SettingsGroup, SettingsItem, SettingsSearchMatches } from "./SettingsItem";
 import type { SettingsItemText } from "./SettingsItem";
 
 export const CACHE_SETTINGS_ITEMS = {
@@ -39,10 +39,9 @@ export const SettingsCacheSection = ({
   onOpenCacheLocation,
   onClearCache,
 }: SettingsCacheSectionProps) => {
-  const { thumbnailsEnabled, thumbnailCacheMb, updateSettings } =
+  const { thumbnailCacheMb, updateSettings } =
     useSettingsStore(
       (state) => ({
-        thumbnailsEnabled: state.thumbnailsEnabled,
         thumbnailCacheMb: state.thumbnailCacheMb,
         updateSettings: state.updateSettings,
       }),
@@ -53,7 +52,6 @@ export const SettingsCacheSection = ({
   const matches = useContext(SettingsSearchMatches);
   const searching = matches !== null;
   const showCacheUsage = !matches || matches.has(CACHE_SETTINGS_ITEMS.thumbnailCache);
-  const isThumbsDisabled = !thumbnailsEnabled;
   const cacheRange = useDeferredRange({
     value: thumbnailCacheMb,
     onCommit: (value) => updateSettings({ thumbnailCacheMb: value }),
@@ -103,12 +101,8 @@ export const SettingsCacheSection = ({
   const cacheUsageLabel = `Used: ${formatBytes(cacheUsageBytes)}`;
 
   return (
-    <section className="settings-section" id={sectionId}>
-      <div className="settings-section-title">Thumbnail cache</div>
-      <SettingsItem
-        item={CACHE_SETTINGS_ITEMS.sizeLimit}
-        className={isThumbsDisabled ? "is-disabled" : undefined}
-      >
+    <SettingsGroup id={sectionId} title="Thumbnail cache" items={Object.values(CACHE_SETTINGS_ITEMS)}>
+      <SettingsItem item={CACHE_SETTINGS_ITEMS.sizeLimit}>
         <div className="settings-range">
           <input
             type="range"
@@ -116,7 +110,6 @@ export const SettingsCacheSection = ({
             min={CACHE_MIN}
             max={CACHE_MAX}
             step={CACHE_STEP}
-            disabled={isThumbsDisabled}
             {...cacheRange.bind}
           />
           <span className="settings-value">{cacheRange.draft} MB</span>
@@ -145,6 +138,6 @@ export const SettingsCacheSection = ({
           </PressButton>
         </div>
       </SettingsItem>
-    </section>
+    </SettingsGroup>
   );
 };

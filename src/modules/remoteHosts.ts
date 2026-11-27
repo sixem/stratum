@@ -4,6 +4,9 @@ import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 import { toMessage } from "@/lib/fsUtils";
 import { loadRemoteProfiles, writeRemoteProfiles, type RemoteProfile } from "./remoteProfiles";
+import { remoteDirectoryChanged, watchRemoteDirectoryChanges } from "./remoteDirectoryChanges";
+import { usePromptStore } from "./promptStore";
+import { remoteParent } from "@/lib/remotePaths";
 
 export type { RemoteProfile } from "./remoteProfiles";
 export type RemoteConnection = {
@@ -64,7 +67,7 @@ export function connectRemote(profile: RemoteProfile): Promise<string> {
   const epoch = (existing?.epoch ?? 0) + 1;
   // Place the request in the map before publishing. Subscribers may also request this host.
   const request = Promise.resolve().then(async () => {
-    await watchConnections();
+    await Promise.all([watchConnections(), watchRemoteDirectoryChanges()]);
     // The user may have cancelled while the event listener was starting.
     if (connection(id)?.epoch !== epoch) throw new Error("Connection closed.");
     const result = await invoke<Connected>("remote_connect", { profileId: id, host: destination, startPath });
@@ -72,6 +75,11 @@ export function connectRemote(profile: RemoteProfile): Promise<string> {
       throw new Error("Connection closed.");
     }
     publish(id, { status: "connected", epoch, ...result });
+    void invoke<{ restored: string[]; warnings: string[] }>("remote_finish_interrupted_transfers", { profileId: id, sessionId: result.sessionId })
+      .then(({ restored, warnings }) => {
+        for (const path of restored) remoteDirectoryChanged({ profileId: id, sessionId: result.sessionId, path: remoteParent(path) });
+        if (warnings.length) usePromptStore.getState().showPrompt({ title: "Interrupted transfer", content: warnings.join("\n\n"), confirmLabel: "OK", cancelLabel: null });
+      }).catch(error => usePromptStore.getState().showPrompt({ title: "Interrupted transfer", content: toMessage(error, "Could not check interrupted transfers."), confirmLabel: "OK", cancelLabel: null }));
     return result.path;
   }).catch(error => {
     reportRemoteDisconnect(id, epoch, toMessage(error, "Could not connect to this host."));

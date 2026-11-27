@@ -11,9 +11,11 @@ use std::io::Cursor;
 const MAX_INPUT: u64 = 1024 * 1024;
 pub(super) fn supported(path: &str) -> bool {
     path.rsplit_once('.').is_some_and(|(_, extension)| {
-        ["jpg", "jpeg", "png", "webp"]
-            .iter()
-            .any(|v| extension.eq_ignore_ascii_case(v))
+        [
+            "jpg", "jpeg", "jpe", "jfif", "png", "webp", "gif", "bmp", "tif", "tiff", "ico",
+        ]
+        .iter()
+        .any(|v| extension.eq_ignore_ascii_case(v))
     })
 }
 pub(super) async fn identity(wire: &mut Wire, host: &str, path: &str) -> Result<Option<String>> {
@@ -25,7 +27,7 @@ pub(super) async fn identity(wire: &mut Wire, host: &str, path: &str) -> Result<
         .await?;
     let attrs = Fields(&packet).attrs()?;
     match (attrs.kind(), attrs.size, attrs.modified) {
-        (0o100000, Some(size @ 1..=MAX_INPUT), Some(modified)) => {
+        (0o100000, Some(size @ 1..), Some(modified)) => {
             Ok(Some(format!("v1\0{host}\0{path}\0{size}\0{modified}")))
         }
         _ => Ok(None),

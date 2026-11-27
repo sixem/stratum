@@ -117,6 +117,7 @@ export type FileGridDragDropProps = {
 };
 
 export type FileGridCreationProps = {
+  preserveWhitespace?: boolean;
   onCreateFolder: (parentPath: string, name: string) => Promise<unknown> | void;
   onCreateFolderAndGo?: (parentPath: string, name: string) => Promise<unknown> | void;
   onCreateFile: (parentPath: string, name: string) => Promise<unknown> | void;

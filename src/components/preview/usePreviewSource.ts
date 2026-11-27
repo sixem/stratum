@@ -6,7 +6,7 @@ import { buildPreviewUrl } from "@/lib/previewUrl";
 
 export const usePreviewSource = (path: string | null, remote?: { profileId: string; sessionId: number }) => {
   const request = useMemo(() => ({ path, profileId: remote?.profileId, sessionId: remote?.sessionId }), [path, remote?.profileId, remote?.sessionId]);
-  const [resolved, setResolved] = useState<{ request: typeof request; src: string } | null>(null);
+  const [resolved, setResolved] = useState<{ request: typeof request; src: string; token?: string } | null>(null);
 
   useEffect(() => {
     if (!request.path) return;
@@ -32,7 +32,7 @@ export const usePreviewSource = (path: string | null, remote?: { profileId: stri
           return;
         }
         token = grant;
-        setResolved({ request, src: buildPreviewUrl(grant) });
+        setResolved({ request, src: buildPreviewUrl(grant), token: grant });
       } catch {
         if (active) setResolved({ request, src: "" });
       }
@@ -47,5 +47,5 @@ export const usePreviewSource = (path: string | null, remote?: { profileId: stri
 
   // A late result or previous URL must not display after changing files.
   const current = resolved?.request === request ? resolved : null;
-  return { src: current?.src ?? "", failed: current?.src === "" };
+  return { src: current?.src ?? "", token: current?.token, failed: current?.src === "" };
 };
