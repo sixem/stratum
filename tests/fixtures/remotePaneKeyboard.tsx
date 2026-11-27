@@ -415,6 +415,14 @@ async function run() {
   outside.focus();
   check(!press(outside, "F5").defaultPrevented, "F5 was intercepted outside the panes");
   check(!press(outside, "a", { ctrlKey: true }).defaultPrevented, "Select all was intercepted outside the panes");
+  outside.blur();
+  check(document.activeElement === document.body, "Focus did not return to the document");
+  setBottomPaneActive(false);
+  check(press(document.body, "a", { ctrlKey: true }).defaultPrevented, "Document focus did not select in the active pane");
+  await waitFor(() => selected("main").startsWith("3 selected"), "Document focus selected the wrong pane");
+  check(!selected("bottom"), "Document focus changed the inactive pane");
+  press(document.body, "Escape");
+  await waitFor(() => !selected("main"), "Document focus did not clear the selection");
 }
 
 run().then(() => { document.documentElement.dataset.testResult = "passed"; }).catch(error => {

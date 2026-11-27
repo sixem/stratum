@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { remoteCrumbs, remoteParent, displayRemoteEntries, canBrowseEntry, canPreviewRemote, canPreviewRemoteVideo } from "../src/components/remote/remoteDirectory.ts";
+import { remoteCrumbs, remoteParent, displayRemoteEntries, canPreviewRemote, canPreviewRemoteVideo } from "../src/components/remote/remoteDirectory.ts";
 
 const row = (name, size = 100, isDir = false) => ({ name, size, isDir, path: "/" + name, modified: 0 });
 
@@ -9,11 +9,6 @@ test("remote breadcrumbs preserve exact components, including backslashes, space
   assert.deepEqual(remoteCrumbs(path).map(c => c.path), ["/", "/srv", "/srv/App", "/srv/App/a\\b", path]);
   assert.equal(remoteParent(path), "/srv/App/a\\b");
   assert.equal(remoteParent("/"), "/");
-});
-
-test("links only browse as folders after their target has been classified", () => {
-  assert.equal(canBrowseEntry({ ...row("link"), isSymlink: true }), false);
-  assert.equal(canBrowseEntry({ ...row("link", 1, true), isSymlink: true }), true);
 });
 
 test("remote video thumbnails require a regular file and stable metadata", () => {

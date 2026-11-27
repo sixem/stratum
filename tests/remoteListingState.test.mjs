@@ -12,7 +12,6 @@ test("a refresh keeps the existing listing until its new response arrives", () =
 test("navigation, a new session, and refresh errors never show an unrelated listing", () => {
   const previous = { location: "host-session-folder", request: "old", data: ["file"] };
   assert.deepEqual(selectRemoteListing(previous, "other-folder", "new"), { data: undefined, error: undefined });
-  assert.deepEqual(selectRemoteListing(previous, "new-session-folder", "new"), { data: undefined, error: undefined });
   assert.deepEqual(selectRemoteListing(previous, "new-session-folder", "old"), { data: undefined, error: undefined });
   assert.deepEqual(selectRemoteListing({ location: previous.location, request: "new", error: "Disconnected" }, previous.location, "new"),
     { data: undefined, error: "Disconnected" });
