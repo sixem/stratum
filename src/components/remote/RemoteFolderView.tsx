@@ -41,7 +41,7 @@ type Props = {
 };
 
 export function RemoteFolderView(props: Props) {
-  const { profile, connection, sessionId, data, cachedOnly, error, refresh, reconnect } = useRemoteListing(props.hostId, props.path, props.refreshVersion);
+  const { profile, connection, sessionId, data, loading, cachedOnly, error, refresh, reconnect } = useRemoteListing(props.hostId, props.path, props.refreshVersion);
   const transferLocation = useMemo(() => sessionId !== undefined && data ? ({
     kind: "remote" as const, profileId: props.hostId, sessionId, path: data.path, displayedPath: props.path, refresh,
   }) : undefined, [props.hostId, props.path, sessionId, data, refresh]);
@@ -75,12 +75,14 @@ export function RemoteFolderView(props: Props) {
     isFiltered: Boolean(props.search.trim()) || entries.length !== total, visibleCount: entries.length, totalCount: total });
   const failure = error || connection?.error;
   const message = failure || (!profile ? "Remote host unavailable" : connection?.status === "disconnected" ? "Disconnected"
-    : !connected ? "Connecting…" : !data ? "Loading folder…" : "");
+    : !connected ? "Connecting…" : loading ? data ? "Refreshing folder…" : "Loading folder…" : "");
+  const level = failure || !profile ? "error"
+    : connection?.status !== "disconnected" && (!connected || loading) ? "loading" : "idle";
   useLayoutEffect(() => {
     useRemoteStatus.setState({ [props.pane]: { countLabel: data ? countLabel : "", selectionLabel, message,
-      level: failure ? "error" : connected && !data ? "loading" : "idle" } });
+      level } });
     return () => useRemoteStatus.setState({ [props.pane]: null });
-  }, [props.pane, data, countLabel, selectionLabel, message, failure, connected]);
+  }, [props.pane, data, countLabel, selectionLabel, message, level]);
   let content;
   if (!profile) content = <EmptyState title="Remote host unavailable" subtitle="This host is no longer saved." />;
   else if (connection?.status === "disconnected") content = <EmptyState title="Disconnected" subtitle={connection.error} actions={[{ label: "Reconnect", onClick: reconnect }]} />;

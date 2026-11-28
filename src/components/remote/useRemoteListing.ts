@@ -40,5 +40,7 @@ export function useRemoteListing(hostId: string, path: string, refreshVersion = 
   // Reuse only the same host, connection and path; revalidate on every visit.
   const visible = selectRemoteListing(result, location, request);
   const cached = sessionId !== undefined && !visible.error ? listings.get(location) : undefined;
-  return { profile, connection, sessionId, ...visible, data: visible.data ?? cached, cachedOnly: !visible.data && Boolean(cached), refresh, reconnect };
+  const loading = sessionId !== undefined && (result?.location !== location || result.request !== request);
+  return { profile, connection, sessionId, ...visible, data: visible.data ?? cached, loading,
+    cachedOnly: !visible.data && Boolean(cached), refresh, reconnect };
 }

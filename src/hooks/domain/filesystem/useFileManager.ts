@@ -9,7 +9,7 @@ import { useEntryMetaCache } from "./useEntryMetaCache";
 import { useFileActivity } from "./useFileActivity";
 import { useFileMutations } from "./useFileMutations";
 import { useFsBootstrap } from "./useFsBootstrap";
-import type { StatusState } from "./fileManager.types";
+import { fileManagerStatus } from "./fileManagerStatus";
 
 const log = makeDebug("fs");
 const perf = makeDebug("perf:fs");
@@ -86,24 +86,10 @@ export function useFileManager() {
   }, [directoryLoader.refresh, fsBootstrap.refreshDriveInfo]);
 
   const indexState = fsBootstrap.indexedSearchStatus?.state;
-  const indexActivity = fsBootstrap.indexedSearchStatus?.activityLabel?.trim();
-  const status = useMemo<StatusState>(() => {
-    if (directoryLoader.loadingPath) {
-      return { level: "loading", message: `Loading ${directoryLoader.loadingPath}` };
-    }
-    if (fileActivity) return { level: "loading", message: fileActivity };
-    if (!fsBootstrap.placesLoaded) return { level: "loading", message: "Loading locations" };
-    if (indexState === "error") {
-      return { level: "error", message: "Indexed search unavailable" };
-    }
-    if (indexState === "starting") {
-      return { level: "idle", message: "Checking saved indexes" };
-    }
-    if (indexState === "scanning") {
-      return { level: "idle", message: indexActivity || "Updating index" };
-    }
-    return { level: "idle", message: "Ready" };
-  }, [directoryLoader.loadingPath, fileActivity, fsBootstrap.placesLoaded, indexState, indexActivity]);
+  const indexActivity = fsBootstrap.indexedSearchStatus?.activityLabel;
+  const status = useMemo(() => fileManagerStatus({ loadingPath: directoryLoader.loadingPath,
+    fileActivity, placesLoaded: fsBootstrap.placesLoaded, indexState, indexActivity }),
+  [directoryLoader.loadingPath, fileActivity, fsBootstrap.placesLoaded, indexState, indexActivity]);
 
   return {
     currentPath: directoryLoader.currentPath,

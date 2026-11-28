@@ -30,10 +30,12 @@ export const AppShellLayout = ({
     countLabel: focused.path ? focused.countLabel : "",
     selectionLabel: focused.path ? focused.selectionLabel : "",
   } : {};
+  const paneStatus = focused?.loadingPath ? { message: `Loading ${focused.loadingPath}`, level: "loading" as const }
+    : focused?.failedPath ? { message: "Couldn't open folder", level: "error" as const } : {};
   return (
     <div className="app-shell-frame">
       <AppLayout topstack={topstack} content={{ ...content, sidebarProps, onBottomSummary: setBottom }} />
-      <AppStatusbar statusBar={{ ...statusbar.statusBar, ...labels }} />
+      <AppStatusbar statusBar={{ ...statusbar.statusBar, ...labels, ...paneStatus }} />
       <RemoteDragPreview />
     </div>
   );

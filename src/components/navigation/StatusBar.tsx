@@ -29,7 +29,6 @@ export const StatusBar = ({
         aria-atomic="true"
       >
         <span className="status-text-content">
-          <span className="status-text-label">{message}</span>
           {level === "loading" ? (
             <img
               src={loader}
@@ -38,6 +37,7 @@ export const StatusBar = ({
               className="status-text-loading-icon"
             />
           ) : null}
+          <span className="status-text-label">{message}</span>
         </span>
       </span>
       {updateAvailable && (

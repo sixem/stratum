@@ -13,6 +13,7 @@ const edge = process.platform === "win32" && [
 ].find(existsSync);
 
 const fixtures = {
+  statusbar: "footer reflects indexing, remote loading, refresh and update activity",
   webhooks: "webhook settings protect credentials during export and Work can retry a failed test",
   remoteTools: "both panes inspect remote properties and Quick Move distinguishes connected hosts and sessions",
   stableBrowsing: "local and SFTP views defer offscreen removals independently in both panes, and Work retains recovery notices",

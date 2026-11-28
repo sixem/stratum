@@ -46,6 +46,8 @@ export type PaneSummary = {
   path: string;
   countLabel: string;
   selectionLabel: string;
+  loadingPath: string | null;
+  failedPath: string | null;
 };
 type Props = {
   upper: ComponentProps<typeof FileView>;
@@ -90,8 +92,10 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
     currentDriveInfo, selected: selection.selected, entryMeta: meta.entryMeta,
   });
   useLayoutEffect(() => {
-    onSummary({ path, countLabel, selectionLabel });
-  }, [onSummary, path, countLabel, selectionLabel]);
+    onSummary({ path, countLabel, selectionLabel, loadingPath: remote || terminal ? null : dir.loadingPath,
+      failedPath: !remote && !terminal && dir.failedPath && folderPathKey(dir.failedPath) === folderPathKey(tabs.displayPath)
+        ? dir.failedPath : null });
+  }, [onSummary, path, countLabel, selectionLabel, remote, terminal, dir.loadingPath, dir.failedPath, tabs.displayPath]);
   // The listing can commit one render before its tab is updated.
   const remoteNav = useRemoteNavigation(remote, "bottom");
   // A refresh of the displayed query can keep its viewport mounted while it reads.
