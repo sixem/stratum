@@ -231,7 +231,7 @@ async fn read_remote_preview(
         use std::sync::atomic::Ordering;
         if thumbnail
             .remaining
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
                 remaining.checked_sub(length)
             })
             .is_err()
