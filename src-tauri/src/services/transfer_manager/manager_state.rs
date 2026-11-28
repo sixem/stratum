@@ -24,6 +24,7 @@ mod progress_tests;
 pub(super) const COMPLETED_JOB_HISTORY_LIMIT: usize = 20;
 
 pub(super) struct TransferManagerInner {
+    pub(super) events: crate::services::operation_events::OperationEvents,
     pub(super) state: Mutex<TransferManagerState>,
     pub(super) queue_signal: Condvar,
     pub(super) next_job_id: AtomicU64,
@@ -491,6 +492,9 @@ mod stage_tests {
     fn remote_download_exposes_only_a_local_destination() {
         let path = std::env::temp_dir().join("download.txt");
         let mut result = crate::services::remotes::transfer::TransferResult {
+            completion: crate::services::remotes::transfer::ItemCompletion::Confirmed(
+                crate::services::operation_events::EntryKind::File,
+            ),
             path: path.to_string_lossy().into_owned(),
             backup: None,
             warning: None,
@@ -516,6 +520,9 @@ mod stage_tests {
             error: None,
             skipped: false,
             result: Some(TransferResult {
+                completion: crate::services::remotes::transfer::ItemCompletion::Confirmed(
+                    crate::services::operation_events::EntryKind::File,
+                ),
                 path: String::new(),
                 backup: None,
                 warning: None,

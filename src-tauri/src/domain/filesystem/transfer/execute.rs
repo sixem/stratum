@@ -24,29 +24,52 @@ use super::manifest::{build_manifest_root, requested_roots, validate_destination
 use super::strategy::{classify_transfer_root, TransferRootStrategy};
 use super::TRANSFER_CANCELLED_MESSAGE;
 use crate::domain::filesystem::{
-    CopyOptions, CopyReport, EntryIdentity, MovedTransferEntry, TransferControlCallback,
-    TransferOptions, TransferProgressCallback, TransferReport,
+    CopyOptions, CopyReport, EntryIdentity, MovedTransferEntry, RootOutcome, RootReporter,
+    TransferControlCallback, TransferOptions, TransferProgressCallback, TransferReport,
 };
+
+use std::path::Path;
 
 // A cancelled root ends the job, including when it is the last item in the batch.
 fn record_root_failure(
     failures: &mut Vec<String>,
     path: &str,
     error: String,
+    on_root: &mut RootReporter<'_>,
 ) -> Result<(), String> {
     if error == TRANSFER_CANCELLED_MESSAGE {
         return Err(error);
     }
+    on_root(Path::new(path), RootOutcome::Failed);
     failures.push(format!("{path}: {error}"));
     Ok(())
 }
 
-pub fn copy_entries(
+#[cfg(test)]
+pub(super) fn copy_entries(
     paths: Vec<String>,
+    destination: String,
+    options: Option<CopyOptions>,
+    on_progress: Option<&mut TransferProgressCallback>,
+    on_control: Option<&mut TransferControlCallback>,
+) -> Result<CopyReport, String> {
+    copy_entries_reported(
+        &paths,
+        destination,
+        options,
+        on_progress,
+        on_control,
+        &mut |_, _| {},
+    )
+}
+
+pub(crate) fn copy_entries_reported(
+    paths: &[String],
     destination: String,
     options: Option<CopyOptions>,
     mut on_progress: Option<&mut TransferProgressCallback>,
     mut on_control: Option<&mut TransferControlCallback>,
+    on_root: &mut RootReporter<'_>,
 ) -> Result<CopyReport, String> {
     let target_path = validate_destination(&destination)?;
     let decisions = build_copy_decision_sets(options.as_ref());
@@ -59,10 +82,11 @@ pub fn copy_entries(
     };
 
     let requested = paths
-        .into_iter()
+        .iter()
         .filter_map(|path| {
             let trimmed = path.trim().to_string();
             if trimmed.is_empty() {
+                on_root(Path::new(path), RootOutcome::Skipped);
                 report.skipped = report.skipped.saturating_add(1);
                 None
             } else {
@@ -81,12 +105,13 @@ pub fn copy_entries(
         {
             Ok(manifest) => manifest,
             Err(error) => {
-                record_root_failure(&mut report.failures, &raw_path, error)?;
+                record_root_failure(&mut report.failures, &raw_path, error, on_root)?;
                 emit_root_completion(raw_path, false, completed, total, &mut on_progress);
                 continue;
             }
         };
 
+        let failures_before = report.failures.len();
         match execute_copy_manifest_root(
             &manifest,
             processed,
@@ -95,15 +120,27 @@ pub fn copy_entries(
             &mut on_control,
             &decisions,
             &mut report.failures,
+            &mut || on_root(&manifest.source, RootOutcome::Skipped),
         ) {
             Ok(outcome) => {
+                if report.failures.len() != failures_before {
+                    on_root(&manifest.source, RootOutcome::Failed);
+                } else if outcome.copied_root && outcome.skipped == 0 {
+                    on_root(
+                        &manifest.source,
+                        RootOutcome::Copied(
+                            super::common::entry_kind_for_transfer_kind(manifest.kind),
+                            &manifest.destination,
+                        ),
+                    );
+                }
                 if outcome.copied_root {
                     report.copied = report.copied.saturating_add(1);
                     report.destination.record_output(&manifest.destination);
                 }
                 report.skipped = report.skipped.saturating_add(outcome.skipped);
             }
-            Err(error) => record_root_failure(&mut report.failures, &raw_path, error)?,
+            Err(error) => record_root_failure(&mut report.failures, &raw_path, error, on_root)?,
         }
 
         emit_root_completion(raw_path, false, completed, total, &mut on_progress);
@@ -114,12 +151,31 @@ pub fn copy_entries(
 
 // Transfers entries into a destination folder with optional overwrite.
 // Auto mode moves within the same drive and copies across drives.
-pub fn transfer_entries(
+#[cfg(test)]
+pub(crate) fn transfer_entries(
     paths: Vec<String>,
     destination: String,
     options: Option<TransferOptions>,
     on_progress: Option<&mut TransferProgressCallback>,
     on_control: Option<&mut TransferControlCallback>,
+) -> Result<TransferReport, String> {
+    transfer_entries_reported(
+        &paths,
+        destination,
+        options,
+        on_progress,
+        on_control,
+        &mut |_, _| {},
+    )
+}
+
+pub(crate) fn transfer_entries_reported(
+    paths: &[String],
+    destination: String,
+    options: Option<TransferOptions>,
+    on_progress: Option<&mut TransferProgressCallback>,
+    on_control: Option<&mut TransferControlCallback>,
+    on_root: &mut RootReporter<'_>,
 ) -> Result<TransferReport, String> {
     let _protected_folder = options
         .as_ref()
@@ -137,6 +193,7 @@ pub fn transfer_entries(
         on_progress,
         on_control,
         &mut report,
+        on_root,
     ) {
         Err(error) if error == TRANSFER_CANCELLED_MESSAGE => report.cancelled = true,
         result => result?,
@@ -145,18 +202,20 @@ pub fn transfer_entries(
 }
 
 fn transfer_roots(
-    paths: Vec<String>,
+    paths: &[String],
     target_path: &std::path::Path,
     options: Option<&TransferOptions>,
     mut on_progress: Option<&mut TransferProgressCallback>,
     mut on_control: Option<&mut TransferControlCallback>,
     report: &mut TransferReport,
+    on_root: &mut RootReporter<'_>,
 ) -> Result<(), String> {
     let requested = paths
-        .into_iter()
+        .iter()
         .filter_map(|path| {
             let trimmed = path.trim().to_string();
             if trimmed.is_empty() {
+                on_root(Path::new(path), RootOutcome::Skipped);
                 report.skipped = report.skipped.saturating_add(1);
                 None
             } else {
@@ -178,6 +237,7 @@ fn transfer_roots(
                         &mut report.failures,
                         &raw_path,
                         "Undo cannot verify this item's identity.".into(),
+                        on_root,
                     )?;
                     emit_root_completion(raw_path, false, completed, total, &mut on_progress);
                     continue;
@@ -191,11 +251,12 @@ fn transfer_roots(
             match classify_transfer_root(&raw_path, target_path, options, &mut on_control) {
                 Ok(Some(strategy)) => strategy,
                 Ok(None) => {
+                    on_root(Path::new(&raw_path), RootOutcome::Skipped);
                     emit_root_completion(raw_path, false, completed, total, &mut on_progress);
                     continue;
                 }
                 Err(error) => {
-                    record_root_failure(&mut report.failures, &raw_path, error)?;
+                    record_root_failure(&mut report.failures, &raw_path, error, on_root)?;
                     emit_root_completion(raw_path, false, completed, total, &mut on_progress);
                     continue;
                 }
@@ -215,11 +276,15 @@ fn transfer_roots(
             ) {
                 Ok(FastMoveOutcome::Moved(identity)) => {
                     record_move(report, &strategy, identity);
+                    on_root(
+                        &strategy.source,
+                        RootOutcome::Moved(strategy.kind, &strategy.destination),
+                    );
                     emit_root_completion(raw_path, true, completed, total, &mut on_progress);
                     continue;
                 }
                 Err(error) => {
-                    record_root_failure(&mut report.failures, &raw_path, error)?;
+                    record_root_failure(&mut report.failures, &raw_path, error, on_root)?;
                     emit_root_completion(raw_path, false, completed, total, &mut on_progress);
                     continue;
                 }
@@ -228,6 +293,7 @@ fn transfer_roots(
                         &mut report.failures,
                         &raw_path,
                         "The folder has to be on the same volume.".into(),
+                        on_root,
                     )?;
                     emit_root_completion(raw_path, false, completed, total, &mut on_progress);
                     continue;
@@ -240,12 +306,13 @@ fn transfer_roots(
             match build_manifest_root(&strategy.source, &strategy.destination, &mut on_control) {
                 Ok(manifest) => manifest,
                 Err(error) => {
-                    record_root_failure(&mut report.failures, &raw_path, error)?;
+                    record_root_failure(&mut report.failures, &raw_path, error, on_root)?;
                     emit_root_completion(raw_path, false, completed, total, &mut on_progress);
                     continue;
                 }
             };
 
+        let failures_before = report.failures.len();
         let source_removed = match execute_transfer_root(
             &manifest,
             strategy.overwrite,
@@ -259,15 +326,30 @@ fn transfer_roots(
         ) {
             Ok(TransferOutcome::Moved(identity)) => {
                 record_move(report, &strategy, identity);
+                on_root(
+                    &strategy.source,
+                    if failures_before != report.failures.len() {
+                        RootOutcome::Failed
+                    } else {
+                        RootOutcome::Moved(strategy.kind, &strategy.destination)
+                    },
+                );
                 true
             }
             Ok(TransferOutcome::Copied) => {
                 report.copied = report.copied.saturating_add(1);
                 report.destination.record_output(&strategy.destination);
+                // A published copy with an unfinished move cleanup is not a successful move.
+                let outcome = if strategy.should_move || failures_before != report.failures.len() {
+                    RootOutcome::Failed
+                } else {
+                    RootOutcome::Copied(strategy.kind, &strategy.destination)
+                };
+                on_root(&strategy.source, outcome);
                 false
             }
             Err(error) => {
-                record_root_failure(&mut report.failures, &raw_path, error)?;
+                record_root_failure(&mut report.failures, &raw_path, error, on_root)?;
                 false
             }
         };

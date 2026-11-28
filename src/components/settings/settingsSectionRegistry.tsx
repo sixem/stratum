@@ -18,6 +18,7 @@ import { MENU_VISIBILITY_SETTINGS_ITEMS } from "./SettingsMenuVisibility";
 import { THUMBS_SETTINGS_ITEMS, SettingsThumbsSection } from "./SettingsThumbsSection";
 import { REMOTE_SETTINGS_ITEMS, SettingsRemotesSection } from "./SettingsRemotesSection";
 import { UPDATE_SETTINGS_ITEMS, SettingsUpdatesSection } from "./SettingsUpdatesSection";
+import { WEBHOOK_ITEM, SettingsWebhooksSection } from "./SettingsWebhooksSection";
 
 export type SettingsSectionId =
   | "settings-general"
@@ -31,6 +32,7 @@ export type SettingsSectionId =
   | "settings-keybinds"
   | "settings-backup"
   | "settings-remotes"
+  | "settings-webhooks"
   | "settings-updates";
 
 export type SettingsSectionRenderContext = {
@@ -137,6 +139,12 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
     keywords: "ssh sftp hosts servers",
     items: Object.values(REMOTE_SETTINGS_ITEMS),
     render: () => <SettingsRemotesSection />,
+  },
+  {
+    id: "settings-webhooks",
+    label: "Webhooks",
+    items: [WEBHOOK_ITEM],
+    render: ({ open }) => open ? <SettingsWebhooksSection /> : null,
   },
   {
     id: "settings-updates",

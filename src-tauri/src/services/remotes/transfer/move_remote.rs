@@ -103,13 +103,14 @@ pub(crate) async fn move_entry(
     }
     journal.state(&id, "staged")?;
     let copied_source = CopiedSource::capture(&job.remotes, &job.profile, job.session, &staged, checkpoint).await?;
-    let (path, _) = destination_stage::copy(job, &id, &staged, checkpoint, progress)
+    let (path, _, kind) = destination_stage::copy(job, &id, &staged, checkpoint, progress)
         .await?;
     let cleanup = async {
         journal.state(&id, "published")?;
         copied_source.remove(&job.remotes, &job.profile, job.session, &staged, &session).await?;
         Ok::<(), String>(())
     }.await;
+    let completion = if cleanup.is_ok() { super::ItemCompletion::Confirmed(kind) } else { super::ItemCompletion::Incomplete };
     let warning = match cleanup {
         Ok(()) => {
             let directory_cleanup = super::tree::remote_remove(&session, &directory, true).await;
@@ -128,6 +129,7 @@ pub(crate) async fn move_entry(
         }
     };
     Ok(TransferResult {
+        completion,
         path,
         backup: None,
         warning,
@@ -295,7 +297,7 @@ mod tests {
             let journal = test_journal(&root.join("journal.sqlite"));
             let file = root.join("file.txt");
             fs::write(&file, b"file contents").unwrap();
-            let remote_file = upload_entry(
+            let (remote_file, _) = upload_entry(
                 &remotes,
                 "source",
                 source.session_id,
@@ -335,7 +337,7 @@ mod tests {
             let tree = root.join("tree");
             fs::create_dir_all(tree.join("nested")).unwrap();
             fs::write(tree.join("nested/child.txt"), b"child").unwrap();
-            let remote_tree = upload_entry(
+            let (remote_tree, _) = upload_entry(
                 &remotes,
                 "source",
                 source.session_id,
@@ -380,7 +382,7 @@ mod tests {
             let replacement = root.join("replacement.txt");
             fs::write(&mutable, b"before").unwrap();
             fs::write(&replacement, b"changed contents").unwrap();
-            let remote_mutable = upload_entry(
+            let (remote_mutable, _) = upload_entry(
                 &remotes,
                 "source",
                 source.session_id,
@@ -391,7 +393,7 @@ mod tests {
             )
             .await
             .unwrap();
-            let remote_replacement = upload_entry(
+            let (remote_replacement, _) = upload_entry(
                 &remotes,
                 "source",
                 source.session_id,
@@ -441,7 +443,7 @@ mod tests {
 
             let large = root.join("large.bin");
             fs::write(&large, vec![7u8; 500_000]).unwrap();
-            let remote_large = upload_entry(
+            let (remote_large, _) = upload_entry(
                 &remotes,
                 "source",
                 source.session_id,

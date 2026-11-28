@@ -58,13 +58,14 @@ export function useRemoteOperations(profileId: string, sessionId: number, parent
     };
     useBatchRenameStore.getState().open({ items: entries, remote: true, onValidate: validate,
       onApply: async requests => {
+        const operationId = crypto.randomUUID();
         let done = 0;
         try {
           for (const request of requests) {
             checkPane();
             const entry = byPath.get(request.path);
             if (!entry) throw new Error("An item is no longer in the selection.");
-            await invoke("remote_rename_entry", { profileId, sessionId, parent, entry, name: request.nextName });
+            await invoke("remote_rename_entry", { profileId, sessionId, parent, entry, name: request.nextName, operationId });
             done++;
           }
         } catch (error) {

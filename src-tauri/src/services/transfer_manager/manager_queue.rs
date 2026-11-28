@@ -23,8 +23,14 @@ use std::sync::{mpsc, Arc, Condvar, Mutex};
 mod queue_tests;
 
 impl TransferManagerHandle {
+    #[cfg(test)]
     pub fn init() -> Self {
+        Self::with_events(Default::default())
+    }
+
+    pub(crate) fn with_events(events: crate::services::operation_events::OperationEvents) -> Self {
         let inner = Arc::new(TransferManagerInner {
+            events,
             state: Mutex::new(TransferManagerState::default()),
             queue_signal: Condvar::new(),
             next_job_id: AtomicU64::new(1),
@@ -173,17 +179,39 @@ impl TransferManagerHandle {
             crate::services::remotes::transfer::Direction::Rename { entries, .. } => entries.len(),
             _ => panic!("Expected same-host move"),
         };
+        self.remote_fixture_request(TransferOperation::Remote(job), id, total, true)
+    }
+
+    #[cfg(all(test, windows))]
+    pub(crate) fn remote_batch_fixture(
+        &self,
+        batch: crate::services::remotes::transfer::TransferBatch,
+        id: &str,
+    ) -> mpsc::Receiver<Result<crate::services::remotes::transfer::BatchResult, String>> {
+        let total = batch.items.len();
+        let moving = batch.items[0].moving;
+        self.remote_fixture_request(TransferOperation::RemoteBatch(batch), id, total, moving)
+    }
+
+    #[cfg(all(test, windows))]
+    fn remote_fixture_request(
+        &self,
+        operation: TransferOperation,
+        id: &str,
+        total: usize,
+        moving: bool,
+    ) -> mpsc::Receiver<Result<crate::services::remotes::transfer::BatchResult, String>> {
         let snapshot = build_initial_snapshot(
             &self.inner.next_job_id,
             Some(id),
             total,
-            super::manager_state::describe_remote_job(true),
+            super::manager_state::describe_remote_job(moving),
         );
         let (completion_tx, completion_rx) = mpsc::channel();
         self.enqueue(TransferJobRequest {
             snapshot,
             event_emitter: super::manager_events::TransferEventEmitter::silent(),
-            operation: TransferOperation::Remote(job),
+            operation,
             completion_tx,
             control: TransferJobControlHandle::new(),
         })
@@ -449,6 +477,12 @@ impl TransferManagerHandle {
             (request, snapshot_from_state(&mut guard))
         };
         request.event_emitter.emit_snapshot(&snapshot);
+        super::manager_events::finish_unstarted(
+            &self.inner.events,
+            job_id,
+            &request.operation,
+            TransferJobStatus::Cancelled,
+        );
         self.inner.queue_signal.notify_all();
         let _ = request
             .completion_tx
@@ -465,16 +499,26 @@ impl TransferManagerHandle {
         let paths = TransferJobPaths::from_operation(&job.operation);
         let event_emitter = job.event_emitter.clone();
         let snapshot = {
-            let mut guard = self
-                .inner
-                .state
-                .lock()
-                .map_err(|_| "transfer manager state unavailable".to_string())?;
+            let reject = |message: &str| {
+                super::manager_events::finish_unstarted(
+                    &self.inner.events,
+                    &job.snapshot.id,
+                    &job.operation,
+                    TransferJobStatus::Failed,
+                );
+                Err(message.to_string())
+            };
+            let mut guard = match self.inner.state.lock() {
+                Ok(guard) => guard,
+                Err(_) => return reject("transfer manager state unavailable"),
+            };
             if guard.shutdown_ticket.is_some() {
-                return Err("Stratum is closing and cannot start a new job.".to_string());
+                drop(guard);
+                return reject("Stratum is closing and cannot start a new job.");
             }
             if guard.has_pending_job(&job.snapshot.id) {
-                return Err("A transfer with this ID is already queued or running".to_string());
+                drop(guard);
+                return reject("A transfer with this ID is already queued or running");
             }
             guard.queued_jobs.push_back(QueuedTransferJobState {
                 request: job,

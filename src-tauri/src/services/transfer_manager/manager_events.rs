@@ -1,7 +1,10 @@
 // Event emission helpers for managed file-operation jobs.
 // Keeping this separate makes the queue and execution code easier to scan.
+use super::manager_state::TransferOperation;
 use crate::domain::filesystem as fs;
+use crate::domain::filesystem::transfer::types::TransferJobStatus;
 use crate::domain::filesystem::transfer::types::TransferQueueSnapshot;
+use crate::services::operation_events::{OperationEvents, Origin, TransferCounts, TransferOutcome};
 #[cfg(not(test))]
 use tauri::{Emitter, Manager};
 
@@ -68,4 +71,37 @@ pub(super) fn build_event_emitter(
         app_handle: window.app_handle().clone(),
         transfer_id: trimmed,
     }
+}
+
+// Only the owner that removed the queued job may finish it. Planning errors
+// and cancellation before execution have no attempted item outcomes.
+pub(super) fn finish_unstarted(
+    events: &OperationEvents,
+    id: &str,
+    operation: &TransferOperation,
+    status: TransferJobStatus,
+) {
+    let skipped = match operation {
+        TransferOperation::Copy { .. } => 0,
+        #[cfg(windows)]
+        TransferOperation::Remote(_) | TransferOperation::RemoteBatch(_) => 0,
+        TransferOperation::Transfer { options, .. } => {
+            options.as_ref().map_or(0, |o| o.skipped_by_prompt)
+        }
+        _ => return,
+    };
+    let outcome = if status == TransferJobStatus::Cancelled {
+        TransferOutcome::Cancelled
+    } else {
+        TransferOutcome::Failed
+    };
+    events
+        .operation(Some(id), Origin::User, [])
+        .finish_transfer(
+            outcome,
+            TransferCounts {
+                skipped,
+                ..Default::default()
+            },
+        );
 }

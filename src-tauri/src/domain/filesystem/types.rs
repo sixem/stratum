@@ -138,6 +138,9 @@ pub enum TransferMode {
 #[derive(Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransferOptions {
+    // The conflict picker omits these roots before submitting a Work job.
+    #[serde(default)]
+    pub skipped_by_prompt: usize,
     pub mode: Option<TransferMode>,
     pub overwrite: Option<bool>,
     pub overwrite_paths: Option<HashSet<PathBuf>>,

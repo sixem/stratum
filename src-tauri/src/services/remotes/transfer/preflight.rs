@@ -26,6 +26,16 @@ pub(crate) struct PendingDecision {
 }
 
 impl PendingDecision {
+    #[cfg(test)]
+    pub(super) fn fixture(decision: Decision) -> Self {
+        let (sender, receiver) = mpsc::channel();
+        sender.send(decision).unwrap();
+        Self {
+            id: String::new(),
+            receiver,
+        }
+    }
+
     pub(crate) fn wait(
         &self,
         checkpoint: &mut dyn FnMut() -> Result<(), String>,
@@ -44,6 +54,36 @@ impl PendingDecision {
             }
         }
     }
+}
+
+// A disconnected-tab drop already has a Work ID while the webview connects SSH.
+// It hands reporting to the native queue only when it submits the transfer.
+pub(super) fn ended(
+    events: &crate::services::operation_events::OperationEvents,
+    id: Option<&str>,
+    cancelled: bool,
+) {
+    use crate::services::operation_events::{Origin, TransferOutcome};
+    let outcome = if cancelled {
+        TransferOutcome::Cancelled
+    } else {
+        TransferOutcome::Failed
+    };
+    events
+        .operation(id, Origin::User, [])
+        .finish_transfer(outcome, Default::default());
+}
+
+#[tauri::command]
+pub(crate) fn remote_transfer_preflight_ended(
+    webview: tauri::Webview,
+    transfer_id: String,
+    cancelled: bool,
+) -> Result<(), String> {
+    use tauri::Manager;
+    super::super::manager(&webview)?;
+    ended(&webview.state(), Some(&transfer_id), cancelled);
+    Ok(())
 }
 
 impl Drop for PendingDecision {
@@ -194,6 +234,21 @@ pub(crate) fn check_conflicts(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn connection_preflight_has_one_terminal_event_and_no_item_outcomes() {
+        use crate::services::operation_events::{
+            testing::Observed, OperationEvents, TransferOutcome,
+        };
+        let events = OperationEvents::default();
+        let mut seen = Observed::subscribe(&events);
+        for (cancelled, outcome) in [
+            (true, TransferOutcome::Cancelled),
+            (false, TransferOutcome::Failed),
+        ] {
+            super::ended(&events, Some("connecting"), cancelled);
+            seen.terminal("connecting", outcome, Default::default());
+        }
+    }
     use super::*;
     use std::sync::{
         atomic::{AtomicBool, Ordering},

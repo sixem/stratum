@@ -10,6 +10,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 
+#[path = "local_operation_tests.rs"]
+mod local_operation_tests;
+
 struct TestDirectory(PathBuf);
 
 impl TestDirectory {

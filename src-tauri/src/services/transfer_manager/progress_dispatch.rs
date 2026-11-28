@@ -256,6 +256,7 @@ mod tests {
     fn pending_item_completions_flush_during_a_pause_in_callbacks() {
         tauri::async_runtime::block_on(async {
             let inner = Arc::new(TransferManagerInner {
+                events: Default::default(),
                 state: Default::default(),
                 queue_signal: Default::default(),
                 next_job_id: Default::default(),

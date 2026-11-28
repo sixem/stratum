@@ -10,6 +10,8 @@ mod job_paths;
 mod job_planning;
 #[path = "transfer_manager/job_state_updates.rs"]
 mod job_state_updates;
+#[path = "transfer_manager/local_events.rs"]
+mod local_events;
 #[path = "transfer_manager/manager_events.rs"]
 mod manager_events;
 #[path = "transfer_manager/manager_queue.rs"]
@@ -24,6 +26,9 @@ mod manager_state;
 mod progress_batch;
 #[path = "transfer_manager/progress_dispatch.rs"]
 mod progress_dispatch;
+#[cfg(windows)]
+#[path = "transfer_manager/remote_events.rs"]
+mod remote_events;
 
 use std::sync::Arc;
 

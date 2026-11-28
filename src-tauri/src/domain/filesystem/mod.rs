@@ -27,16 +27,18 @@ pub use fs_trash::restore_recycle_items;
 pub(crate) use fs_trash::trash_entries;
 pub use rename::{rename_entry, validate_batch_rename, BatchRenameRequest, RenamedEntry};
 pub(crate) use reports::{
-    CompletedFileWork, CompletedTransferItem, TransferControlCallback, TransferProgressCallback,
-    TransferProgressUpdate,
+    CompletedFileWork, CompletedTransferItem, RemovedRoot, RootOutcome, RootReporter,
+    TransferControlCallback, TransferProgressCallback, TransferProgressUpdate,
 };
 pub use reports::{
     CopyConflict, CopyConflictKind, CopyPlan, CopyReport, DeleteReport, MovedTransferEntry,
     RestoreRecycleReport, TransferProgress, TransferReport, TrashReport,
 };
 pub(crate) use time::to_epoch_ms;
+pub use transfer::plan_copy_entries;
+#[cfg(test)]
+pub(crate) use transfer::transfer_entries;
 pub use transfer::types::TransferQueueSnapshot;
-pub use transfer::{copy_entries, plan_copy_entries, transfer_entries};
 pub use types::{
     CopyOptions, DriveInfo, EntryMeta, FileEntry, FilePane, FolderThumbSampleBatchOptions,
     FolderThumbSampleBatchResult, FolderThumbSampleStatus, ListDirOptions, ListDirResult,

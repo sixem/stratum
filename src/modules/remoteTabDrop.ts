@@ -1,4 +1,5 @@
 // A drop owns its Work row while waiting for SSH, then hands its ID to the transfer queue.
+import { reportRemotePreflightEnd } from "./remoteTransfer";
 import { connectRemote, useRemoteHosts } from "./remoteHosts";
 import { getPaneSessionStore } from "./sessionStore";
 import { useTransferStore } from "./transferStore";
@@ -28,7 +29,10 @@ export async function prepareRemoteTabDrop(target: Pick<DropTarget, "tabId" | "p
     if (preflight) store.finishPreflight(preflight.id, "ready");
     return { profileId: profile.id, sessionId, path: target.path, transferId: preflight?.id };
   } catch (error) {
-    if (preflight) store.finishPreflight(preflight.id, controller.signal.aborted ? "cancelled" : "failed");
+    if (preflight) {
+      store.finishPreflight(preflight.id, controller.signal.aborted ? "cancelled" : "failed");
+      reportRemotePreflightEnd(preflight.id, controller.signal.aborted);
+    }
     if (!controller.signal.aborted) throw error;
   }
 }

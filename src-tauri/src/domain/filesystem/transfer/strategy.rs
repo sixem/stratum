@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug)]
 pub(crate) struct TransferRootStrategy {
+    pub kind: super::common::EntryKind,
     pub source: PathBuf,
     pub destination: PathBuf,
     pub should_move: bool,
@@ -65,6 +66,7 @@ pub(crate) fn classify_transfer_root(
         should_move && same_drive(&source, target_path) && !overwrite && !path_exists(&destination);
 
     Ok(Some(TransferRootStrategy {
+        kind: super::common::entry_kind_for_transfer_kind(inspection.kind),
         source,
         destination,
         should_move,

@@ -33,9 +33,14 @@ fn prepare_restore_parent(path: &Path) -> io::Result<Vec<File>> {
     Ok(pinned)
 }
 
-pub(super) fn restore_entry(entry: &RecycleEntry) -> io::Result<()> {
+pub(super) fn restore_entry(
+    entry: &RecycleEntry,
+) -> io::Result<Option<crate::domain::filesystem::transfer::EntryKind>> {
     let destination = Path::new(&entry.original_path);
     let source = entry.open_for_restore()?;
+    let kind = source.data.metadata().ok().map(|meta| {
+        crate::domain::filesystem::transfer::kind_from_metadata(&entry.data_path, &meta)
+    });
     let _directories = prepare_restore_parent(destination)?;
     rename_pinned_file(&source.data, destination)?;
 
@@ -49,5 +54,5 @@ pub(super) fn restore_entry(entry: &RecycleEntry) -> io::Result<()> {
             size_of::<FILE_DISPOSITION_INFO>() as u32,
         );
     }
-    Ok(())
+    Ok(kind)
 }

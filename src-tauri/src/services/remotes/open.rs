@@ -157,7 +157,7 @@ async fn run(
 ) {
     let mut done = 0u64;
     let mut total = 0u64;
-    let result: Result<(), String> = async {
+    let result: Result<PathBuf, String> = async {
         let metadata = remotes.read_range(&profile, session, &path, 0, 0).await?;
         total = metadata.size;
         let base = root(&app)?;
@@ -263,16 +263,17 @@ async fn run(
                 error: None,
             },
         );
-        let target = target.to_string_lossy().into_owned();
-        tokio::task::spawn_blocking(move || crate::services::opener::open_path(target))
+        let open_path = target.to_string_lossy().into_owned();
+        tokio::task::spawn_blocking(move || crate::services::opener::open_path(open_path))
             .await
             .map_err(|_| "Could not open the local copy.".to_owned())??;
         staging.retained = true;
-        Ok(())
+        Ok(target)
     }
     .await;
+    report_open_copy(&app.state(), &id, &profile, &path, &result);
     let (state, error) = match result {
-        Ok(()) => ("done", None),
+        Ok(_) => ("done", None),
         Err(error) if error == "Cancelled" => ("cancelled", None),
         Err(error) => ("failed", Some(error)),
     };
@@ -289,6 +290,30 @@ async fn run(
     if let Ok(mut jobs) = app.state::<OpenJobs>().0.lock() {
         jobs.remove(&id);
     }
+}
+
+// Download & open retains the user's local copy only after the native opener succeeds.
+fn report_open_copy(
+    events: &crate::services::operation_events::OperationEvents,
+    id: &str,
+    profile: &str,
+    path: &str,
+    result: &Result<PathBuf, String>,
+) {
+    use super::direct_events::{finish, DirectTransfer};
+    let outcome = match result {
+        Ok(target) => DirectTransfer::Downloaded(target),
+        Err(error) if error == "Cancelled" => DirectTransfer::Cancelled,
+        Err(_) => DirectTransfer::Failed,
+    };
+    finish(
+        events,
+        Some(id),
+        profile,
+        path,
+        crate::services::operation_events::EntryKind::File,
+        outcome,
+    );
 }
 
 #[tauri::command]
@@ -437,6 +462,56 @@ fn cleanup_at(base: &std::path::Path, now: SystemTime) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn download_and_open_reports_only_a_retained_local_copy() {
+        use crate::services::operation_events::{
+            testing::Observed, EntryKind, ItemChange, Location, OperationEvents, TransferCounts,
+            TransferOutcome,
+        };
+        let events = OperationEvents::default();
+        let mut observed = Observed::subscribe(&events);
+        let target = PathBuf::from(r"C:\temp\_bad_name.txt");
+        let remote = "/data/bad:name.txt";
+        report_open_copy(&events, "open", "host-id", remote, &Ok(target.clone()));
+        observed.item(
+            Some("open"),
+            EntryKind::File,
+            ItemChange::Copied {
+                source: Location::sftp("host-id", remote),
+                destination: Location::Local(target),
+            },
+        );
+        observed.terminal(
+            "open",
+            TransferOutcome::Completed,
+            TransferCounts {
+                copied: 1,
+                ..Default::default()
+            },
+        );
+        report_open_copy(&events, "open", "host-id", remote, &Err("Cancelled".into()));
+        observed.terminal(
+            "open",
+            TransferOutcome::Cancelled,
+            TransferCounts::default(),
+        );
+        report_open_copy(
+            &events,
+            "open",
+            "host-id",
+            remote,
+            &Err("opener failed".into()),
+        );
+        observed.terminal(
+            "open",
+            TransferOutcome::Failed,
+            TransferCounts {
+                failed: 1,
+                ..Default::default()
+            },
+        );
+    }
 
     #[test]
     fn safe_names_keep_extensions_and_avoid_windows_collisions() {

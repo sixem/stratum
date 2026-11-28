@@ -36,6 +36,7 @@ useRemoteHosts.setState({ profiles: [{ id: "host", name: "Test", destination: "t
 let journal: RecoveryDetail[] = [{ id: "notice", kind: "delete", host: "test.example", original: "/test/folder",
   sourceHost: "test.example", location: "/test/folder", state: "restored_partial" }];
 mockIPC((command, args) => {
+  if (command === "webhook_work") return { failures: [], total: 0, missed: 0, error: null };
   if (command === "remote_list") return { path: "/test", sessionId: 7, entries: entries("/test", "/"), omittedEntries: 0 };
   if (command === "remote_recovery_details") return [...journal];
   if (command === "remote_finish_interrupted_transfers") return { restored: [], warnings: ["Partial deletion of /test/folder"] };

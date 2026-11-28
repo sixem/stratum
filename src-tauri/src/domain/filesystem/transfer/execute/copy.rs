@@ -122,6 +122,7 @@ pub(super) fn execute_copy_manifest_root(
     on_control: &mut Option<&mut TransferControlCallback>,
     decisions: &CopyDecisionSets,
     cleanup_failures: &mut Vec<String>,
+    on_skip: &mut dyn FnMut(),
 ) -> Result<CopyExecution, String> {
     let mut outcome = CopyExecution {
         copied_root: true,
@@ -150,6 +151,7 @@ pub(super) fn execute_copy_manifest_root(
         remaining = next;
         if existing.is_some() {
             if should_skip_copy_destination(&entry.destination, decisions) {
+                on_skip();
                 outcome.skipped += 1;
                 if entry.source == root.source {
                     outcome.copied_root = false;

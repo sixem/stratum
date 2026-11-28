@@ -18,6 +18,12 @@ type RemoteSelection = { name: string; isDir: boolean; isSymlink?: boolean; size
 const RECOVERY_CANCELLED_PREFIX = "Transfer cancelled; recovery required: ";
 let promptTail: Promise<unknown> = Promise.resolve();
 
+// The native queue owns terminal reporting after the transfer command is submitted.
+export function reportRemotePreflightEnd(transferId: string, cancelled: boolean) {
+  void invoke("remote_transfer_preflight_ended", { transferId, cancelled })
+    .catch(error => console.error("Could not report the remote transfer preflight outcome", error));
+}
+
 // Conflict and completion prompts from separate drops must not replace each other.
 function queuedPrompt<T>(show: () => Promise<T>): Promise<T> {
   const next = promptTail.then(show);
@@ -85,6 +91,7 @@ export async function copyRemoteFiles(
   const backups: string[] = [], warnings: string[] = [];
   const unlisteners: (() => void)[] = [];
   const promptLifetime = new AbortController();
+  let submitted = false;
   const settled = new Set<string>();
   let settleTimer: number | undefined;
   const flushSettled = () => {
@@ -120,6 +127,7 @@ export async function copyRemoteFiles(
       const expected = selected && { name: selected.name, isDir: selected.isDir, isSymlink: Boolean(selected.isSymlink), size: selected.size, modified: selected.modified };
       return { request, expected };
     });
+    submitted = true;
     const report = await invoke<BatchResult>("remote_transfer_batch", { profileId: remote.profileId, sessionId: remote.sessionId, items, transferId: registration.id, moving, dropStage });
     let copied = 0, moved = 0, failed = 0, skipped = 0;
     for (const item of report.items) {
@@ -136,6 +144,7 @@ export async function copyRemoteFiles(
     }
     useTransferStore.getState().recordJobOutcome(registration.id, { copied, moved, skipped, failures: failed });
   } catch (error) {
+    if (!submitted) reportRemotePreflightEnd(registration.id, isTransferCancelledError(error));
     if (transferId) store.failJob(transferId);
     if (!isTransferCancelledError(error)) {
       failures.push(getTransferErrorMessage(error, moving ? "Could not move the items." : "Could not copy the items."));

@@ -1,6 +1,7 @@
 // Move a local regular file only while an exclusive Windows source handle is
 // held. The handle denies writers and renames throughout upload and deletion.
 use super::{tree::upload_move_tree, upload::upload_open_file, Remotes, TransferResult};
+use super::{EntryKind, ItemCompletion};
 use crate::domain::filesystem::transfer::CopiedMoveSources;
 use std::{
     fs,
@@ -45,22 +46,16 @@ pub(crate) async fn move_file(
             &mut copied,
         )
         .await?;
-        let warning = if checkpoint().is_err() {
-            Some(format!(
-                "Copied to {path}; the original was kept because the move was cancelled."
-            ))
-        } else {
-            copied
-                .remove(&path)
-                .err()
-                .map(|error| format!("Move cleanup was incomplete: {error}"))
-        };
-        return Ok(TransferResult {
+        return Ok(finish_move(
             path,
-            backup: None,
-            warning,
-            local_path: None,
-        });
+            EntryKind::Directory,
+            checkpoint,
+            |target| {
+                copied
+                    .remove(target)
+                    .map_err(|error| format!("Move cleanup was incomplete: {error}"))
+            },
+        ));
     }
     let file = fs::OpenOptions::new()
         .access_mode(FILE_READ_DATA | FILE_READ_ATTRIBUTES | DELETE)
@@ -79,12 +74,7 @@ pub(crate) async fn move_file(
         remotes, profile, session, source, reader, folder, checkpoint, progress,
     )
     .await?;
-    // If cancellation arrives after publication, leave both copies intact.
-    let warning = if checkpoint().is_err() {
-        Some(format!(
-            "Copied to {path}; the original was kept because the move was cancelled."
-        ))
-    } else {
+    Ok(finish_move(path, EntryKind::File, checkpoint, |target| {
         let disposition = FILE_DISPOSITION_INFO { DeleteFile: 1 };
         let removed = unsafe {
             SetFileInformationByHandle(
@@ -94,19 +84,49 @@ pub(crate) async fn move_file(
                 size_of::<FILE_DISPOSITION_INFO>() as u32,
             )
         };
-        (removed == 0).then(|| {
-            format!(
-                "Copied to {path}, but the original was kept: {}",
+        if removed == 0 {
+            Err(format!(
+                "Copied to {target}, but the original was kept: {}",
                 std::io::Error::last_os_error()
-            )
-        })
+            ))
+        } else {
+            Ok(())
+        }
+    }))
+}
+
+// The destination is published. A move becomes confirmed only when its source is removed.
+fn finish_move(
+    path: String,
+    kind: EntryKind,
+    checkpoint: &mut dyn FnMut() -> Result<(), String>,
+    remove_source: impl FnOnce(&str) -> Result<(), String>,
+) -> TransferResult {
+    let (completion, warning) = match checkpoint() {
+        Err(error) if error == crate::domain::filesystem::transfer::TRANSFER_CANCELLED_MESSAGE => (
+            ItemCompletion::Cancelled,
+            Some(format!(
+                "Copied to {path}; the original was kept because the move was cancelled."
+            )),
+        ),
+        Err(error) => (
+            ItemCompletion::Incomplete,
+            Some(format!(
+                "Copied to {path}, but the original was kept: {error}"
+            )),
+        ),
+        Ok(()) => match remove_source(&path) {
+            Ok(()) => (ItemCompletion::Confirmed(kind), None),
+            Err(warning) => (ItemCompletion::Incomplete, Some(warning)),
+        },
     };
-    Ok(TransferResult {
+    TransferResult {
+        completion,
         path,
         backup: None,
         warning,
         local_path: None,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -156,13 +176,17 @@ mod tests {
             assert_eq!(cancelled.unwrap_err(), "Cancelled");
             assert_eq!(fs::read(&source).unwrap(), data);
             let checked_lock = std::cell::Cell::new(false);
+            let mut checkpoints = 0;
             let result = move_file(
                 &remotes,
                 "move-upload-test",
                 conn.session_id,
                 &source,
                 &folder,
-                &mut || Ok(()),
+                &mut || {
+                    checkpoints += 1;
+                    Ok(())
+                },
                 &mut |_, _| {
                     if !checked_lock.replace(true) {
                         assert!(fs::write(&source, b"changed").is_err());
@@ -202,6 +226,36 @@ mod tests {
                 .current("move-upload-test", Some(conn.session_id))
                 .unwrap();
             remote_remove(&session, &result.path, false).await.unwrap();
+            // Replay the same file and cancel at the final, post-publication checkpoint.
+            fs::write(&source, &data).unwrap();
+            let mut remaining = checkpoints;
+            let retained = move_file(
+                &remotes,
+                "move-upload-test",
+                conn.session_id,
+                &source,
+                &folder,
+                &mut || {
+                    remaining -= 1;
+                    if remaining == 0 {
+                        Err("Transfer cancelled".into())
+                    } else {
+                        Ok(())
+                    }
+                },
+                &mut |_, _| {},
+            )
+            .await
+            .unwrap();
+            assert_eq!(retained.completion, ItemCompletion::Cancelled);
+            assert_eq!(fs::read(&source).unwrap(), data);
+            assert!(remotes
+                .exists("move-upload-test", conn.session_id, &retained.path)
+                .await
+                .unwrap());
+            remote_remove(&session, &retained.path, false)
+                .await
+                .unwrap();
             remotes.disconnect("move-upload-test").await;
             fs::remove_dir_all(root).unwrap();
         });
@@ -333,6 +387,7 @@ mod tests {
             .unwrap();
             assert!(changed.get());
             assert!(changed_result.warning.is_some());
+            assert_eq!(changed_result.completion, ItemCompletion::Incomplete);
             assert_eq!(fs::read(&changed_file).unwrap(), b"new");
             assert_eq!(
                 remotes

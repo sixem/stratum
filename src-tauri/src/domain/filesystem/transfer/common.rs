@@ -19,7 +19,7 @@ use windows::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
 #[cfg(not(target_os = "windows"))]
 pub(crate) const COPY_CHUNK_SIZE: usize = 1024 * 1024;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum EntryKind {
     File,
     Directory,

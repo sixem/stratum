@@ -96,7 +96,7 @@ export const runDropTransfer = async ({
     const report = await transferEntries(
       plan.items.map((item) => item.candidate.path),
       plan.destination,
-      { mode: plan.mode, overwritePaths: plan.overwritePaths, protectedFolder },
+      { mode: plan.mode, overwritePaths: plan.overwritePaths, skippedByPrompt: plan.skippedByPrompt, protectedFolder },
       job.id,
       dropStage,
     );

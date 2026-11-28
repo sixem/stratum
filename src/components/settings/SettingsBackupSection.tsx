@@ -119,6 +119,7 @@ export const SettingsBackupSection = ({ sectionId }: { sectionId: string }) => {
               {scope === "workspaces" ? " Only hosts used by the selected workspaces are included." : " All saved hosts are included."}
             </p>
           </div>
+          <p className="settings-desc">All exports exclude webhook destinations, credentials, and queued deliveries.</p>
           <div className="settings-actions">
             <PressButton type="button" className="btn" disabled={busy || (scope === "workspaces" && !selectedWorkspaces.length)} onClick={exportBackup}>
               Export…

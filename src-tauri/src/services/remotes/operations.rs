@@ -5,6 +5,7 @@ use super::{
     wire::{put_string, Attrs, Error, Fields, Reply, Request, Wire},
     Remotes, Session,
 };
+use crate::services::operation_events::{EntryKind, ItemSuccess, Location, OperationEvents};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{Emitter, Manager, Webview};
@@ -20,6 +21,17 @@ pub(crate) struct SelectedEntry {
     pub(super) is_symlink: bool,
     size: Option<u64>,
     modified: Option<u64>,
+}
+
+impl SelectedEntry {
+    // A selected link is an entry in its own right, even when it points to a directory.
+    pub(crate) fn kind(&self) -> EntryKind {
+        if self.is_dir && !self.is_symlink {
+            EntryKind::Directory
+        } else {
+            EntryKind::File
+        }
+    }
 }
 
 fn child(parent: &str, name: &str) -> Result<String, String> {
@@ -109,6 +121,7 @@ pub(crate) async fn remote_create_entry(
     directory: bool,
 ) -> Result<(), String> {
     create(
+        &webview.state::<OperationEvents>(),
         &manager(&webview)?,
         &profile_id,
         session_id,
@@ -119,7 +132,8 @@ pub(crate) async fn remote_create_entry(
     .await
 }
 
-async fn create(
+pub(super) async fn create(
+    events: &OperationEvents,
     remotes: &Remotes,
     profile: &str,
     id: u32,
@@ -148,7 +162,21 @@ async fn create(
             },
             60,
         )
-        .await
+        .await?;
+    events.sftp_item(
+        None,
+        profile,
+        &path,
+        if directory {
+            EntryKind::Directory
+        } else {
+            EntryKind::File
+        },
+        || ItemSuccess::Created {
+            destination: Location::sftp(profile, &path),
+        },
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -159,8 +187,11 @@ pub(crate) async fn remote_rename_entry(
     parent: String,
     entry: SelectedEntry,
     name: String,
+    operation_id: Option<String>,
 ) -> Result<(), String> {
     rename_entry(
+        &webview.state::<OperationEvents>(),
+        operation_id.as_deref(),
         &manager(&webview)?,
         &profile_id,
         session_id,
@@ -171,7 +202,9 @@ pub(crate) async fn remote_rename_entry(
     .await
 }
 
-async fn rename_entry(
+pub(super) async fn rename_entry(
+    events: &OperationEvents,
+    operation_id: Option<&str>,
     remotes: &Remotes,
     profile: &str,
     id: u32,
@@ -204,7 +237,13 @@ async fn rename_entry(
             },
             60,
         )
-        .await
+        .await?;
+    events.sftp_item(operation_id, profile, &from, entry.kind(), || {
+        ItemSuccess::Relocated {
+            destination: Location::sftp(profile, to),
+        }
+    });
+    Ok(())
 }
 
 // SFTP rename is a same-server move. Both parents must still resolve to the
@@ -218,7 +257,8 @@ pub(crate) async fn remote_move_entry(
     destination: String,
     entry: SelectedEntry,
 ) -> Result<(), String> {
-    move_entry(
+    let source = child(&parent, &entry.name)?;
+    let result = move_entry(
         &manager(&webview)?,
         &profile_id,
         session_id,
@@ -226,7 +266,21 @@ pub(crate) async fn remote_move_entry(
         &destination,
         &entry,
     )
-    .await
+    .await;
+    use super::direct_events::{finish, DirectTransfer};
+    let outcome = match &result {
+        Ok(path) => DirectTransfer::Moved(path),
+        Err(_) => DirectTransfer::Failed,
+    };
+    finish(
+        &webview.state(),
+        None,
+        &profile_id,
+        &source,
+        entry.kind(),
+        outcome,
+    );
+    result.map(|_| ())
 }
 
 pub(crate) async fn move_entry(
@@ -236,7 +290,7 @@ pub(crate) async fn move_entry(
     parent: &str,
     destination: &str,
     entry: &SelectedEntry,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let from = child(parent, &entry.name)?;
     let to = child(destination, &entry.name)?;
     if from == to {
@@ -268,7 +322,8 @@ pub(crate) async fn move_entry(
             },
             60,
         )
-        .await
+        .await?;
+    Ok(to)
 }
 
 async fn remove(session: &Arc<Session>, path: &str, directory: bool) -> Result<(), String> {
@@ -755,15 +810,24 @@ mod tests {
             let mut random = [0u8; 16];
             getrandom::fill(&mut random).unwrap();
             let fixture_name = format!("stratum-delete-test-{:032x}", u128::from_le_bytes(random));
+            let events = OperationEvents::default();
             let remotes = Remotes::default();
             let session = remotes
                 .connect("delete-fixture", &host, &base, Arc::new(|_| {}))
                 .await
                 .unwrap();
             let id = session.session_id;
-            create(&remotes, "delete-fixture", id, &base, &fixture_name, true)
-                .await
-                .unwrap();
+            create(
+                &events,
+                &remotes,
+                "delete-fixture",
+                id,
+                &base,
+                &fixture_name,
+                true,
+            )
+            .await
+            .unwrap();
             let parent = child(&base, &fixture_name).unwrap();
             let journal_path = std::env::temp_dir().join(format!("{fixture_name}.sqlite"));
             let journal = super::super::recovery::RecoveryJournal::for_test(journal_path.clone());
@@ -780,14 +844,22 @@ mod tests {
                 ("untouched", false, "11111111111111111111111111111111"),
                 ("partial", true, "22222222222222222222222222222222"),
             ] {
-                create(&remotes, "delete-fixture", id, &parent, name, true)
+                create(&events, &remotes, "delete-fixture", id, &parent, name, true)
                     .await
                     .unwrap();
                 let original = child(&parent, name).unwrap();
                 for file in ["first", "second"] {
-                    create(&remotes, "delete-fixture", id, &original, file, false)
-                        .await
-                        .unwrap();
+                    create(
+                        &events,
+                        &remotes,
+                        "delete-fixture",
+                        id,
+                        &original,
+                        file,
+                        false,
+                    )
+                    .await
+                    .unwrap();
                 }
                 let listing = remotes
                     .list("delete-fixture", &parent, Some(id))
@@ -857,14 +929,30 @@ mod tests {
 
             // Cancellation during a recursive delete restores surviving children
             // and tells the caller that the result can be incomplete.
-            create(&remotes, "delete-fixture", id, &parent, "cancelled", true)
-                .await
-                .unwrap();
+            create(
+                &events,
+                &remotes,
+                "delete-fixture",
+                id,
+                &parent,
+                "cancelled",
+                true,
+            )
+            .await
+            .unwrap();
             let cancelled = child(&parent, "cancelled").unwrap();
             for file in ["first", "second"] {
-                create(&remotes, "delete-fixture", id, &cancelled, file, false)
-                    .await
-                    .unwrap();
+                create(
+                    &events,
+                    &remotes,
+                    "delete-fixture",
+                    id,
+                    &cancelled,
+                    file,
+                    false,
+                )
+                .await
+                .unwrap();
             }
             let listing = remotes
                 .list("delete-fixture", &parent, Some(id))
@@ -944,9 +1032,17 @@ mod tests {
             journal.acknowledge_delete_notices(&host, &notices).unwrap();
 
             // An occupied original name is never overwritten during recovery.
-            create(&remotes, "delete-fixture", id, &parent, "occupied", false)
-                .await
-                .unwrap();
+            create(
+                &events,
+                &remotes,
+                "delete-fixture",
+                id,
+                &parent,
+                "occupied",
+                false,
+            )
+            .await
+            .unwrap();
             let original = child(&parent, "occupied").unwrap();
             let listing = remotes
                 .list("delete-fixture", &parent, Some(id))
@@ -983,9 +1079,17 @@ mod tests {
                     .map_err(|e| e.message().to_owned())
                     .unwrap();
             }
-            create(&remotes, "delete-fixture", id, &parent, "occupied", false)
-                .await
-                .unwrap();
+            create(
+                &events,
+                &remotes,
+                "delete-fixture",
+                id,
+                &parent,
+                "occupied",
+                false,
+            )
+            .await
+            .unwrap();
             let (mut restored, mut warnings, mut notices) = (Vec::new(), Vec::new(), Vec::new());
             super::super::delete_recovery::recover_interrupted_deletes(
                 &remotes,
@@ -1025,9 +1129,17 @@ mod tests {
             // Pause the worker after one deletion, then cancel it through the
             // same shutdown gate used by window close and updater handoff.
             for name in ["queue-first", "queue-second"] {
-                create(&remotes, "delete-fixture", id, &parent, name, false)
-                    .await
-                    .unwrap();
+                create(
+                    &events,
+                    &remotes,
+                    "delete-fixture",
+                    id,
+                    &parent,
+                    name,
+                    false,
+                )
+                .await
+                .unwrap();
             }
             let listing = remotes
                 .list("delete-fixture", &parent, Some(id))
@@ -1067,9 +1179,19 @@ mod tests {
                     }
                 }),
             };
-            let manager = TransferManagerHandle::init();
+            use crate::services::operation_events::{testing::Observed, DeleteMethod, ItemChange};
+            let mut observed = Observed::subscribe(&events);
+            let manager = TransferManagerHandle::with_events(events.clone());
             let completion = manager.remote_delete_fixture(job);
             reached_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+            observed.item(
+                Some("fixture-delete"),
+                EntryKind::File,
+                ItemChange::Deleted {
+                    source: Location::sftp("delete-fixture", format!("{parent}/queue-first")),
+                    method: DeleteMethod::Permanent,
+                },
+            );
             assert!(manager
                 .begin_shutdown(TransferShutdownMode::IdleOnly)
                 .unwrap()
@@ -1086,6 +1208,7 @@ mod tests {
                 .unwrap();
             assert!(report.cancelled);
             assert_eq!(report.deleted, 1);
+            observed.empty();
             assert!(remotes
                 .exists(
                     "delete-fixture",
@@ -1129,6 +1252,7 @@ mod tests {
         tauri::async_runtime::block_on(async {
             let host = std::env::var("STRATUM_SFTP_TEST_HOST").unwrap();
             let parent = std::env::var("STRATUM_SFTP_OPERATIONS_DIR").unwrap();
+            let events = OperationEvents::default();
             let remotes = Remotes::default();
             let connection = remotes
                 .connect("operations", &host, &parent, Arc::new(|_| {}))
@@ -1142,17 +1266,39 @@ mod tests {
                 size: item.size,
                 modified: item.modified,
             };
-            create(&remotes, "operations", id, &parent, " file .txt", false)
-                .await
-                .unwrap();
-            assert!(
-                create(&remotes, "operations", id, &parent, " file .txt", false)
-                    .await
-                    .is_err()
-            );
-            create(&remotes, "operations", id, &parent, "other.txt", false)
-                .await
-                .unwrap();
+            create(
+                &events,
+                &remotes,
+                "operations",
+                id,
+                &parent,
+                " file .txt",
+                false,
+            )
+            .await
+            .unwrap();
+            assert!(create(
+                &events,
+                &remotes,
+                "operations",
+                id,
+                &parent,
+                " file .txt",
+                false
+            )
+            .await
+            .is_err());
+            create(
+                &events,
+                &remotes,
+                "operations",
+                id,
+                &parent,
+                "other.txt",
+                false,
+            )
+            .await
+            .unwrap();
             let listing = remotes.list("operations", &parent, Some(id)).await.unwrap();
             let file = selected(
                 listing
@@ -1161,11 +1307,20 @@ mod tests {
                     .find(|entry| entry.name == " file .txt")
                     .unwrap(),
             );
-            create(&remotes, "operations", id, &parent, "destination", true)
-                .await
-                .unwrap();
+            create(
+                &events,
+                &remotes,
+                "operations",
+                id,
+                &parent,
+                "destination",
+                true,
+            )
+            .await
+            .unwrap();
             let destination = format!("{parent}/destination");
             create(
+                &events,
                 &remotes,
                 "operations",
                 id,
@@ -1215,13 +1370,29 @@ mod tests {
             move_entry(&remotes, "operations", id, &destination, &parent, &moved)
                 .await
                 .unwrap();
-            create(&remotes, "operations", id, &parent, "move-folder", true)
-                .await
-                .unwrap();
+            create(
+                &events,
+                &remotes,
+                "operations",
+                id,
+                &parent,
+                "move-folder",
+                true,
+            )
+            .await
+            .unwrap();
             let folder_path = format!("{parent}/move-folder");
-            create(&remotes, "operations", id, &folder_path, "child.txt", false)
-                .await
-                .unwrap();
+            create(
+                &events,
+                &remotes,
+                "operations",
+                id,
+                &folder_path,
+                "child.txt",
+                false,
+            )
+            .await
+            .unwrap();
             let listing = remotes.list("operations", &parent, Some(id)).await.unwrap();
             let folder = selected(
                 listing
@@ -1255,14 +1426,30 @@ mod tests {
                 .exists("operations", id, &format!("{parent}/ file .txt"))
                 .await
                 .unwrap());
-            assert!(
-                rename_entry(&remotes, "operations", id, &parent, &file, "other.txt")
-                    .await
-                    .is_err()
-            );
-            rename_entry(&remotes, "operations", id, &parent, &file, "renamed.txt")
-                .await
-                .unwrap();
+            assert!(rename_entry(
+                &events,
+                None,
+                &remotes,
+                "operations",
+                id,
+                &parent,
+                &file,
+                "other.txt"
+            )
+            .await
+            .is_err());
+            rename_entry(
+                &events,
+                None,
+                &remotes,
+                "operations",
+                id,
+                &parent,
+                &file,
+                "renamed.txt",
+            )
+            .await
+            .unwrap();
             let listing = remotes.list("operations", &parent, Some(id)).await.unwrap();
             let file = selected(
                 listing
@@ -1274,7 +1461,7 @@ mod tests {
             delete(&remotes, "operations", id, &parent, &file)
                 .await
                 .unwrap();
-            create(&remotes, "operations", id, &parent, "empty", true)
+            create(&events, &remotes, "operations", id, &parent, "empty", true)
                 .await
                 .unwrap();
             let listing = remotes.list("operations", &parent, Some(id)).await.unwrap();

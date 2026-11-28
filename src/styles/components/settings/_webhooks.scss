@@ -1,0 +1,53 @@
+// Align saved receivers and their actions with the other Settings rows.
+:where(.settings-panel) .webhook-settings {
+  container-type: inline-size;
+
+  .webhook-heading { padding-block: 0; }
+  .webhook-add {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    white-space: nowrap;
+    svg { width: .875rem; height: .875rem; }
+  }
+
+  .webhook-row, .webhook-editor-footer, .webhook-confirm, .webhook-feedback {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: .5rem 1rem;
+  }
+
+  .webhook-row, .webhook-types, .webhook-editor-footer {
+    margin-block-start: .75rem;
+    padding-block-start: .75rem;
+    border-block-start: var(--surface-border-width) solid var(--stroke);
+  }
+  .webhook-identity { display: grid; min-width: 0; overflow-wrap: anywhere; }
+  .webhook-row .settings-actions { margin-inline-start: auto; gap: .25rem; }
+  .webhook-row .lucide-pencil { fill: none; }
+  .webhook-feedback { margin-block-start: .5rem; }
+
+  .webhook-editor fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+  .webhook-editor legend { padding: 0; margin-block-end: .75rem; }
+  .webhook-fields { display: grid; gap: .375rem; }
+  .webhook-field {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr);
+    align-items: center;
+    gap: .25rem 1rem;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+  }
+  .webhook-field input { width: 100%; }
+  .webhook-fields > :is(.settings-desc, .settings-checkbox) { margin: 0 0 0 8rem; }
+  .webhook-types .settings-desc { margin: .125rem 0 .5rem; }
+  .webhook-types .webhook-field + .webhook-field { margin-block-start: .25rem; }
+
+  @container (max-width: 28rem) {
+    .webhook-field { grid-template-columns: minmax(0, 1fr); }
+    .webhook-fields > :is(.settings-desc, .settings-checkbox) { margin-inline-start: 0; }
+    .webhook-types .webhook-field + .webhook-field { margin-block-start: .5rem; }
+  }
+}

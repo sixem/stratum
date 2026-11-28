@@ -26,6 +26,7 @@ pub(crate) fn delete_entries(
             &mut on_control,
         )?;
         return Ok(DeleteReport {
+            removed_roots: report.removed_roots,
             deleted: report.completed_paths.len(),
             skipped,
             cancelled: report.cancelled,
@@ -50,6 +51,7 @@ fn legacy_delete_entries(
     mut on_control: Option<&mut TransferControlCallback>,
 ) -> Result<DeleteReport, String> {
     let mut report = DeleteReport {
+        removed_roots: Vec::new(),
         deleted: 0,
         skipped: 0,
         cancelled: false,
@@ -106,7 +108,18 @@ fn legacy_delete_entries(
         let result = hard_delete();
         let source_removed = result.is_ok();
         match result {
-            Ok(_) => report.deleted += 1,
+            Ok(_) => {
+                report.deleted += 1;
+                report.removed_roots.push(super::RemovedRoot {
+                    path: path.clone(),
+                    kind: if metadata.is_dir() {
+                        super::transfer::EntryKind::Directory
+                    } else {
+                        super::transfer::EntryKind::File
+                    },
+                    recycled: false,
+                });
+            }
             Err(err) => report.failures.push(format!("{path}: {err}")),
         }
         emit_delete_progress(

@@ -26,6 +26,7 @@ pub(crate) fn trash_entries(
     )?;
 
     Ok(TrashReport {
+        removed_roots: report.removed_roots,
         deleted: report.completed_paths.len(),
         skipped,
         cancelled: report.cancelled,
@@ -52,6 +53,7 @@ fn skipped_trash_paths(paths: &[String]) -> usize {
 #[cfg(target_os = "windows")]
 pub fn restore_recycle_items(receipt: String) -> Result<RestoreRecycleReport, String> {
     let mut report = RestoreRecycleReport {
+        restored_roots: Vec::new(),
         restored_paths: Vec::new(),
         failures: Vec::new(),
         can_retry: false,
@@ -63,7 +65,16 @@ pub fn restore_recycle_items(receipt: String) -> Result<RestoreRecycleReport, St
     let mut remaining = Vec::new();
     for entry in entries {
         match restore::restore_entry(&entry) {
-            Ok(()) => report.restored_paths.push(entry.original_path),
+            Ok(kind) => {
+                if let Some(kind) = kind {
+                    report.restored_roots.push((
+                        entry.data_path,
+                        (&entry.original_path).into(),
+                        kind,
+                    ));
+                }
+                report.restored_paths.push(entry.original_path);
+            }
             Err(error) => {
                 report
                     .failures

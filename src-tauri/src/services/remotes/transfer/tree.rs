@@ -5,6 +5,7 @@ use super::super::{
     wire::{put_string, Reply, Request},
     Session,
 };
+use super::EntryKind;
 use super::{destination, download_file, upload_file, valid_windows_name, Remotes};
 use crate::domain::filesystem::staging::{rename_new, StageDirectory};
 use crate::domain::filesystem::transfer::{CopiedMoveSources, PinnedMoveSource};
@@ -28,21 +29,19 @@ pub(crate) async fn download_entry(
     folder: &Path,
     checkpoint: Checkpoint<'_>,
     progress: Progress<'_>,
-) -> Result<PathBuf, String> {
+) -> Result<(PathBuf, EntryKind), String> {
     checkpoint()?;
     match remotes.stat(profile, session, path).await?.kind() {
-        0o100000 => {
-            download_file(
-                remotes, profile, session, path, folder, checkpoint, progress,
-            )
-            .await
-        }
-        0o040000 => {
-            download_tree(
-                remotes, profile, session, path, folder, checkpoint, progress,
-            )
-            .await
-        }
+        0o100000 => download_file(
+            remotes, profile, session, path, folder, checkpoint, progress,
+        )
+        .await
+        .map(|path| (path, EntryKind::File)),
+        0o040000 => download_tree(
+            remotes, profile, session, path, folder, checkpoint, progress,
+        )
+        .await
+        .map(|path| (path, EntryKind::Directory)),
         _ => Err("Links and special files cannot be copied.".into()),
     }
 }
@@ -270,7 +269,7 @@ pub(crate) async fn upload_entry(
     folder: &str,
     checkpoint: Checkpoint<'_>,
     progress: Progress<'_>,
-) -> Result<String, String> {
+) -> Result<(String, EntryKind), String> {
     upload_entry_inner(
         remotes, profile, session_id, source, folder, checkpoint, progress, None,
     )
@@ -299,6 +298,7 @@ pub(super) async fn upload_move_tree(
         Some(copied),
     )
     .await
+    .map(|(path, _)| path)
 }
 
 async fn upload_entry_inner(
@@ -310,7 +310,7 @@ async fn upload_entry_inner(
     checkpoint: Checkpoint<'_>,
     progress: Progress<'_>,
     mut copied: Option<&mut CopiedMoveSources>,
-) -> Result<String, String> {
+) -> Result<(String, EntryKind), String> {
     use std::os::windows::fs::MetadataExt;
     use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
     checkpoint()?;
@@ -326,7 +326,8 @@ async fn upload_entry_inner(
         return upload_file(
             remotes, profile, session_id, source, folder, checkpoint, progress,
         )
-        .await;
+        .await
+        .map(|path| (path, EntryKind::File));
     }
     check_path(folder, false).map_err(|e| e.message().to_owned())?;
     let name = source
@@ -479,7 +480,7 @@ async fn upload_entry_inner(
             ))
         };
     }
-    Ok(target)
+    Ok((target, EntryKind::Directory))
 }
 
 #[cfg(test)]
@@ -535,7 +536,7 @@ mod tests {
                 .unwrap()
                 .entries
                 .is_empty());
-            let target = upload_entry(
+            let (target, _) = upload_entry(
                 &remotes,
                 "tree-test",
                 conn.session_id,
@@ -565,7 +566,7 @@ mod tests {
             .await;
             assert_eq!(cancelled.unwrap_err(), "Cancelled");
             assert!(fs::read_dir(&output).unwrap().next().is_none());
-            let local = download_entry(
+            let (local, _) = download_entry(
                 &remotes,
                 "tree-test",
                 conn.session_id,

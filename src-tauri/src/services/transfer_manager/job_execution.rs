@@ -22,12 +22,19 @@ pub(super) fn run_operation(
 ) -> TransferOperationOutcome {
     match operation {
         #[cfg(windows)]
-        TransferOperation::Remote(job) => {
-            execute_remote_job(inner, job_id, plan, event_emitter, control, job)
-        }
+        TransferOperation::Remote(job) => super::remote_events::run(
+            &inner.events,
+            job_id,
+            std::slice::from_ref(&job),
+            |settled| {
+                execute_remote_job(inner, job_id, plan, event_emitter, control, &job, settled)
+            },
+        ),
         #[cfg(windows)]
         TransferOperation::RemoteBatch(batch) => {
-            execute_remote_batch(inner, job_id, plan, event_emitter, control, batch)
+            super::remote_events::run(&inner.events, job_id, &batch.items, |settled| {
+                execute_remote_batch(inner, job_id, plan, event_emitter, control, &batch, settled)
+            })
         }
         #[cfg(windows)]
         TransferOperation::RemoteDelete(job) => {
@@ -86,7 +93,19 @@ fn execute_remote_delete(
 ) -> TransferOperationOutcome {
     run_with_progress_dispatcher(inner, job_id, plan, event_emitter, move |callback| {
         let report = tauri::async_runtime::block_on(async {
+            use crate::services::operation_events::{DeleteMethod, ItemSuccess, Location, Origin};
+            let source = |entry: &crate::services::remotes::operations::SelectedEntry| {
+                Location::sftp(
+                    &job.profile,
+                    format!("{}/{}", job.parent.trim_end_matches('/'), entry.name),
+                )
+            };
+            let mut events =
+                inner
+                    .events
+                    .operation(Some(job_id), Origin::User, job.entries.iter().map(source));
             let mut report = fs::DeleteReport {
+                removed_roots: Vec::new(),
                 deleted: 0,
                 skipped: 0,
                 cancelled: false,
@@ -119,7 +138,14 @@ fn execute_remote_delete(
                 )
                 .await
                 {
-                    Ok(()) => report.deleted += 1,
+                    Ok(()) => {
+                        report.deleted += 1;
+                        if inner.events.has_subscribers() {
+                            events.item_succeeded(&source(entry), entry.kind(), || {
+                                ItemSuccess::Deleted(DeleteMethod::Permanent)
+                            });
+                        }
+                    }
                     Err(error) if error.starts_with(TRANSFER_CANCELLED_MESSAGE) => {
                         report.cancelled = true;
                         if error != TRANSFER_CANCELLED_MESSAGE {
@@ -154,7 +180,8 @@ fn execute_remote_job(
     plan: &PlannedTransferJob,
     event_emitter: &TransferEventEmitter,
     control: TransferJobControlHandle,
-    job: crate::services::remotes::transfer::Transfer,
+    job: &crate::services::remotes::transfer::Transfer,
+    settled: &mut super::remote_events::Settled<'_>,
 ) -> TransferOperationOutcome {
     use crate::services::remotes::transfer::{Direction, TransferResult};
     run_with_progress_dispatcher(inner, job_id, plan, event_emitter, move |callback| {
@@ -189,6 +216,16 @@ fn execute_remote_job(
                             entry,
                         ),
                     );
+                    let result = result.map(|path| TransferResult {
+                        completion: crate::services::remotes::transfer::ItemCompletion::Confirmed(
+                            entry.kind(),
+                        ),
+                        path,
+                        backup: None,
+                        warning: None,
+                        local_path: None,
+                    });
+                    settled(job, index, (&result).into());
                     if let Some(notify) = &job.source_changed {
                         notify(parent.clone());
                         notify(destination.clone());
@@ -204,12 +241,7 @@ fn execute_remote_job(
                         status_text: Some("Moving".into()),
                         ..Default::default()
                     });
-                    result.map(|()| TransferResult {
-                        path: format!("{}/{}", destination.trim_end_matches('/'), entry.name),
-                        backup: None,
-                        warning: None,
-                        local_path: None,
-                    })
+                    result
                 },
             );
             let failed = report.items.iter().any(|item| item.error.is_some());
@@ -247,7 +279,9 @@ fn execute_remote_job(
                 ..Default::default()
             })
         };
-        let result = run_remote_item(&job, &mut on_control, &mut on_progress).map(|mut result| {
+        let result = run_remote_item(job, &mut on_control, &mut on_progress);
+        settled(job, 0, (&result).into());
+        let result = result.map(|mut result| {
             if matches!(job.direction, Direction::Download { .. }) {
                 result.local_path = Some(std::path::PathBuf::from(&result.path));
             }
@@ -267,11 +301,10 @@ fn execute_remote_batch(
     plan: &PlannedTransferJob,
     event_emitter: &TransferEventEmitter,
     control: TransferJobControlHandle,
-    batch: crate::services::remotes::transfer::TransferBatch,
+    batch: &crate::services::remotes::transfer::TransferBatch,
+    settled: &mut super::remote_events::Settled<'_>,
 ) -> TransferOperationOutcome {
-    use crate::services::remotes::transfer::{
-        BatchItemResult, BatchResult, Direction, RECOVERY_CANCELLED_PREFIX,
-    };
+    use crate::services::remotes::transfer::{BatchItemResult, BatchResult, Direction};
     run_with_progress_dispatcher(inner, job_id, plan, event_emitter, move |callback| {
         let total = batch.items.len();
         let mut items = Vec::with_capacity(total);
@@ -343,27 +376,44 @@ fn execute_remote_batch(
             };
         }
         let mut last_boundary_flush: Option<std::time::Instant> = None;
+        let mut finish_item = |job: &crate::services::remotes::transfer::Transfer,
+                               item: BatchItemResult| {
+            use super::remote_events::ItemOutcome;
+            let outcome = match (&item.result, &item.error) {
+                (Some(result), _) => ItemOutcome::Published(result),
+                (_, Some(error)) => ItemOutcome::Error(error),
+                _ => ItemOutcome::Skipped,
+            };
+            settled(job, 0, outcome);
+            items.push(item);
+        };
         for (index, job) in batch.items.iter().enumerate() {
             if let Err(error) = control.checkpoint() {
                 cancelled = terminal_status_for_error(&error) == TransferJobStatus::Cancelled;
                 if !cancelled {
-                    items.push(BatchItemResult {
-                        index,
-                        result: None,
-                        error: Some(error),
-                        skipped: false,
-                    });
+                    finish_item(
+                        job,
+                        BatchItemResult {
+                            index,
+                            result: None,
+                            error: Some(error),
+                            skipped: false,
+                        },
+                    );
                 }
                 break;
             }
             let replace = match &checks[index] {
                 Err(error) => {
-                    items.push(BatchItemResult {
-                        index,
-                        result: None,
-                        error: Some(error.clone()),
-                        skipped: false,
-                    });
+                    finish_item(
+                        job,
+                        BatchItemResult {
+                            index,
+                            result: None,
+                            error: Some(error.clone()),
+                            skipped: false,
+                        },
+                    );
                     (batch.item_finished)(index);
                     callback(fs::TransferProgressUpdate {
                         processed: index + 1,
@@ -374,14 +424,17 @@ fn execute_remote_batch(
                     continue;
                 }
                 Ok(true) if moving => {
-                    items.push(BatchItemResult {
-                        index,
-                        result: None,
-                        error: Some(
-                            "An item with this name already exists in the destination.".into(),
-                        ),
-                        skipped: false,
-                    });
+                    finish_item(
+                        job,
+                        BatchItemResult {
+                            index,
+                            result: None,
+                            error: Some(
+                                "An item with this name already exists in the destination.".into(),
+                            ),
+                            skipped: false,
+                        },
+                    );
                     (batch.item_finished)(index);
                     callback(fs::TransferProgressUpdate {
                         processed: index + 1,
@@ -397,12 +450,15 @@ fn execute_remote_batch(
                         crate::services::remotes::transfer::preflight::Decision::Skip
                     ) =>
                 {
-                    items.push(BatchItemResult {
-                        index,
-                        result: None,
-                        error: None,
-                        skipped: true,
-                    });
+                    finish_item(
+                        job,
+                        BatchItemResult {
+                            index,
+                            result: None,
+                            error: None,
+                            skipped: true,
+                        },
+                    );
                     (batch.item_finished)(index);
                     callback(fs::TransferProgressUpdate {
                         processed: index + 1,
@@ -459,17 +515,19 @@ fn execute_remote_batch(
                     (Some(result), None)
                 }
                 Err(error) => {
-                    cancelled = error == TRANSFER_CANCELLED_MESSAGE
-                        || error.starts_with(RECOVERY_CANCELLED_PREFIX);
+                    cancelled = terminal_status_for_error(&error) == TransferJobStatus::Cancelled;
                     (None, Some(error))
                 }
             };
-            items.push(BatchItemResult {
-                index,
-                result,
-                error,
-                skipped: false,
-            });
+            finish_item(
+                job,
+                BatchItemResult {
+                    index,
+                    result,
+                    error,
+                    skipped: false,
+                },
+            );
             // Keep the first completion responsive without flooding the UI
             // with queue snapshots for large batches of tiny files.
             let now = std::time::Instant::now();
@@ -560,7 +618,8 @@ fn run_remote_item(
                 on_progress,
             )
             .await
-            .map(|path| TransferResult {
+            .map(|(path, kind)| TransferResult {
+                completion: crate::services::remotes::transfer::ItemCompletion::Confirmed(kind),
                 path: path.to_string_lossy().into_owned(),
                 backup: None,
                 warning: None,
@@ -609,7 +668,8 @@ fn run_remote_item(
                 on_progress,
             )
             .await
-            .map(|path| TransferResult {
+            .map(|(path, kind)| TransferResult {
+                completion: crate::services::remotes::transfer::ItemCompletion::Confirmed(kind),
                 path,
                 backup: None,
                 warning: None,
@@ -624,8 +684,11 @@ fn run_remote_item(
 pub(super) fn terminal_status_for_error(error: &str) -> TransferJobStatus {
     // A staged remote move includes recovery guidance after cancellation.
     #[cfg(windows)]
-    let recovery_cancelled =
-        error.starts_with(crate::services::remotes::transfer::RECOVERY_CANCELLED_PREFIX);
+    let recovery_cancelled = error
+        .starts_with(crate::services::remotes::transfer::RECOVERY_CANCELLED_PREFIX)
+        || error
+            .strip_prefix(TRANSFER_CANCELLED_MESSAGE)
+            .is_some_and(|suffix| suffix.starts_with(' '));
     #[cfg(not(windows))]
     let recovery_cancelled = false;
     if error == TRANSFER_CANCELLED_MESSAGE || recovery_cancelled {
@@ -647,19 +710,22 @@ fn execute_copy_job(
 ) -> TransferOperationOutcome {
     run_with_progress_dispatcher(inner, job_id, plan, event_emitter, move |callback| {
         let mut on_control = move || control.checkpoint();
-        let result = fs::copy_entries(
-            paths,
-            destination,
-            options,
-            Some(callback),
-            Some(&mut on_control),
-        )
-        .map(TransferOperationResult::Copy);
+        super::local_events::run_transfer(&inner.events, job_id, &paths, 0, |on_root| {
+            let result = fs::transfer::copy_entries_reported(
+                &paths,
+                destination,
+                options,
+                Some(callback),
+                Some(&mut on_control),
+                on_root,
+            )
+            .map(TransferOperationResult::Copy);
 
-        TransferOperationOutcome {
-            terminal_status: completed_status_for_result(&result),
-            result,
-        }
+            TransferOperationOutcome {
+                terminal_status: completed_status_for_result(&result),
+                result,
+            }
+        })
     })
 }
 
@@ -675,26 +741,30 @@ fn execute_transfer_job(
 ) -> TransferOperationOutcome {
     run_with_progress_dispatcher(inner, job_id, plan, event_emitter, move |callback| {
         let mut on_control = move || control.checkpoint();
-        match fs::transfer_entries(
-            paths,
-            destination,
-            options,
-            Some(callback),
-            Some(&mut on_control),
-        ) {
-            Ok(report) => TransferOperationOutcome {
-                terminal_status: if report.cancelled {
-                    TransferJobStatus::Cancelled
-                } else {
-                    TransferJobStatus::Completed
+        let skipped = options.as_ref().map_or(0, |o| o.skipped_by_prompt);
+        super::local_events::run_transfer(&inner.events, job_id, &paths, skipped, |on_root| {
+            match fs::transfer::transfer_entries_reported(
+                &paths,
+                destination,
+                options,
+                Some(callback),
+                Some(&mut on_control),
+                on_root,
+            ) {
+                Ok(report) => TransferOperationOutcome {
+                    terminal_status: if report.cancelled {
+                        TransferJobStatus::Cancelled
+                    } else {
+                        TransferJobStatus::Completed
+                    },
+                    result: Ok(TransferOperationResult::Transfer(report)),
                 },
-                result: Ok(TransferOperationResult::Transfer(report)),
-            },
-            Err(error) => TransferOperationOutcome {
-                terminal_status: terminal_status_for_error(&error),
-                result: Err(error),
-            },
-        }
+                Err(error) => TransferOperationOutcome {
+                    terminal_status: terminal_status_for_error(&error),
+                    result: Err(error),
+                },
+            }
+        })
     })
 }
 
@@ -714,14 +784,17 @@ fn execute_delete_job(
             Some(callback),
             Some(&mut on_control),
         ) {
-            Ok(report) => TransferOperationOutcome {
-                terminal_status: if report.cancelled {
-                    TransferJobStatus::Cancelled
-                } else {
-                    TransferJobStatus::Completed
-                },
-                result: Ok(TransferOperationResult::Delete(report)),
-            },
+            Ok(report) => {
+                super::local_events::deleted(&inner.events, job_id, &report.removed_roots);
+                TransferOperationOutcome {
+                    terminal_status: if report.cancelled {
+                        TransferJobStatus::Cancelled
+                    } else {
+                        TransferJobStatus::Completed
+                    },
+                    result: Ok(TransferOperationResult::Delete(report)),
+                }
+            }
             Err(error) => TransferOperationOutcome {
                 terminal_status: terminal_status_for_error(&error),
                 result: Err(error),
@@ -746,14 +819,17 @@ fn execute_trash_job(
             Some(callback),
             Some(&mut on_control),
         ) {
-            Ok(report) => TransferOperationOutcome {
-                terminal_status: if report.cancelled {
-                    TransferJobStatus::Cancelled
-                } else {
-                    TransferJobStatus::Completed
-                },
-                result: Ok(TransferOperationResult::Trash(report)),
-            },
+            Ok(report) => {
+                super::local_events::deleted(&inner.events, job_id, &report.removed_roots);
+                TransferOperationOutcome {
+                    terminal_status: if report.cancelled {
+                        TransferJobStatus::Cancelled
+                    } else {
+                        TransferJobStatus::Completed
+                    },
+                    result: Ok(TransferOperationResult::Trash(report)),
+                }
+            }
             Err(error) => TransferOperationOutcome {
                 terminal_status: terminal_status_for_error(&error),
                 result: Err(error),

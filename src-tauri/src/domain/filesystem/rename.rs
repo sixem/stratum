@@ -60,9 +60,9 @@ fn rename_paths(path: &str, name: &str) -> Result<RenamePaths, String> {
     })
 }
 
-fn check_source(path: &Path) -> Result<(), String> {
+fn check_source(path: &Path) -> Result<super::transfer::EntryKind, String> {
     match fs::symlink_metadata(path) {
-        Ok(_) => Ok(()),
+        Ok(metadata) => Ok(super::transfer::kind_from_metadata(path, &metadata)),
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             Err("The source no longer exists.".into())
         }
@@ -102,7 +102,7 @@ pub fn validate_batch_rename(requests: Vec<BatchRenameRequest>) -> Vec<Option<St
         let source_key = normalize_path_key(&paths.source);
         let destination_key = normalize_path_key(&paths.destination);
         errors[index] = check_source(&paths.source)
-            .and_then(|()| {
+            .and_then(|_| {
                 if paths.source == paths.destination {
                     Ok(())
                 } else if source_key == destination_key {
@@ -147,6 +147,8 @@ fn mark_duplicate(
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenamedEntry {
+    #[serde(skip)]
+    pub(crate) kind: super::transfer::EntryKind,
     pub path: String,
     pub identity: Option<EntryIdentity>,
 }
@@ -157,12 +159,13 @@ pub fn rename_entry(
     expected: Option<EntryIdentity>,
 ) -> Result<RenamedEntry, String> {
     let paths = rename_paths(&path, &new_name)?;
-    check_source(&paths.source)?;
+    let kind = check_source(&paths.source)?;
 
     let source = paths.source.to_string_lossy();
     let destination = paths.destination.to_string_lossy();
     if source == destination {
         return Ok(RenamedEntry {
+            kind,
             path: source.into_owned(),
             identity: None,
         });
@@ -188,6 +191,7 @@ pub fn rename_entry(
         original.and_then(|entry| entry.published(&paths.destination))
     };
     Ok(RenamedEntry {
+        kind,
         path: destination.into_owned(),
         identity,
     })

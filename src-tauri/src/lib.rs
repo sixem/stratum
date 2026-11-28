@@ -97,13 +97,25 @@ pub fn run() {
             let thumbnails = domain::media::thumbs::init(app.handle().clone());
             app.manage(thumbnails);
             app.manage(services::watch::DirWatchHandle::default());
-            app.manage(services::transfer_manager::TransferManagerHandle::init());
+            let events = services::operation_events::OperationEvents::default();
+            app.manage(services::webhooks::Webhooks::init(app.handle(), events.clone()));
+            app.manage(
+                services::transfer_manager::TransferManagerHandle::with_events(events.clone()),
+            );
+            app.manage(events);
             app.manage(services::indexed_search::IndexedSearchHandle::init(
                 app.handle().clone(),
             ));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            services::webhooks::webhook_settings,
+            services::webhooks::webhook_save,
+            services::webhooks::webhook_remove,
+            services::webhooks::webhook_test,
+            services::webhooks::webhook_work,
+            services::webhooks::webhook_retry,
+            services::webhooks::webhook_dismiss,
             app::commands::updates::check_app_update,
             app::commands::updates::apply_app_update,
             app::commands::open_stratum_backup,
@@ -211,6 +223,7 @@ pub fn run() {
             services::remotes::transfer::remote_transfer_batch,
             #[cfg(windows)]
             services::remotes::transfer::preflight::remote_transfer_conflict_decision,
+            services::remotes::transfer::preflight::remote_transfer_preflight_ended,
             services::remotes::open::remote_start_open,
             services::remotes::open::remote_cancel_open,
             services::remotes::create_remote_preview_grant,
@@ -252,6 +265,9 @@ pub fn run() {
                 event,
                 tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
             ) {
+                if let Some(webhooks) = app.try_state::<services::webhooks::Webhooks>() {
+                    webhooks.shutdown();
+                }
                 if let Some(indexed_search) =
                     app.try_state::<services::indexed_search::IndexedSearchHandle>()
                 {

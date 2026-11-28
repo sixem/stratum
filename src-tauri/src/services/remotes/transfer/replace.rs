@@ -28,7 +28,7 @@ pub(crate) async fn download(
 ) -> Result<TransferResult, String> {
     let target = destination(folder, source)?;
     let stage = StageDirectory::beside(&target, "remote-replace").map_err(|e| e.to_string())?;
-    let prepared = download_entry(
+    let (prepared, kind) = download_entry(
         remotes,
         profile,
         session,
@@ -56,6 +56,7 @@ pub(crate) async fn download(
             return Err(format!("Could not publish the copy: {error}"));
         }
         Ok(TransferResult {
+            completion: super::ItemCompletion::Confirmed(kind),
             path: target.to_string_lossy().into_owned(),
             backup: saved.then(|| backup.to_string_lossy().into_owned()),
             warning: None,
@@ -104,7 +105,7 @@ pub(crate) async fn upload(
     remote_mkdir(&session, &stage)
         .await
         .map_err(|error| format!("{error} Check {stage} for an incomplete upload."))?;
-    let prepared = match upload_entry(
+    let (prepared, kind) = match upload_entry(
         remotes, profile, session_id, source, &stage, checkpoint, progress,
     )
     .await
@@ -129,7 +130,7 @@ pub(crate) async fn upload(
             }
             return Err(format!("Could not publish the copy: {error}. The staged copy is at {stage}."));
         }
-        Ok(TransferResult { path: target.clone(), backup: saved.then_some(backup), warning: None, local_path: None })
+        Ok(TransferResult { completion: super::ItemCompletion::Confirmed(kind), path: target.clone(), backup: saved.then_some(backup), warning: None, local_path: None })
     }.await;
     match result {
         Ok(mut output) => {
@@ -185,7 +186,7 @@ mod tests {
             fs::create_dir(&root).unwrap();
             let source = root.join("file.txt");
             fs::write(&source, b"old remote").unwrap();
-            let target = upload_entry(
+            let (target, _) = upload_entry(
                 &remotes,
                 "replace-test",
                 conn.session_id,
@@ -280,7 +281,7 @@ mod tests {
             let tree = root.join("tree");
             fs::create_dir(&tree).unwrap();
             fs::write(tree.join("child.txt"), b"old folder").unwrap();
-            let target_tree = upload_entry(
+            let (target_tree, _) = upload_entry(
                 &remotes,
                 "replace-test",
                 conn.session_id,

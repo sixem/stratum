@@ -2,6 +2,7 @@
 // are published only after their remote sources have been checked again.
 use super::{browse::check_path, Remotes};
 use crate::domain::filesystem::staging::{rename_new, StageDirectory};
+use crate::domain::filesystem::transfer::EntryKind;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -11,6 +12,8 @@ use tokio::io::AsyncWriteExt;
 
 pub(crate) mod batch_move;
 mod destination_stage;
+#[cfg(test)]
+mod event_tests;
 mod move_remote;
 mod move_source;
 mod move_upload;
@@ -107,9 +110,20 @@ struct RemoteDirectoryChange {
     path: String,
 }
 
+// Publication alone does not complete a move. Keep the verified item kind or
+// the reason the source remained, independently of the user-facing warning.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ItemCompletion {
+    Confirmed(EntryKind),
+    Incomplete,
+    Cancelled,
+}
+
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TransferResult {
+    #[serde(skip)]
+    pub completion: ItemCompletion,
     pub path: String,
     pub backup: Option<String>,
     pub warning: Option<String>,
@@ -278,22 +292,20 @@ fn staged_upload_paths(items: &[BatchRequestItem], moving: bool) -> Result<Vec<S
         .collect()
 }
 
-// One queue job owns the whole selection, including its pause/cancel state.
-#[tauri::command]
-pub(crate) async fn remote_transfer_batch(
-    webview: tauri::Webview,
-    profile_id: String,
+fn prepare_batch(
+    webview: &tauri::Webview,
+    remotes: &Remotes,
+    profile_id: &str,
     session_id: u32,
     items: Vec<BatchRequestItem>,
-    transfer_id: String,
+    transfer_id: &str,
     moving: bool,
     drop_stage: Option<u64>,
-) -> Result<BatchResult, String> {
+) -> Result<TransferBatch, String> {
     if items.is_empty() || items.len() > 100_000 {
         return Err("Select between 1 and 100000 items.".into());
     }
-    let remotes = super::manager(&webview)?;
-    remotes.current(&profile_id, Some(session_id))?;
+    remotes.current(profile_id, Some(session_id))?;
     let stage = drop_stage
         .map(|id| {
             let paths = staged_upload_paths(&items, moving)?;
@@ -303,9 +315,9 @@ pub(crate) async fn remote_transfer_batch(
                 .map(std::sync::Arc::new)
         })
         .transpose()?;
-    let journal = super::recovery::RecoveryJournal::for_webview(&webview)?;
+    let journal = super::recovery::RecoveryJournal::for_webview(webview)?;
     let app = webview.app_handle().clone();
-    let source_profile = profile_id.clone();
+    let source_profile = profile_id.to_owned();
     let notify = std::sync::Arc::new(move |path| {
         let _ = app.emit_to(
             "main",
@@ -333,7 +345,7 @@ pub(crate) async fn remote_transfer_batch(
         } = &direction
         {
             remotes.current(dest_profile, Some(*dest_session))?;
-            if moving && dest_profile == &profile_id && *dest_session == session_id {
+            if moving && dest_profile == profile_id && *dest_session == session_id {
                 return Err("Use a same-host move for this destination.".into());
             }
         }
@@ -341,7 +353,7 @@ pub(crate) async fn remote_transfer_batch(
             || (moving && matches!(&direction, Direction::Download { .. }));
         jobs.push(Transfer {
             remotes: remotes.clone(),
-            profile: profile_id.clone(),
+            profile: profile_id.to_owned(),
             session: session_id,
             direction,
             replace: false,
@@ -351,17 +363,8 @@ pub(crate) async fn remote_transfer_batch(
             source_changed: moving.then(|| notify.clone()),
         });
     }
-    let indexed_search = webview
-        .state::<crate::services::indexed_search::IndexedSearchHandle>()
-        .inner()
-        .clone();
-    let queue = webview
-        .state::<crate::services::transfer_manager::TransferManagerHandle>()
-        .inner()
-        .clone();
-    let window = webview.window();
     let app = webview.app_handle().clone();
-    let event_id = transfer_id.clone();
+    let event_id = transfer_id.to_owned();
     let item_finished = std::sync::Arc::new(move |index| {
         let _ = app.emit_to(
             "main",
@@ -373,22 +376,53 @@ pub(crate) async fn remote_transfer_batch(
         );
     });
     let decision_app = webview.app_handle().clone();
-    let decision_id = transfer_id.clone();
+    let decision_id = transfer_id.to_owned();
     let request_decision = std::sync::Arc::new(move |indices| {
         preflight::request_decision(&decision_app, &decision_id, indices)
     });
-    let reconcile_jobs = jobs.clone();
+    Ok(TransferBatch {
+        _drop_stage: stage,
+        items: jobs,
+        request_decision,
+        item_finished,
+    })
+}
+
+// One queue job owns the whole selection, including its pause/cancel state.
+#[tauri::command]
+pub(crate) async fn remote_transfer_batch(
+    webview: tauri::Webview,
+    profile_id: String,
+    session_id: u32,
+    items: Vec<BatchRequestItem>,
+    transfer_id: String,
+    moving: bool,
+    drop_stage: Option<u64>,
+) -> Result<BatchResult, String> {
+    let remotes = super::manager(&webview)?;
+    let batch = prepare_batch(
+        &webview,
+        &remotes,
+        &profile_id,
+        session_id,
+        items,
+        &transfer_id,
+        moving,
+        drop_stage,
+    )
+    .inspect_err(|_| preflight::ended(&webview.state(), Some(&transfer_id), false))?;
+    let indexed_search = webview
+        .state::<crate::services::indexed_search::IndexedSearchHandle>()
+        .inner()
+        .clone();
+    let queue = webview
+        .state::<crate::services::transfer_manager::TransferManagerHandle>()
+        .inner()
+        .clone();
+    let window = webview.window();
+    let reconcile_jobs = batch.items.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        queue.remote_batch(
-            window,
-            TransferBatch {
-                _drop_stage: stage,
-                items: jobs,
-                request_decision,
-                item_finished,
-            },
-            Some(transfer_id),
-        )
+        queue.remote_batch(window, batch, Some(transfer_id))
     })
     .await
     .map_err(|_| "Could not run the remote transfer.".to_owned())??;
@@ -431,11 +465,14 @@ pub(crate) async fn remote_transfer_file(
     transfer_id: Option<String>,
 ) -> Result<BatchResult, String> {
     let remotes = super::manager(&webview)?;
-    remotes.current(&profile_id, Some(session_id))?;
-    let direction = direction_for(request)?;
-    if !matches!(&direction, Direction::Rename { .. }) {
-        return Err("Invalid move request.".into());
-    }
+    let direction = (|| {
+        remotes.current(&profile_id, Some(session_id))?;
+        match direction_for(request)? {
+            direction @ Direction::Rename { .. } => Ok(direction),
+            _ => Err("Invalid move request.".to_owned()),
+        }
+    })()
+    .inspect_err(|_| preflight::ended(&webview.state(), transfer_id.as_deref(), false))?;
     let queue = webview
         .state::<crate::services::transfer_manager::TransferManagerHandle>()
         .inner()

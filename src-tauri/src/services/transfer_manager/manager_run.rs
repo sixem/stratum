@@ -87,6 +87,12 @@ fn run_planning_job(inner: &Arc<TransferManagerInner>, job: TransferJobRequest) 
                 terminal_status,
                 &job.event_emitter,
             ) {
+                super::manager_events::finish_unstarted(
+                    &inner.events,
+                    &request.snapshot.id,
+                    &request.operation,
+                    terminal_status,
+                );
                 let _ = request.completion_tx.send(Err(error));
             }
         }
@@ -127,6 +133,12 @@ fn run_job(inner: &Arc<TransferManagerInner>, job: TransferJobRequest, plan: Pla
             operation,
         ),
         Err(error) => {
+            super::manager_events::finish_unstarted(
+                &inner.events,
+                &snapshot.id,
+                &operation,
+                terminal_status_for_error(&error),
+            );
             drop(operation);
             TransferOperationOutcome {
                 terminal_status: terminal_status_for_error(&error),

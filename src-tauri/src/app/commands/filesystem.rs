@@ -1,6 +1,7 @@
 // Filesystem-centric command handlers.
 use crate::domain::filesystem as fs;
 use crate::services::indexed_search;
+use crate::services::operation_events::{EntryKind, OperationEvents};
 use crate::services::transfer_manager;
 use crate::services::watch;
 use std::path::Path;
@@ -193,26 +194,30 @@ pub async fn ensure_dir(
 
 #[tauri::command]
 pub async fn create_folder(
+    events: tauri::State<'_, OperationEvents>,
     indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
     path: String,
 ) -> Result<(), String> {
+    let events = events.inner().clone();
     let indexed_search = indexed_search.inner().clone();
     let reconcile_path = path.clone();
     run_reconcile_after_create_command(
         indexed_search,
         vec![reconcile_path],
         "create_folder",
-        move || fs::create_folder(path),
+        move || events.create_entry(path, EntryKind::Directory),
     )
     .await
 }
 
 #[tauri::command]
 pub async fn create_tracked_folder(
+    events: tauri::State<'_, OperationEvents>,
     indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
     parent: String,
     name: String,
 ) -> Result<fs::CreatedFolder, String> {
+    let events = events.inner().clone();
     let path = std::path::Path::new(parent.trim())
         .join(&name)
         .to_string_lossy()
@@ -221,37 +226,41 @@ pub async fn create_tracked_folder(
         indexed_search.inner().clone(),
         vec![path],
         "create_tracked_folder",
-        move || fs::create_tracked_folder(parent, name),
+        move || events.create_tracked_folder(parent, name),
     )
     .await
 }
 
 #[tauri::command]
 pub async fn remove_created_folder_if_empty(
+    events: tauri::State<'_, OperationEvents>,
     indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
     folder: fs::CreatedFolder,
 ) -> Result<bool, String> {
+    let events = events.inner().clone();
     run_reconcile_after_delete_command(
         indexed_search.inner().clone(),
         vec![folder.path.clone()],
         "remove_created_folder_if_empty",
-        move || fs::remove_created_folder_if_empty(folder),
+        move || events.remove_created_folder(folder),
     )
     .await
 }
 
 #[tauri::command]
 pub async fn create_file(
+    events: tauri::State<'_, OperationEvents>,
     indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
     path: String,
 ) -> Result<(), String> {
+    let events = events.inner().clone();
     let indexed_search = indexed_search.inner().clone();
     let reconcile_path = path.clone();
     run_reconcile_after_create_command(
         indexed_search,
         vec![reconcile_path],
         "create_file",
-        move || fs::create_file(path),
+        move || events.create_entry(path, EntryKind::File),
     )
     .await
 }
@@ -476,12 +485,14 @@ pub async fn trash_entries(
 
 #[tauri::command]
 pub async fn restore_recycle_items(
+    events: tauri::State<'_, OperationEvents>,
     indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
     receipt_id: String,
 ) -> Result<fs::RestoreRecycleReport, String> {
+    let events = events.inner().clone();
     let indexed_search = indexed_search.inner().clone();
     let report =
-        tauri::async_runtime::spawn_blocking(move || fs::restore_recycle_items(receipt_id))
+        tauri::async_runtime::spawn_blocking(move || events.restore_recycle_items(receipt_id))
             .await
             .map_err(|err| err.to_string())??;
     queue_reconcile_after_create(
@@ -503,15 +514,18 @@ pub async fn validate_batch_rename(
 
 #[tauri::command]
 pub async fn rename_entry(
+    events: tauri::State<'_, OperationEvents>,
     indexed_search: tauri::State<'_, indexed_search::IndexedSearchHandle>,
     path: String,
     new_name: String,
     expected_identity: Option<fs::EntryIdentity>,
+    operation_id: Option<String>,
 ) -> Result<fs::RenamedEntry, String> {
+    let events = events.inner().clone();
     let indexed_search = indexed_search.inner().clone();
     let reconcile_source = path.clone();
     let renamed = tauri::async_runtime::spawn_blocking(move || {
-        fs::rename_entry(path, new_name, expected_identity)
+        events.rename(operation_id.as_deref(), path, new_name, expected_identity)
     })
     .await
     .map_err(|err| err.to_string())??;

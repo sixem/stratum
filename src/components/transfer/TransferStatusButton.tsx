@@ -11,6 +11,7 @@ import { TransferStatusList } from "./TransferStatusList";
 import { buildTransferSummary } from "./transferStatusView";
 import { WorkPillFill } from "./WorkPillFill";
 import { refreshRecovery, useRecovery } from "@/modules/remoteRecovery";
+import { useWebhookWork, watchWebhookWork } from "@/modules/webhookWork";
 
 export const TransferStatusButton = ({
   onOpenDestination,
@@ -27,7 +28,10 @@ export const TransferStatusButton = ({
   const canClear = summary.hasFinished;
   const recoveryCount = useRecovery(s => s.details.length);
   const recoveryError = useRecovery(s => Boolean(s.error));
-  const hasWork = jobs.length > 0 || recoveryCount > 0 || recoveryError;
+  const webhookCount = useWebhookWork(s => s.total);
+  const webhookNotice = useWebhookWork(s => Boolean(s.missed || s.error));
+  const hasWork = jobs.length > 0 || recoveryCount > 0 || recoveryError || webhookCount > 0 || webhookNotice;
+  useEffect(watchWebhookWork, []);
   useEffect(() => { void refreshRecovery(); }, [open]);
   const clearTooltipText = canClear
     ? `Clear ${summary.finishedCount} finished job${summary.finishedCount === 1 ? "" : "s"}`
@@ -85,7 +89,8 @@ export const TransferStatusButton = ({
           aria-hidden="true"
         />
         <span className="transfer-label">Work</span>
-        <span className="transfer-count tnum">{[jobs.length ? summary.countLabel : "", recoveryCount ? `${recoveryCount} to review` : recoveryError ? "Recovery unavailable" : ""].filter(Boolean).join(" · ")}</span>
+        <span className="transfer-count tnum">{[jobs.length ? summary.countLabel : "", recoveryCount ? `${recoveryCount} to review` : recoveryError ? "Recovery unavailable" : "",
+          webhookCount ? `${webhookCount} webhook failure${webhookCount === 1 ? "" : "s"}` : webhookNotice ? "Check webhooks" : ""].filter(Boolean).join(" · ")}</span>
       </PressButton>
       {open ? (
         // The title bar passes pointer events through decorative elements.

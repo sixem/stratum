@@ -2,6 +2,7 @@
 mod browse;
 mod connection;
 pub(crate) mod delete_recovery;
+mod direct_events;
 pub(crate) mod file;
 pub(crate) mod open;
 pub(crate) mod operations;

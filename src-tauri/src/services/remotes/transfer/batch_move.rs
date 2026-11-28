@@ -53,6 +53,9 @@ mod tests {
                     return Err("Destination exists".into());
                 }
                 Ok(TransferResult {
+                    completion: crate::services::remotes::transfer::ItemCompletion::Confirmed(
+                        crate::services::operation_events::EntryKind::File,
+                    ),
                     path: entry.to_string(),
                     backup: None,
                     warning: None,
@@ -105,7 +108,8 @@ mod tests {
             serde_json::from_value::<SelectedEntry>(serde_json::json!({
                 "name": item.name, "isDir": item.is_dir, "isSymlink": item.is_symlink,
                 "size": item.size, "modified": item.modified,
-            })).unwrap()
+            }))
+            .unwrap()
         };
         let make_job = |entries, source_changed| Transfer {
             remotes: remotes.clone(),
@@ -122,7 +126,17 @@ mod tests {
             expected: None,
             source_changed,
         };
-        let manager = TransferManagerHandle::init();
+        use crate::services::operation_events::{
+            testing::Observed, EntryKind, ItemChange, Location, OperationEvents, TransferCounts,
+            TransferOutcome,
+        };
+        let events = OperationEvents::default();
+        let mut observed = Observed::subscribe(&events);
+        let manager = TransferManagerHandle::with_events(events);
+        let moved = |name: &str| ItemChange::Moved {
+            source: Location::sftp("move-fixture", format!("{source}/{name}")),
+            destination: Location::sftp("move-fixture", format!("{destination}/{name}")),
+        };
         let report = manager
             .remote_move_fixture(
                 make_job(vec![select("first"), select("conflict")], None),
@@ -134,6 +148,16 @@ mod tests {
         assert!(!report.cancelled);
         assert!(report.items[0].result.is_some());
         assert!(report.items[1].error.is_some());
+        observed.item(Some("move-partial"), EntryKind::File, moved("first"));
+        observed.terminal(
+            "move-partial",
+            TransferOutcome::Failed,
+            TransferCounts {
+                moved: 1,
+                failed: 1,
+                ..Default::default()
+            },
+        );
 
         let (reached_tx, reached_rx) = mpsc::channel();
         let (resume_tx, resume_rx) = mpsc::channel();
@@ -157,6 +181,8 @@ mod tests {
             "move-cancel",
         );
         reached_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        observed.item(Some("move-cancel"), EntryKind::File, moved("cancel-first"));
+        observed.empty();
         assert!(manager.cancel_job("move-cancel").unwrap());
         resume_tx.send(()).unwrap();
         let report = completion
@@ -165,6 +191,14 @@ mod tests {
             .unwrap();
         assert!(report.cancelled);
         assert_eq!(report.items.len(), 1);
+        observed.terminal(
+            "move-cancel",
+            TransferOutcome::Cancelled,
+            TransferCounts {
+                moved: 1,
+                ..Default::default()
+            },
+        );
         assert!(report.items[0].result.is_some());
         assert!(tauri::async_runtime::block_on(remotes.exists(
             "move-fixture",

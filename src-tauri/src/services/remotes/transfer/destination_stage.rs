@@ -17,7 +17,7 @@ pub(super) async fn copy(
     source: &str,
     checkpoint: &mut dyn FnMut() -> Result<(), String>,
     progress: &mut dyn FnMut(u64, u64),
-) -> Result<(String, Option<String>), String> {
+) -> Result<(String, Option<String>, super::EntryKind), String> {
     let journal = job
         .recovery
         .as_ref()
@@ -52,7 +52,7 @@ pub(super) async fn copy(
                 .map_err(|e| format!("Could not create destination staging: {e}"))?;
             journal.destination_identity(id, &stage.identity().map_err(|e| e.to_string())?)?;
             let result = async {
-                let payload = super::download_entry(
+                let (payload, kind) = super::download_entry(
                     &job.remotes,
                     &job.profile,
                     job.session,
@@ -65,7 +65,7 @@ pub(super) async fn copy(
                 checkpoint()?;
                 rename_new(&payload, &target)
                     .map_err(|e| format!("Could not publish the download: {e}"))?;
-                Ok((target.to_string_lossy().into_owned(), None))
+                Ok((target.to_string_lossy().into_owned(), None, kind))
             }
             .await;
             drop(stage);
@@ -119,7 +119,7 @@ pub(super) async fn copy(
             // Do not offer automatic deletion if creation was never confirmed.
             journal.destination_identity(id, "created")?;
             let result = async {
-                let payload = remote_copy::copy_entry(
+                let (payload, kind) = remote_copy::copy_entry(
                     &job.remotes,
                     (&job.profile, job.session),
                     (dest_profile, *dest_session),
@@ -153,7 +153,7 @@ pub(super) async fn copy(
                     }
                     return Err(error);
                 }
-                Ok((target, saved.then_some(backup)))
+                Ok((target, saved.then_some(backup), kind))
             }
             .await;
             if remote_remove(&session, &stage, true).await.is_ok() {

@@ -3,6 +3,18 @@
 use serde::Serialize;
 
 use super::transfer::destination::DestinationSummary;
+use super::transfer::EntryKind;
+use std::path::Path;
+
+// Success and failure describe the selected root. Skips count each conflict
+// decision, including individual entries skipped while merging a directory.
+pub(crate) enum RootOutcome<'a> {
+    Copied(EntryKind, &'a Path),
+    Moved(EntryKind, &'a Path),
+    Failed,
+    Skipped,
+}
+pub(crate) type RootReporter<'a> = dyn FnMut(&Path, RootOutcome<'_>) + 'a;
 
 // Transfer/reporting types for copy, move, and queue updates.
 #[derive(Clone, Serialize)]
@@ -120,9 +132,17 @@ pub(crate) type TransferProgressCallback = dyn FnMut(TransferProgressUpdate);
 pub(crate) type TransferControlCallback = dyn FnMut() -> Result<(), String>;
 
 // Delete/trash report types.
+#[derive(Clone)]
+pub(crate) struct RemovedRoot {
+    pub path: String,
+    pub kind: EntryKind,
+    pub recycled: bool,
+}
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteReport {
+    #[serde(skip)]
+    pub(crate) removed_roots: Vec<RemovedRoot>,
     pub deleted: usize,
     pub skipped: usize,
     pub cancelled: bool,
@@ -132,6 +152,8 @@ pub struct DeleteReport {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashReport {
+    #[serde(skip)]
+    pub(crate) removed_roots: Vec<RemovedRoot>,
     pub deleted: usize,
     pub skipped: usize,
     pub cancelled: bool,
@@ -143,6 +165,8 @@ pub struct TrashReport {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RestoreRecycleReport {
+    #[serde(skip)]
+    pub(crate) restored_roots: Vec<(std::path::PathBuf, std::path::PathBuf, EntryKind)>,
     pub restored_paths: Vec<String>,
     pub failures: Vec<String>,
     pub can_retry: bool,

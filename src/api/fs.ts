@@ -78,6 +78,7 @@ export const transferEntries = (
     mode?: TransferMode;
     overwrite?: boolean;
     overwritePaths?: string[];
+    skippedByPrompt?: number;
     protectedFolder?: CreatedFolder;
     expectedSources?: Record<string, string>;
   },
@@ -113,9 +114,9 @@ export const trashEntries = (paths: string[], transferId?: string) =>
 export const restoreRecycleItems = (receiptId: string) =>
   invoke<RestoreRecycleReport>("restore_recycle_items", { receiptId });
 
-export const renameEntry = (path: string, newName: string, expectedIdentity?: string) =>
+export const renameEntry = (path: string, newName: string, expectedIdentity?: string, operationId?: string) =>
   invoke<{ path: string; identity: string | null }>("rename_entry", {
-    path, newName, expectedIdentity,
+    path, newName, expectedIdentity, operationId,
   });
 
 export const validateBatchRename = (requests: { path: string; nextName: string }[]) =>

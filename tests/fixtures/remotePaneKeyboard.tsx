@@ -33,6 +33,7 @@ let localCut: string[] = [];
 let skipLast = false;
 let replaceClipboardDuringMove = false;
 const transfers: { command: string; args: any }[] = [];
+const preflightEnds: { transferId: string; cancelled: boolean }[] = [];
 const callbacks = new Map<number, (event: any) => void>();
 const listeners = new Map<string, number>();
 let nextCallback = 1;
@@ -47,6 +48,7 @@ const preview = { registerSource: () => noop, onPress: () => false, open: noop }
   transformCallback: (callback: (event: any) => void) => { const id = nextCallback++; callbacks.set(id, callback); return id; },
   invoke: async (command: string, args: any) => {
     if (command === "release_drop_stage") { releasedDropStages.push(args.id); return; }
+    if (command === "remote_transfer_preflight_ended") { preflightEnds.push(args); return; }
     if (command === "remote_connect") {
       connectingHost = args.profileId;
       await new Promise<void>(resolve => { finishConnection = resolve; });
@@ -448,6 +450,8 @@ async function exerciseConnectingDrop() {
   await waitFor(() => transfers.length === before + 1, "The other drop did not resume");
   check(transfers[before].args.dropStage === 41, "Connected tab upload lost its attachments");
   check(transfers[before].args.transferId === second.id, "Work lost its job ID after connecting");
+  check(preflightEnds.filter(end => end.transferId === first.id && end.cancelled).length === 1, "Cancelled connection must report its Work ID once");
+  check(!preflightEnds.some(end => end.transferId === second.id), "A successful handoff ended the transfer before the worker could report it");
   useRemoteHosts.setState(state => ({ connections: {
     ...state.connections, offline: { status: "disconnected", epoch: 2 },
   } }));

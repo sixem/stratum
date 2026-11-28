@@ -120,10 +120,11 @@ export const useFileMutations = ({
       const failures: RenameFailure[] = [];
       const renamed = new Map<string, string>();
       const undoEntries: UndoRenameEntry[] = [];
+      const operationId = crypto.randomUUID();
       try {
         for (const item of nextRenames) {
           try {
-            const result = await renameEntry(item.path, item.nextName, item.expectedIdentity);
+            const result = await renameEntry(item.path, item.nextName, item.expectedIdentity, operationId);
             if (result.path) {
               renamed.set(item.path, result.path);
               if (item.updateFolderLocations) updateRenamedFolderLocations(item.path, result.path);

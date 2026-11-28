@@ -46,9 +46,10 @@ pub(crate) async fn copy_transfer(
     getrandom::fill(&mut random).map_err(|_| "Could not create a copy staging ID.")?;
     let id = format!("{:032x}", u128::from_le_bytes(random));
     let _active = crate::services::remotes::recovery::ActiveMove::start(&id)?;
-    let (path, backup) =
+    let (path, backup, kind) =
         super::destination_stage::copy(job, &id, remote_path, checkpoint, progress).await?;
     Ok(super::TransferResult {
+        completion: super::ItemCompletion::Confirmed(kind),
         path,
         backup,
         warning: None,
@@ -244,12 +245,14 @@ pub(super) async fn copy_entry(
     folder: &str,
     checkpoint: Checkpoint<'_>,
     progress: Progress<'_>,
-) -> Result<String, String> {
+) -> Result<(String, super::EntryKind), String> {
     checkpoint()?;
     check_path(folder, false).map_err(|e| e.message().to_owned())?;
     let kind = remotes.stat(src.0, src.1, source).await?.kind();
     if kind == 0o100000 {
-        return copy_file(remotes, src, dst, source, folder, checkpoint, progress).await;
+        return copy_file(remotes, src, dst, source, folder, checkpoint, progress)
+            .await
+            .map(|path| (path, super::EntryKind::File));
     }
     if kind != 0o040000 {
         return Err("Links and special files cannot be copied.".into());
@@ -360,5 +363,5 @@ pub(super) async fn copy_entry(
         });
     }
     let _ = remote_remove(&session, &stage, true).await;
-    Ok(target)
+    Ok((target, super::EntryKind::Directory))
 }
