@@ -6,8 +6,9 @@ use super::{
 };
 use crate::platform::windows::com::StaComGuard;
 use std::{
-    fs,
-    path::PathBuf,
+    fs::{self, OpenOptions},
+    os::windows::{ffi::OsStringExt, fs::OpenOptionsExt},
+    path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 use windows::Win32::System::Com::{CoTaskMemFree, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL};
@@ -17,6 +18,7 @@ use windows::Win32::System::Ole::{
 use windows::Win32::UI::Shell::{
     DragQueryFileW, IShellItemArray, SHCreateShellItemArrayFromDataObject, HDROP, SIGDN_FILESYSPATH,
 };
+use windows_sys::Win32::Storage::FileSystem::{GetShortPathNameW, FILE_FLAG_BACKUP_SEMANTICS};
 
 struct Fixture(PathBuf);
 
@@ -39,10 +41,36 @@ impl Drop for Fixture {
     }
 }
 
+// A Shell path can spell the same file with long or 8.3 directory names.
+fn file_identity(path: &Path) -> (u64, u128) {
+    let handle = OpenOptions::new()
+        .access_mode(0)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)
+        .unwrap();
+    crate::domain::filesystem::file_identity::file_id(&handle).unwrap()
+}
+
+// Exercise an 8.3 parent when the filesystem provides one, as on CI runners.
+fn short_path_or_original(path: &Path) -> PathBuf {
+    use std::os::windows::ffi::OsStrExt;
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let required = unsafe { GetShortPathNameW(wide.as_ptr(), std::ptr::null_mut(), 0) };
+    if required == 0 {
+        return path.to_path_buf();
+    }
+    let mut short = vec![0; required as usize];
+    let written = unsafe { GetShortPathNameW(wide.as_ptr(), short.as_mut_ptr(), required) };
+    if written == 0 || written >= required {
+        return path.to_path_buf();
+    }
+    PathBuf::from(std::ffi::OsString::from_wide(&short[..written as usize]))
+}
+
 #[test]
 fn mixed_parent_files_and_folders_round_trip_through_both_windows_formats() {
     let f = Fixture::new();
-    let folder = f.0.join("résumé 📂");
+    let folder = short_path_or_original(&f.0).join("résumé 📂");
     fs::create_dir(&folder).unwrap();
     let file = folder.join("日本語.txt");
     fs::write(&file, b"fixture").unwrap();
@@ -90,11 +118,10 @@ fn mixed_parent_files_and_folders_round_trip_through_both_windows_formats() {
                 .unwrap();
             let actual = name.to_string().unwrap();
             CoTaskMemFree(Some(name.0.cast()));
-            // Shell item display names can expand an 8.3 alias in the temp path.
-            // Check the resolved paths in selection order for this format.
+            // Resolve both spellings to their filesystem identities in selection order.
             assert_eq!(
-                fs::canonicalize(&actual).unwrap(),
-                fs::canonicalize(expected).unwrap(),
+                file_identity(Path::new(&actual)),
+                file_identity(Path::new(expected)),
                 "Shell item {index}: {actual:?} (selected {expected:?})"
             );
         }
