@@ -13,7 +13,9 @@ const mapLayoutHosts = (layout: WorkspaceLayout, map: (id: string) => string): W
       ? { ...tab, remote: { ...tab.remote, hostId: map(tab.remote.hostId) } }
       : tab),
   });
-  return { ...layout, main: mapSession(layout.main), bottom: mapSession(layout.bottom) };
+  return { ...layout, main: mapSession(layout.main), bottom: mapSession(layout.bottom),
+    places: { ...layout.places, places: layout.places.places.map(place =>
+      place.hostId ? { ...place, hostId: map(place.hostId) } : place) } };
 };
 
 export const mapBackupRemoteHosts = (backup: StratumBackup, map: (id: string) => string): StratumBackup => {

@@ -4,6 +4,7 @@
 import { useCallback } from "react";
 import { APP_NAME } from "@/constants";
 import { setBottomPaneActive } from "@/modules/bottomPaneStore";
+import type { PlaceReference } from "@/lib/placeLocation";
 import type { Place, TransferDestination } from "@/types";
 import type { useFileDrop, useFileManager } from "@/hooks/domain/filesystem";
 import type { useSettings, useTabSession } from "@/hooks/domain/session";
@@ -36,7 +37,7 @@ type UseShellNavigationModelOptions = {
   navigationController: NavigationControllerModel;
   shellView: ShellViewModel;
   places: Place[];
-  reorderPinnedPlace: (fromPath: string, toPath: string, position: "before" | "after") => void;
+  reorderPinnedPlace: (fromPath: PlaceReference, toPath: PlaceReference, position: "before" | "after") => void;
 };
 
 export const useShellNavigationModel = ({

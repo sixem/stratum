@@ -38,7 +38,7 @@ pub(crate) struct DestinationStage {
 #[derive(Clone)]
 pub(crate) struct RecoveryJournal(PathBuf);
 
-fn active_moves() -> &'static Mutex<HashSet<String>> {
+pub(super) fn active_moves() -> &'static Mutex<HashSet<String>> {
     static ACTIVE: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
     ACTIVE.get_or_init(|| Mutex::new(HashSet::new()))
 }
@@ -82,15 +82,22 @@ impl RecoveryJournal {
             Connection::open(&self.0).map_err(|e| format!("Could not open move recovery: {e}"))?;
         db.busy_timeout(Duration::from_secs(5))
             .map_err(|e| e.to_string())?;
-        db.execute_batch("PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS moves (
+        db.execute_batch("PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; CREATE TABLE IF NOT EXISTS moves (
             id TEXT PRIMARY KEY, profile TEXT NOT NULL, host TEXT NOT NULL,
             original TEXT NOT NULL, stage TEXT NOT NULL, destination TEXT NOT NULL, state TEXT NOT NULL
         ); CREATE TABLE IF NOT EXISTS destination_stages (
             id TEXT PRIMARY KEY, kind TEXT NOT NULL, host TEXT NOT NULL, folder TEXT NOT NULL,
             path TEXT NOT NULL, identity TEXT
+        ); CREATE TABLE IF NOT EXISTS destination_sources (
+            id TEXT PRIMARY KEY REFERENCES destination_stages(id) ON DELETE CASCADE,
+            host TEXT NOT NULL, original TEXT NOT NULL
         ); CREATE TABLE IF NOT EXISTS remote_deletes (
             id TEXT PRIMARY KEY, host TEXT NOT NULL, original TEXT NOT NULL,
             stage TEXT NOT NULL, selected TEXT NOT NULL, state TEXT NOT NULL
+        ); CREATE TABLE IF NOT EXISTS reviewed_moves (
+            id TEXT PRIMARY KEY REFERENCES moves(id) ON DELETE CASCADE, state TEXT NOT NULL
+        ); CREATE TABLE IF NOT EXISTS reviewed_deletes (
+            id TEXT PRIMARY KEY REFERENCES remote_deletes(id) ON DELETE CASCADE, state TEXT NOT NULL
         );").map_err(|e| format!("Could not prepare move recovery: {e}"))?;
         Ok(db)
     }
@@ -120,8 +127,15 @@ impl RecoveryJournal {
         Ok(())
     }
 
-    pub(crate) fn track_destination(&self, stage: &DestinationStage) -> Result<(), String> {
-        self.open()?
+    pub(crate) fn track_destination(
+        &self,
+        stage: &DestinationStage,
+        source_host: &str,
+        original: &str,
+    ) -> Result<(), String> {
+        let mut db = self.open()?;
+        let transaction = db.transaction().map_err(|e| e.to_string())?;
+        transaction
             .execute(
                 "INSERT INTO destination_stages VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
@@ -134,7 +148,13 @@ impl RecoveryJournal {
                 ],
             )
             .map_err(|e| format!("Could not save destination recovery: {e}"))?;
-        Ok(())
+        transaction
+            .execute(
+                "INSERT INTO destination_sources VALUES (?1, ?2, ?3)",
+                params![stage.id, source_host, original],
+            )
+            .map_err(|e| format!("Could not save the source location: {e}"))?;
+        transaction.commit().map_err(|e| e.to_string())
     }
 
     pub(crate) fn destination_identity(&self, id: &str, identity: &str) -> Result<(), String> {
@@ -444,6 +464,9 @@ pub(super) async fn restore_active(
     session_id: u32,
 ) -> Result<(), String> {
     let entry = journal.get(id)?.ok_or("Recovery entry not found.")?;
+    if entry.state == "restored_partial" {
+        return Err("The remaining original was already restored. Review its location in Work.".into());
+    }
     if entry.state == "planned" {
         return Err(
             "Staging creation was not confirmed; inspect the recovery folder manually.".into(),
@@ -501,7 +524,15 @@ pub(super) async fn restore_active(
     }
     // A failed directory cleanup never deletes the restored original.
     let _ = super::transfer::tree::remote_remove(&session, &dir, true).await;
-    journal.remove(id)
+    finish_restored_move(journal, &entry)
+}
+
+// After publication, cleanup may already have removed some source children.
+fn finish_restored_move(journal: &RecoveryJournal, entry: &RecoveryEntry) -> Result<(), String> {
+    if entry.state == "published" {
+        return journal.state(&entry.id, "restored_partial");
+    }
+    journal.remove(&entry.id)
 }
 
 // Restore interrupted moves without overwriting anything at the original path.
@@ -529,7 +560,7 @@ pub(super) async fn recover_active(
         if entry.state != "planned" {
             let _ = super::transfer::tree::remote_remove(&session, &directory, true).await;
         }
-        return journal.remove(id);
+        return finish_restored_move(journal, &entry);
     }
     if entry.state == "published" {
         let _ = super::transfer::tree::remote_remove(&session, &directory, true).await;
@@ -549,7 +580,7 @@ pub(crate) struct RecoveredTransfers {
     delete_notice_ids: Vec<String>,
 }
 
-// On reconnect, restore interrupted moves before cleaning their temporary copies.
+// On reconnect, restore interrupted originals and report remaining copies.
 #[tauri::command]
 pub(crate) async fn remote_finish_interrupted_transfers(
     webview: Webview,
@@ -558,14 +589,30 @@ pub(crate) async fn remote_finish_interrupted_transfers(
 ) -> Result<RecoveredTransfers, String> {
     let remotes = manager(&webview)?;
     let journal = RecoveryJournal::for_webview(&webview)?;
-    let session = remotes.current(&profile_id, Some(session_id))?;
+    check_interrupted(&remotes, &journal, &profile_id, session_id).await
+}
+
+pub(super) async fn check_interrupted(
+    remotes: &Remotes,
+    journal: &RecoveryJournal,
+    profile_id: &str,
+    session_id: u32,
+) -> Result<RecoveredTransfers, String> {
+    let session = remotes.current(profile_id, Some(session_id))?;
     let mut restored = Vec::new();
     let mut warnings = Vec::new();
     let mut delete_notice_ids = Vec::new();
     super::delete_recovery::recover_interrupted_deletes(
-        &remotes, &journal, &session.host, &profile_id, session_id, &mut restored, &mut warnings, &mut delete_notice_ids,
-    ).await?;
-    let mut recovered_ids = HashSet::new();
+        remotes,
+        journal,
+        &session.host,
+        profile_id,
+        session_id,
+        &mut restored,
+        &mut warnings,
+        &mut delete_notice_ids,
+    )
+    .await?;
     for entry in journal
         .list()?
         .into_iter()
@@ -574,76 +621,60 @@ pub(crate) async fn remote_finish_interrupted_transfers(
         let Ok(_active) = ActiveMove::start(&entry.id) else {
             continue;
         };
-        match recover_active(&remotes, &journal, &entry.id, &profile_id, session_id).await {
-            Ok(()) => {
-                recovered_ids.insert(entry.id);
-                restored.push(entry.original);
-            }
-            Err(error) => warnings.push(format!(
-                "Could not restore {}: {error} Check {} on {}.",
-                entry.original, entry.stage, entry.host
-            )),
-        }
-    }
-    let pending: HashSet<_> = journal.list()?.into_iter().map(|entry| entry.id).collect();
-    for stage in journal.destination_stages()? {
-        if !recovered_ids.contains(&stage.id) {
-            // A partial copy without a corresponding original record cannot be
-            // safely deleted automatically. Surface its location instead.
-            if pending.contains(&stage.id) || ActiveMove::start(&stage.id).is_err() {
-                continue;
-            }
-            let relevant = stage.kind == "local" || stage.host == session.host;
-            if relevant {
-                let exists = if stage.kind == "local" {
-                    match fs::symlink_metadata(&stage.path) {
-                        Ok(_) => true,
-                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
-                        Err(_) => true,
-                    }
-                } else {
-                    remotes
-                        .exists(&profile_id, session_id, &stage.path)
-                        .await
-                        .unwrap_or(true)
-                };
-                if !exists {
-                    journal.clear_destination(&stage.id)?;
-                    continue;
-                }
-                let location = if stage.host.is_empty() {
-                    stage.path.clone()
-                } else {
-                    format!("{}:{}", stage.host, stage.path)
-                };
-                warnings.push(format!(
-                    "An incomplete transfer may have left temporary files at {location}."
-                ));
-            }
+        if entry.state == "restored_partial" {
+            warnings.push(format!("Check {} on {}. Some original contents may have been removed after the move was copied.", entry.original, entry.host));
             continue;
         }
-        let result = if stage.kind == "local" {
-            cleanup_destination(&remotes, &journal, &stage.id, None, None).await
+        match recover_active(remotes, journal, &entry.id, profile_id, session_id).await {
+            Ok(()) => {
+                if entry.state == "published" && journal.get(&entry.id)?.is_some() {
+                    warnings.push(format!(
+                        "Check {} on {}. Some original contents may have been removed.",
+                        entry.original, entry.host
+                    ));
+                }
+                restored.push(entry.original);
+            }
+            Err(error) => {
+                if !journal.reviewed_source("move", &entry.id, &entry.state)? {
+                    warnings.push(format!("Could not restore {}: {error} Check {} on {}.", entry.original, entry.stage, entry.host));
+                }
+            }
+        }
+    }
+    for stage in journal.destination_stages()? {
+        let Ok(_active) = ActiveMove::start(&stage.id) else {
+            continue;
+        };
+        let exists = if stage.kind == "local" {
+            !matches!(fs::symlink_metadata(&stage.path), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
         } else if stage.host == session.host {
-            cleanup_destination(
-                &remotes,
-                &journal,
-                &stage.id,
-                Some(&profile_id),
-                Some(session_id),
-            )
-            .await
+            remotes
+                .exists(profile_id, session_id, &stage.path)
+                .await
+                .unwrap_or(true)
         } else {
             continue;
         };
-        if let Err(error) = result {
+        if exists {
+            let host = if stage.kind == "local" {
+                "this PC"
+            } else {
+                &stage.host
+            };
             warnings.push(format!(
-                "Temporary files may remain at {}: {error}",
+                "Check {} on {host} for remaining transfer data.",
                 stage.path
             ));
+        } else {
+            journal.clear_destination(&stage.id)?;
         }
     }
-    Ok(RecoveredTransfers { restored, warnings, delete_notice_ids })
+    Ok(RecoveredTransfers {
+        restored,
+        warnings,
+        delete_notice_ids,
+    })
 }
 
 #[tauri::command]
@@ -719,7 +750,7 @@ mod tests {
                     folder: root.to_string_lossy().into_owned(),
                     path: path.to_string_lossy().into_owned(),
                     identity: Some(identity),
-                })
+                }, "source", "/original")
                 .unwrap();
             let old = root.join("old-stage");
             fs::rename(&path, &old).unwrap();
@@ -753,7 +784,7 @@ mod tests {
                     folder: root.to_string_lossy().into_owned(),
                     path: unknown_path.to_string_lossy().into_owned(),
                     identity: None,
-                })
+                }, "source", "/original")
                 .unwrap();
             assert!(
                 cleanup_destination(&Remotes::default(), &reopened, unknown_id, None, None)
@@ -795,7 +826,7 @@ mod tests {
                         folder: folder.clone(),
                         path: format!("{folder}/.stratum-move-copy-{id}"),
                         identity: (id != ids[2]).then(|| "created".into()),
-                    })
+                    }, "source", "/original")
                     .unwrap();
             }
             cleanup_destination(

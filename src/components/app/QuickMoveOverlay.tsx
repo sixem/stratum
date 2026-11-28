@@ -3,14 +3,13 @@ import { useEffect } from "react";
 import { QuickMovePicker } from "@/components/overlay/quickMove/QuickMovePicker";
 import { useRecentMoveDestinations } from "@/modules/recentMoveStore";
 import { closeQuickMove, confirmQuickMove, useQuickMoveSession } from "@/modules/quickMoveSession";
-import { usePromptStore, useSettingsStore } from "@/modules";
+import { usePromptStore } from "@/modules";
 
 export const QuickMoveOverlay = () => {
   const request = useQuickMoveSession((state) => state.request);
-  const indexedSearchEnabled = useSettingsStore((state) => state.indexedSearchEnabled);
   const promptOpen = usePromptStore((state) => state.prompt !== null);
   const { workspaceId, destinations } = useRecentMoveDestinations();
-  const valid = indexedSearchEnabled && !promptOpen && request?.workspaceId === workspaceId;
+  const valid = !promptOpen && request?.workspaceId === workspaceId;
 
   useEffect(() => {
     if (request && !valid) closeQuickMove(request);
@@ -24,6 +23,6 @@ export const QuickMoveOverlay = () => {
     recentPaths={destinations}
     isDestinationDisabled={request.isDestinationDisabled}
     onClose={() => closeQuickMove(request)}
-    onSelectPath={(path) => confirmQuickMove(request, path)}
+    onSelectDestination={target => confirmQuickMove(request, target)}
   />;
 };

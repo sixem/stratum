@@ -41,7 +41,7 @@ type Props = {
 };
 
 export function RemoteFolderView(props: Props) {
-  const { profile, connection, sessionId, data, error, refresh, reconnect } = useRemoteListing(props.hostId, props.path, props.refreshVersion);
+  const { profile, connection, sessionId, data, cachedOnly, error, refresh, reconnect } = useRemoteListing(props.hostId, props.path, props.refreshVersion);
   const transferLocation = useMemo(() => sessionId !== undefined && data ? ({
     kind: "remote" as const, profileId: props.hostId, sessionId, path: data.path, displayedPath: props.path, refresh,
   }) : undefined, [props.hostId, props.path, sessionId, data, refresh]);
@@ -86,7 +86,7 @@ export function RemoteFolderView(props: Props) {
   else if (connection?.status === "disconnected") content = <EmptyState title="Disconnected" subtitle={connection.error} actions={[{ label: "Reconnect", onClick: reconnect }]} />;
   else if (error) content = <EmptyState title="Couldn't open folder" subtitle={error} actions={[{ label: "Retry", onClick: refresh }]} />;
   else if (!data) content = <div className="remote-loading" role="status">{connected ? "Loading folder…" : "Connecting…"}</div>;
-  else content = <RemoteEntries {...props} directoryPath={data.path} onSelection={setSelected} key={JSON.stringify([props.hostId, data.sessionId, connection?.epoch, props.path])} entries={entries} sessionId={data.sessionId} sessionEpoch={connection?.epoch ?? 0}
+  else content = <RemoteEntries {...props} cachedOnly={cachedOnly} directoryPath={data.path} onSelection={setSelected} key={JSON.stringify([props.hostId, data.sessionId, connection?.epoch, props.path])} entries={entries} sessionId={data.sessionId} sessionEpoch={connection?.epoch ?? 0}
     scrollTop={remoteScrollCache.get(scrollKey) ?? props.scrollTop} onScrollTop={top => { remoteScrollCache.set(scrollKey, top, 1); props.onScrollTop?.(top); }} />;
   return <section className="remote-folder" aria-label={`Remote folder ${props.path}`}
     data-remote-host={props.hostId} data-remote-folder-path={data?.path ?? props.path}

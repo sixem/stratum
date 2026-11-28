@@ -114,13 +114,13 @@ export const useFileDrop = ({
       updateTabDropSubmenuTarget(null);
       return;
     }
-    if (target.kind === "tab" || target.kind === "remote-tab" || target.kind === "tab-submenu") {
+    if (target.kind === "tab" || (target.kind === "remote-tab" && !target.tabPath) || target.kind === "tab-submenu") {
       setDropTargetTabId((prev) => (prev === target.tabId ? prev : target.tabId ?? null));
       setDropTargetPath(null);
-      updateTabDropSubmenuTarget(target.kind === "remote-tab" ? null : target);
+      updateTabDropSubmenuTarget(target);
       return;
     }
-    if (target.kind === "tab-destination") {
+    if (target.kind === "tab-destination" || target.kind === "remote-tab") {
       setDropTargetPath((prev) => (prev === target.path ? prev : target.path));
       setDropTargetTabId((prev) => (prev === target.tabId ? prev : target.tabId ?? null));
       updateTabDropSubmenuTarget(target);
@@ -139,7 +139,13 @@ export const useFileDrop = ({
   }, [closeTabDropSubmenu, highlightTabStrip, setDropTarget]);
   useEffect(() => useRemoteDrag.subscribe((state, previous) => {
     if (state.target !== previous.target) setDropTarget(state.target);
-  }), [setDropTarget]);
+    if (!tabDropMenuEnabled || state.preview === previous.preview) return;
+    if (!state.preview) { setDragPoint(null); closeTabDropSubmenu(); return; }
+    const point = { x: state.preview.x, y: state.preview.y };
+    setDragPoint(point);
+    // Hover can reveal valid subfolders even when dropping on the tab itself is a no-op.
+    if (!state.target) updateTabDropSubmenuTarget(getDropTargetFromPoint(point.x, point.y));
+  }), [setDropTarget, tabDropMenuEnabled, closeTabDropSubmenu, updateTabDropSubmenuTarget]);
 
   useLayoutEffect(() => {
     currentPathKeyRef.current = normalizeDropPath(currentPath);
@@ -241,11 +247,11 @@ export const useFileDrop = ({
     const dispatch = async (paths: string[], target: DropTarget, mode: TransferMode, stage: number | undefined,
       workspace: ReturnType<typeof captureMoveHistoryWorkspace>, remote?: RemotePaneDirectory) => {
       if (target.kind === "tab-submenu") return;
+      const moving = stage == null && mode === "move";
       if (target.kind === "remote-tab") {
-        if (stage != null) { await queueDropError("Save temporary attachments locally before uploading them."); return; }
         try {
-          const dest = await prepareRemoteTabDrop(target, paths, mode === "move");
-          if (dest) await copyRemoteFiles(paths, dest, "", "upload", mode === "move", undefined, undefined, dest.transferId);
+          const dest = await prepareRemoteTabDrop(target, paths, moving);
+          if (dest) await copyRemoteFiles(paths, dest, "", "upload", moving, { transferId: dest.transferId, dropStage: stage });
         } catch (error) { await queueDropError(toMessage(error, "Could not upload the dropped files.")); }
         return;
       }
@@ -255,11 +261,7 @@ export const useFileDrop = ({
           await queueDropError("The remote destination changed or disconnected while receiving the files. Drop them again.");
           return;
         }
-        if (stage != null) {
-          await queueDropError("Temporary attachments cannot be copied to remote folders yet. Save them locally first.");
-          return;
-        }
-        await copyRemoteFiles(paths, { ...remote, path: target.path }, "", "upload", mode === "move");
+        await copyRemoteFiles(paths, { ...remote, path: target.path }, "", "upload", moving, { dropStage: stage });
         return;
       }
       await performDrop(paths, target.path, mode, stage, workspace);

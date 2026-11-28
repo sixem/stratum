@@ -13,6 +13,8 @@ const edge = process.platform === "win32" && [
 ].find(existsSync);
 
 const fixtures = {
+  remoteTools: "both panes inspect remote properties and Quick Move distinguishes connected hosts and sessions",
+  stableBrowsing: "local and SFTP views defer offscreen removals independently in both panes, and Work retains recovery notices",
   remotePaneKeyboard: "remote breadcrumbs support keyboard shortcuts and file drops in both panes and layouts",
   remoteOpen: "SFTP opens respect confirmation settings and show responsive download progress",
 };

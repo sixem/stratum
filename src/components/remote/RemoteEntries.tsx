@@ -36,7 +36,10 @@ import { useRemoteOperations } from "./useRemoteOperations";
 import { moveRemoteEntries } from "./remoteMove";
 import { useClipboardStore, writeRemoteClipboard } from "@/modules/clipboardStore";
 import { useRemoteHosts } from "@/modules/remoteHosts";
+import { usePlacesStore } from "@/modules/placesStore";
 import { pasteIntoRemote } from "@/modules/remoteClipboard";
+import { showRemoteProperties } from "./RemoteProperties";
+import { openRemoteQuickMove } from "@/modules/quickMoveSession";
 import { remoteSelectionCache } from "./remoteViewCache";
 import { selectedRemoteEntries } from "./remoteSelection";
 import { hasVisibleShortcutOverlay, isRemotePaneActive, isRemotePaneShortcutFocus } from "./remotePaneKeyboard";
@@ -46,6 +49,7 @@ type Props = {
   entries: RemoteEntry[]; pane: LinkedPane; path: string; search: string;
   hostId: string; sessionId: number; viewMode: ViewMode; sort: SortState;
   sessionEpoch: number;
+  cachedOnly: boolean;
   tabId: string;
   directoryPath: string;
   onSelection: (selected: Set<string>) => void;
@@ -88,16 +92,19 @@ export function RemoteEntries(props: Props) {
     const estimatedBytes = snapshot.reduce((bytes, path) => bytes + 64 + path.length * 2, 64);
     remoteSelectionCache.set(selectionKey, { paths: snapshot, anchor: selection.getAnchorPath() }, estimatedBytes);
   }, [selectionKey, selection.getSelectionSnapshot, selection.getAnchorPath]);
-  const copySelection = useCallback((selectedPaths: string[]) => {
+  const copySelection = useCallback((selectedPaths: string[], mode: "copy" | "move" = "copy") => {
     const host = useRemoteHosts.getState().profiles.find(profile => profile.id === hostId);
     const selectedEntries = selectedRemoteEntries(selectedPaths, entryByPath);
-    if (host && selectedEntries.length) void writeRemoteClipboard({ profileId: hostId, host: host.destination, path: props.directoryPath, entries: selectedEntries });
+    if (host && selectedEntries.length) void writeRemoteClipboard({ profileId: hostId, host: host.destination, path: props.directoryPath, entries: selectedEntries, mode });
   }, [entryByPath, hostId, props.directoryPath]);
   const paste = useCallback((destination = props.directoryPath) => {
     void pasteIntoRemote({ profileId: hostId, sessionId, path: destination }).catch(error =>
       usePromptStore.getState().showPrompt({ title: "Paste failed", content: String(error), confirmLabel: "OK", cancelLabel: null }));
   }, [hostId, sessionId, props.directoryPath]);
   const ops = useRemoteOperations(hostId, sessionId, props.directoryPath, selection.clearSelection, props.pane);
+  const quickMove = useCallback((items: RemoteEntry[]) => openRemoteQuickMove({
+    profileId: hostId, sessionId, epoch: props.sessionEpoch, path: props.directoryPath,
+  }, items), [hostId, sessionId, props.sessionEpoch, props.directoryPath]);
   // Selection commands have the same effect when a pane control has focus.
   const handleSelectionShortcut = useCallback((event: globalThis.KeyboardEvent) => {
     if (event.defaultPrevented || event.isComposing) return false;
@@ -105,8 +112,8 @@ export function RemoteEntries(props: Props) {
     const key = event.key.toLowerCase();
     const selected = selection.selected;
     const anchor = selection.getAnchorPath();
-    if (event.ctrlKey && !event.altKey && !event.shiftKey && key === "c" && selected.size) {
-      copySelection([...selected]);
+    if (event.ctrlKey && !event.altKey && !event.shiftKey && (key === "c" || key === "x") && selected.size) {
+      copySelection([...selected], key === "x" ? "move" : "copy");
     } else if (event.ctrlKey && !event.altKey && !event.shiftKey && key === "v") {
       paste();
     } else if (!event.repeat && binding === settings.keybinds.renameSelection && anchor && selected.size && entryByPath.has(anchor)) {
@@ -114,6 +121,11 @@ export function RemoteEntries(props: Props) {
       else ops.startBatchRename(entries.filter(entry => selected.has(entry.path)));
     } else if (!event.repeat && binding === settings.keybinds.deleteSelection && selected.size) {
       ops.deleteEntries(selectedRemoteEntries(selected, entryByPath));
+    } else if (!event.repeat && binding === settings.keybinds.quickMove && selected.size) {
+      return quickMove(selectedRemoteEntries(selected, entryByPath));
+    } else if (binding === "Alt+Enter") {
+      const items = selectedRemoteEntries(selected, entryByPath);
+      if (!event.repeat && items.length === 1) showRemoteProperties({ profileId: hostId, sessionId, path: items[0].path });
     } else if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && key === "a") {
       selection.setSelection(entries.map(entry => entry.path));
     } else if (key === "escape" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && selected.size) {
@@ -122,7 +134,7 @@ export function RemoteEntries(props: Props) {
     return true;
   }, [copySelection, paste, selection.selected, selection.getAnchorPath, selection.setSelection, selection.clearSelection,
     settings.keybinds.renameSelection, settings.keybinds.deleteSelection, entryByPath, entries,
-    ops.startRename, ops.startBatchRename, ops.deleteEntries]);
+    ops.startRename, ops.startBatchRename, ops.deleteEntries, quickMove, settings.keybinds.quickMove, hostId, sessionId]);
   const createPrompt = useCreateEntryPrompt();
   const createFolderAndOpen = async (folder: string, name: string) => {
     if (await ops.create(folder, name, true)) props.onNavigate(`${folder.replace(/\/$/, "")}/${name}`);
@@ -231,8 +243,9 @@ export function RemoteEntries(props: Props) {
     e.preventDefault(); e.stopPropagation();
   };
   const common = {
-    view: { remote: true, currentPath: props.directoryPath, entryByPath, items, loading: false, searchQuery: props.search,
+    view: { remote: true, remoteProfileId: hostId, currentPath: props.directoryPath, entryByPath, items, loading: false, searchQuery: props.search, sortState: props.sort,
       viewKey: key, scrollRestoreKey: key, scrollRestoreTop: props.scrollTop ?? 0, scrollRequest,
+      removalScope: JSON.stringify([selectionKey, props.search, props.sort.key, props.sort.dir, settings.remoteShowHidden, props.cachedOnly]),
       smoothScroll: settings.smoothScroll, canGoUp: path !== "/", onGoUp: () => props.onNavigate(remoteParent(path)) },
     selection: { selectedPaths: selection.selected, pendingDeletePaths: emptyPaths, pendingTransferPaths: emptyPaths,
       onSelectItem: selection.selectItem, onSetSelection: selection.setSelection, onClearSelection: selection.clearSelection },
@@ -250,6 +263,17 @@ export function RemoteEntries(props: Props) {
       onCreateFolderAndGo: createFolderAndOpen, onCreateFile: (folder: string, name: string) => ops.create(folder, name, false) },
   };
   const menuPath = menu?.path;
+  const pinPath = menuPath ?? path;
+  const savedPlace = usePlacesStore(state => state.places.find(place => place.hostId === hostId && place.path === pinPath));
+  const pinItem: ContextMenuItem = {
+    id: "place-target-pin-toggle", label: savedPlace?.pinned ? "Unpin from places" : "Pin to places",
+    icon: savedPlace?.pinned ? "unpin" : "pin",
+    onSelect: () => {
+      const store = usePlacesStore.getState();
+      if (savedPlace?.pinned) store.unpinPlace(savedPlace);
+      else store.addPlace({ hostId, path: pinPath }, undefined, { pinned: true });
+    },
+  };
   const menuEntry = menuPath ? entryByPath.get(menuPath) : undefined;
   const menuEntries = !menuEntry ? [] : selection.selected.has(menuEntry.path)
     ? selectedRemoteEntries(selection.selected, entryByPath) : [menuEntry];
@@ -268,40 +292,46 @@ export function RemoteEntries(props: Props) {
     onCreate: (target, name) => ops.create(target, name, kind === "folder"),
     onCreateAndGo: kind === "folder" ? createFolderAndOpen : undefined,
   });
-  const menuItems: ContextMenuItem[] = !menu ? [] : !menuPath ? backgroundMenu : !menuEntry ? [] : [
+  const menuItems: ContextMenuItem[] = !menu ? [] : !menuPath ? [...backgroundMenu, pinItem] : !menuEntry ? [] : [
     ...buildEntryOpenItems({ target: menuEntry, targetCount: menuPaths.length, onOpenEntry: openFile,
       onOpenDir: props.onNavigate, onOpenDirNewTab: props.onOpenTab,
       onOpenGallery: !menuEntry.isSymlink && isPreviewableEntry(menuEntry, settings.galleryAudio) ? props.preview.open : undefined,
       galleryPath: menuEntry.path }),
+    ...(menuEntry.isDir && menuPaths.length === 1 ? [pinItem] : []),
     ...(menuEntry.isDir && !menuEntry.isSymlink && menuPaths.length === 1 ? [
       { id: "new-folder", label: "New folder", icon: "new-folder" as const, onSelect: () => showCreate(menuEntry.path, "folder") },
       { id: "new-file", label: "New file", icon: "new-file" as const, onSelect: () => showCreate(menuEntry.path, "file") },
     ] : []),
+    { id: "entry-cut", icon: "cut", label: "Cut", onSelect: () => copySelection(menuPaths, "move") },
     { id: "copy", icon: "copy", label: "Copy", onSelect: () => copySelection(menuPaths) },
+    { id: "entry-quick-move", label: "Quick Move…", icon: "paste-into-folder", onSelect: () => quickMove(menuEntries) },
     ...(menuEntry.isDir && !menuEntry.isSymlink && menuPaths.length === 1 ? [{ id: "paste", icon: "paste-into-folder" as const,
       label: "Paste into folder", disabled: !canPaste, onSelect: () => paste(menuEntry.path) }] : []),
     ...(localTarget ? [{ id: "copy-to-pane", icon: "copy" as const, label: "Copy to other pane", tooltip: localTarget.path, onSelect: download }] : []),
     ...(localTarget ? [{ id: "move-to-local-pane", icon: "paste-into-folder" as const, label: "Move to other pane", tooltip: localTarget.path,
       onSelect: () => { if (!isCurrentPaneDirectory(props.pane, localTarget)) return;
-        void copyRemoteFiles(menuPaths, { profileId: hostId, sessionId, path }, localTarget.path, "download", true, undefined, entryByPath); } }] : []),
+        void copyRemoteFiles(menuPaths, { profileId: hostId, sessionId, path }, localTarget.path, "download", true, { sourceEntries: entryByPath }); } }] : []),
     ...(remoteTarget ? [{ id: "copy-to-remote-pane", icon: "copy" as const, label: "Copy to other pane", tooltip: remoteTarget.path,
       onSelect: () => { if (!isCurrentPaneDirectory(props.pane, remoteTarget)) return;
-        void copyRemoteFiles(menuPaths, { profileId: hostId, sessionId, path }, "", "download", false, remoteTarget, entryByPath); } }] : []),
+        void copyRemoteFiles(menuPaths, { profileId: hostId, sessionId, path }, "", "download", false, { remoteTarget, sourceEntries: entryByPath }); } }] : []),
     ...(remoteTarget ? [{ id: "move-to-pane", icon: "paste-into-folder" as const, label: "Move to other pane", tooltip: remoteTarget.path,
       onSelect: () => { if (!isCurrentPaneDirectory(props.pane, remoteTarget)) return;
         if (remoteTarget.profileId === hostId && remoteTarget.sessionId === sessionId) {
           void moveRemoteEntries(menuEntries, hostId, sessionId, props.directoryPath, remoteTarget.path);
         } else {
-          void copyRemoteFiles(menuPaths, { profileId: hostId, sessionId, path }, "", "download", true, remoteTarget, entryByPath);
+          void copyRemoteFiles(menuPaths, { profileId: hostId, sessionId, path }, "", "download", true, { remoteTarget, sourceEntries: entryByPath });
         } } }] : []),
     ...buildEntryRenameItems({ target: menuEntry, hasTargets: true, multiple: menuPaths.length > 1,
       onRenameEntry: () => menuPaths.length === 1 ? ops.startRename(menuEntry) : ops.startBatchRename(entries.filter(entry => selection.selected.has(entry.path)))}),
     { id: "entry-delete", label: "Delete", icon: "delete", onSelect: () => ops.deleteEntries(menuEntries) },
+    { kind: "divider", id: "entry-divider-properties" },
+    { id: "entry-properties", label: "Properties", icon: "properties", disabled: menuPaths.length !== 1,
+      onSelect: () => showRemoteProperties({ profileId: hostId, sessionId, path: menuEntry.path }) },
   ];
   return <div className="remote-entries" ref={container} tabIndex={-1} onKeyDown={onKeyDown}
     onScrollCapture={e => { if ((e.target as Element).matches(".list-body, .thumb-viewport")) props.onScrollTop?.((e.target as HTMLElement).scrollTop); }}>
     <Suspense fallback={null}>{props.viewMode === "list"
-      ? <FileList {...common} list={{ sortState: props.sort, onSortChange: props.onSort, categoryTinting: settings.categoryTinting, onVisibleEntries: setVisible,
+      ? <FileList {...common} list={{ onSortChange: props.onSort, categoryTinting: settings.categoryTinting, onVisibleEntries: setVisible,
           nameEllipsis: settings.gridNameEllipsis, hideExtension: settings.gridNameHideExtension }} />
       : <FileGrid {...common} grid={{ pane: props.pane, gridSize: settings.gridSize, gridAutoColumns: settings.gridAutoColumns,
           gridGap: settings.gridGap, gridShowSize: settings.gridShowSize, gridShowExtension: settings.gridShowExtension,

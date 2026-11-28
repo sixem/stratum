@@ -1,6 +1,7 @@
 // Manages delayed tab-hover submenu state for drag-drop destinations.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listDir } from "@/api";
+import { listRemoteTabFolders } from "@/modules/remoteTabFolders";
 import type { DropTarget, DropTargetSubmenuItem, TabDropSubmenuState } from "@/lib";
 import { getParentPath, getPathName, normalizePath } from "@/lib";
 import {
@@ -59,7 +60,8 @@ export const useTabDropSubmenu = ({ enabled, includeSubfolders, includeParent }:
   const openTimerRef = useRef<number | null>(null);
   const closeTimerRef = useRef<number | null>(null);
   const activeHostKeyRef = useRef<string | null>(null);
-  const pendingHostRef = useRef<{ tabId: string; path: string } | null>(null);
+  const pendingHostRef = useRef<{ tabId: string; path: string; profileId?: string } | null>(null);
+  const remoteRequest = useRef<AbortController | null>(null);
   const requestIdRef = useRef(0);
   const cacheRef = useRef<Map<string, CachedSubmenuEntry>>(new Map());
 
@@ -86,6 +88,8 @@ export const useTabDropSubmenu = ({ enabled, includeSubfolders, includeParent }:
   }, []);
 
   const closeSubmenu = useCallback(() => {
+    remoteRequest.current?.abort();
+    remoteRequest.current = null;
     clearOpenTimer();
     clearCloseTimer();
     pendingHostRef.current = null;
@@ -105,8 +109,8 @@ export const useTabDropSubmenu = ({ enabled, includeSubfolders, includeParent }:
   }, [clearCloseTimer, clearOpenTimer]);
 
   const openSubmenu = useCallback(
-    async (tabId: string, path: string) => {
-      const trimmedPath = path.trim();
+    async (tabId: string, path: string, profileId?: string) => {
+      const trimmedPath = profileId ? path : path.trim();
       if (!enabled || !tabId || !trimmedPath) {
         closeSubmenu();
         return;
@@ -116,6 +120,23 @@ export const useTabDropSubmenu = ({ enabled, includeSubfolders, includeParent }:
       clearCloseTimer();
       pendingHostRef.current = null;
 
+      remoteRequest.current?.abort();
+      remoteRequest.current = null;
+      if (profileId) {
+        const controller = new AbortController();
+        remoteRequest.current = controller;
+        activeHostKeyRef.current = JSON.stringify([tabId, profileId, path]);
+        const id = ++requestIdRef.current;
+        const host = { hostTabId: tabId, hostPath: path };
+        setSubmenu({ ...host, items: [], loading: true });
+        try {
+          const folders = await listRemoteTabFolders(profileId, path, includeSubfolders, includeParent, controller.signal);
+          if (requestIdRef.current === id) setSubmenu({ ...host, ...folders, loading: false });
+        } catch (error) {
+          if (requestIdRef.current === id) setSubmenu({ ...host, items: [], loading: false, error: String(error) });
+        }
+        return;
+      }
       const cacheKey = normalizePath(trimmedPath);
       const hostKey = `${tabId}\u0000${cacheKey}`;
       activeHostKeyRef.current = hostKey;
@@ -192,10 +213,13 @@ export const useTabDropSubmenu = ({ enabled, includeSubfolders, includeParent }:
         return;
       }
 
-      if (target.kind === "tab-destination" || target.kind === "tab-submenu") {
+      const remoteRow = target.kind === "remote-tab" && target.tabPath !== undefined;
+      if (target.kind === "tab-destination" || target.kind === "tab-submenu" || remoteRow) {
         if (
           !target.tabId ||
           target.tabId !== submenu.hostTabId ||
+          (remoteRow && (target.profileId !== submenu.remote?.profileId || target.sessionId !== submenu.remote?.sessionId ||
+            target.tabPath !== submenu.hostPath || !submenu.items.some(item => item.path === target.path))) ||
           (target.kind === "tab-destination" && !itemBelongsToSubmenu(submenu.items, target.path))
         ) {
           closeSubmenu();
@@ -204,19 +228,18 @@ export const useTabDropSubmenu = ({ enabled, includeSubfolders, includeParent }:
         clearOpenTimer();
         clearCloseTimer();
         pendingHostRef.current = null;
-        activeHostKeyRef.current = `${target.tabId}\u0000${normalizePath(
-          submenu.hostPath ?? "",
-        )}`;
         return;
       }
 
-      if (target.kind !== "tab") {
+      if (target.kind !== "tab" && target.kind !== "remote-tab") {
         closeSubmenu();
         return;
       }
 
       const tabId = target.tabId ?? null;
-      const path = target.path.trim();
+      const profileId = target.kind === "remote-tab" ? target.profileId : undefined;
+      if (target.kind === "remote-tab" && !profileId) { closeSubmenu(); return; }
+      const path = profileId ? target.path : target.path.trim();
       if (!tabId || !path) {
         closeSubmenu();
         return;
@@ -225,7 +248,7 @@ export const useTabDropSubmenu = ({ enabled, includeSubfolders, includeParent }:
       clearCloseTimer();
       if (
         submenu.hostTabId === tabId &&
-        normalizePath(submenu.hostPath ?? "") === normalizePath(path)
+        activeHostKeyRef.current === (profileId ? JSON.stringify([tabId, profileId, path]) : `${tabId}\u0000${normalizePath(path)}`)
       ) {
         clearOpenTimer();
         pendingHostRef.current = null;
@@ -234,19 +257,19 @@ export const useTabDropSubmenu = ({ enabled, includeSubfolders, includeParent }:
 
       if (
         pendingHostRef.current?.tabId === tabId &&
-        normalizePath(pendingHostRef.current.path) === normalizePath(path)
+        pendingHostRef.current.profileId === profileId && (profileId ? pendingHostRef.current.path === path : normalizePath(pendingHostRef.current.path) === normalizePath(path))
       ) {
         return;
       }
 
       clearOpenTimer();
-      pendingHostRef.current = { tabId, path };
+      pendingHostRef.current = { tabId, path, profileId };
       openTimerRef.current = window.setTimeout(() => {
         openTimerRef.current = null;
         const nextHost = pendingHostRef.current;
         pendingHostRef.current = null;
         if (!nextHost) return;
-        void openSubmenu(nextHost.tabId, nextHost.path);
+        void openSubmenu(nextHost.tabId, nextHost.path, nextHost.profileId);
       }, TAB_SUBMENU_HOVER_DELAY_MS);
     },
     [
@@ -259,6 +282,7 @@ export const useTabDropSubmenu = ({ enabled, includeSubfolders, includeParent }:
       submenu.hostPath,
       submenu.hostTabId,
       submenu.items,
+      submenu.remote,
     ],
   );
 
@@ -267,7 +291,7 @@ export const useTabDropSubmenu = ({ enabled, includeSubfolders, includeParent }:
   }, [closeSubmenu, enabled, includeParent, includeSubfolders]);
 
   useEffect(() => {
-    if (!enabled || !includeSubfolders || !activeHostKeyRef.current) return;
+    if (!enabled || !includeSubfolders || !activeHostKeyRef.current || remoteRequest.current) return;
     const hostPath = submenu.hostPath;
     const hostTabId = submenu.hostTabId;
     if (!hostPath || !hostTabId) return;
@@ -292,6 +316,7 @@ export const useTabDropSubmenu = ({ enabled, includeSubfolders, includeParent }:
       clearOpenTimer();
       clearCloseTimer();
       requestIdRef.current += 1;
+      remoteRequest.current?.abort();
     },
     [clearCloseTimer, clearOpenTimer],
   );

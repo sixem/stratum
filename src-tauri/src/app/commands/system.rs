@@ -71,9 +71,10 @@ pub async fn set_remote_clipboard(
     window: tauri::Window,
     text: String,
     token: String,
+    expected_sequence: Option<u32>,
 ) -> Result<u32, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        clipboard::set_remote_clipboard(clipboard_owner(&window)?, text, token)
+        clipboard::set_remote_clipboard(clipboard_owner(&window)?, text, token, expected_sequence)
     })
     .await
     .map_err(|err| err.to_string())?

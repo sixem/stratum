@@ -51,6 +51,7 @@ export function RemoteHostEditor({ profile, onClose }: Props) {
     }
   };
   return <form className="remote-editor" onSubmit={save}>
+    <p className="remote-placeholder">SFTP uses Windows OpenSSH, including your SSH config, keys and agent. Connect once in Windows Terminal to verify the host fingerprint before using it here.</p>
     <label>SSH destination
       <input autoFocus={!profile} autoCapitalize="off" autoComplete="off" spellCheck={false} required
         maxLength={255} disabled={testing}

@@ -65,6 +65,7 @@ export const useShellFileViewAssembly = ({
           loading: resolvedView.viewLoading,
           showLander: resolvedView.showLander,
           searchQuery: viewState.deferredSearchValue,
+          confirmedQueryKey: fileManager.confirmedQueryKey,
           viewKey: resolvedView.viewKey,
           scrollRestoreKey: resolvedView.viewKey,
           scrollRestoreTop: resolvedView.scrollRestoreTop,

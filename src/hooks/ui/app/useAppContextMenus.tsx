@@ -1,5 +1,6 @@
 // Centralizes context menu items and pointer handlers for layout + entries.
 import { useCallback, useEffect, useMemo } from "react";
+import type { PlaceReference } from "@/lib/placeLocation";
 import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 import { flushSync } from "react-dom";
 import { openPathProperties, type ShellMenuTarget } from "@/api";
@@ -9,6 +10,8 @@ import { applyContextMenuVisibility } from "@/lib/contextMenuVisibility";
 import { setTabAnchored } from "@/lib/tabAnchors";
 import { useClipboardStore, usePromptStore, useSettingsStore } from "@/modules";
 import { showBottomPane } from "@/modules/bottomPaneStore";
+import { hasConnectedHost } from "@/modules/remoteQuickMoveFolders";
+import { useRemoteHosts } from "@/modules/remoteHosts";
 import { openQuickMove } from "@/modules/quickMoveSession";
 import { getPaneSessionStore } from "@/modules/sessionStore";
 import { getDefaultTabGridSize, readTabGridSize } from "@/modules/tabGridSize";
@@ -94,10 +97,10 @@ type UseAppContextMenusOptions = {
   onOpenConvertModal: (request: ConversionModalRequest) => void;
   onQuickConvertImages: (request: ConversionModalRequest, targetFormat: string) => void;
   places: Place[];
-  onAddPlace: (path: string, name?: string, options?: { pinned?: boolean }) => void;
-  onPinPlace: (path: string) => void;
-  onUnpinPlace: (path: string) => void;
-  onRemovePlace: (path: string) => void;
+  onAddPlace: (path: PlaceReference, name?: string, options?: { pinned?: boolean }) => void;
+  onPinPlace: (path: PlaceReference) => void;
+  onUnpinPlace: (path: PlaceReference) => void;
+  onRemovePlace: (path: PlaceReference) => void;
   onRemoveRecentJump?: (path: string) => void;
 };
 
@@ -173,7 +176,9 @@ export const useAppContextMenus = ({
   onRemoveRecentJump,
 }: UseAppContextMenusOptions) => {
   const defaultTabGridSize = useSettingsStore(getDefaultTabGridSize);
-  const quickMoveEnabled = useSettingsStore((state) => state.indexedSearchEnabled);
+  const localIndexEnabled = useSettingsStore(state => state.indexedSearchEnabled);
+  const connectedHost = useRemoteHosts(hasConnectedHost);
+  const quickMoveEnabled = localIndexEnabled || connectedHost;
   const menuUseWindowsForItems = useSettingsStore((state) => state.menuUseWindowsForItems);
   const includeAudio = useSettingsStore((state) => state.galleryAudio);
   const menuPaneTransfers = useSettingsStore((state) => state.menuPaneTransfers);
@@ -234,7 +239,7 @@ export const useAppContextMenus = ({
       case "entry":
         return { paths: resolveContextTargets(contextMenu.entry, selected, viewParentPath) };
       case "place-target":
-        return contextMenu.target.path ? { paths: [contextMenu.target.path] } : null;
+        return !contextMenu.target.hostId && contextMenu.target.path ? { paths: [contextMenu.target.path] } : null;
       case "sort":
         return currentPath ? { backgroundPath: currentPath } : null;
       case "actions":
@@ -289,7 +294,7 @@ export const useAppContextMenus = ({
       if (event.button !== 2) return;
       event.preventDefault();
       event.stopPropagation();
-      if (event.shiftKey && target.path && openWindowsMenu({ paths: [target.path] }, eventPoint(event), true)) return;
+      if (event.shiftKey && !target.hostId && target.path && openWindowsMenu({ paths: [target.path] }, eventPoint(event), true)) return;
       openPlaceTargetMenu(event, target);
     },
     [openPlaceTargetMenu, openWindowsMenu],
@@ -435,6 +440,7 @@ export const useAppContextMenus = ({
   }
   const placeTargetMenuItems = buildPlaceTargetMenuItems({
     target: placeTarget,
+    pane,
     places,
     tabActions,
     onOpenPath: terminalSidebarMenu ? undefined : onOpenDir,

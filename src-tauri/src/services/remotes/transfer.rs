@@ -67,6 +67,8 @@ pub(crate) struct Transfer {
 
 #[derive(Clone)]
 pub(crate) struct TransferBatch {
+    // The queue owns virtual attachment data through waiting, conflict decisions and execution.
+    _drop_stage: Option<std::sync::Arc<crate::platform::windows::dragdrop::DropStage>>,
     pub items: Vec<Transfer>,
     pub request_decision: std::sync::Arc<
         dyn Fn(Vec<usize>) -> Result<preflight::PendingDecision, String> + Send + Sync,
@@ -260,6 +262,22 @@ struct BatchItemFinished {
     index: usize,
 }
 
+fn staged_upload_paths(items: &[BatchRequestItem], moving: bool) -> Result<Vec<String>, String> {
+    if moving {
+        return Err("Temporary attachments can only be copied.".into());
+    }
+    items
+        .iter()
+        .map(|item| match &item.request {
+            TransferRequest::Upload { local_path, .. } => local_path
+                .to_str()
+                .map(str::to_owned)
+                .ok_or_else(|| "Invalid temporary attachment path.".into()),
+            _ => Err("Temporary attachments can only be uploaded.".into()),
+        })
+        .collect()
+}
+
 // One queue job owns the whole selection, including its pause/cancel state.
 #[tauri::command]
 pub(crate) async fn remote_transfer_batch(
@@ -269,12 +287,22 @@ pub(crate) async fn remote_transfer_batch(
     items: Vec<BatchRequestItem>,
     transfer_id: String,
     moving: bool,
+    drop_stage: Option<u64>,
 ) -> Result<BatchResult, String> {
     if items.is_empty() || items.len() > 100_000 {
         return Err("Select between 1 and 100000 items.".into());
     }
     let remotes = super::manager(&webview)?;
     remotes.current(&profile_id, Some(session_id))?;
+    let stage = drop_stage
+        .map(|id| {
+            let paths = staged_upload_paths(&items, moving)?;
+            webview
+                .state::<crate::platform::windows::dragdrop::IncomingDrops>()
+                .take_for_transfer(webview.label(), id, &paths)
+                .map(std::sync::Arc::new)
+        })
+        .transpose()?;
     let journal = super::recovery::RecoveryJournal::for_webview(&webview)?;
     let app = webview.app_handle().clone();
     let source_profile = profile_id.clone();
@@ -354,6 +382,7 @@ pub(crate) async fn remote_transfer_batch(
         queue.remote_batch(
             window,
             TransferBatch {
+                _drop_stage: stage,
                 items: jobs,
                 request_decision,
                 item_finished,
@@ -614,6 +643,43 @@ mod tests {
     use super::*;
 
     #[test]
+    fn staged_batch_accepts_only_copy_uploads_and_keeps_the_files_until_workers_finish() {
+        use crate::platform::windows::dragdrop::claimed_test_file;
+        let (stage, source) = claimed_test_file();
+        let mut items = vec![BatchRequestItem {
+            request: TransferRequest::Upload {
+                local_path: PathBuf::from(&source),
+                remote_folder: "/inbox".into(),
+            },
+            expected: None,
+        }];
+        assert_eq!(
+            staged_upload_paths(&items, false).unwrap(),
+            [source.clone()]
+        );
+        assert!(staged_upload_paths(&items, true).is_err());
+        items.push(BatchRequestItem {
+            request: TransferRequest::Download {
+                remote_path: "/file".into(),
+                local_folder: std::env::temp_dir(),
+            },
+            expected: None,
+        });
+        assert!(staged_upload_paths(&items, false).is_err());
+        let batch = TransferBatch {
+            _drop_stage: Some(std::sync::Arc::new(stage)),
+            items: Vec::new(),
+            request_decision: std::sync::Arc::new(|_| unreachable!()),
+            item_finished: std::sync::Arc::new(|_| {}),
+        };
+        let worker = batch.clone();
+        drop(batch);
+        assert_eq!(fs::read(&source).unwrap(), b"sample");
+        drop(worker);
+        assert!(!Path::new(&source).exists());
+    }
+
+    #[test]
     fn destination_rejects_names_that_windows_cannot_preserve() {
         let folder = std::env::temp_dir();
         assert_eq!(
@@ -741,14 +807,8 @@ mod tests {
                 .connect("upload-test", &host, "", std::sync::Arc::new(|_| {}))
                 .await
                 .unwrap();
-            let mut random = [0u8; 16];
-            getrandom::fill(&mut random).unwrap();
-            let local = std::env::temp_dir().join(format!(
-                "stratum-upload-test-{:032x}",
-                u128::from_le_bytes(random)
-            ));
-            fs::create_dir(&local).unwrap();
-            let source = local.join("upload.bin");
+            let (stage, source) = crate::platform::windows::dragdrop::claimed_test_file();
+            let source = PathBuf::from(source);
             let data = (0..200_000)
                 .map(|value| (value % 251) as u8)
                 .collect::<Vec<_>>();
@@ -840,7 +900,8 @@ mod tests {
                 .unwrap();
             drop(wire);
             remotes.disconnect("upload-test").await;
-            fs::remove_dir_all(local).unwrap();
+            drop(stage);
+            assert!(!source.exists());
         });
     }
 }

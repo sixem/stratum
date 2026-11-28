@@ -145,6 +145,17 @@
     margin-inline-end: -5px;
   }
 
+  .recovery-details {
+    h3 { margin: 8px 0 2px; font-size: var(--font-size-md); }
+    .recovery-item { padding: 8px 0; font-size: var(--font-size-sm); overflow-wrap: anywhere; }
+    article + article { border-top: 1px solid var(--stroke); }
+    dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 8px; margin: 6px 0; }
+    dt, p { color: var(--muted); }
+    dd { margin: 0; user-select: text; white-space: pre-wrap; }
+    p { margin: 4px 0; }
+    .recovery-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  }
+
   .transfer-popover-clear {
     @include control.icon-button-shell(24px);
     border: 0;

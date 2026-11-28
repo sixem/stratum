@@ -138,7 +138,12 @@ pub fn set_clipboard_text(owner: usize, text: String) -> Result<(), String> {
 // Windows updates the sequence when the writing clipboard lock closes. A
 // private marker lets us verify our write after reopening without accepting a
 // different application's clipboard contents in the intervening window.
-pub fn set_remote_clipboard(owner: usize, text: String, token: String) -> Result<u32, String> {
+pub fn set_remote_clipboard(
+    owner: usize,
+    text: String,
+    token: String,
+    expected_sequence: Option<u32>,
+) -> Result<u32, String> {
     if text.contains('\0')
         || token.len() != 36
         || !token.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')
@@ -154,7 +159,15 @@ pub fn set_remote_clipboard(owner: usize, text: String, token: String) -> Result
     let marker = Memory::from_bytes(token.as_bytes())?;
     {
         let _guard = OpenGuard::open(Some(HWND(owner as _)))?;
+        if expected_sequence
+            .is_some_and(|seq| seq == 0 || seq != unsafe { GetClipboardSequenceNumber() })
+        {
+            return Ok(0);
+        }
         unsafe { EmptyClipboard() }.map_err(|e| e.to_string())?;
+        if expected_sequence.is_some() && text.is_empty() {
+            return Ok(0);
+        }
         marker.publish(format)?;
         data.publish(CF_UNICODETEXT.0.into())?;
     }

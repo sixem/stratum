@@ -5,6 +5,9 @@ import { isTransferCancelledError, getTransferErrorMessage } from "@/hooks/domai
 import { usePromptStore } from "@/modules/promptStore";
 import { useTransferStore } from "@/modules/transferStore";
 import { refreshRemoteTransferViews } from "@/modules/remoteTransferRefresh";
+import { moveRemoteEntries } from "@/components/remote/remoteMove";
+import type { RemoteEntry } from "@/components/remote/remoteDirectory";
+import { refreshRecovery } from "./remoteRecovery";
 
 type RemoteDestination = { profileId: string; sessionId: number; path: string };
 type Request = { kind: "upload"; localPath: string; remoteFolder: string } | { kind: "download"; remotePath: string; localFolder: string } |
@@ -60,11 +63,16 @@ export async function copyRemoteFiles(
   localFolder: string,
   direction: "upload" | "download",
   moving = false,
-  remoteTarget?: RemoteDestination,
-  sourceEntries?: ReadonlyMap<string, RemoteSelection>,
-  transferId?: string,
+  options: {
+    remoteTarget?: RemoteDestination;
+    sourceEntries?: ReadonlyMap<string, RemoteSelection>;
+    transferId?: string;
+    dropStage?: number;
+  } = {},
 ) {
-  if (!paths.length) return;
+  const { remoteTarget, sourceEntries, transferId, dropStage } = options;
+  const movedPaths: string[] = [];
+  if (!paths.length) return movedPaths;
   const candidates = paths.map((path): { path: string; request: Request } => ({ path, request: remoteTarget
     ? { kind: "remote", remotePath: path, destProfile: remoteTarget.profileId, destSession: remoteTarget.sessionId, remoteFolder: remoteTarget.path }
     : direction === "upload" ? { kind: "upload", localPath: path, remoteFolder: remote.path }
@@ -112,12 +120,12 @@ export async function copyRemoteFiles(
       const expected = selected && { name: selected.name, isDir: selected.isDir, isSymlink: Boolean(selected.isSymlink), size: selected.size, modified: selected.modified };
       return { request, expected };
     });
-    const report = await invoke<BatchResult>("remote_transfer_batch", { profileId: remote.profileId, sessionId: remote.sessionId, items, transferId: registration.id, moving });
+    const report = await invoke<BatchResult>("remote_transfer_batch", { profileId: remote.profileId, sessionId: remote.sessionId, items, transferId: registration.id, moving, dropStage });
     let copied = 0, moved = 0, failed = 0, skipped = 0;
     for (const item of report.items) {
       const path = candidates[item.index]?.path ?? "Item";
       if (item.result) {
-        if (moving && !item.result.warning) moved++; else copied++;
+        if (moving && !item.result.warning) { moved++; movedPaths.push(path); } else copied++;
         if (item.result.backup) backups.push(item.result.backup);
         if (item.result.warning) warnings.push(item.result.warning);
       } else if (item.skipped) skipped++;
@@ -136,6 +144,22 @@ export async function copyRemoteFiles(
   } finally {
     promptLifetime.abort(); unlisteners.forEach(unlisten => unlisten()); candidates.forEach((_, index) => refresh(index));
     flushSettled(); fileJob?.finish();
+    if (remoteTarget || (moving && direction === "download")) void refreshRecovery();
   }
-  await reportResults(failures, backups, warnings, moving);
+  const notice = reportResults(failures, backups, warnings, moving);
+  // A rejected batch can still have an unclaimed drop stage. Let the caller
+  // release it as soon as work ends, even if the result dialog stays open.
+  if (dropStage === undefined) await notice;
+  return movedPaths;
+}
+
+// Same-session moves can rename in place. Other destinations use the managed batch transfer.
+export function transferRemoteSelection(entries: RemoteEntry[], source: RemoteDestination,
+  destination: string | RemoteDestination, moving: boolean) {
+  const target = typeof destination === "string" ? undefined : destination;
+  if (moving && target?.profileId === source.profileId && target.sessionId === source.sessionId) {
+    return moveRemoteEntries(entries, source.profileId, source.sessionId, source.path, target.path);
+  }
+  return copyRemoteFiles(entries.map(entry => entry.path), source, typeof destination === "string" ? destination : "",
+    "download", moving, { remoteTarget: target, sourceEntries: new Map(entries.map(entry => [entry.path, entry])) });
 }

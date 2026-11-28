@@ -94,7 +94,10 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
   }, [onSummary, path, countLabel, selectionLabel]);
   // The listing can commit one render before its tab is updated.
   const remoteNav = useRemoteNavigation(remote, "bottom");
-  const ready = !remote && !!path && !busy && !tabs.restoringTabs && folderPathKey(path) === folderPathKey(tabs.displayPath);
+  // A refresh of the displayed query can keep its viewport mounted while it reads.
+  const refreshingView = busy && folderPathKey(dir.loadingPath ?? "") === folderPathKey(path) &&
+    dir.displayedQueryKey === buildQueryKey(path, { search: tabs.searchValue, sort: tabs.sortState });
+  const ready = !remote && !!path && (!busy || refreshingView) && !tabs.restoringTabs && folderPathKey(path) === folderPathKey(tabs.displayPath);
   useTabReveal(files, {
     tabId: tabs.activeTabId,
     ready: ready || (!tabs.displayPath && !busy && !tabs.restoringTabs),
@@ -354,7 +357,7 @@ export function BottomPane({ upper, actions, drop, onSummary, bottomPreview, men
         drop.hoveredPane === "bottom" ? drop.dropTargetPath : null} currentPath={path} viewMode={tabs.viewMode} viewKey={viewKey}
         showLander={!path} recentJumps={tabs.recentJumps} onOpenPlace={navigate} onOpenRecent={navigate} onOpenDrive={navigate}
         onOpenDriveNewTab={openNew} onOpenPlaceNewTab={openNew} onOpenRecentNewTab={openNew}
-        searchQuery={tabs.searchValue} loading={busy} scrollRestoreKey={viewKey}
+        searchQuery={tabs.searchValue} confirmedQueryKey={dir.confirmedQueryKey} loading={busy && !refreshingView} scrollRestoreKey={viewKey}
         scrollRestoreTop={tabs.navigationRevealPath ? 0 : tabs.activeTab?.scrollTop ?? 0}
         scrollRequest={scrollRequest} selectedPaths={selection.selected} onSelectItem={paneActions.handleSelectItemWithRename}
         onSetSelection={paneActions.handleSelectionChange} onClearSelection={paneActions.handleClearSelection}

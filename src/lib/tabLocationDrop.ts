@@ -14,7 +14,7 @@ export const getTabLocationDropTarget = (x: number, y: number, allowExistingTabs
   const bounds = strip.getBoundingClientRect();
   if (x < bounds.left || x >= bounds.right || y < bounds.top || y >= bounds.bottom) return null;
   // An existing folder tab is also a filesystem transfer destination.
-  if (!allowExistingTabs && hit?.closest('[data-drop-kind="tab"][data-tab-kind="directory"]')) return null;
+  if (!allowExistingTabs && hit?.closest('[data-drop-kind="tab"][data-tab-kind="directory"], [data-drop-kind="remote-tab"]')) return null;
   return strip;
 };
 

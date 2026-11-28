@@ -11,7 +11,7 @@ import type { BeginFileActivity } from "./useFileActivity";
 import { planDropTransfer, resolveDropTransferConflicts } from "./dropTransferPlanning";
 import { runDropTransfer } from "./runDropTransfer";
 import { resolveCopyConflicts } from "@/hooks/domain/filesystem/copyConflictResolution";
-import { readRemoteClipboard } from "@/modules/clipboardStore";
+import { activeCuts, readRemoteClipboard } from "@/modules/clipboardStore";
 import { pasteRemoteClipboardToLocal } from "@/modules/remoteClipboard";
 import {
   getTransferErrorMessage,
@@ -39,7 +39,6 @@ export const useFileManagerCopy = ({
 }: UseFileManagerCopyOptions) => {
   // Keep Undo guarded while copy or move requests are preparing or running.
   const activeCopyRequestCountRef = useRef(0);
-  const activeCuts = useRef(new Set<number>());
   const registerTransferJob = useTransferStore((state) => state.registerFileJob);
   const recordTransferJobOutcome = useTransferStore((state) => state.recordJobOutcome);
   const trackRequest = useCallback(() => {
@@ -264,9 +263,9 @@ export const useFileManagerCopy = ({
         const clipboard = await refreshFileClipboard();
         if (!clipboard.paths.length) return;
         if (clipboard.mode === "copy") return copyEntriesToFolder(clipboard.paths, target);
-        if (activeCuts.current.has(clipboard.sequence)) return;
+        if (activeCuts.has(clipboard.sequence)) return;
         cutSequence = clipboard.sequence;
-        activeCuts.current.add(cutSequence);
+        activeCuts.add(cutSequence);
         finishRequest = trackRequest();
         const report = await runMoveOperation(clipboard.paths, target, moveHistoryWorkspace, finishPreparing);
         if (report?.movedEntries.length) {
@@ -284,7 +283,7 @@ export const useFileManagerCopy = ({
         });
       } finally {
         finishPreparing();
-        if (cutSequence !== undefined) activeCuts.current.delete(cutSequence);
+        if (cutSequence !== undefined) activeCuts.delete(cutSequence);
         finishRequest?.();
       }
     },

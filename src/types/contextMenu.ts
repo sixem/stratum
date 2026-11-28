@@ -11,6 +11,7 @@ export type PlaceContextSource =
   | "entry";
 
 export type PlaceContextTarget = {
+  hostId?: string;
   name: string;
   path: string;
   source: PlaceContextSource;

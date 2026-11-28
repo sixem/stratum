@@ -90,7 +90,13 @@ fn mixed_parent_files_and_folders_round_trip_through_both_windows_formats() {
                 .unwrap();
             let actual = name.to_string().unwrap();
             CoTaskMemFree(Some(name.0.cast()));
-            assert_eq!(&actual, expected);
+            // Shell item display names can expand an 8.3 alias in the temp path.
+            // Check the resolved paths in selection order for this format.
+            assert_eq!(
+                fs::canonicalize(&actual).unwrap(),
+                fs::canonicalize(expected).unwrap(),
+                "Shell item {index}: {actual:?} (selected {expected:?})"
+            );
         }
     }
 }

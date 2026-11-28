@@ -1,7 +1,8 @@
 // User-managed places store (seeded from defaults once, then fully editable).
 import { createWithEqualityFn } from "zustand/traditional";
 import { PLACES_STORAGE_KEY, PLACES_STORAGE_VERSION } from "@/constants";
-import { normalizePath, tabLabel } from "@/lib";
+import { placeKey, placeName, type PlaceReference } from "@/lib/placeLocation";
+import { isRemoteLocation } from "@/lib/tabRestore";
 import type { Place } from "@/types";
 
 type StoredPlacesState = {
@@ -14,13 +15,13 @@ type PlacesStore = {
   initialized: boolean;
   places: Place[];
   seedDefaults: (defaults: Place[]) => void;
-  addPlace: (path: string, name?: string, options?: { pinned?: boolean }) => void;
-  renamePlace: (path: string, name: string) => void;
-  pinPlace: (path: string) => void;
-  unpinPlace: (path: string) => void;
-  setPinColor: (path: string, color?: string) => void;
-  reorderPinnedPlace: (fromPath: string, toPath: string, position: "before" | "after") => void;
-  removePlace: (path: string) => void;
+  addPlace: (path: PlaceReference, name?: string, options?: { pinned?: boolean }) => void;
+  renamePlace: (path: PlaceReference, name: string) => void;
+  pinPlace: (path: PlaceReference) => void;
+  unpinPlace: (path: PlaceReference) => void;
+  setPinColor: (path: PlaceReference, color?: string) => void;
+  reorderPinnedPlace: (fromPath: PlaceReference, toPath: PlaceReference, position: "before" | "after") => void;
+  removePlace: (path: PlaceReference) => void;
 };
 
 export type PlacesState = Pick<PlacesStore, "initialized" | "places">;
@@ -33,28 +34,17 @@ export const DEFAULT_PLACES_STATE: PlacesState = {
   places: [],
 };
 
-const toPlaceKey = (path: string): string | null => {
-  const trimmed = path.trim();
-  if (!trimmed) return null;
-  return normalizePath(trimmed) ?? trimmed.toLowerCase();
-};
-
-const coercePlaceName = (value: unknown, fallbackPath: string) => {
-  if (typeof value === "string" && value.trim()) {
-    return value.trim();
-  }
-  const fallback = tabLabel(fallbackPath);
-  return fallback || fallbackPath;
-};
-
 const coercePlaceEntry = (value: unknown): Place | null => {
   if (!value || typeof value !== "object") return null;
-  const raw = value as { name?: unknown; path?: unknown; pinned?: unknown; pinColor?: unknown };
+  const raw = value as { hostId?: unknown; name?: unknown; path?: unknown; pinned?: unknown; pinColor?: unknown };
   if (typeof raw.path !== "string") return null;
-  const path = raw.path.trim();
+  if (raw.hostId !== undefined && !isRemoteLocation(value)) return null;
+  const hostId = typeof raw.hostId === "string" ? raw.hostId : undefined;
+  const path = hostId ? raw.path : raw.path.trim();
   if (!path) return null;
   return {
-    name: coercePlaceName(raw.name, path),
+    ...(hostId ? { hostId } : {}),
+    name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : placeName({ hostId, path }),
     path,
     pinned: raw.pinned === true,
     pinColor: typeof raw.pinColor === "string" && /^#[0-9a-f]{6}$/i.test(raw.pinColor) ? raw.pinColor : undefined,
@@ -71,22 +61,12 @@ const dedupePlaces = (places: Place[]) => {
   const next: Place[] = [];
   const seen = new Set<string>();
   places.forEach((place) => {
-    const key = toPlaceKey(place.path);
+    const key = placeKey(place);
     if (!key || seen.has(key)) return;
     seen.add(key);
-    next.push({
-      name: coercePlaceName(place.name, place.path),
-      path: place.path.trim(),
-      pinned: place.pinned === true,
-      pinColor: place.pinColor,
-    });
+    next.push(place);
   });
   return orderPlaces(next);
-};
-
-const placeNameFromPath = (path: string) => {
-  const label = tabLabel(path);
-  return label || path;
 };
 
 const insertPlace = (places: Place[], place: Place) => {
@@ -105,25 +85,25 @@ const insertPlace = (places: Place[], place: Place) => {
 
 const reorderPinnedPlaces = (
   places: Place[],
-  fromPath: string,
-  toPath: string,
+  fromPath: PlaceReference,
+  toPath: PlaceReference,
   position: "before" | "after",
 ) => {
-  const fromKey = toPlaceKey(fromPath);
-  const toKey = toPlaceKey(toPath);
+  const fromKey = placeKey(fromPath);
+  const toKey = placeKey(toPath);
   if (!fromKey || !toKey || fromKey === toKey) return places;
 
   const pinned = places.filter((place) => place.pinned === true);
   const normal = places.filter((place) => place.pinned !== true);
-  const fromIndex = pinned.findIndex((place) => toPlaceKey(place.path) === fromKey);
-  const toIndex = pinned.findIndex((place) => toPlaceKey(place.path) === toKey);
+  const fromIndex = pinned.findIndex((place) => placeKey(place) === fromKey);
+  const toIndex = pinned.findIndex((place) => placeKey(place) === toKey);
   if (fromIndex < 0 || toIndex < 0) return places;
 
   const nextPinned = [...pinned];
   const [moved] = nextPinned.splice(fromIndex, 1);
   if (!moved) return places;
 
-  const targetIndex = nextPinned.findIndex((place) => toPlaceKey(place.path) === toKey);
+  const targetIndex = nextPinned.findIndex((place) => placeKey(place) === toKey);
   if (targetIndex < 0) return places;
 
   const insertIndex = position === "after" ? targetIndex + 1 : targetIndex;
@@ -133,20 +113,15 @@ const reorderPinnedPlaces = (
 
 const updatePlace = (
   places: Place[],
-  path: string,
+  path: PlaceReference,
   patch: Partial<Pick<Place, "name" | "pinned">>,
 ) => {
-  const key = toPlaceKey(path);
+  const key = placeKey(path);
   if (!key) return places;
-  const index = places.findIndex((item) => toPlaceKey(item.path) === key);
+  const index = places.findIndex((item) => placeKey(item) === key);
   if (index === -1) return places;
   const current = places[index];
-  const nextPlace: Place = {
-    name: coercePlaceName(patch.name ?? current.name, current.path),
-    path: current.path,
-    pinned: patch.pinned ?? current.pinned ?? false,
-    pinColor: current.pinColor,
-  };
+  const nextPlace: Place = { ...current, ...patch };
   const next = [...places];
   next.splice(index, 1);
   return insertPlace(next, nextPlace);
@@ -198,14 +173,7 @@ export const usePlacesStore = createWithEqualityFn<PlacesStore>((set) => ({
   seedDefaults: (defaults) =>
     set((state) => {
       if (state.initialized) return state;
-      const seeded = dedupePlaces(
-        defaults.map((place) => ({
-          name: coercePlaceName(place.name, place.path),
-          path: place.path.trim(),
-          pinned: place.pinned === true,
-          pinColor: place.pinColor,
-        })),
-      );
+      const seeded = coercePlacesState({ places: defaults }).places;
       return {
         initialized: true,
         places: seeded,
@@ -213,38 +181,27 @@ export const usePlacesStore = createWithEqualityFn<PlacesStore>((set) => ({
     }),
   addPlace: (path, name, options) =>
     set((state) => {
-      const trimmedPath = path.trim();
-      const key = toPlaceKey(trimmedPath);
-      if (!key) return state;
-      const existingIndex = state.places.findIndex((item) => toPlaceKey(item.path) === key);
-      const nextName = coercePlaceName(name, trimmedPath);
-      const shouldPin = options?.pinned === true;
-      if (existingIndex >= 0) {
-        const existing = state.places[existingIndex];
-        const next = updatePlace(state.places, trimmedPath, {
-          name: nextName || existing.name,
-          pinned: shouldPin ? true : existing.pinned === true,
-        });
-        return {
-          initialized: true,
-          places: next,
-        };
+      const location = typeof path === "string" ? { path } : path;
+      const candidate = coercePlaceEntry({ ...location, name, pinned: options?.pinned });
+      if (!candidate) return state;
+      const key = placeKey(candidate);
+      const existing = state.places.find(item => placeKey(item) === key);
+      if (existing) {
+        return { initialized: true, places: updatePlace(state.places, existing, {
+          name: name?.trim() || existing.name,
+          pinned: options?.pinned || existing.pinned,
+        }) };
       }
-      const nextPlace: Place = {
-        name: nextName || placeNameFromPath(trimmedPath),
-        path: trimmedPath,
-        pinned: shouldPin,
-      };
       return {
         initialized: true,
-        places: insertPlace([...state.places], nextPlace),
+        places: insertPlace([...state.places], candidate),
       };
     }),
   renamePlace: (path, name) =>
     set((state) => {
-      const key = toPlaceKey(path);
+      const key = placeKey(path);
       const nextName = name.trim();
-      const index = key ? state.places.findIndex((place) => toPlaceKey(place.path) === key) : -1;
+      const index = key ? state.places.findIndex((place) => placeKey(place) === key) : -1;
       if (!nextName || index < 0 || state.places[index].name === nextName) return state;
       // Editing the display name preserves the place's position.
       const places = state.places.slice();
@@ -263,7 +220,7 @@ export const usePlacesStore = createWithEqualityFn<PlacesStore>((set) => ({
     })),
   setPinColor: (path, color) =>
     set((state) => ({ places: state.places.map((place) =>
-      toPlaceKey(place.path) === toPlaceKey(path) ? { ...place, pinColor: color } : place) })),
+      placeKey(place) === placeKey(path) ? { ...place, pinColor: color } : place) })),
   reorderPinnedPlace: (fromPath, toPath, position) =>
     set((state) => ({
       initialized: true,
@@ -271,11 +228,11 @@ export const usePlacesStore = createWithEqualityFn<PlacesStore>((set) => ({
     })),
   removePlace: (path) =>
     set((state) => {
-      const key = toPlaceKey(path);
+      const key = placeKey(path);
       if (!key) return state;
       return {
         initialized: true,
-        places: state.places.filter((item) => toPlaceKey(item.path) !== key),
+        places: state.places.filter((item) => placeKey(item) !== key),
       };
     }),
 }));

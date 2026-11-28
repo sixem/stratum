@@ -137,7 +137,7 @@ export function RemoteHostPicker() {
               </div>
             </li>;
           })}
-        </ul> : <p className="remote-placeholder">No saved hosts.</p>}
+        </ul> : <p className="remote-placeholder">Add an SFTP host using a destination configured in Windows OpenSSH.</p>}
       {error && <p role="alert" className="remote-error">{error}</p>}
     </ToolbarPopover>}
     {open && menu && createPortal(<div ref={menuRoot} data-remotes-picker="true">

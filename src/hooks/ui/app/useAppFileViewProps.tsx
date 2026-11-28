@@ -15,6 +15,7 @@ type UseAppFileViewPropsOptions = {
     | "loading"
     | "showLander"
     | "searchQuery"
+    | "confirmedQueryKey"
     | "viewKey"
     | "scrollRestoreKey"
     | "scrollRestoreTop"

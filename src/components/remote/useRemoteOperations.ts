@@ -1,6 +1,7 @@
 // Operations shared by the list, grid, empty state, and context menus.
 import { useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { refreshRecovery } from "@/modules/remoteRecovery";
 import { usePromptStore } from "@/modules/promptStore";
 import { useTransferStore } from "@/modules/transferStore";
 import { useBatchRenameStore } from "@/modules/batchRenameStore";
@@ -107,6 +108,7 @@ export function useRemoteOperations(profileId: string, sessionId: number, parent
           }
         } finally {
           changed(parent);
+          void refreshRecovery();
         }
       })(); },
     });

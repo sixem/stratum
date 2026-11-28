@@ -178,6 +178,92 @@ mod tests {
     use std::{fs, sync::Arc};
 
     #[test]
+    #[ignore = "requires the disposable SFTP transfer folder"]
+    fn reconnect_preserves_an_occupied_original_partial_move_and_destination_copy() {
+        use crate::services::remotes::recovery::{check_interrupted, DestinationStage};
+        tauri::async_runtime::block_on(async {
+            let host = std::env::var("STRATUM_SFTP_TEST_HOST").unwrap();
+            let folder = std::env::var("STRATUM_SFTP_TEST_FOLDER").unwrap();
+            let remotes = crate::services::remotes::Remotes::default();
+            let conn = remotes
+                .connect("review", &host, "", Arc::new(|_| {}))
+                .await
+                .unwrap();
+            let session = remotes.current("review", Some(conn.session_id)).unwrap();
+            let mut random = [0; 16];
+            getrandom::fill(&mut random).unwrap();
+            let id = format!("{:032x}", u128::from_le_bytes(random));
+            let original = format!("{folder}/original-{id}");
+            let (stage_dir, stage) = stage_path(&original, &id).unwrap();
+            for path in [&original, &stage_dir, &stage, &format!("{stage}/survivor")] {
+                remote_mkdir(&session, path).await.unwrap();
+            }
+            let root = std::env::temp_dir().join(&id);
+            let journal_path = root.join("review.sqlite");
+            let journal = test_journal(&journal_path);
+            journal
+                .insert(&RecoveryEntry {
+                    id: id.clone(),
+                    profile: "review".into(),
+                    host: host.clone(),
+                    original: original.clone(),
+                    stage: stage.clone(),
+                    destination: root.display().to_string(),
+                    state: "published".into(),
+                })
+                .unwrap();
+            let copy = root.join(format!(".stratum-move-copy-{id}"));
+            let guard =
+                crate::domain::filesystem::staging::StageDirectory::create(copy.clone()).unwrap();
+            fs::write(copy.join("survivor"), b"remaining data").unwrap();
+            journal
+                .track_destination(
+                    &DestinationStage {
+                        id: id.clone(),
+                        kind: "local".into(),
+                        host: String::new(),
+                        folder: root.display().to_string(),
+                        path: copy.display().to_string(),
+                        identity: Some(guard.identity().unwrap()),
+                    },
+                    &host,
+                    &original,
+                )
+                .unwrap();
+            drop(guard);
+            check_interrupted(&remotes, &journal, "review", conn.session_id)
+                .await
+                .unwrap();
+            assert!(remotes
+                .exists("review", conn.session_id, &format!("{stage}/survivor"))
+                .await
+                .unwrap());
+            assert_eq!(journal.list().unwrap()[0].state, "published");
+            // The user frees the original name. Recovery can now restore only the survivors.
+            remote_remove(&session, &original, true).await.unwrap();
+            check_interrupted(&remotes, &journal, "review", conn.session_id)
+                .await
+                .unwrap();
+            assert!(remotes
+                .exists("review", conn.session_id, &format!("{original}/survivor"))
+                .await
+                .unwrap());
+            assert_eq!(
+                test_journal(&journal_path).list().unwrap()[0].state,
+                "restored_partial"
+            );
+            assert_eq!(fs::read(copy.join("survivor")).unwrap(), b"remaining data");
+            assert_eq!(journal.destination_stages().unwrap().len(), 1);
+            remote_remove(&session, &format!("{original}/survivor"), true)
+                .await
+                .unwrap();
+            remote_remove(&session, &original, true).await.unwrap();
+            fs::remove_dir_all(root).unwrap();
+            remotes.disconnect("review").await;
+        });
+    }
+
+    #[test]
     #[ignore = "set STRATUM_SFTP_TEST_HOST and STRATUM_SFTP_TEST_FOLDER to an empty test directory"]
     fn live_moves_finish_or_restore() {
         tauri::async_runtime::block_on(async {

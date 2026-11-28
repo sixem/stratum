@@ -49,6 +49,7 @@ type FileViewProps = {
   canGoUp: boolean;
   onGoUp: () => void;
   searchQuery: string;
+  confirmedQueryKey?: string | null;
   viewKey: string;
   scrollRestoreKey: string;
   scrollRestoreTop: number;
@@ -167,6 +168,7 @@ export const FileView = ({
   onCreateFile,
   ...viewProps
 }: FileViewProps) => {
+  const removalScope = JSON.stringify([viewProps.viewKey, viewProps.confirmedQueryKey, viewProps.searchQuery, sortState.key, sortState.dir]);
   // Cache the last stable auto-grid width so we can avoid a layout jump
   // when the new-tab lander temporarily unmounts the grid.
   const autoGridViewportWidthRef = useRef<number | null>(null);
@@ -183,6 +185,7 @@ export const FileView = ({
   if (showLander) {
     return (
       <StartLander
+        pane={pane}
         recentJumps={recentJumps}
         onOpenRecent={onOpenRecent}
         onOpenRecentNewTab={onOpenRecentNewTab}
@@ -211,6 +214,8 @@ export const FileView = ({
           <FileGrid
             view={{
               ...viewProps,
+              removalScope,
+              sortState,
               currentPath,
               smoothScroll,
               canGoUp,
@@ -293,6 +298,8 @@ export const FileView = ({
           <FileList
             view={{
               ...viewProps,
+              removalScope,
+              sortState,
               currentPath,
               smoothScroll,
               canGoUp,
@@ -323,7 +330,6 @@ export const FileView = ({
               onRequestMeta: viewProps.onRequestMeta,
             }}
             list={{
-              sortState,
               onSortChange,
               categoryTinting,
               nameEllipsis: gridNameEllipsis,

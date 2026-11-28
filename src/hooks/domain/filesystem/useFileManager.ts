@@ -110,6 +110,7 @@ export function useFileManager() {
     parentPath: directoryLoader.parentPath,
     entries: directoryLoader.entries,
     displayedQueryKey: directoryLoader.displayedQueryKey,
+    confirmedQueryKey: directoryLoader.confirmedQueryKey,
     totalCount: directoryLoader.totalCount,
     places: fsBootstrap.places,
     placesLoaded: fsBootstrap.placesLoaded,

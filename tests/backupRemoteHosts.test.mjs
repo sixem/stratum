@@ -18,6 +18,16 @@ test("full and workspace exports include the appropriate remote host profiles", 
   } }, [hostA, hostB]), [hostA, hostB]);
 });
 
+test("a host referenced only by a pinned place travels with the workspace and is remapped on import", () => {
+  const saved = layout(hostA.id);
+  const pin = { hostId: hostB.id, path: "/Archive/Case ", name: "Archive", pinned: true, pinColor: "#ad86d9" };
+  saved.places.places.push(pin);
+  const backup = { scope: "workspaces", workspaces: [workspace("project", saved)] };
+  assert.deepEqual(selectBackupRemoteHosts(backup, [hostA, hostB]), [hostA, hostB]);
+  const plan = planBackupRemoteHosts({ ...backup, remoteHosts: [hostA, hostB] }, [{ ...hostB, id: newId }]);
+  assert.deepEqual(plan.backup.workspaces[0].layout.places.places, [{ ...pin, hostId: newId }]);
+});
+
 test("conflicting IDs do not redirect imported tabs to an unrelated existing host", () => {
   const unrelated = { ...hostB, id: hostA.id };
   const backup = { scope: "full", remoteHosts: [hostA], workspaces: [workspace("project", layout(hostA.id), layout(hostA.id))],

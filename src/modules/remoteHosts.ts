@@ -4,9 +4,9 @@ import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 import { toMessage } from "@/lib/fsUtils";
 import { loadRemoteProfiles, writeRemoteProfiles, type RemoteProfile } from "./remoteProfiles";
-import { remoteDirectoryChanged, watchRemoteDirectoryChanges } from "./remoteDirectoryChanges";
+import { watchRemoteDirectoryChanges } from "./remoteDirectoryChanges";
 import { usePromptStore } from "./promptStore";
-import { remoteParent } from "@/lib/remotePaths";
+import { checkInterruptedOperations } from "./remoteRecovery";
 
 export type { RemoteProfile } from "./remoteProfiles";
 export type RemoteConnection = {
@@ -98,17 +98,8 @@ function connectShared(profile: RemoteProfile): Promise<string> {
       throw new Error("Connection closed.");
     }
     publish(id, { status: "connected", epoch, ...result });
-    void invoke<{ restored: string[]; warnings: string[]; deleteNoticeIds: string[] }>("remote_finish_interrupted_transfers", { profileId: id, sessionId: result.sessionId })
-      .then(({ restored, warnings, deleteNoticeIds }) => {
-        for (const path of restored) remoteDirectoryChanged({ profileId: id, sessionId: result.sessionId, path: remoteParent(path) });
-        if (warnings.length) usePromptStore.getState().showPrompt({ title: `Interrupted operations on ${destination}`, content: warnings.join("\n\n"), confirmLabel: "OK", cancelLabel: null,
-          queued: true, blocking: true,
-          onConfirm: () => {
-            if (!deleteNoticeIds.length) return;
-            void invoke("remote_acknowledge_delete_recovery", { profileId: id, sessionId: result.sessionId, ids: deleteNoticeIds })
-              .catch(error => usePromptStore.getState().showPrompt({ title: `Recovery notice for ${destination}`, content: toMessage(error, "Could not acknowledge recovery."), confirmLabel: "OK", cancelLabel: null, queued: true }));
-          } });
-      }).catch(error => usePromptStore.getState().showPrompt({ title: `Interrupted transfer on ${destination}`, content: toMessage(error, "Could not check interrupted transfers."), confirmLabel: "OK", cancelLabel: null, queued: true }));
+    void checkInterruptedOperations(id, result.sessionId, destination)
+      .catch(error => usePromptStore.getState().showPrompt({ title: `Interrupted transfer on ${destination}`, content: toMessage(error, "Could not check interrupted transfers."), confirmLabel: "OK", cancelLabel: null, queued: true }));
     return result.path;
   }).catch(error => {
     reportRemoteDisconnect(id, epoch, toMessage(error, "Could not connect to this host."));

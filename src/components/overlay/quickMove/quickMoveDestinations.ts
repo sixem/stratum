@@ -1,12 +1,15 @@
 // Saved folders share the index filters and take precedence over duplicate matches.
 import { folderPathKey, getPathName } from "@/lib/paths";
 import { getQuickMoveDriveRoot } from "@/modules/quickMovePreferences";
+import type { RemoteQuickMoveFolder } from "@/modules/remoteQuickMoveFolders";
+import type { MoveDestination } from "@/modules/quickMoveSession";
 import type { IndexedPathMatch } from "@/types";
 import type { QuickMoveSearch } from "./useQuickMoveFolderSearch";
 
-export type QuickMoveSection = "Favourites" | "Recent" | "Matches";
+export type QuickMoveSection = "Favourites" | "Recent" | "Connected hosts" | "Matches";
 
 export type QuickMoveDestination = {
+  remote?: RemoteQuickMoveFolder;
   path: string;
   name: string;
   key: string;
@@ -22,13 +25,13 @@ type DestinationOptions = {
   recentPaths: readonly string[];
   matches: readonly IndexedPathMatch[];
   scope: QuickMoveSearch;
-  isDestinationDisabled?: (path: string) => boolean;
+  remoteFolders: readonly RemoteQuickMoveFolder[];
+  isDestinationDisabled?: (target: MoveDestination) => boolean;
 };
 
 export const buildQuickMoveDestinations = ({
-  favoritePaths, recentPaths, matches, scope, isDestinationDisabled,
+  favoritePaths, recentPaths, matches, scope, remoteFolders, isDestinationDisabled,
 }: DestinationOptions): QuickMoveDestination[] => {
-  if (!scope.scopeRoots.length) return [];
   const favorites = new Set(favoritePaths.map(folderPathKey));
   const selectedRoots = new Set(scope.scopeRoots);
   const search = withoutVerbatimPrefix(scope.search.replace(/\//g, "\\")).toLowerCase();
@@ -51,6 +54,14 @@ export const buildQuickMoveDestinations = ({
 
   for (const path of favoritePaths) add(path, getPathName(path) || path, "Favourites");
   for (const path of recentPaths) add(path, getPathName(path) || path, "Recent");
+  const query = scope.search.toLowerCase();
+  for (const remote of remoteFolders) {
+    const { host, hostName, path, profileId, sessionId, epoch } = remote;
+    if (query && ![host, hostName, path].some(value => value.toLowerCase().includes(query))) continue;
+    destinations.push({ remote, path, name: path.split("/").filter(Boolean).pop() ?? "/",
+      key: JSON.stringify([profileId, sessionId, epoch, path]), section: "Connected hosts", favorite: false,
+      disabled: Boolean(isDestinationDisabled?.(remote)) });
+  }
   for (const { path, name, kind } of matches) {
     if (kind === "directory") add(path, name, "Matches");
   }

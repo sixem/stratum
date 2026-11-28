@@ -232,6 +232,20 @@
   font-weight: 500;
 }
 
+.quick-move-path[data-remote] {
+  display: flex;
+  gap: 0.65em;
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .quick-move-host {
+    max-width: 50%;
+    flex: 0 0 auto;
+    color: var(--text);
+  }
+}
+
 .quick-move-star {
   @include control.icon-button-shell(28px);
 

@@ -54,6 +54,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fullWidthBreadcrumbs: false,
   showWorkProgressFill: true,
   smoothScroll: false,
+  deferOffscreenRemovals: false,
   smartTabJump: true,
   terminalTabNavigation: false,
   accentTheme: "red",

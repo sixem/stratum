@@ -19,6 +19,9 @@ export STRATUM_SFTP_UNSAFE_TREE="$fixture/unsafe-download"
 ops=$STRATUM_SFTP_OPERATIONS_DIR
 links=$STRATUM_SFTP_LINK_FIXTURE
 mkdir -p "$STRATUM_SFTP_TEST_FOLDER" "$ops"/{move-source,move-destination,tree/nested,unsafe,outside} "$links/outside" "$STRATUM_SFTP_UNSAFE_TREE"
+mkdir -p "$fixture/properties"
+printf data > "$fixture/properties/file"
+ln -s 'missing target' "$fixture/properties/link"
 dd if=/dev/urandom of="$STRATUM_SFTP_TEST_RANGE" bs=64K count=12 status=none
 printf tail >> "$STRATUM_SFTP_TEST_RANGE"
 touch "$ops/occupied.txt" "$ops/tree/nested/file" "$ops/outside/sentinel.txt" "$ops/move-destination/conflict"

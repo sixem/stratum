@@ -18,12 +18,15 @@ export type FileListEntryContextTarget = {
 
 export type FileListViewProps = {
   remote?: boolean;
+  remoteProfileId?: string;
   currentPath: string;
   entryByPath: Map<string, FileEntry>;
   items: EntryItem[];
   indexMap?: Map<string, number>;
   loading: boolean;
   searchQuery: string;
+  removalScope: string;
+  sortState: SortState;
   viewKey: string;
   scrollRestoreKey: string;
   scrollRestoreTop: number;
@@ -64,7 +67,6 @@ export type FileListMetadataProps = {
 
 export type FileListListProps = {
   onVisibleEntries?: (entries: FileEntry[]) => void;
-  sortState: SortState;
   onSortChange: (next: SortState) => void;
   categoryTinting: boolean;
   nameEllipsis: GridNameEllipsis;

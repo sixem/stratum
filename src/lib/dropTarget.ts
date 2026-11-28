@@ -4,6 +4,8 @@ export type DropTarget = {
   pane?: "main" | "bottom";
   profileId?: string;
   sessionId?: number;
+  // For a submenu row, keep the tab's displayed folder alongside the actual destination.
+  tabPath?: string;
 } & (
   | { kind: "entry" | "tab" | "tab-destination" | "pane" | "remote-pane" | "remote-entry" | "remote-crumb" | "remote-tab"; path: string }
   | { kind: "tab-submenu" }
@@ -20,6 +22,8 @@ export type TabDropSubmenuState = {
   hostPath: string | null;
   items: DropTargetSubmenuItem[];
   loading: boolean;
+  remote?: { profileId: string; sessionId: number };
+  error?: string;
 };
 
 export type DropTargetHit = {
@@ -29,11 +33,19 @@ export type DropTargetHit = {
 
 export const getDropTargetHit = (x: number, y: number): DropTargetHit => {
   const element = document.elementFromPoint(x, y) as HTMLElement | null;
+  if (element?.closest("[data-pending-removal]")) return { target: null, element };
   const tabDestination = element?.closest<HTMLElement>(
     "[data-drop-kind=\"tab-destination\"][data-drop-path]",
   );
   const destinationPath = tabDestination?.dataset.dropPath ?? "";
   if (destinationPath.trim()) {
+    if (tabDestination?.dataset.dropProfile) {
+      const { dropProfile, dropHostPath, dropSession, dropTabId } = tabDestination.dataset;
+      return { target: dropHostPath && dropSession && dropTabId ? {
+        kind: "remote-tab", path: destinationPath, profileId: dropProfile, sessionId: Number(dropSession),
+        tabPath: dropHostPath, tabId: dropTabId,
+      } : null, element: tabDestination };
+    }
     return {
       target: {
         kind: "tab-destination",

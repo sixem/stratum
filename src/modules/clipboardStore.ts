@@ -8,7 +8,10 @@ import { usePromptStore } from "./promptStore";
 import type { RemoteEntry } from "@/components/remote/remoteDirectory";
 import { isRemoteClipboardCurrent } from "@/lib/remoteClipboardState";
 
-export type RemoteClipboard = { profileId: string; host: string; path: string; entries: RemoteEntry[]; sequence: number };
+export type RemoteClipboard = { profileId: string; host: string; path: string; entries: RemoteEntry[]; sequence: number; mode: FileClipboardMode };
+
+// One clipboard sequence can have a move in flight across all panes.
+export const activeCuts = new Set<number>();
 
 export const useClipboardStore = createWithEqualityFn<{ clipboard: FileClipboard | null; remote: RemoteClipboard | null }>(() => ({
   clipboard: null,
@@ -72,14 +75,18 @@ export const writeTextClipboard = async (text: string) => {
 
 // Remote paths are text on the Windows clipboard, never fake local file paths.
 // The sequence binds the in-app selection to that exact clipboard write.
-export async function writeRemoteClipboard(input: Omit<RemoteClipboard, "sequence">) {
-  if (!input.entries.length) return;
+export async function writeRemoteClipboard(input: Omit<RemoteClipboard, "sequence">, expectedSequence?: number) {
+  if (!input.entries.length && expectedSequence === undefined) return;
   await writeClipboard(async () => {
     const text = input.entries.map(entry => `${input.host}:${entry.path}`).join("\r\n");
-    const sequence = await setRemoteClipboard(text, crypto.randomUUID());
+    const sequence = await setRemoteClipboard(text, crypto.randomUUID(), expectedSequence);
+    if (!sequence && expectedSequence !== undefined) {
+      if (useClipboardStore.getState().remote?.sequence === expectedSequence) useClipboardStore.setState({ remote: null });
+      return;
+    }
     if (!sequence) throw new Error("Windows did not provide a clipboard sequence.");
     useClipboardStore.setState({ remote: { ...input, entries: [...input.entries], sequence }, clipboard: null });
-  }, "Couldn't copy items");
+  }, expectedSequence !== undefined ? "Couldn't update the cut selection" : input.mode === "move" ? "Couldn't cut items" : "Couldn't copy items");
 }
 
 export async function readRemoteClipboard() {

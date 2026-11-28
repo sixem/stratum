@@ -77,6 +77,7 @@ const importLayout = (value: unknown): WorkspaceLayout => {
   checkSession(value.bottom);
   for (const place of value.places.places) {
     if (!isRecord(place) || !pathString(place.path)) return invalidBackup();
+    if (place.hostId !== undefined && !isRemoteLocation(place)) return invalidBackup();
   }
   const link = value.pane.link;
   if (link != null && (!isRecord(link) || !pathString(link.mainRootPath) || !pathString(link.bottomRootPath))) {

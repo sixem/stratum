@@ -1,6 +1,8 @@
 // Virtualized list view for file entries.
 import { useEffect, useMemo } from "react";
-import { useEntryPresence, useScrollToIndex } from "@/hooks";
+import { useScrollToIndex } from "@/hooks";
+import { useDeferredRemovals, useRemovalViewport } from "./fileView/useDeferredRemovals";
+import { PendingRemoval } from "./fileView/PendingRemoval";
 import { useSettingsStore } from "@/modules";
 import { EmptyState } from "@/components/primitives/EmptyState";
 import { SelectionRect } from "./SelectionRect";
@@ -28,7 +30,7 @@ const FileList = ({
   dragDrop,
   creation,
 }: FileListProps) => {
-  const isCut = useCutEntries();
+  const isCut = useCutEntries(view.remoteProfileId);
   const density = useSettingsStore((state) => state.listDensity);
   const showSize = useSettingsStore((state) => state.listShowSize);
   const showModified = useSettingsStore((state) => state.listShowModified);
@@ -52,16 +54,13 @@ const FileList = ({
     creation,
   });
 
-  const { items: rows } = useEntryPresence({
-    items: view.items,
-    resetKey: view.viewKey,
-    animate: !view.loading && (list.presenceEnabled ?? true),
-  });
+  const removals = useDeferredRemovals(view, list.presenceEnabled ?? true);
+  const rows = removals.rows;
   const selectionItems = useMemo(
     () =>
       rows.map((row) => ({
         path: row.type === "parent" ? row.path : row.entry.path,
-        selectable: row.presence !== "removed",
+        selectable: row.presence !== "removed" && row.presence !== "pending-removal",
       })),
     [rows],
   );
@@ -74,12 +73,13 @@ const FileList = ({
     loading: view.loading,
   });
 
+  useRemovalViewport(removals, listRef, itemHeight, rowHeight);
   const applyScrollRequest = useScrollToIndex(listRef, {
     itemCount: rows.length,
     rowHeight,
     rowGap: itemHeight - rowHeight,
     insetTop: VIEW_INSET,
-    scrollRequest: view.scrollRequest,
+    scrollRequest: removals.scrollRequest,
     scrollKey: view.viewKey,
     ready: !view.loading,
   });
@@ -92,16 +92,17 @@ const FileList = ({
     applyScrollRequest,
   });
   const onVisibleEntries = list.onVisibleEntries;
+  const liveVisible = useMemo(() => removals.pending ? visibleRows.filter(row => row.presence !== "pending-removal") : visibleRows, [visibleRows, removals.pending]);
   useEffect(() => {
-    onVisibleEntries?.(visibleRows.flatMap(row => row.type === "entry" ? [row.entry] : []));
-  }, [onVisibleEntries, visibleRows]);
+    onVisibleEntries?.(liveVisible.flatMap(row => row.type === "entry" ? [row.entry] : []));
+  }, [onVisibleEntries, liveVisible]);
   // The full scroll area must exist on the first layout, before measuring the visible range.
   const contentHeight = rows.length * itemHeight + VIEW_INSET * 2;
 
   const rowMetaByPath = useListMeta({
     listRef,
     viewKey: view.viewKey,
-    visibleRows,
+    visibleRows: liveVisible,
     entryMeta: metadata.entryMeta,
     onRequestMeta: metadata.onRequestMeta,
     loading: view.loading,
@@ -146,7 +147,7 @@ const FileList = ({
       onContextMenu={(event) => event.preventDefault()}
     >
       <ListHeader
-        sortState={list.sortState}
+        sortState={view.sortState}
         onSortChange={list.onSortChange}
         showSize={showSize}
         showModified={showModified}
@@ -185,6 +186,7 @@ const FileList = ({
                     />
                   );
                 }
+                if (row.presence === "pending-removal") return <PendingRemoval key={row.key} name={row.entry.name} />;
                 const isDropTarget = dragDrop.dropTargetPath === row.entry.path;
                 const rowMeta = rowMetaByPath.get(row.entry.path);
                 const baseIndex = resolvedIndexMap.get(row.entry.path) ?? index;
@@ -203,7 +205,7 @@ const FileList = ({
                     hideExtension={list.hideExtension}
                     selected={selection.selectedPaths.has(row.entry.path)}
                     isDeleting={isDeletePending(row.entry.path)}
-                    isCut={!view.remote && isCut(row.entry.path)}
+                    isCut={isCut(row.entry.path)}
                     isTransferring={isTransferPending(row.entry.path)}
                     dropTarget={isDropTarget}
                     isRenaming={rename.renameTargetPath === row.entry.path}
@@ -223,7 +225,7 @@ const FileList = ({
                 );
               })}
             </div>
-            {view.entryByPath.size === 0 && !view.loading ? (
+            {view.entryByPath.size === 0 && !view.loading && !removals.pending ? (
               <div className="list-empty">
                 <EmptyState
                   title={emptyMessage.title}

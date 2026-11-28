@@ -136,6 +136,7 @@ useSettingsStore.subscribe((state) => {
     fullWidthBreadcrumbs: state.fullWidthBreadcrumbs,
     showWorkProgressFill: state.showWorkProgressFill,
     smoothScroll: state.smoothScroll,
+    deferOffscreenRemovals: state.deferOffscreenRemovals,
     smartTabJump: state.smartTabJump,
     terminalTabNavigation: state.terminalTabNavigation,
     accentTheme: state.accentTheme,

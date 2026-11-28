@@ -17,6 +17,8 @@ type DropTargetSubmenuProps = {
   hostPath: string | null;
   items: DropTargetSubmenuItem[];
   loading: boolean;
+  remote?: { profileId: string; sessionId: number };
+  error?: string;
   activePath?: string | null;
   dragPoint?: { x: number; y: number } | null;
   onHoverTargetChange?: (target: DropTarget | null) => void;
@@ -42,6 +44,8 @@ export const DropTargetSubmenu = ({
   hostPath,
   items,
   loading,
+  remote,
+  error,
   activePath = null,
   dragPoint = null,
   onHoverTargetChange,
@@ -350,6 +354,9 @@ export const DropTargetSubmenu = ({
               data-drop-kind="tab-destination"
               data-drop-path={item.path}
               data-drop-tab-id={hostTabId}
+              data-drop-profile={remote?.profileId}
+              data-drop-session={remote?.sessionId}
+              data-drop-host-path={remote ? hostPath : undefined}
               data-drop-target={activePath === item.path ? "true" : "false"}
             >
               {item.parent && <ChevronUpIcon className="drop-submenu-parent-icon" />}
@@ -357,6 +364,7 @@ export const DropTargetSubmenu = ({
             </div>
           ))}
           {loading && <div className="drop-submenu-status">Loading folders...</div>}
+          {error && <div className="drop-submenu-status" role="status">{error}</div>}
         </ScrollArea>
       </div>
     </div>,

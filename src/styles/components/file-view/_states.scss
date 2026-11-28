@@ -121,3 +121,14 @@
     animation: none;
   }
 }
+
+:is(.row, .thumb-card)[data-pending-removal] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  cursor: default;
+  span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  small { flex: none; font-size: var(--font-size-xs); }
+}
+.thumb-card[data-pending-removal] { flex-direction: column; justify-content: center; }

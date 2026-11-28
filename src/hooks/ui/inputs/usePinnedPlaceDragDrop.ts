@@ -2,6 +2,7 @@
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
+import { openRemotePlace } from "@/modules/remotePlaces";
 import { DRAG_THRESHOLD_PX } from "@/constants";
 import { createTabLocationHover, getTabLocationDropTarget, openDroppedLocation } from "@/lib/tabLocationDrop";
 
@@ -111,7 +112,7 @@ export const usePinnedPlaceDragDrop = ({
 
     for (const place of places) {
       const rect = place.getBoundingClientRect();
-      const path = place.dataset.path;
+      const path = place.dataset.placeKey;
       if (!path) continue;
       const midpoint = rect.top + rect.height / 2;
       if (point.clientY < midpoint) {
@@ -120,7 +121,7 @@ export const usePinnedPlaceDragDrop = ({
     }
 
     const lastPlace = places[places.length - 1];
-    const lastPath = lastPlace?.dataset.path;
+    const lastPath = lastPlace?.dataset.placeKey;
     return lastPath ? { path: lastPath, position: "after" } : null;
   };
 
@@ -159,8 +160,12 @@ export const usePinnedPlaceDragDrop = ({
     if (wasDragging) armSuppress();
     clearDrag();
     if (!sourcePath) return;
-    if (tabStrip) openDroppedLocation(tabStrip, sourcePath);
-    else if (nextTarget && nextTarget.path !== sourcePath) {
+    if (tabStrip) {
+      const data = drag.source?.dataset;
+      if (data?.placeHost && data.remotePlacePath) {
+        openRemotePlace({ hostId: data.placeHost, path: data.remotePlacePath }, tabStrip.dataset.tabPane === "bottom" ? "bottom" : "main", true);
+      } else if (data?.path) openDroppedLocation(tabStrip, data.path);
+    } else if (nextTarget && nextTarget.path !== sourcePath) {
       onReorderRef.current(sourcePath, nextTarget.path, nextTarget.position);
     }
   };

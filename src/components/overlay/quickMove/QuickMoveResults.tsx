@@ -50,7 +50,7 @@ export const QuickMoveResults = ({
   autoPage, onLoadMore, onChoose, onActivate, onToggleFavorite,
 }: QuickMoveResultsProps) => {
   const { headings, rows, height } = useMemo(() => layoutRows(destinations), [destinations]);
-  // The viewport has at most three short section headings. Overscan covers the
+  // The viewport can contain several short section headings. Overscan covers the
   // extra offsets, and the exact heading height keeps the total scroll range correct.
   const { startIndex, endIndex } = useVirtualRange(
     viewportRef, rows.length, ROW_STRIDE, 5, 0, headings.length * HEADING_HEIGHT,
@@ -83,13 +83,14 @@ export const QuickMoveResults = ({
         ))}
         {visibleRows.map(({ destination, index, top }) => {
           const { key, name, path, favorite, disabled } = destination;
+          const location = destination.remote ? `${destination.remote.host} · ${path}` : path;
           const active = index === activeIndex;
           const starLabel = favorite ? "Remove from favourites" : "Add to favourites";
           return (
             <div key={key} id={quickMoveResultId(resultsId, index)} role="row" aria-selected={active}
               className="quick-move-row" data-active={active || undefined} style={{ top }}>
               <div role="gridcell" className="quick-move-destination-cell">
-                <TooltipWrapper text={path}>
+                <TooltipWrapper text={location}>
                   <PressButton type="button" className="quick-move-destination" tabIndex={-1}
                     pressOnPointerDown={false} disabled={busy || disabled}
                     onPointerEnter={() => onActivate(destination)}
@@ -97,12 +98,15 @@ export const QuickMoveResults = ({
                     <ContextOpenFolderIcon className="quick-move-folder-icon" />
                     <span className="quick-move-destination-label">
                       <span className="quick-move-name">{name}</span>
-                      <span className="quick-move-path">{path}</span>
+                      <span className="quick-move-path" data-remote={destination.remote ? true : undefined}>
+                        {destination.remote && <span className="quick-move-host">{destination.remote.host}</span>}
+                        <span>{path}</span>
+                      </span>
                     </span>
                   </PressButton>
                 </TooltipWrapper>
               </div>
-              <div role="gridcell">
+              {!destination.remote && <div role="gridcell">
                 <TooltipWrapper text={starLabel}>
                   <PressButton type="button" className="quick-move-star" aria-label={starLabel}
                     aria-pressed={favorite} tabIndex={active ? 0 : -1} disabled={busy}
@@ -113,7 +117,7 @@ export const QuickMoveResults = ({
                     </svg>
                   </PressButton>
                 </TooltipWrapper>
-              </div>
+              </div>}
             </div>
           );
         })}

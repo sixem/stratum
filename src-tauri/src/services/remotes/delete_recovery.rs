@@ -148,10 +148,12 @@ pub(super) async fn recover_interrupted_deletes(
                     journal.remove_delete(&entry.id)?;
                 }
             }
-            Err(error) => warnings.push(format!(
-                "Interrupted deletion of {}: {error} Check {}/item on {}.",
-                entry.original, entry.stage, entry.host
-            )),
+            Err(error) => {
+                let state = if entry.deleting { "deleting" } else { "staged" };
+                if !journal.reviewed_source("delete", &entry.id, state)? {
+                    warnings.push(format!("Interrupted deletion of {}: {error} Check {}/item on {}.", entry.original, entry.stage, entry.host));
+                }
+            }
         }
     }
     Ok(())

@@ -25,7 +25,7 @@ const mapLayoutPaths = (layout: WorkspaceLayout, map: MapPath): WorkspaceLayout 
       ...layout.pane,
       link: { ...link, mainRootPath: map(link.mainRootPath), bottomRootPath: map(link.bottomRootPath) },
     } : layout.pane,
-    places: { ...layout.places, places: layout.places.places.map((place) => ({ ...place, path: map(place.path) })) },
+    places: { ...layout.places, places: layout.places.places.map(place => place.hostId ? place : { ...place, path: map(place.path) }) },
   };
 };
 

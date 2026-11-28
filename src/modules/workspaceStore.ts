@@ -234,7 +234,7 @@ const havePlacesChanged = (saved: PlacesState, current: PlacesState) => {
   const currentPlaces = (current.initialized ? current : defaultPlaces).places;
   return savedPlaces.length !== currentPlaces.length || savedPlaces.some((place, index) => {
     const other = currentPlaces[index];
-    return place.path !== other.path || place.name !== other.name || Boolean(place.pinned) !== Boolean(other.pinned) || place.pinColor !== other.pinColor;
+    return place.hostId !== other.hostId || place.path !== other.path || place.name !== other.name || Boolean(place.pinned) !== Boolean(other.pinned) || place.pinColor !== other.pinColor;
   });
 };
 

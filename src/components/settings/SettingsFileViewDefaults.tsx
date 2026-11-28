@@ -20,6 +20,11 @@ export const FILE_VIEW_DEFAULTS_ITEMS = {
     label: "Parent directory entry",
     description: "Show an entry that opens the parent folder.",
   },
+  deferredRemovals: {
+    label: "Keep offscreen rows in place",
+    description: "When files disappear, hold their spaces until you scroll to them. Applies to local and SFTP folders.",
+    keywords: "stable browsing deferred removal move delete",
+  },
   keepFilter: {
     label: "Keep filter when changing folders",
     description: "Carry the current filter into the next folder in the same tab, in either pane.",
@@ -33,6 +38,7 @@ const DEFAULT_VIEW_OPTIONS = [
 ] as const;
 
 export const SettingsFileViewDefaults = ({ sectionId }: { sectionId: string }) => {
+  const deferOffscreenRemovals = useSettingsStore(state => state.deferOffscreenRemovals);
   const { defaultViewMode, smoothScroll, showParentEntry, keepFilterOnNavigation, updateSettings } = useSettingsStore(
     (state) => ({
       defaultViewMode: state.defaultViewMode,
@@ -71,6 +77,8 @@ export const SettingsFileViewDefaults = ({ sectionId }: { sectionId: string }) =
       </SettingsItem>
       <SettingsToggleItem item={FILE_VIEW_DEFAULTS_ITEMS.smoothScrolling} checked={smoothScroll}
         onChange={(smoothScroll) => updateSettings({ smoothScroll })} />
+      <SettingsToggleItem item={FILE_VIEW_DEFAULTS_ITEMS.deferredRemovals} checked={deferOffscreenRemovals}
+        onChange={value => updateSettings({ deferOffscreenRemovals: value })} />
       <SettingsToggleItem item={FILE_VIEW_DEFAULTS_ITEMS.parentEntry} checked={showParentEntry}
         onChange={(showParentEntry) => updateSettings({ showParentEntry })} />
       <SettingsToggleItem item={FILE_VIEW_DEFAULTS_ITEMS.keepFilter} checked={keepFilterOnNavigation}

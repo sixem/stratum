@@ -28,18 +28,26 @@ pub(super) async fn copy(
         .filter(|name| !name.is_empty())
         .ok_or("Invalid source name.")?;
     let stage_name = format!(".stratum-move-copy-{id}");
+    let source_session = job.remotes.current(&job.profile, Some(job.session))?;
     match &job.direction {
-        Direction::Download { local_folder, .. } => {
+        Direction::Download {
+            local_folder,
+            remote_path,
+        } => {
             let target = super::destination(local_folder, source)?;
             let path = local_folder.join(&stage_name);
-            journal.track_destination(&DestinationStage {
-                id: id.into(),
-                kind: "local".into(),
-                host: String::new(),
-                folder: local_folder.to_string_lossy().into_owned(),
-                path: path.to_string_lossy().into_owned(),
-                identity: None,
-            })?;
+            journal.track_destination(
+                &DestinationStage {
+                    id: id.into(),
+                    kind: "local".into(),
+                    host: String::new(),
+                    folder: local_folder.to_string_lossy().into_owned(),
+                    path: path.to_string_lossy().into_owned(),
+                    identity: None,
+                },
+                &source_session.host,
+                remote_path,
+            )?;
             let stage = StageDirectory::create(path.clone())
                 .map_err(|e| format!("Could not create destination staging: {e}"))?;
             journal.destination_identity(id, &stage.identity().map_err(|e| e.to_string())?)?;
@@ -71,7 +79,7 @@ pub(super) async fn copy(
             dest_profile,
             dest_session,
             remote_folder,
-            ..
+            remote_path,
         } => {
             let session = job.remotes.current(dest_profile, Some(*dest_session))?;
             let stage = format!("{}/{stage_name}", remote_folder.trim_end_matches('/'));
@@ -95,14 +103,18 @@ pub(super) async fn copy(
                     )
                     .await?;
             }
-            journal.track_destination(&DestinationStage {
-                id: id.into(),
-                kind: "remote".into(),
-                host: session.host.clone(),
-                folder: remote_folder.clone(),
-                path: stage.clone(),
-                identity: None,
-            })?;
+            journal.track_destination(
+                &DestinationStage {
+                    id: id.into(),
+                    kind: "remote".into(),
+                    host: session.host.clone(),
+                    folder: remote_folder.clone(),
+                    path: stage.clone(),
+                    identity: None,
+                },
+                &source_session.host,
+                remote_path,
+            )?;
             remote_private_mkdir(&session, &stage).await?;
             // Do not offer automatic deletion if creation was never confirmed.
             journal.destination_identity(id, "created")?;

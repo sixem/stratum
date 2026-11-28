@@ -8,7 +8,7 @@ import type {
 import type { EntryItem } from "@/lib";
 import type { ScrollRequest } from "@/hooks";
 import type { GridNameEllipsis, GridSize, ThumbnailFit } from "@/modules";
-import type { EntryMeta, EntryMetaLookup, FileEntry, RenameCommitReason, RequestScopedThumbnails, ThumbnailLookup } from "@/types";
+import type { EntryMeta, EntryMetaLookup, FileEntry, RenameCommitReason, RequestScopedThumbnails, SortState, ThumbnailLookup } from "@/types";
 
 export type FileGridEntryContextTarget = {
   name: string;
@@ -18,12 +18,15 @@ export type FileGridEntryContextTarget = {
 
 export type FileGridViewProps = {
   remote?: boolean;
+  remoteProfileId?: string;
   currentPath: string;
   entryByPath: Map<string, FileEntry>;
   items: EntryItem[];
   indexMap?: Map<string, number>;
   loading: boolean;
   searchQuery: string;
+  removalScope: string;
+  sortState: SortState;
   viewKey: string;
   scrollRestoreKey: string;
   scrollRestoreTop: number;

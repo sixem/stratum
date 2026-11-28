@@ -54,6 +54,7 @@ export type Settings = {
   fullWidthBreadcrumbs: boolean;
   showWorkProgressFill: boolean;
   smoothScroll: boolean;
+  deferOffscreenRemovals: boolean;
   smartTabJump: boolean;
   terminalTabNavigation: boolean;
   accentTheme: AccentTheme;

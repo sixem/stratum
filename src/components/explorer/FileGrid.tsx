@@ -1,7 +1,9 @@
 // Virtualized grid view for file entries.
 import { useCallback, useEffect, useMemo } from "react";
 import { shallow } from "zustand/shallow";
-import { useEntryPresence, useScrollToIndex } from "@/hooks";
+import { useScrollToIndex } from "@/hooks";
+import { useDeferredRemovals, useRemovalViewport } from "./fileView/useDeferredRemovals";
+import { PendingRemoval } from "./fileView/PendingRemoval";
 import { useThumbnailScope } from "@/hooks/domain/metadata/useThumbnailScope";
 import { useSettingsStore } from "@/modules";
 import { DEFAULT_FILE_ICON_KEY } from "@/constants/fileIcons";
@@ -35,7 +37,7 @@ const FileGrid = ({
   dragDrop,
   creation,
 }: FileGridProps) => {
-  const isCut = useCutEntries();
+  const isCut = useCutEntries(view.remoteProfileId);
   const usePaneSession = getPaneSessionStore(grid.pane);
   const defaultTabGridSize = useSettingsStore(getDefaultTabGridSize);
   const [tabId, tabGridSize, splitLayout] = usePaneSession(state => {
@@ -64,16 +66,13 @@ const FileGrid = ({
     creation,
   });
 
-  const { items: viewItems } = useEntryPresence({
-    items: view.items,
-    resetKey: view.viewKey,
-    animate: !view.loading && (thumbs.presenceEnabled ?? true),
-  });
+  const removals = useDeferredRemovals(view, thumbs.presenceEnabled ?? true);
+  const viewItems = removals.rows;
   const selectionItems = useMemo(
     () =>
       viewItems.map((item) => ({
         path: item.type === "parent" ? item.path : item.entry.path,
-        selectable: item.type !== "parent" && item.presence !== "removed",
+        selectable: item.type !== "parent" && item.presence !== "removed" && item.presence !== "pending-removal",
       })),
     [viewItems],
   );
@@ -112,6 +111,7 @@ const FileGrid = ({
     viewItemsLength: viewItems.length,
   });
   useGridWheelSize(viewportRef, view.viewKey, usePaneSession, tabId);
+  useRemovalViewport(removals, viewportRef, rowHeight, rowHeight - columnGap, columnCount);
 
   // Reposition before the virtual range reads the new scroll offset.
   useGridScrollAnchor({
@@ -132,7 +132,7 @@ const FileGrid = ({
     rowGap: columnGap,
     insetTop: VIEW_INSET,
     itemsPerRow: columnCount,
-    scrollRequest: view.scrollRequest,
+    scrollRequest: removals.scrollRequest,
     scrollKey: view.viewKey,
     ready: !view.loading && layoutReady,
   });
@@ -149,9 +149,10 @@ const FileGrid = ({
   });
 
   const onVisibleEntries = thumbs.onVisibleEntries;
+  const liveVisible = useMemo(() => removals.pending ? visibleItems.filter(item => item.presence !== "pending-removal") : visibleItems, [visibleItems, removals.pending]);
   useEffect(() => {
-    if (onVisibleEntries) onVisibleEntries(visibleItems.flatMap(item => item.type === "entry" ? [item.entry] : []));
-  }, [onVisibleEntries, visibleItems]);
+    if (onVisibleEntries) onVisibleEntries(liveVisible.flatMap(item => item.type === "entry" ? [item.entry] : []));
+  }, [onVisibleEntries, liveVisible]);
 
   const requestThumbs = useThumbnailScope(
     grid.pane, view.viewKey, thumbs.thumbnailsEnabled, thumbs.onRequestThumbs,
@@ -166,7 +167,7 @@ const FileGrid = ({
   } = useGridThumbRequests({
     viewportRef,
     viewKey: view.viewKey,
-    visibleItems,
+    visibleItems: liveVisible,
     isResizing,
     entryMeta: metadata.entryMeta,
     onRequestMeta: metadata.onRequestMeta,
@@ -226,7 +227,7 @@ const FileGrid = ({
         selectionBox={selectionBox}
         onContextMenu={contextMenu.onContextMenu}
         onContextMenuDown={contextMenu.onContextMenuDown}
-        emptyState={view.entryByPath.size === 0 && !view.loading ? (
+        emptyState={view.entryByPath.size === 0 && !view.loading && !removals.pending ? (
           <div className="thumb-empty">
             <EmptyState
               title={emptyMessage.title}
@@ -259,6 +260,7 @@ const FileGrid = ({
               );
             }
 
+            if (item.presence === "pending-removal") return <PendingRemoval key={item.key} name={item.entry.name} grid />;
             const isDropTarget = dragDrop.dropTargetPath === item.entry.path;
             const itemMeta = gridMetaByPath.get(item.entry.path);
             const baseIndex = resolvedIndexMap.get(item.entry.path) ?? index;
@@ -295,7 +297,7 @@ const FileGrid = ({
                 hideExtension={grid.gridNameHideExtension}
                 selected={selection.selectedPaths.has(item.entry.path)}
                 isDeleting={isDeletePending(item.entry.path)}
-                isCut={!view.remote && isCut(item.entry.path)}
+                isCut={isCut(item.entry.path)}
                 isTransferring={isTransferPending(item.entry.path)}
                 dropTarget={isDropTarget}
                 isRenaming={rename.renameTargetPath === item.entry.path}

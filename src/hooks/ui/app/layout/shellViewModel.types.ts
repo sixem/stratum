@@ -1,6 +1,7 @@
 // Shared model types for the shell-view composition hooks.
 // Keeping these aliases in one place helps the smaller hooks describe their
 // contracts without repeating the same ReturnType boilerplate everywhere.
+import type { PlaceReference } from "@/lib/placeLocation";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { Place } from "@/types";
 import type {
@@ -74,9 +75,9 @@ export type UseShellViewModelOptions = {
   viewState: ViewStateModel;
   navigationController: NavigationControllerModel;
   places: Place[];
-  addPlace: (path: string) => void;
-  pinPlace: (path: string) => void;
-  unpinPlace: (path: string) => void;
-  removePlace: (path: string) => void;
+  addPlace: (path: PlaceReference) => void;
+  pinPlace: (path: PlaceReference) => void;
+  unpinPlace: (path: PlaceReference) => void;
+  removePlace: (path: PlaceReference) => void;
   viewLog: (...args: unknown[]) => void;
 };

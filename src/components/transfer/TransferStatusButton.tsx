@@ -10,6 +10,7 @@ import type { TransferDestination } from "@/types";
 import { TransferStatusList } from "./TransferStatusList";
 import { buildTransferSummary } from "./transferStatusView";
 import { WorkPillFill } from "./WorkPillFill";
+import { refreshRecovery, useRecovery } from "@/modules/remoteRecovery";
 
 export const TransferStatusButton = ({
   onOpenDestination,
@@ -24,15 +25,19 @@ export const TransferStatusButton = ({
   const popoverId = useId();
   const summary = useMemo(() => buildTransferSummary(jobs), [jobs]);
   const canClear = summary.hasFinished;
+  const recoveryCount = useRecovery(s => s.details.length);
+  const recoveryError = useRecovery(s => Boolean(s.error));
+  const hasWork = jobs.length > 0 || recoveryCount > 0 || recoveryError;
+  useEffect(() => { void refreshRecovery(); }, [open]);
   const clearTooltipText = canClear
     ? `Clear ${summary.finishedCount} finished job${summary.finishedCount === 1 ? "" : "s"}`
     : "No finished jobs to clear";
 
   useEffect(() => {
-    if (jobs.length === 0 && open) {
+    if (!hasWork && open) {
       setOpen(false);
     }
-  }, [jobs.length, open]);
+  }, [hasWork, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -61,7 +66,7 @@ export const TransferStatusButton = ({
     popoverRef.current?.focus();
   }, [open]);
 
-  if (jobs.length === 0) return null;
+  if (!hasWork) return null;
 
   return (
     <div className="transfer-status" ref={containerRef}>
@@ -80,7 +85,7 @@ export const TransferStatusButton = ({
           aria-hidden="true"
         />
         <span className="transfer-label">Work</span>
-        <span className="transfer-count tnum">{summary.countLabel}</span>
+        <span className="transfer-count tnum">{[jobs.length ? summary.countLabel : "", recoveryCount ? `${recoveryCount} to review` : recoveryError ? "Recovery unavailable" : ""].filter(Boolean).join(" · ")}</span>
       </PressButton>
       {open ? (
         // The title bar passes pointer events through decorative elements.
@@ -93,7 +98,7 @@ export const TransferStatusButton = ({
           id={popoverId}
           ref={popoverRef}
           tabIndex={-1}
-          heading={summary.title}
+          heading={jobs.length ? summary.title : "Work"}
           headerAction={(
             <TooltipWrapper text={clearTooltipText}>
               <span className="transfer-popover-clear-shell">

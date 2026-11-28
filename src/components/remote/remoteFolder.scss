@@ -23,3 +23,19 @@
 .remote-entries > :is(.file-list, .thumb-shell) { flex: 1; min-width: 0; }
 .remote-loading { color: var(--muted); font-size: var(--font-size-sm); }
 .remote-omitted { font-size: var(--font-size-xs); color: var(--muted); margin: 0; padding: 3px 8px; }
+
+.remote-properties {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 5px 16px;
+  margin: 0;
+  max-height: 45vh;
+  overflow: auto;
+  dd {
+    margin: 0;
+    color: var(--text);
+    white-space: pre-wrap;
+    user-select: text;
+  }
+  .remote-mode { font-family: monospace; }
+}

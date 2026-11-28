@@ -1,11 +1,15 @@
 // Shared menu builder for folder-like targets that can be saved as places.
-import { folderPathKey, getParentPath, getPathName, normalizePath } from "@/lib";
+import { folderPathKey, getParentPath, getPathName } from "@/lib";
+import { placeKey, type PlaceReference } from "@/lib/placeLocation";
+import { openRemotePlace } from "@/modules/remotePlaces";
+import type { LinkedPane } from "@/lib/paneLink";
 import { writeFileClipboard, writeTextClipboard } from "@/modules/clipboardStore";
 import { usePlacesStore } from "@/modules/placesStore";
 import type { ContextMenuItem, PlaceContextTarget, Place } from "@/types";
 import { showEntryRenamePrompt } from "./showEntryRenamePrompt";
 
 type BuildPlaceTargetMenuItemsOptions = {
+  pane: LinkedPane;
   target: PlaceContextTarget | null;
   places: Place[];
   tabActions: ContextMenuItem[];
@@ -17,10 +21,10 @@ type BuildPlaceTargetMenuItemsOptions = {
   onRenameFolder: (path: string, name: string) => Promise<unknown>;
   onPasteIntoFolder?: (path: string) => void;
   canPaste: boolean;
-  onAddPlace: (path: string, name?: string, options?: { pinned?: boolean }) => void;
-  onPinPlace: (path: string) => void;
-  onUnpinPlace: (path: string) => void;
-  onRemovePlace: (path: string) => void;
+  onAddPlace: (path: PlaceReference, name?: string, options?: { pinned?: boolean }) => void;
+  onPinPlace: (path: PlaceReference) => void;
+  onUnpinPlace: (path: PlaceReference) => void;
+  onRemovePlace: (path: PlaceReference) => void;
   onRemoveRecentJump?: (path: string) => void;
   onOpenProperties?: (path: string) => void | Promise<unknown>;
 };
@@ -41,6 +45,7 @@ const buildPinLabel = (source: PlaceContextTarget["source"], exists: boolean, pi
 
 export const buildPlaceTargetMenuItems = ({
   target,
+  pane,
   places,
   tabActions,
   onOpenPath,
@@ -59,109 +64,118 @@ export const buildPlaceTargetMenuItems = ({
   onOpenProperties,
 }: BuildPlaceTargetMenuItemsOptions): ContextMenuItem[] => {
   if (!target) return [];
-  const path = target.path.trim();
+  const path = target.hostId ? target.path : target.path.trim();
   const items = [...tabActions];
   if (!path) return items;
   if (items.length) items.push({ kind: "divider", id: "place-target-divider-tab" });
-  const key = normalizePath(path);
-  const existing = places.find((place) => normalizePath(place.path) === key);
+  const existing = places.find(place => placeKey(place) === placeKey(target));
   const isPinned = existing?.pinned === true;
-  const hasFolderActions = isSidebarPlaceTarget(target) || target.source === "tab";
-  const parent = hasFolderActions ? getParentPath(path) : null;
-  const hasParent = parent && folderPathKey(parent) !== folderPathKey(path);
-  const folderName = getPathName(path);
+  const remote = target.hostId ? { hostId: target.hostId, path } : undefined;
+  const reference = remote ?? path;
+  const addOrUpdate = (options?: { pinned?: boolean }) => onAddPlace(reference, target.name, options);
 
-  const addOrUpdate = (options?: { pinned?: boolean }) => {
-    onAddPlace(path, target.name, options);
-  };
+  if (remote) {
+    if (isSidebarPlaceTarget(target)) {
+      items.push(
+        { id: "place-target-open", label: "Open", icon: "open-folder", onSelect: () => openRemotePlace(remote, pane) },
+        { id: "place-target-open-new-tab", label: "Open in new tab", icon: "open-new-tab", onSelect: () => openRemotePlace(remote, pane, true) },
+        { id: "place-target-copy-path", label: "Copy path", icon: "copy", onSelect: () => { void writeTextClipboard(path); } },
+        { kind: "divider", id: "place-target-divider-open" },
+      );
+    }
+  } else {
+    const hasFolderActions = isSidebarPlaceTarget(target) || target.source === "tab";
+    const parent = hasFolderActions ? getParentPath(path) : null;
+    const hasParent = parent && folderPathKey(parent) !== folderPathKey(path);
+    const folderName = getPathName(path);
+    const { tabId } = target;
+    const open = tabId && onSelectTab ? () => onSelectTab(tabId) :
+      onOpenPath ? () => onOpenPath(path) : undefined;
+    const navigationStart = items.length;
 
-  const { tabId } = target;
-  const open = tabId && onSelectTab ? () => onSelectTab(tabId) :
-    onOpenPath ? () => onOpenPath(path) : undefined;
-  const navigationStart = items.length;
-
-  if (open) {
-    items.push({
-      id: "place-target-open",
-      label: "Open",
-      icon: "open-folder",
-      onSelect: open,
-    });
-  }
-
-  if (onOpenPathNewTab) {
-    items.push({
-      id: "place-target-open-new-tab",
-      label: "Open in new tab",
-      icon: "open-new-tab",
-      onSelect: () => onOpenPathNewTab(path),
-    });
-  }
-
-  if (onOpenPathInBackgroundTab) {
-    items.push({
-      id: "place-target-open-background-tab",
-      label: "Open in background tab",
-      icon: "open-new-tab",
-      onSelect: () => onOpenPathInBackgroundTab(path),
-    });
-  }
-
-  if (hasFolderActions && otherPane) {
-    items.push({
-      id: "place-target-open-other-pane",
-      label: otherPane.label,
-      icon: "open-folder",
-      onSelect: () => otherPane.open(path),
-    });
-  }
-
-  if (hasParent && onOpenPath) {
-    items.push({
-      id: "place-target-open-parent",
-      label: "Open parent folder",
-      icon: "open-folder",
-      onSelect: () => onOpenPath(parent),
-    });
-  }
-
-  if (items.length > navigationStart) {
-    items.push({ kind: "divider", id: "place-target-divider-open" });
-  }
-
-  if (hasFolderActions) {
-    items.push(
-      {
-        id: "place-target-copy",
-        label: "Copy",
-        icon: "copy",
-        onSelect: () => { void writeFileClipboard([path], "copy"); },
-      },
-      {
-        id: "place-target-copy-path",
-        label: "Copy path",
-        icon: "copy",
-        onSelect: () => { void writeTextClipboard(path); },
-      },
-    );
-    if (onPasteIntoFolder) {
+    if (open) {
       items.push({
-        id: "place-target-paste",
-        label: "Paste into folder",
-        icon: "paste-into-folder",
-        disabled: !canPaste,
-        onSelect: () => onPasteIntoFolder(path),
+        id: "place-target-open",
+        label: "Open",
+        icon: "open-folder",
+        onSelect: open,
       });
     }
-    if (hasParent && folderName) {
+
+    if (onOpenPathNewTab) {
       items.push({
-        id: "place-target-rename-folder",
-        label: "Rename folder…",
-        icon: "rename",
-        onSelect: () => showEntryRenamePrompt({ path, name: folderName }, onRenameFolder, "Rename folder"),
+        id: "place-target-open-new-tab",
+        label: "Open in new tab",
+        icon: "open-new-tab",
+        onSelect: () => onOpenPathNewTab(path),
       });
     }
-    items.push({ kind: "divider", id: "place-target-divider-folder" });
+
+    if (onOpenPathInBackgroundTab) {
+      items.push({
+        id: "place-target-open-background-tab",
+        label: "Open in background tab",
+        icon: "open-new-tab",
+        onSelect: () => onOpenPathInBackgroundTab(path),
+      });
+    }
+
+    if (hasFolderActions && otherPane) {
+      items.push({
+        id: "place-target-open-other-pane",
+        label: otherPane.label,
+        icon: "open-folder",
+        onSelect: () => otherPane.open(path),
+      });
+    }
+
+    if (hasParent && onOpenPath) {
+      items.push({
+        id: "place-target-open-parent",
+        label: "Open parent folder",
+        icon: "open-folder",
+        onSelect: () => onOpenPath(parent),
+      });
+    }
+
+    if (items.length > navigationStart) {
+      items.push({ kind: "divider", id: "place-target-divider-open" });
+    }
+
+    if (hasFolderActions) {
+      items.push(
+        {
+          id: "place-target-copy",
+          label: "Copy",
+          icon: "copy",
+          onSelect: () => { void writeFileClipboard([path], "copy"); },
+        },
+        {
+          id: "place-target-copy-path",
+          label: "Copy path",
+          icon: "copy",
+          onSelect: () => { void writeTextClipboard(path); },
+        },
+      );
+      if (onPasteIntoFolder) {
+        items.push({
+          id: "place-target-paste",
+          label: "Paste into folder",
+          icon: "paste-into-folder",
+          disabled: !canPaste,
+          onSelect: () => onPasteIntoFolder(path),
+        });
+      }
+      if (hasParent && folderName) {
+        items.push({
+          id: "place-target-rename-folder",
+          label: "Rename folder…",
+          icon: "rename",
+          onSelect: () => showEntryRenamePrompt({ path, name: folderName }, onRenameFolder, "Rename folder"),
+        });
+      }
+      items.push({ kind: "divider", id: "place-target-divider-folder" });
+    }
   }
 
   if (target.source === "sidebar-place" && existing) {
@@ -170,7 +184,7 @@ export const buildPlaceTargetMenuItems = ({
       label: "Rename place…",
       icon: "rename",
       onSelect: () => showEntryRenamePrompt({ path, name: existing.name },
-        usePlacesStore.getState().renamePlace, "Rename place"),
+        (_path, name) => usePlacesStore.getState().renamePlace(reference, name), "Rename place"),
     });
   }
 
@@ -187,7 +201,7 @@ export const buildPlaceTargetMenuItems = ({
         items: colors.map(([label, color]) => ({
           id: `place-pin-color-${label}`, label, icon: "pin-shape", iconColor: color ?? defaultColor,
           checked: existing.pinColor === color,
-          onSelect: () => usePlacesStore.getState().setPinColor(path, color),
+          onSelect: () => usePlacesStore.getState().setPinColor(reference, color),
         })),
       });
     }
@@ -197,9 +211,9 @@ export const buildPlaceTargetMenuItems = ({
       icon: isPinned ? "unpin" : "pin",
       onSelect: () => {
         if (isPinned) {
-          onUnpinPlace(path);
+          onUnpinPlace(reference);
         } else {
-          onPinPlace(path);
+          onPinPlace(reference);
         }
       },
     });
@@ -207,7 +221,7 @@ export const buildPlaceTargetMenuItems = ({
       id: "place-target-remove",
       label: "Remove from places",
       icon: "remove",
-      onSelect: () => onRemovePlace(path),
+      onSelect: () => onRemovePlace(reference),
     });
   } else {
     items.push({
@@ -234,7 +248,7 @@ export const buildPlaceTargetMenuItems = ({
     });
   }
 
-  if (onOpenProperties) {
+  if (!remote && onOpenProperties) {
     items.push({ kind: "divider", id: "place-target-divider-properties" });
     items.push({
       id: "place-target-properties",

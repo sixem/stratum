@@ -41,6 +41,7 @@ export const updateRenamedFolderLocations = (from: string, to: string) => {
   }
   usePlacesStore.setState((state) => {
     const places = state.places.map((place) => {
+      if (place.hostId) return place;
       const path = mapPath(place.path);
       if (path === place.path) return place;
       const name = place.name === getPathName(place.path) ? getPathName(path) : place.name;

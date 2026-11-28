@@ -101,7 +101,7 @@ const TabItem = ({
   const remote = tab.kind === "remote" ? tab.remote : null;
   const label = remote ? remote.path.split("/").filter(Boolean).pop() || "/" : tab.terminal && !location ? "PowerShell" : tabLabel(location) || location;
   const isUntitled = tab.kind === "folder" && tab.path.trim().length === 0;
-  const menuTarget: PlaceContextTarget = { name: label, path: tab.path, source: "tab", tabId: tab.id };
+  const menuTarget: PlaceContextTarget = { name: label, path: remote?.path ?? tab.path, hostId: remote?.hostId, source: "tab", tabId: tab.id };
   return (
     <div
       className={`tab${isActive ? " is-active" : ""}${isDragging ? " is-dragging" : ""}${isUntitled ? " is-untitled" : ""}`}
@@ -296,7 +296,7 @@ export const TabsBar = ({
   }, [tabDropSubmenu?.hostTabId, tabs]);
 
   return (
-    <div className="tabsbar" data-tab-location-strip="true" data-tab-transfer-hover={receivingTab || undefined} ref={stripRef}
+    <div className="tabsbar" data-tab-location-strip="true" data-tab-pane={pane} data-tab-transfer-hover={receivingTab || undefined} ref={stripRef}
       onContextMenu={event => {
         const target = event.target;
         if (event.defaultPrevented || !(target instanceof Element) ||
@@ -377,13 +377,15 @@ export const TabsBar = ({
         </PressButton>
       </TooltipWrapper>
       <DropTargetSubmenu
-        open={Boolean(submenuAnchorElement && tabDropSubmenu?.hostTabId && (tabDropSubmenu.loading || tabDropSubmenu.items.length > 0))}
+        open={Boolean(submenuAnchorElement && tabDropSubmenu?.hostTabId && (tabDropSubmenu.loading || tabDropSubmenu.error || tabDropSubmenu.items.length > 0))}
         anchorElement={submenuAnchorElement}
         scrollElement={tabsRef.current}
         hostTabId={tabDropSubmenu?.hostTabId ?? null}
         hostPath={tabDropSubmenu?.hostPath ?? null}
         items={tabDropSubmenu?.items ?? []}
         loading={tabDropSubmenu?.loading ?? false}
+        remote={tabDropSubmenu?.remote}
+        error={tabDropSubmenu?.error}
         activePath={dropTargetPath}
         dragPoint={dragPoint}
         onHoverTargetChange={onSubmenuHoverTargetChange}

@@ -8,18 +8,21 @@ type MenuRequest = {
   point: { x: number; y: number };
 };
 
-export const getFileCommandFocus = (main: HTMLElement | null, allowUntitledTab = false) => {
+export const getFileCommandFocus = (main: HTMLElement | null, forContextMenu = false) => {
   if (!main) return null;
   const active = document.activeElement;
   if (!active || active === document.body || active === document.documentElement || main.contains(active)) {
     return "view" as const;
   }
   const element = active.closest<HTMLElement>("[data-context-place]");
-  const path = element?.dataset.dropPath || element?.dataset.path || "";
+  const hostId = element?.dataset.placeHost ?? element?.dataset.dropProfile;
+  if (hostId && !forContextMenu) return null;
+  const path = element?.dataset.remotePlacePath || element?.dataset.dropPath || element?.dataset.path || "";
   const source = element?.dataset.contextPlace as PlaceContextTarget["source"] | undefined;
   const tabId = source === "tab" ? element?.dataset.tabId : undefined;
-  if (!element || !source || (!path && !(allowUntitledTab && tabId))) return null;
+  if (!element || !source || (!path && !(forContextMenu && tabId))) return null;
   const place: PlaceContextTarget = { path, source, name: element.dataset.contextName || path };
+  if (hostId) place.hostId = hostId;
   if (tabId) place.tabId = tabId;
   return { element, place };
 };
@@ -36,7 +39,7 @@ export const getKeyboardMenuRequest = (
   if (focus !== "view") {
     const rect = focus.element.getBoundingClientRect();
     return {
-      target: focus.place.path ? { paths: [focus.place.path] } : null,
+      target: !focus.place.hostId && focus.place.path ? { paths: [focus.place.path] } : null,
       place: focus.place,
       point: { x: rect.left, y: rect.bottom },
     };

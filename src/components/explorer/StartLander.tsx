@@ -3,12 +3,18 @@ import { handleMiddleClick } from "@/lib";
 import { useLocationDrag } from "@/hooks/ui/inputs/useLocationDrag";
 import type { DriveInfo, Place } from "@/types";
 import { TooltipWrapper } from "@/components/overlay/Tooltip";
-import { PinIcon } from "@/components/icons";
+import { PinShapeIcon } from "@/components/icons/PinShapeIcon";
+import { useSettingsStore } from "@/modules/settings.store";
+import { useRemoteHosts } from "@/modules/remoteHosts";
+import { openRemotePlace, remotePlaceSubtitle } from "@/modules/remotePlaces";
+import { placeKey } from "@/lib/placeLocation";
+import type { LinkedPane } from "@/lib/paneLink";
 import { EmptyState } from "@/components/primitives/EmptyState";
 import { PressButton } from "@/components/primitives/PressButton";
 import { StartLanderDrives } from "./StartLanderDrives";
 
 type StartLanderProps = {
+  pane: LinkedPane;
   recentJumps: string[];
   onOpenRecent: (path: string) => void;
   onOpenRecentNewTab?: (path: string) => void;
@@ -46,6 +52,7 @@ const formatRecentDriveTag = (path: string) => {
 };
 
 export const StartLander = ({
+  pane,
   recentJumps,
   onOpenRecent,
   onOpenRecentNewTab,
@@ -59,6 +66,13 @@ export const StartLander = ({
   onOpenPlace,
   onOpenPlaceNewTab,
 }: StartLanderProps) => {
+  const profiles = useRemoteHosts(state => state.profiles);
+  const pinShape = useSettingsStore(state => state.pinShape);
+  const openPlace = (place: Place, newTab = false) => {
+    if (place.hostId) openRemotePlace({ hostId: place.hostId, path: place.path }, pane, newTab);
+    else if (newTab) onOpenPlaceNewTab?.(place.path);
+    else onOpenPlace(place.path);
+  };
   const visibleRecents = recentJumps;
   const visiblePlaces = places;
   const locationDrag = useLocationDrag();
@@ -130,17 +144,17 @@ export const StartLander = ({
               <div className="lander-recents-list">
                 {visiblePlaces.map((place) => (
                   <PressButton
-                    key={place.path}
+                    key={placeKey(place)}
                     type="button"
                     className="place lander-place"
-                    data-location-path={place.path}
+                    data-location-path={place.hostId ? undefined : place.path}
                     pressOnPointerDown={false}
                     data-pinned={place.pinned ? "true" : "false"}
-                    onClick={() => onOpenPlace(place.path)}
+                    onClick={() => openPlace(place)}
                     onMouseDown={(event) => {
-                      if (!onOpenPlaceNewTab) return;
+                      if (!place.hostId && !onOpenPlaceNewTab) return;
                       handleMiddleClick(event, () =>
-                        onOpenPlaceNewTab(place.path),
+                        openPlace(place, true),
                       );
                     }}
                   >
@@ -150,13 +164,13 @@ export const StartLander = ({
                       </span>
                       {place.pinned ? (
                         <TooltipWrapper text="Pinned place">
-                          <span className="place-pin" aria-hidden="true">
-                            <PinIcon className="place-pin-icon" />
+                          <span className="place-pin" style={{ color: place.pinColor }} aria-hidden="true">
+                            <PinShapeIcon shape={pinShape} className="place-pin-icon" />
                           </span>
                         </TooltipWrapper>
                       ) : null}
                     </div>
-                    <span className="place-path lander-place-path">{place.path}</span>
+                    <span className="place-path lander-place-path">{place.hostId ? remotePlaceSubtitle(place.path, profiles.find(profile => profile.id === place.hostId)) : place.path}</span>
                   </PressButton>
                 ))}
               </div>

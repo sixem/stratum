@@ -33,6 +33,7 @@ export type ListDirWithParentResult = {
 };
 
 export type Place = {
+  hostId?: string;
   name: string;
   path: string;
   // Pinned places are shown before normal places in sidebar lists.

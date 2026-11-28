@@ -4,6 +4,11 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { Fragment, useRef, useState } from "react";
 import { usePinnedPlaceDragDrop } from "@/hooks";
 import { useLocationDrag } from "@/hooks/ui/inputs/useLocationDrag";
+import { placeKey, type PlaceReference } from "@/lib/placeLocation";
+import { useRemoteHosts } from "@/modules/remoteHosts";
+import { openRemotePlace, remotePlaceSubtitle } from "@/modules/remotePlaces";
+import { getPaneSessionStore } from "@/modules/sessionStore";
+import { useBottomPaneStore } from "@/modules/bottomPaneStore";
 import { folderPathKey, handleMiddleClick, tabLabel } from "@/lib";
 import type { PinShape, SidebarSectionId } from "@/modules";
 import { normalizeSidebarHiddenSections, normalizeSidebarSectionOrder, useSettingsStore } from "@/modules";
@@ -25,7 +30,7 @@ type SidebarProps = {
   onSelect: (path: string) => void;
   onSelectRecent: (path: string) => void;
   onSelectNewTab?: (path: string) => void;
-  onReorderPinnedPlace?: (fromPath: string, toPath: string, position: "before" | "after") => void;
+  onReorderPinnedPlace?: (fromPath: PlaceReference, toPath: PlaceReference, position: "before" | "after") => void;
   onPlaceContextMenu?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
   onPlaceContextMenuDown?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
   onRecentContextMenu?: (event: ReactPointerEvent, target: PlaceContextTarget) => void;
@@ -34,6 +39,8 @@ type SidebarProps = {
 };
 
 type SidebarItemProps = {
+  hostId?: string;
+  reorderKey?: string;
   path: string;
   title: string;
   subtitle: string;
@@ -54,6 +61,8 @@ type SidebarItemProps = {
 };
 
 const SidebarItem = ({
+  hostId,
+  reorderKey,
   path,
   title,
   subtitle,
@@ -81,7 +90,7 @@ const SidebarItem = ({
     event.stopPropagation();
   };
   const source: PlaceContextTarget["source"] = isRecent ? "sidebar-recent" : "sidebar-place";
-  const menuTarget: PlaceContextTarget = { name: title, path, source };
+  const menuTarget: PlaceContextTarget = { name: title, path, source, hostId };
   const canReorder = isPinned && !isRecent && Boolean(onReorderPointerDown);
 
   return (
@@ -92,9 +101,12 @@ const SidebarItem = ({
       data-place-kind={isPinned && !isRecent ? "pinned" : isRecent ? "recent" : "place"}
       data-context-place={source}
       data-context-name={title}
-      data-is-dir="true"
-      data-path={path}
-      data-location-path={canReorder ? undefined : path}
+      data-place-host={hostId}
+      data-place-key={reorderKey}
+      data-remote-place-path={hostId ? path : undefined}
+      data-is-dir={hostId ? undefined : "true"}
+      data-path={hostId ? undefined : path}
+      data-location-path={hostId || canReorder ? undefined : path}
       data-drop-target={isDropTarget ? "true" : "false"}
       data-pinned-drop={pinnedDropPosition ? "true" : "false"}
       data-pinned-drop-position={pinnedDropPosition ?? undefined}
@@ -108,7 +120,7 @@ const SidebarItem = ({
       }}
       onPointerDownCapture={(event) => {
         if (!canReorder || event.button !== 0) return;
-        onReorderPointerDown?.(event, path);
+        if (reorderKey) onReorderPointerDown?.(event, reorderKey);
       }}
       draggable={false}
       onPointerUp={(event) => {
@@ -153,7 +165,11 @@ export const Sidebar = ({
   const [placesOpen, setPlacesOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
   const placesListRef = useRef<HTMLDivElement | null>(null);
-  const activeKey = folderPathKey(activePath);
+  const profiles = useRemoteHosts(state => state.profiles);
+  const pane = useBottomPaneStore(state => state.active ? "bottom" : "main");
+  const activeTab = getPaneSessionStore(pane)(state => state.tabs.find(tab => tab.id === state.activeTabId));
+  const activeRemote = activeTab?.kind === "remote" ? activeTab.remote : undefined;
+  const activeKey = activeRemote ? null : folderPathKey(pane === "bottom" ? activeTab?.path ?? "" : activePath);
   const dropTargetKey = dropTargetPath ? folderPathKey(dropTargetPath) : null;
   const orderedSections = normalizeSidebarSectionOrder(sectionOrder);
   const hiddenSectionIds = normalizeSidebarHiddenSections(hiddenSections);
@@ -162,7 +178,9 @@ export const Sidebar = ({
   const { draggingPath, dropTarget, handlePointerDown, handleSuppressClick } =
     usePinnedPlaceDragDrop({
       onReorder: (fromPath, toPath, position) => {
-        onReorderPinnedPlace?.(fromPath, toPath, position);
+        const from = places.find(place => placeKey(place) === fromPath);
+        const to = places.find(place => placeKey(place) === toPath);
+        if (from && to) onReorderPinnedPlace?.(from, to, position);
       },
       containerRef: placesListRef,
     });
@@ -180,37 +198,43 @@ export const Sidebar = ({
               <div className="place is-empty">No places found</div>
             ) : (
               <div className="sidebar-places-list" ref={placesListRef}>
-                {places.map((place) => (
-                  <SidebarItem
-                    key={place.path}
-                    path={place.path}
-                    title={place.name}
-                    subtitle={place.path}
-                    isActive={activeKey === folderPathKey(place.path)}
-                    isDropTarget={dropTargetKey === folderPathKey(place.path)}
-                    isPinned={place.pinned === true}
-                    pinColor={place.pinColor}
-                    pinShape={pinShape}
-                    isDragging={draggingPath === place.path}
-                    pinnedDropPosition={
-                      dropTarget?.path === place.path ? dropTarget.position : null
-                    }
-                    onReorderPointerDown={
-                      place.pinned === true && onReorderPinnedPlace
-                        ? handlePointerDown
-                        : undefined
-                    }
-                    onSuppressClick={
-                      place.pinned === true && onReorderPinnedPlace
-                        ? handleSuppressClick
-                        : undefined
-                    }
-                    onSelect={onSelect}
-                    onSelectNewTab={onSelectNewTab}
-                    onContextMenu={onPlaceContextMenu}
-                    onContextMenuDown={onPlaceContextMenuDown}
-                  />
-                ))}
+                {places.map((place) => {
+                  const key = placeKey(place)!;
+                  const remote = place.hostId ? { hostId: place.hostId, path: place.path } : undefined;
+                  return (
+                    <SidebarItem
+                      key={key}
+                      reorderKey={key}
+                      hostId={place.hostId}
+                      path={place.path}
+                      title={place.name}
+                      subtitle={remote ? remotePlaceSubtitle(place.path, profiles.find(profile => profile.id === remote.hostId)) : place.path}
+                      isActive={remote ? activeRemote?.hostId === remote.hostId && activeRemote.path === remote.path : activeKey === folderPathKey(place.path)}
+                      isDropTarget={!remote && dropTargetKey === folderPathKey(place.path)}
+                      isPinned={place.pinned === true}
+                      pinColor={place.pinColor}
+                      pinShape={pinShape}
+                      isDragging={draggingPath === key}
+                      pinnedDropPosition={
+                        dropTarget?.path === key ? dropTarget.position : null
+                      }
+                      onReorderPointerDown={
+                        place.pinned === true && onReorderPinnedPlace
+                          ? handlePointerDown
+                          : undefined
+                      }
+                      onSuppressClick={
+                        place.pinned === true && onReorderPinnedPlace
+                          ? handleSuppressClick
+                          : undefined
+                      }
+                      onSelect={remote ? () => openRemotePlace(remote, pane) : onSelect}
+                      onSelectNewTab={remote ? () => openRemotePlace(remote, pane, true) : onSelectNewTab}
+                      onContextMenu={onPlaceContextMenu}
+                      onContextMenuDown={onPlaceContextMenuDown}
+                    />
+                  );
+                })}
               </div>
             )}
           </SidebarSection>

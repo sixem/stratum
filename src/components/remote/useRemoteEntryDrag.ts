@@ -17,7 +17,7 @@ import { resolveRemoteDragTarget } from "./remoteDragPolicy";
 // Preserve target identity between pointer moves within the same destination.
 const sameTarget = (a: DropTarget | null, b: DropTarget | null) =>
   a === b || Boolean(a && b && a.kind === b.kind && a.pane === b.pane && a.tabId === b.tabId &&
-    (a.kind === "tab-submenu" || b.kind === "tab-submenu" || a.path === b.path) && a.profileId === b.profileId && a.sessionId === b.sessionId);
+    (a.kind === "tab-submenu" || b.kind === "tab-submenu" || a.path === b.path) && a.profileId === b.profileId && a.sessionId === b.sessionId && a.tabPath === b.tabPath);
 
 export function useRemoteEntryDrag(pane: LinkedPane, profileId: string, sessionId: number, remotePath: string, entryByPath: ReadonlyMap<string, RemoteEntry>) {
   const release = useRef<() => void>(() => {});
@@ -71,7 +71,7 @@ export function useRemoteEntryDrag(pane: LinkedPane, profileId: string, sessionI
       clear();
       if (!chosen || chosen.kind === "tab-submenu") return;
       if (chosen.kind === "tab" || chosen.kind === "tab-destination") {
-        void copyRemoteFiles(sourcePaths, { profileId, sessionId, path: remotePath }, chosen.path, "download", event.shiftKey, undefined, entryByPath);
+        void copyRemoteFiles(sourcePaths, { profileId, sessionId, path: remotePath }, chosen.path, "download", event.shiftKey, { sourceEntries: entryByPath });
         return;
       }
       if (chosen.kind === "remote-tab") {
@@ -82,14 +82,15 @@ export function useRemoteEntryDrag(pane: LinkedPane, profileId: string, sessionI
             if (dest.profileId === profileId && dest.sessionId === sessionId && !event.ctrlKey) {
               await moveRemoteEntries(entries, profileId, sessionId, remotePath, dest.path, dest.transferId);
             } else {
-              await copyRemoteFiles(sourcePaths, { profileId, sessionId, path: remotePath }, "", "download", !event.ctrlKey, dest, entryByPath, dest.transferId);
+              await copyRemoteFiles(sourcePaths, { profileId, sessionId, path: remotePath }, "", "download", !event.ctrlKey,
+                { remoteTarget: dest, sourceEntries: entryByPath, transferId: dest.transferId });
             }
           } catch (error) { usePromptStore.getState().showPrompt({ title: "Transfer failed", content: String(error), confirmLabel: "OK", cancelLabel: null }); }
         })();
         return;
       }
       if (chosen.kind === "entry" && !chosen.pane) {
-        void copyRemoteFiles(sourcePaths, { profileId, sessionId, path: remotePath }, chosen.path, "download", event.shiftKey, undefined, entryByPath);
+        void copyRemoteFiles(sourcePaths, { profileId, sessionId, path: remotePath }, chosen.path, "download", event.shiftKey, { sourceEntries: entryByPath });
         return;
       }
       if (!chosen.pane) return;
@@ -100,12 +101,12 @@ export function useRemoteEntryDrag(pane: LinkedPane, profileId: string, sessionI
           void moveRemoteEntries(entries, profileId, sessionId, remotePath, destination);
         } else {
           void copyRemoteFiles(sourcePaths, { profileId, sessionId, path: remotePath }, "", "download", !event.ctrlKey,
-            { profileId: location.profileId, sessionId: location.sessionId, path: destination }, entryByPath);
+            { remoteTarget: { ...location, path: destination }, sourceEntries: entryByPath });
         }
         return;
       }
       if (!location || location.kind !== "local") return;
-      void copyRemoteFiles(sourcePaths, { profileId, sessionId, path: remotePath }, chosen.path, "download", event.shiftKey, undefined, entryByPath);
+      void copyRemoteFiles(sourcePaths, { profileId, sessionId, path: remotePath }, chosen.path, "download", event.shiftKey, { sourceEntries: entryByPath });
     };
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); clear(); }

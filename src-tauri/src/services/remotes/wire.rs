@@ -25,6 +25,7 @@ pub(super) enum Request {
     Realpath = 16,
     Stat = 17,
     Rename = 18,
+    Readlink = 19,
 }
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq)]
@@ -93,7 +94,11 @@ impl<'a> Fields<'a> {
         if flags & 2 != 0 {
             self.take(8)?;
         }
-        let mode = if flags & 4 != 0 { self.number()? } else { 0 };
+        let mode = if flags & 4 != 0 {
+            Some(self.number()?)
+        } else {
+            None
+        };
         let modified = if flags & 8 != 0 {
             self.number()?;
             Some(u64::from(self.number()?) * 1000)
@@ -115,13 +120,13 @@ impl<'a> Fields<'a> {
     }
 }
 pub(super) struct Attrs {
-    pub mode: u32,
+    pub mode: Option<u32>,
     pub size: Option<u64>,
     pub modified: Option<u64>,
 }
 impl Attrs {
     pub fn kind(&self) -> u32 {
-        self.mode & 0o170000
+        self.mode.unwrap_or_default() & 0o170000
     }
 }
 

@@ -5,7 +5,9 @@ pub(crate) mod delete_recovery;
 pub(crate) mod file;
 pub(crate) mod open;
 pub(crate) mod operations;
+pub(crate) mod properties;
 pub(crate) mod recovery;
+pub(crate) mod recovery_review;
 mod thumbnail;
 pub(crate) mod transfer;
 mod wire;
@@ -83,7 +85,8 @@ impl Session {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(Error::Transport(message))) => {
                 self.stop.send_replace(true);
-                Err(connection::failure(&self.diagnostics, &message))
+                if self.home.get().is_some() { Err(connection::failure(&self.diagnostics, &message)) }
+                else { Err(message) }
             }
             Ok(Err(error)) => Err(error.message().into()),
             Err(_) => {
@@ -211,11 +214,15 @@ impl Remotes {
             )
             .await;
         // A failed initial probe should never leave an unaffiliated SSH child.
-        if path.is_err() {
-            session.stop.send_replace(true);
-        }
+        let path = match path {
+            Ok(path) => path,
+            Err(error) => {
+                session.stop.send_replace(true);
+                return Err(session.diagnostics.connection_error(&error).await);
+            }
+        };
         Ok(Connected {
-            path: path?,
+            path,
             session_id: session.id,
         })
     }

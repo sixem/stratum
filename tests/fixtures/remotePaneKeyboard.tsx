@@ -17,15 +17,26 @@ import { openRemoteTab } from "@/modules/remoteTabs";
 import { getPaneSessionStore } from "@/modules/sessionStore";
 import { useTransferStore } from "@/modules/transferStore";
 import { TransferStatusItemActions } from "@/components/transfer/TransferStatusItemActions";
+import { DropTargetSubmenu } from "@/components/overlay/DropTargetSubmenu";
+import { pasteIntoRemote, pasteRemoteClipboardToLocal } from "@/modules/remoteClipboard";
+import { useClipboardStore } from "@/modules/clipboardStore";
+import { exerciseRemotePlaces } from "./remotePlaces";
 
 type Pane = "main" | "bottom";
 const displayedPath = (pane: Pane) => pane === "main" ? "/alias/work" : "/bottom";
 const reads: Record<Pane, number> = { main: 0, bottom: 0 };
 const clipboard: string[] = [];
+const releasedDropStages: number[] = [];
+let finishUpload: (() => void) | undefined;
+let sequence = 1;
+let localCut: string[] = [];
+let skipLast = false;
+let replaceClipboardDuringMove = false;
 const transfers: { command: string; args: any }[] = [];
 const callbacks = new Map<number, (event: any) => void>();
 const listeners = new Map<string, number>();
 let nextCallback = 1;
+let connectingHost: string | undefined;
 let finishConnection: (() => void) | undefined;
 let disconnects = 0;
 const noop = () => {};
@@ -35,12 +46,16 @@ const preview = { registerSource: () => noop, onPress: () => false, open: noop }
   metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
   transformCallback: (callback: (event: any) => void) => { const id = nextCallback++; callbacks.set(id, callback); return id; },
   invoke: async (command: string, args: any) => {
+    if (command === "release_drop_stage") { releasedDropStages.push(args.id); return; }
     if (command === "remote_connect") {
+      connectingHost = args.profileId;
       await new Promise<void>(resolve => { finishConnection = resolve; });
+      connectingHost = undefined;
       return { path: "/", sessionId: 77 };
     }
     if (command === "remote_disconnect") { disconnects++; finishConnection?.(); return; }
     if (command === "remote_finish_interrupted_transfers") return { restored: [], warnings: [], deleteNoticeIds: [] };
+    if (command === "remote_recovery_details") return [];
     if (command === "remote_list") {
       const pane = args.profileId as Pane;
       reads[pane]++;
@@ -49,17 +64,33 @@ const preview = { registerSource: () => noop, onPress: () => false, open: noop }
           isDir: name === "folder", isSymlink: false, size: 10, modified: 1 })) };
     }
     if (command === "remote_resolve_target" && args.path === "/alias") return { kind: "directory", path: "/archive" };
-    if (command === "set_remote_clipboard") { clipboard.push(String(args.text)); return 1; }
-    if (command === "get_file_clipboard") return { paths: [], mode: "copy", sequence: 1 };
+    if (command === "set_remote_clipboard") {
+      if (args.expectedSequence !== undefined && args.expectedSequence !== sequence) return 0;
+      clipboard.push(String(args.text)); localCut = []; sequence++;
+      return args.text ? sequence : 0;
+    }
+    if (command === "get_file_clipboard") return { paths: localCut, mode: localCut.length ? "move" : "copy", sequence };
+    if (command === "finish_file_cut") {
+      if (args.sequence === sequence) { localCut = localCut.filter(path => !args.moved.includes(path)); sequence++; }
+      return;
+    }
     if (command === "plugin:event|listen") { listeners.set(args.event, args.handler); return args.handler; }
     if (command === "plugin:event|unlisten" || command === "file_drop_listener_ready") return undefined;
     if (command === "remote_transfer_file") {
       transfers.push({ command, args });
+      if (replaceClipboardDuringMove) {
+        replaceClipboardDuringMove = false;
+        sequence++;
+        localCut = ["C:\\newer-selection"];
+      }
       return { items: args.request.entries.map((_: unknown, index: number) => ({ index, result: { path: "/moved" }, error: null })), cancelled: false };
     }
     if (command === "remote_transfer_batch") {
+      if (args.dropStage === 33) throw new Error("Upload rejected before claiming the attachment");
       transfers.push({ command, args });
-      return { items: args.items.map((_: unknown, index: number) => ({ index, result: { path: "/copied" }, error: null, skipped: false })), cancelled: false };
+      if (args.dropStage === 31) await new Promise<void>(resolve => { finishUpload = resolve; });
+      return { items: args.items.map((_: unknown, index: number) => skipLast && index === args.items.length - 1
+        ? { index, result: null, skipped: true } : { index, result: { path: "/copied" }, error: null, skipped: false }), cancelled: false };
     }
     throw new Error(`Unexpected fixture command: ${command}`);
   },
@@ -67,7 +98,7 @@ const preview = { registerSource: () => noop, onPress: () => false, open: noop }
 (window as unknown as { __TAURI_EVENT_PLUGIN_INTERNALS__: unknown }).__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: noop };
 useRemoteHosts.setState({
   profiles: ["main", "bottom"].map(id => ({ id, name: id, destination: `${id}.example`, startPath: "" })),
-  connections: { main: { status: "connected", sessionId: 1, epoch: 1 }, bottom: { status: "connected", sessionId: 2, epoch: 1 } },
+  connections: { main: { status: "connected", sessionId: 1, epoch: 1, path: "/main" }, bottom: { status: "connected", sessionId: 2, epoch: 1, path: "/bottom" } },
 });
 useBottomPaneStore.setState({ open: true, active: false });
 useSettingsStore.setState({ showParentEntry: false, remoteThumbnails: false, remoteVideoThumbnails: false });
@@ -101,7 +132,7 @@ function DragDriver() {
 function Fixture() {
   const preflights = useTransferStore(state => state.localJobs);
   const [fullWidth, setFullWidth] = useState(false);
-  const drop = useFileDrop({ beginFileActivity: () => noop, currentPath: "", enabled: true });
+  const drop = useFileDrop({ beginFileActivity: () => noop, currentPath: "", enabled: true, enableTabDropParentFolder: true, enableTabDropSubfolders: true });
   const crumbs = <Crumbs pane="main" />;
   return <div data-layout={fullWidth ? "full" : "default"}>
     <div className="topstack" onFocusCapture={() => setBottomPaneActive(false)}>
@@ -121,6 +152,8 @@ function Fixture() {
     <button id="toggle-layout" onClick={() => setFullWidth(value => !value)}>Change layout</button>
     <DragDriver />
     <RemoteDragPreview />
+    <DropTargetSubmenu open={!!drop.tabDropSubmenu.hostTabId} anchorElement={document.getElementById("fixture-drop-tab")}
+      {...drop.tabDropSubmenu} dragPoint={drop.dragPoint} activePath={drop.dropTargetPath} />
     {preflights.map(job => <div key={job.id} data-preflight={job.id}>
       <TransferStatusItemActions job={job} onOpenDestination={noop} />
     </div>)}
@@ -286,7 +319,7 @@ async function exerciseAliasAndPendingDrop() {
   const position = { x: at.x * devicePixelRatio, y: at.y * devicePixelRatio };
   const receive = (pendingDrop: number) => listener({ payload: { type: "receiving", pendingDrop, position } });
   const finish = (pendingDrop: number) => listener({ payload: { type: "drop", pendingDrop, position,
-    paths: ["C:\\Temp\\local.txt"], mode: "copy", stage: null } });
+    paths: ["C:\\Temp\\local.txt"], mode: "copy", stage: 30 + pendingDrop } });
   const original = getPaneDirectory("main");
   check(original?.kind === "remote", "Missing remote destination");
   receive(1);
@@ -296,9 +329,21 @@ async function exerciseAliasAndPendingDrop() {
   await waitFor(() => transfers.length === before + 2, "Refresh lost the pending drop");
   check(transfers[before + 1].args.items[0].request.remoteFolder === "/archive", "Upload lost its resolved destination");
 
+  check(transfers[before + 1].args.dropStage === 31 && !transfers[before + 1].args.moving, "Attachment upload did not claim its stage for copying");
+  check(!releasedDropStages.includes(31), "Temporary files were released during upload");
+  finishUpload!();
+  await waitFor(() => releasedDropStages.includes(31), "Temporary files were not released after upload");
+
   await waitFor(() => alias.dataset.remoteCrumbPath === "/archive", "Alias did not resolve after refresh");
+  receive(3);
+  finish(3);
+  await waitFor(() => usePromptStore.getState().prompt?.title === "Copy completed with issues", "Rejected upload did not report the error");
+  await waitFor(() => releasedDropStages.includes(33), "An open error notice held the temporary file");
+  const failure = usePromptStore.getState().prompt!;
+  usePromptStore.getState().hidePrompt(failure);
+  failure.onConfirm?.();
   receive(2);
-  useRemoteHosts.setState(state => ({ connections: { ...state.connections, main: { status: "connected", epoch: 2, sessionId: 3 } } }));
+  useRemoteHosts.setState(state => ({ connections: { ...state.connections, main: { status: "connected", epoch: 2, sessionId: 3, path: "/main" } } }));
   await waitFor(() => {
     const directory = getPaneDirectory("main");
     return directory?.kind === "remote" && directory.sessionId === 3;
@@ -306,7 +351,73 @@ async function exerciseAliasAndPendingDrop() {
   finish(2);
   await waitFor(() => usePromptStore.getState().prompt?.title === "Drop failed", "Changed session did not report a failed drop");
   check(transfers.length === before + 2, "Drop was sent to a replacement session");
+  await waitFor(() => releasedDropStages.includes(32), "Rejected attachment drop leaked its stage");
   usePromptStore.getState().hidePrompt();
+}
+
+async function exerciseCutPaste() {
+  const src = crumb("main");
+  press(src, "a", { ctrlKey: true });
+  await waitFor(() => selected("main").startsWith("3 selected"), "No range to cut");
+  press(src, "x", { ctrlKey: true });
+  await waitFor(() => useClipboardStore.getState().remote?.mode === "move", "Ctrl+X did not cut remote entries");
+  skipLast = true;
+  await pasteRemoteClipboardToLocal("C:\\Downloads");
+  check(transfers.at(-1)?.args.moving && transfers.at(-1)?.args.items[0].request.kind === "download", "Cut download became a copy");
+  check(useClipboardStore.getState().remote?.entries.length === 1, "Skipped remote cut was lost");
+  skipLast = false;
+  press(crumb("bottom"), "v", { ctrlKey: true });
+  await waitFor(() => !useClipboardStore.getState().remote, "Completed remote cut was not consumed");
+  check(transfers.at(-1)?.args.moving && transfers.at(-1)?.args.items[0].request.destProfile === "bottom", "Cross-host paste missed its destination");
+  localCut = ["C:\\Temp\\one", "C:\\Temp\\two"];
+  sequence++;
+  skipLast = true;
+  press(crumb("bottom"), "v", { ctrlKey: true });
+  await waitFor(() => localCut.length === 1, "Local cut was not reconciled");
+  check(localCut[0].endsWith("two") && transfers.at(-1)?.args.moving && transfers.at(-1)?.args.items[0].request.kind === "upload", "Wrong source consumed on partial upload");
+  skipLast = false;
+  press(crumb("main"), "x", { ctrlKey: true });
+  await waitFor(() => useClipboardStore.getState().remote?.mode === "move", "Could not cut again");
+  const writes = clipboard.length;
+  replaceClipboardDuringMove = true;
+  await pasteIntoRemote({ profileId: "main", sessionId: 1, path: "/archive" });
+  check(transfers.at(-1)?.args.request.kind === "rename" && transfers.at(-1)?.args.request.destination === "/archive", "Same-host cut did not use a rename");
+  check(clipboard.length === writes && localCut[0] === "C:\\newer-selection", "Finishing a cut replaced newer clipboard data");
+  press(crumb("main"), "Escape");
+}
+
+async function exerciseRemoteTabMenu() {
+  // Edge's dump-dom virtual clock advances timers without producing paint frames.
+  // Drive the submenu's two positioning frames on that same clock.
+  const { requestAnimationFrame, cancelAnimationFrame } = window;
+  window.requestAnimationFrame = callback => window.setTimeout(() => callback(performance.now()), 16);
+  window.cancelAnimationFrame = id => window.clearTimeout(id);
+  openRemoteTab("bottom", "/bottom", "bottom");
+  const anchor = document.createElement("button");
+  anchor.id = "fixture-drop-tab";
+  Object.assign(anchor.dataset, { dropKind: "remote-tab", dropProfile: "bottom", dropPath: "/bottom",
+    dropId: getPaneSessionStore("bottom").getState().activeTabId });
+  anchor.style.cssText = "position:fixed;top:10px;right:100px;width:100px;height:30px";
+  document.body.append(anchor);
+  const native = callbacks.get(listeners.get("stratum-file-drag")!)!;
+  const position = (el: Element) => { const p = point(el); return { x: p.x * devicePixelRatio, y: p.y * devicePixelRatio }; };
+  const row = (path: string) => document.querySelector<HTMLElement>(`.drop-submenu-item[data-drop-path="${path}"]`);
+  native({ payload: { type: "over", position: position(anchor) } });
+  await waitFor(() => row("/"), "Remote parent row did not load");
+  await waitFor(() => row("/")?.closest<HTMLElement>(".drop-submenu-surface")?.style.visibility === "visible", "Remote parent menu did not become visible");
+  const before = transfers.length;
+  native({ payload: { type: "drop", paths: ["C:\\Temp\\file"], mode: "copy", stage: 40, position: position(row("/")!) } });
+  await waitFor(() => transfers.length === before + 1, "Parent upload was not submitted");
+  check(transfers[before].args.items[0].request.remoteFolder === "/", "Parent upload used the tab folder");
+  check(transfers[before].args.dropStage === 40, "Remote submenu did not upload staged attachments");
+  startDrag();
+  dragPointer("pointermove", point(anchor));
+  await waitFor(() => row("/bottom/folder")?.closest<HTMLElement>(".drop-submenu-surface")?.style.visibility === "visible", "Remote drag did not open subfolders");
+  dragPointer("pointerup", point(row("/bottom/folder")!));
+  await waitFor(() => transfers.length === before + 2, "Subfolder move was not submitted");
+  check(transfers[before + 1].args.moving && transfers[before + 1].args.items[0].request.remoteFolder === "/bottom/folder", "Subfolder move used the wrong destination");
+  anchor.remove();
+  Object.assign(window, { requestAnimationFrame, cancelAnimationFrame });
 }
 
 async function exerciseConnectingDrop() {
@@ -320,28 +431,34 @@ async function exerciseConnectingDrop() {
   document.body.append(tab);
   const position = point(tab);
   const drop = () => { startDrag(); dragPointer("pointerup", position, { ctrlKey: true }); };
+  const native = callbacks.get(listeners.get("stratum-file-drag")!)!;
+  const attachment = (stage: number) => native({ payload: { type: "drop", stage, paths: ["C:\\Temp\\mail.pdf"], mode: "copy",
+    position: { x: position.x * devicePixelRatio, y: position.y * devicePixelRatio } } });
   const before = transfers.length;
   drop();
   await waitFor(() => finishConnection, "Drop did not initiate SSH");
-  drop();
+  attachment(41);
   await waitFor(() => document.querySelectorAll('[data-preflight] [aria-label="Cancel operation"]').length === 2, "Connecting drops have no Work controls");
   const [first, second] = useTransferStore.getState().localJobs;
   document.querySelector<HTMLButtonElement>(`[data-preflight="${first.id}"] button`)!.click();
   await waitFor(() => useTransferStore.getState().localJobs[0]?.status === "cancelled", "Work did not cancel the connecting drop");
   check(!disconnects && transfers.length === before, "Cancelled a shared SSH session or submitted early");
+  check(!releasedDropStages.includes(41), "Attachment was released while connecting");
   finishConnection!();
   await waitFor(() => transfers.length === before + 1, "The other drop did not resume");
+  check(transfers[before].args.dropStage === 41, "Connected tab upload lost its attachments");
   check(transfers[before].args.transferId === second.id, "Work lost its job ID after connecting");
   useRemoteHosts.setState(state => ({ connections: {
     ...state.connections, offline: { status: "disconnected", epoch: 2 },
   } }));
   finishConnection = undefined;
-  drop();
+  attachment(42);
   await waitFor(() => finishConnection, "Second SSH attempt did not start");
   await waitFor(() => document.querySelector('[data-preflight] [aria-label="Cancel operation"]'), "Missing sole-waiter cancellation");
   document.querySelector<HTMLButtonElement>('[data-preflight] [aria-label="Cancel operation"]')!.click();
   await waitFor(() => disconnects > 0 && useRemoteHosts.getState().connections.offline?.status === "disconnected", "Last cancelled drop left SSH connecting");
   check(transfers.length === before + 1, "A cancelled handshake submitted a drop");
+  await waitFor(() => releasedDropStages.includes(42), "Cancelling the connection leaked the attachment stage");
   tab.remove();
 }
 
@@ -395,6 +512,8 @@ async function run() {
       await waitFor(() => document.querySelector('[data-layout="full"]'), "Full-width layout did not render");
     }
   }
+  await exerciseCutPaste();
+  await exerciseRemoteTabMenu();
   await exerciseConnectingDrop();
   await exerciseAliasAndPendingDrop();
   for (const pane of ["main", "bottom"] as const) {
@@ -423,6 +542,10 @@ async function run() {
   check(!selected("bottom"), "Document focus changed the inactive pane");
   press(document.body, "Escape");
   await waitFor(() => !selected("main"), "Document focus did not clear the selection");
+  await exerciseRemotePlaces(waitFor, async () => {
+    await waitFor(() => connectingHost === "main", "Pin did not start SSH for the saved host");
+    finishConnection!();
+  });
 }
 
 run().then(() => { document.documentElement.dataset.testResult = "passed"; }).catch(error => {

@@ -6,6 +6,9 @@ import { DropdownSelect, PressButton } from "@/components/primitives";
 import type { DropdownGroup } from "@/components/primitives";
 import { useModalFocusTrap } from "@/hooks/ui/app/useModalFocusTrap";
 import { toMessage } from "@/lib/fsUtils";
+import { useRemoteQuickMoveFolders } from "@/modules/remoteQuickMoveFolders";
+import type { MoveDestination } from "@/modules/quickMoveSession";
+import { useSettingsStore } from "@/modules/settings.store";
 import { getQuickMoveDriveRoot } from "@/modules/quickMovePreferences";
 import { getQuickMovePreferences, toggleQuickMoveFavorite, updateQuickMovePreferences, useQuickMovePreferences } from "@/modules/quickMoveStore";
 import { DialogCloseButton } from "../DialogCloseButton";
@@ -22,9 +25,9 @@ export type QuickMovePickerProps = {
   workspaceId: string | null;
   itemCount: number;
   recentPaths: readonly string[];
-  onSelectPath: (path: string) => Promise<string | undefined>;
+  onSelectDestination: (target: MoveDestination) => Promise<string | undefined>;
   onClose: () => void;
-  isDestinationDisabled?: (path: string) => boolean;
+  isDestinationDisabled?: (target: MoveDestination) => boolean;
 };
 
 const DEPTH_OPTIONS = Array.from({ length: 10 }, (_, index) => {
@@ -35,7 +38,7 @@ const DEPTH_OPTIONS = Array.from({ length: 10 }, (_, index) => {
 const isComposing = ({ nativeEvent }: KeyboardEvent) => nativeEvent.isComposing || nativeEvent.keyCode === 229;
 
 export const QuickMovePicker = ({
-  workspaceId, itemCount, recentPaths, onSelectPath, onClose, isDestinationDisabled,
+  workspaceId, itemCount, recentPaths, onSelectDestination, onClose, isDestinationDisabled,
 }: QuickMovePickerProps) => {
   const titleId = useId();
   const resultsId = useId();
@@ -49,10 +52,12 @@ export const QuickMovePicker = ({
   const [cursor, setCursor] = useState<{ scope: QuickMoveSearch; key: string; keyboard: boolean } | null>(null);
   const [selectionError, setSelectionError] = useState<{ scope: QuickMoveSearch; message: string } | null>(null);
   const { favorites, driveRoots, maxDepth } = useQuickMovePreferences(workspaceId);
-  const { serviceStatus, driveStatuses, visibleDriveInfo, statusLoading, statusError } = useIndexedSearchStatus(true);
+  const localSearch = useSettingsStore(state => state.indexedSearchEnabled);
+  const remoteFolders = useRemoteQuickMoveFolders();
+  const { serviceStatus, driveStatuses, visibleDriveInfo, statusLoading, statusError } = useIndexedSearchStatus(localSearch);
   useModalFocusTrap({ open: true, containerRef: panelRef, initialFocusRef: inputRef });
 
-  const indexEnabled = serviceStatus?.state !== "disabled";
+  const indexEnabled = localSearch && serviceStatus?.state !== "disabled";
   const indexedRoots = useMemo(() => {
     if (!indexEnabled) return [];
     const roots = new Set<string>();
@@ -80,11 +85,11 @@ export const QuickMovePicker = ({
   }], [maxDepth]);
   const search = useQuickMoveFolderSearch(scope, indexEnabled, serviceStatus?.catalogRevision);
   const destinations = useMemo(() => buildQuickMoveDestinations({
-    favoritePaths: favorites, recentPaths, matches: search.matches, scope, isDestinationDisabled,
-  }), [favorites, isDestinationDisabled, recentPaths, scope, search.matches]);
+    favoritePaths: favorites, recentPaths, matches: search.matches, scope, remoteFolders, isDestinationDisabled,
+  }), [favorites, isDestinationDisabled, recentPaths, scope, remoteFolders, search.matches]);
   const scopedCursor = cursor?.scope === scope ? cursor : null;
   const cursorIndex = scopedCursor ? destinations.findIndex((row) => row.key === scopedCursor.key && !row.disabled) : -1;
-  const activeIndex = cursorIndex >= 0 ? cursorIndex : destinations.findIndex((row) => !row.disabled);
+  const activeIndex = scopedCursor ? cursorIndex : destinations.findIndex((row) => !row.disabled);
   const active = destinations[activeIndex];
 
   useLayoutEffect(() => {
@@ -106,7 +111,7 @@ export const QuickMovePicker = ({
     inputRef.current?.focus({ preventScroll: true });
     setPending(true);
     try {
-      const message = await onSelectPath(destination.path);
+      const message = await onSelectDestination(destination.remote ?? destination.path);
       if (message) setSelectionError({ scope, message });
     } catch (error) {
       setSelectionError({ scope, message: toMessage(error, "Couldn't move to this folder.") });
@@ -120,7 +125,7 @@ export const QuickMovePicker = ({
     if (event.defaultPrevented || isComposing(event) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     if (event.key === "Enter") {
       event.preventDefault();
-      if (active && !search.loading) void choose(active);
+      if (active && (active.remote || !search.loading)) void choose(active);
       return;
     }
     if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
@@ -139,7 +144,8 @@ export const QuickMovePicker = ({
 
   const error = (selectionError?.scope === scope && selectionError.message) || search.error || statusError;
   const emptyMessage = (() => {
-    if (!indexEnabled) return "Enable Indexed Search to use Quick Move.";
+    if (remoteFolders.length && trimmedQuery && (!scope.scopeRoots.length || !indexEnabled)) return "No matching folders.";
+    if (!indexEnabled) return "No connected remote folders are available.";
     if (statusLoading && !indexedRoots.length) return "Checking indexed drives…";
     if (!indexedRoots.length) return "No indexed drives are ready yet.";
     if (!scope.scopeRoots.length) return "Select a drive to find folders.";
@@ -166,13 +172,13 @@ export const QuickMovePicker = ({
           <div className="quick-move-searchbox">
             <LibraryIcon className="quick-move-search-icon" />
             <input ref={inputRef} className="quick-move-input" type="search" role="combobox"
-              aria-label="Find an indexed folder" aria-autocomplete="list" aria-haspopup="grid"
+              aria-label="Find a destination folder" aria-autocomplete="list" aria-haspopup="grid"
               aria-expanded="true" aria-controls={resultsId}
               aria-activedescendant={active ? quickMoveResultId(resultsId, activeIndex) : undefined}
               placeholder="Find a folder…" autoComplete="off" spellCheck={false} value={query} readOnly={pending}
               onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeys} />
           </div>
-          <div className="quick-move-filters">
+          {indexEnabled && <div className="quick-move-filters">
             <div className="quick-move-drives" role="group" aria-label="Indexed drives">
               {indexedRoots.map((root) => (
                 <TooltipWrapper key={root} text={driveLabels.get(root) || root}>
@@ -189,7 +195,7 @@ export const QuickMovePicker = ({
                 value={maxDepth == null ? null : String(maxDepth)} disabled={pending}
                 onChange={(value) => updateQuickMovePreferences(workspaceId, { maxDepth: value == null ? null : Number(value) })} />
             </div>
-          </div>
+          </div>}
         </div>
         <QuickMoveResults destinations={destinations} viewportRef={viewportRef} resultsId={resultsId}
           activeIndex={activeIndex} keyboardPath={scopedCursor?.keyboard ? scopedCursor.key : null}

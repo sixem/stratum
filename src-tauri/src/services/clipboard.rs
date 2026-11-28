@@ -41,7 +41,7 @@ pub fn set_clipboard_text(_: usize, _: String) -> Result<(), String> {
 }
 
 #[cfg(not(windows))]
-pub fn set_remote_clipboard(_: usize, _: String, _: String) -> Result<u32, String> {
+pub fn set_remote_clipboard(_: usize, _: String, _: String, _: Option<u32>) -> Result<u32, String> {
     Err("Clipboard integration requires Windows.".into())
 }
 

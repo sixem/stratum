@@ -14,7 +14,8 @@ export const setFileClipboard = (paths: string[], mode: FileClipboardMode) =>
 
 export const setTextClipboard = (text: string) => invoke<void>("set_clipboard_text", { text });
 
-export const setRemoteClipboard = (text: string, token: string) => invoke<number>("set_remote_clipboard", { text, token });
+export const setRemoteClipboard = (text: string, token: string, expectedSequence?: number) =>
+  invoke<number>("set_remote_clipboard", { text, token, expectedSequence });
 
 export const getFileClipboard = () => invoke<FileClipboard>("get_file_clipboard");
 

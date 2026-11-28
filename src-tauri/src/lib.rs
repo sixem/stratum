@@ -185,6 +185,7 @@ pub fn run() {
             services::remotes::remote_disconnect,
             #[cfg(windows)]
             services::remotes::remote_list,
+            services::remotes::properties::remote_properties,
             #[cfg(windows)]
             services::remotes::remote_thumbnail,
             services::remotes::remote_link_target,
@@ -193,6 +194,8 @@ pub fn run() {
             services::remotes::operations::remote_rename_entry,
             services::remotes::operations::remote_move_entry,
             services::remotes::recovery::remote_move_recovery_list,
+            services::remotes::recovery_review::remote_recovery_details,
+            services::remotes::recovery_review::remote_recovery_acknowledge,
             services::remotes::recovery::remote_finish_interrupted_transfers,
             services::remotes::delete_recovery::remote_acknowledge_delete_recovery,
             services::remotes::recovery::remote_move_recovery_delete,

@@ -219,6 +219,7 @@ export const coerceSettings = (value: Partial<Settings> | null | undefined): Set
       typeof value?.smoothScroll === "boolean"
         ? value.smoothScroll
         : DEFAULT_SETTINGS.smoothScroll,
+    deferOffscreenRemovals: value?.deferOffscreenRemovals === true,
     smartTabJump:
       typeof value?.smartTabJump === "boolean"
         ? value.smartTabJump
